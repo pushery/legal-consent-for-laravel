@@ -4,6 +4,13 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-07-11
+
+### Fixed
+
+- README PHP-version badge now uses the reliable `packagist/dependency-v` shields endpoint;
+  the previous `packagist/php-v` route was rendering "not found".
+
 ## [0.1.0] - 2026-07-11
 
 ### Added
