@@ -258,6 +258,19 @@ Every variant bakes in the non-negotiable anti-dark-pattern rules: checkboxes ar
 pre-checked (Planet49 C-673/17), a real consent is never `required` (Kopplungsverbot
 Art. 7(4)), and the full text is always linked and retrievable (clickwrap, § 305 II BGB).
 
+**Bundled translations.** Every string the package renders — the grace-period banner, the
+consent and settings stubs, the re-consent notification, the validation messages, and the
+acceptance wording — ships translated in seven locales out of the box: German, English,
+Spanish, French, Italian, Dutch, and Portuguese. Override any of them by publishing the
+language files:
+
+```bash
+php artisan vendor:publish --tag=legal-consent-lang
+```
+
+This is independent of `legal-consent.locales`, which is the set of locales you publish your
+own legal *documents* in — leave it at `[de, en]` even while the UI is available in all seven.
+
 ## Configuration
 
 Everything lives in `config/legal-consent.php`. The keys you are most likely to touch:

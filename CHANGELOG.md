@@ -4,6 +4,17 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-13
+
+### Added
+
+- Translations for the user-facing strings (settings/banner UI, re-consent notifications,
+  validation messages, acceptance wording) in five more locales — Spanish, French, Italian,
+  Dutch, and Portuguese — bringing the shipped set to seven (de, en, es, fr, it, nl, pt).
+  Each locale preserves the contract-vs-notice distinction (a privacy policy is acknowledged,
+  never "consented to") and the pluralised grace-period countdown. The consuming app's
+  document-locale set (`legal-consent.locales`) is unchanged and still defaults to `de`, `en`.
+
 ## [0.1.1] - 2026-07-11
 
 ### Fixed
