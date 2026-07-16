@@ -60,4 +60,30 @@ final class TenantContext
 
         return is_int($tenant) || is_string($tenant) ? (string) $tenant : '';
     }
+
+    /**
+     * Run $callback with the tenant pinned to $tenantId, then restore the previous resolver.
+     *
+     * A cross-tenant SYSTEM sweep (scheduler/console) has no ambient tenant — there is no
+     * authenticated user, so the app's resolver yields nothing and current() falls back to the
+     * shared '' bucket. A row written that way would land outside the tenant it belongs to,
+     * making the proof invisible to that tenant's own queries. The sweeps therefore pin the
+     * tenant of the version they are processing around every write.
+     *
+     * @template TReturn
+     *
+     * @param  Closure(): TReturn  $callback
+     * @return TReturn
+     */
+    public function forTenant(string $tenantId, Closure $callback): mixed
+    {
+        $previous = $this->resolver;
+        $this->resolver = static fn (): string => $tenantId;
+
+        try {
+            return $callback();
+        } finally {
+            $this->resolver = $previous;
+        }
+    }
 }

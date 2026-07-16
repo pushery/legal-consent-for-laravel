@@ -33,6 +33,26 @@ enum ConsentAction: string
     case Parental = 'parental';
 
     /**
+     * A Widerspruch: the subject actively objected — either rebutting a deemed-consent
+     * fiction (§ 308 Nr. 5 lit. a BGB) or exercising the Art. 21 right to object to
+     * legitimate-interest processing. Not an accepting action.
+     */
+    case Objected = 'objected';
+
+    /**
+     * The subject exercised a free right to terminate before a change took effect
+     * (§ 675g / § 327r Abs. 3 BGB / P2B). Not an accepting action.
+     */
+    case Terminated = 'terminated';
+
+    /**
+     * System-generated: a deemed-consent objection window elapsed with no objection, so
+     * silence is deemed acceptance (Zustimmungsfiktion). IS an accepting action — this is
+     * how "silence binds" becomes provable in the ledger rather than merely asserted.
+     */
+    case DeemedAccepted = 'deemed_accepted';
+
+    /**
      * The actions that count as a subject currently holding a document: they raise
      * the highest-accepted major version the re-consent gate compares against.
      *
@@ -40,7 +60,7 @@ enum ConsentAction: string
      */
     public static function accepting(): array
     {
-        return [self::Granted, self::Acknowledged, self::ReAccepted, self::Parental];
+        return [self::Granted, self::Acknowledged, self::ReAccepted, self::Parental, self::DeemedAccepted];
     }
 
     /**

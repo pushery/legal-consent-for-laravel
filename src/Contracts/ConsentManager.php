@@ -28,6 +28,20 @@ interface ConsentManager
     public function withdraw(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
 
     /**
+     * Record a Widerspruch: the subject objected to a change (rebutting a deemed-consent
+     * fiction, § 308 Nr. 5 lit. a BGB) or objected to legitimate-interest processing
+     * (Art. 21). Fires ConsentObjected so the app can stop the processing where required.
+     */
+    public function object(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
+
+    /**
+     * Record that the subject exercised a free right to terminate before a change took
+     * effect (§ 675g / § 327r Abs. 3 BGB / P2B). Fires ConsentTerminated so the app can end
+     * the contract; the package only records the provable ledger entry.
+     */
+    public function terminate(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
+
+    /**
      * The mandatory documents this subject still owes acceptance for.
      *
      * @return Collection<int, LegalDocument>

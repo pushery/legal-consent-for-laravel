@@ -30,22 +30,23 @@ return [
     |   - consent          Art. 6(1)(a): a real consent — voluntary, NEVER required
     |                                    (Kopplungsverbot Art. 7(4)), withdrawable.
     |
+    | Whether a document needs an explicit opt-in FOLLOWS from its legal basis — it is
+    | derived at publish time, never configured: only a real consent may be opt-in, and it
+    | always must be. Set the basis correctly and the rest follows.
+    |
     */
     'documents' => [
         'terms' => [
             'source' => 'markdown',
             'legal_basis' => 'contract',
-            'requires_explicit_optin' => false,
         ],
         'privacy' => [
             'source' => 'markdown',
             'legal_basis' => 'acknowledgement',
-            'requires_explicit_optin' => false,
         ],
         'newsletter' => [
             'source' => 'database',
             'legal_basis' => 'consent',
-            'requires_explicit_optin' => true,
         ],
     ],
 
@@ -151,6 +152,7 @@ return [
     */
     'schedule' => [
         'dispatch_notices' => true,
+        'close_objection_windows' => true,
     ],
 
     /*
@@ -163,6 +165,44 @@ return [
     |
     */
     'retention_after_end' => '3 years',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Advance-notice periods (per regime)
+    |--------------------------------------------------------------------------
+    |
+    | Advance-notice periods are per-regime, never one global value — a single number
+    | is legally wrong for several regimes. At publish, a SCHEDULED active-re-consent or
+    | deemed-consent change must give at least the minimum lead for its regime (payment
+    | contracts have the hard 2-month rule); the info-only periods are documented defaults
+    | for the notice content. Override per document via a `min_lead_days` key in `documents`.
+    |
+    */
+    'notice_periods' => [
+        'active_reconsent_min_days' => 60, // § 308 Nr. 5 / BGH XI ZR 26/20 grace (also MATERIAL_MIN_LEAD_DAYS)
+        'deemed_consent_min_days' => 60,   // the 2-month § 308 / § 675g benchmark
+        'psd2_min_days' => 60,             // HARD: § 675g(1) BGB / Art. 54 PSD2 (2 months)
+        'dcd_termination_days' => 30,      // § 327r Abs. 3 free-termination window
+        'p2b_standstill_days' => 15,       // Reg. (EU) 2019/1150 Art. 3 minimum standstill
+        'eecc_min_days' => 30,             // Dir. (EU) 2018/1972 Art. 105(4)
+        'privacy_advance_days' => 30,      // "well in advance" (WP260) — a sane default, not statutory
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Durable medium
+    |--------------------------------------------------------------------------
+    |
+    | A disadvantageous or materially-adverse change must be delivered on a durable
+    | medium (dauerhafter Datenträger / Textform § 126b BGB; CJEU C-375/15 BAWAG). When
+    | `proof` is on, the notice dispatch writes an append-only legal_notices proof row per
+    | subject. `channels` are the durable-medium delivery channels.
+    |
+    */
+    'durable_medium' => [
+        'proof' => true,
+        'channels' => ['mail'],
+    ],
 
     /*
     |--------------------------------------------------------------------------

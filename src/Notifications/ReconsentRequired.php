@@ -10,16 +10,18 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Route;
+use Pushery\LegalConsent\Contracts\SendsNoticeMail;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
- * Tells a subject a material change now requires their re-consent. Queued; channels come
- * from config (mail + database by default). The mail states the deadline AND its
- * consequence explicitly (§ 308 Nr. 5 lit. b BGB) and links to the consent route. Locale
- * follows the notifiable's preference (Laravel applies it when it implements
- * HasLocalePreference).
+ * The ACTIVE re-consent notification: a material CONTRACT change requires the subject to
+ * actively agree before it applies (NoticeMode::ActiveReconsent). Reserved for contracts —
+ * a privacy notice is info-only and never re-consented (it goes out as
+ * LegalChangeInformational). Queued; channels come from config (mail + database by default).
+ * The mail states the deadline AND its consequence explicitly (§ 308 Nr. 5 lit. b BGB) and
+ * links to the consent route. Locale follows the notifiable's preference.
  */
-final class ReconsentRequired extends Notification implements ShouldQueue
+final class ReconsentRequired extends Notification implements SendsNoticeMail, ShouldQueue
 {
     use Queueable;
 
@@ -68,41 +70,39 @@ final class ReconsentRequired extends Notification implements ShouldQueue
     }
 
     /**
+     * A re-consent notice must state the deadline AND its consequence (§ 308 Nr. 5 lit. b BGB);
+     * the hardcoded fallback guarantees both even with no translation, so this is a real check
+     * of the rendered content rather than an assumption.
+     */
+    public function mandatoryContentPresent(): bool
+    {
+        return $this->line('consequence', ['deadline' => '']) !== ''
+            && $this->line('subject', ['title' => '']) !== '';
+    }
+
+    /**
      * @param  array<string, string>  $replace
      */
     private function line(string $key, array $replace = []): string
     {
-        // Branch the copy by legal basis so a privacy NOTICE is never framed as consent
-        // ("zur Kenntnis nehmen", not "zustimmen") — the exact EDPB 05/2020 Rz. 122 error
-        // this package exists to prevent.
-        $basis = $this->document->type->legalBasis();
-        $transKey = "legal-consent::notifications.{$basis}.{$key}";
+        $transKey = "legal-consent::notifications.contract.{$key}";
         $translated = trans($transKey, $replace);
 
         if (is_string($translated) && $translated !== $transKey) {
             return $translated;
         }
 
-        return $this->fallback($basis, $key);
+        return $this->fallback($key);
     }
 
-    private function fallback(string $basis, string $key): string
+    private function fallback(string $key): string
     {
-        $acknowledgement = [
-            'subject' => 'Wichtig: aktualisierte Datenschutzerklärung',
-            'intro' => 'Wir haben unsere Datenschutzerklärung aktualisiert und bitten dich, die neue Fassung zur Kenntnis zu nehmen.',
-            'cta' => 'Jetzt ansehen und zur Kenntnis nehmen',
-            'consequence' => 'Bitte nimm die Aktualisierung rechtzeitig zur Kenntnis — andernfalls ist die weitere Nutzung ab dem Stichtag eingeschränkt.',
-        ];
-
-        $acceptance = [
+        return [
             'subject' => 'Wichtig: aktualisierte Nutzungsbedingungen',
             'intro' => 'Wir haben unsere Nutzungsbedingungen aktualisiert und bitten dich um deine erneute Zustimmung.',
             'cta' => 'Jetzt ansehen und zustimmen',
             'consequence' => 'Bitte stimme rechtzeitig zu — andernfalls ist die weitere Nutzung ab dem Stichtag eingeschränkt.',
-        ];
-
-        return ($basis === 'acknowledgement' ? $acknowledgement : $acceptance)[$key] ?? '';
+        ][$key] ?? '';
     }
 
     private function consentUrl(): string

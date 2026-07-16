@@ -14,6 +14,7 @@ use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 use Override;
 use Pushery\LegalConsent\Console\CheckDriftCommand;
+use Pushery\LegalConsent\Console\CloseObjectionWindowsCommand;
 use Pushery\LegalConsent\Console\DispatchDueLegalNoticesCommand;
 use Pushery\LegalConsent\Console\FlushDocumentCacheCommand;
 use Pushery\LegalConsent\Console\PruneExpiredConsentRecordsCommand;
@@ -128,14 +129,19 @@ final class LegalConsentServiceProvider extends ServiceProvider
         }
 
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
-            if (! (bool) config('legal-consent.schedule.dispatch_notices', true)) {
-                return;
+            if ((bool) config('legal-consent.schedule.dispatch_notices', true)) {
+                $schedule->command('legal-consent:dispatch-notices')
+                    ->hourly()
+                    ->withoutOverlapping()
+                    ->onOneServer();
             }
 
-            $schedule->command('legal-consent:dispatch-notices')
-                ->hourly()
-                ->withoutOverlapping()
-                ->onOneServer();
+            if ((bool) config('legal-consent.schedule.close_objection_windows', true)) {
+                $schedule->command('legal-consent:close-objection-windows')
+                    ->hourly()
+                    ->withoutOverlapping()
+                    ->onOneServer();
+            }
         });
 
         if ($this->app->runningInConsole()) {
@@ -146,6 +152,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 PublishDocumentCommand::class,
                 CheckDriftCommand::class,
                 DispatchDueLegalNoticesCommand::class,
+                CloseObjectionWindowsCommand::class,
                 PruneExpiredConsentRecordsCommand::class,
                 VerifyLedgerCommand::class,
             ]);

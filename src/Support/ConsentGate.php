@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Enums\ConsentAction;
+use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 
@@ -20,6 +21,12 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * fix (same major) never forces a re-consent, while a material change (a new major,
  * published with requires_reconsent) does — but only once its enforcement window has
  * opened (EDPB 05/2020 Rz. 110; the grace period comes from enforce_from).
+ *
+ * Only an ACTIVE re-consent (NoticeMode::ActiveReconsent) hard-blocks. An info-only change
+ * takes effect regardless and a deemed-consent change binds by silence (via the objection
+ * window, not an access block) — neither gates. This is what keeps a privacy notice, which
+ * is info-only, from ever blocking access (WP260 rev.01 Rz. 30-31): forcing acknowledgement
+ * to regain access would be unlawful pressure.
  */
 final class ConsentGate
 {
@@ -38,6 +45,7 @@ final class ConsentGate
             ->where('locale', $locale)
             ->where('is_active', true)
             ->where('requires_explicit_optin', false)
+            ->where('notice_mode', NoticeMode::ActiveReconsent->value) // only an active re-consent gates
             ->whereNotNull('enforce_from')
             ->where('enforce_from', '<=', $now)
             ->get();

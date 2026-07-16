@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 use Override;
 use Pushery\LegalConsent\Enums\DocumentType;
+use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
 
 /**
@@ -34,11 +35,19 @@ use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
  * @property string $source_driver
  * @property string|null $source_reference
  * @property bool $requires_reconsent
+ * @property NoticeMode|null $notice_mode
+ * @property string|null $change_class
+ * @property string|null $regime
+ * @property int|null $notice_period_days
+ * @property bool $offers_termination
+ * @property bool $keeps_unmodified_offered
  * @property string|null $change_summary
  * @property bool $is_active
  * @property CarbonImmutable|null $published_at
  * @property CarbonImmutable|null $announce_from
  * @property CarbonImmutable|null $enforce_from
+ * @property CarbonImmutable|null $objection_deadline
+ * @property CarbonImmutable|null $objection_closed_at
  * @property CarbonImmutable|null $notified_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
@@ -54,6 +63,42 @@ final class LegalDocument extends Model
 
     /** @var list<string> */
     protected $hidden = ['content'];
+
+    /**
+     * Keep the legacy boolean `requires_reconsent` and the first-class `notice_mode`
+     * consistent on every insert, whichever the caller sets. `notice_mode` is the source
+     * of truth; a caller that still sets only the boolean (pre-v0.3.0 code) gets the
+     * mapped mode, and a caller that sets only the mode gets the derived boolean — so a
+     * notice-mode query and a legacy `requires_reconsent` query can never disagree.
+     */
+    #[Override]
+    protected static function booted(): void
+    {
+        self::creating(function (self $document): void {
+            $mode = $document->notice_mode;
+
+            if ($mode instanceof NoticeMode) {
+                $document->requires_reconsent = $mode->gates();
+
+                return;
+            }
+
+            $mode = NoticeMode::fromLegacyReconsent((bool) $document->requires_reconsent);
+            $document->notice_mode = $mode;
+            $document->requires_reconsent = $mode->gates();
+        });
+    }
+
+    /**
+     * The notice mode of this version, resolving a legacy row that predates the column
+     * (null `notice_mode`) from its `requires_reconsent` boolean.
+     */
+    public function noticeMode(): NoticeMode
+    {
+        return $this->notice_mode instanceof NoticeMode
+            ? $this->notice_mode
+            : NoticeMode::fromLegacyReconsent((bool) $this->requires_reconsent);
+    }
 
     /**
      * @return HasMany<LegalConsent, $this>
@@ -116,10 +161,16 @@ final class LegalDocument extends Model
             'minor_version' => 'integer',
             'patch_version' => 'integer',
             'requires_reconsent' => 'boolean',
+            'notice_mode' => NoticeMode::class,
+            'notice_period_days' => 'integer',
+            'offers_termination' => 'boolean',
+            'keeps_unmodified_offered' => 'boolean',
             'is_active' => 'boolean',
             'published_at' => 'immutable_datetime',
             'announce_from' => 'immutable_datetime',
             'enforce_from' => 'immutable_datetime',
+            'objection_deadline' => 'immutable_datetime',
+            'objection_closed_at' => 'immutable_datetime',
             'notified_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',

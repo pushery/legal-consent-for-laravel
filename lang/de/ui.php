@@ -16,4 +16,6 @@ return [
 
     // Grace-Period-Restzeit (trans_choice): Pluralisierung + Stichtag-Fall.
     'days_left' => '{0}Ab heute wirksam|{1}Noch :count Tag|[2,*]Noch :count Tage',
+    'updated_note' => 'Aktualisiert — keine Aktion erforderlich.',
+    'object_review' => 'Ansehen oder widersprechen',
 ];

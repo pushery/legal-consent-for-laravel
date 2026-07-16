@@ -41,6 +41,34 @@ final class ConsentSettings extends Component
         }
     }
 
+    public function object(string $key): void
+    {
+        $subject = $this->subject();
+
+        if ($subject instanceof Model) {
+            app(ConsentManager::class)->object(
+                $subject,
+                $key,
+                ConsentContext::fromRequest(request(), ConsentMethod::SettingsToggle),
+                $this->locale,
+            );
+        }
+    }
+
+    public function terminate(string $key): void
+    {
+        $subject = $this->subject();
+
+        if ($subject instanceof Model) {
+            app(ConsentManager::class)->terminate(
+                $subject,
+                $key,
+                ConsentContext::fromRequest(request(), ConsentMethod::SettingsToggle),
+                $this->locale,
+            );
+        }
+    }
+
     public function render(): View
     {
         $subject = $this->subject();

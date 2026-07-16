@@ -16,4 +16,6 @@ return [
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}En vigor hoy|{1}Queda :count día|[2,*]Quedan :count días',
+    'updated_note' => 'Actualizado — no se requiere ninguna acción.',
+    'object_review' => 'Revisar u oponerte',
 ];
