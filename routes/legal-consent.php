@@ -19,5 +19,7 @@ Route::middleware(is_array($middleware) ? $middleware : ['api', 'auth'])
     ->group(function (): void {
         Route::post('consent', [ConsentController::class, 'store'])->name('legal-consent.api.store');
         Route::post('withdraw', [ConsentController::class, 'withdraw'])->name('legal-consent.api.withdraw');
+        Route::post('object', [ConsentController::class, 'object'])->name('legal-consent.api.object');
+        Route::post('terminate', [ConsentController::class, 'terminate'])->name('legal-consent.api.terminate');
         Route::get('status', [ConsentController::class, 'status'])->name('legal-consent.api.status');
     });

@@ -25,9 +25,19 @@ final readonly class AffectedSubjectResolver
     public function __construct(private TenantContext $tenant) {}
 
     /**
+     * @param  int|null  $maxConsentId  Only consider ledger rows up to this id — a snapshot of the
+     *                                  ledger taken before the caller starts writing. The stream
+     *                                  pages with LIMIT/OFFSET over a `HAVING MAX(major) < …` set,
+     *                                  so a caller that APPENDS an accepting row per subject while
+     *                                  iterating (the deemed-acceptance sweep) would shrink that
+     *                                  set mid-stream and the next page's offset would skip
+     *                                  subjects it never returns. Pinning the ledger to a snapshot
+     *                                  keeps the paged set immutable for the whole sweep; a re-run
+     *                                  takes a fresh snapshot, which then correctly excludes the
+     *                                  subjects already accepted.
      * @return LazyCollection<int, Model>
      */
-    public function forVersion(LegalDocument $version): LazyCollection
+    public function forVersion(LegalDocument $version, ?int $maxConsentId = null): LazyCollection
     {
         $accepting = array_map(static fn (ConsentAction $action): string => $action->value, ConsentAction::accepting());
 
@@ -37,6 +47,7 @@ final readonly class AffectedSubjectResolver
             ->where('locale', $version->locale)
             // The notice sweep crosses tenants, so scope subjects to THIS version's tenant.
             ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id))
+            ->when($maxConsentId !== null, fn (QueryBuilder $query): QueryBuilder => $query->where('id', '<=', $maxConsentId))
             ->whereNotNull('subject_type')
             ->whereNotNull('subject_id')
             ->whereIn('action', $accepting)

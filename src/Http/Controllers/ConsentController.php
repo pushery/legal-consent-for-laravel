@@ -55,6 +55,40 @@ final readonly class ConsentController
         return response()->json(null, JsonResponse::HTTP_NO_CONTENT);
     }
 
+    public function object(Request $request): JsonResponse
+    {
+        $request->validate(['document_key' => ['required', 'string']]);
+
+        $record = $this->consent->object(
+            $this->subject($request),
+            $request->string('document_key')->toString(),
+            ConsentContext::fromRequest($request, ConsentMethod::Api),
+        );
+
+        return response()->json([
+            'id' => $record->id,
+            'document_key' => $record->document_key,
+            'action' => $record->action->value,
+        ], JsonResponse::HTTP_CREATED);
+    }
+
+    public function terminate(Request $request): JsonResponse
+    {
+        $request->validate(['document_key' => ['required', 'string']]);
+
+        $record = $this->consent->terminate(
+            $this->subject($request),
+            $request->string('document_key')->toString(),
+            ConsentContext::fromRequest($request, ConsentMethod::Api),
+        );
+
+        return response()->json([
+            'id' => $record->id,
+            'document_key' => $record->document_key,
+            'action' => $record->action->value,
+        ], JsonResponse::HTTP_CREATED);
+    }
+
     public function status(Request $request): JsonResponse
     {
         return response()->json($this->consent->statusFor($this->subject($request)));

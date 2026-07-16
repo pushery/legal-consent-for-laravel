@@ -26,6 +26,10 @@ enum ConsentMethod: string
     /** The headless JSON API. */
     case Api = 'api';
 
+    /** System-generated deemed acceptance: a deemed-consent objection window closed with no
+     * objection, so silence is deemed acceptance (§ 308 Nr. 5 BGB Zustimmungsfiktion). */
+    case DeemedAcceptance = 'deemed_acceptance';
+
     /** Backfilled from a legacy source — weaker proof (no captured wording). */
     case Import = 'import';
 }

@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
-// Re-consent notification, split by legal basis: a contract asks for renewed AGREEMENT,
-// a privacy policy only for ACKNOWLEDGEMENT (never "agree" — EDPB 05/2020 §122). The
-// consequence line satisfies § 308 Nr. 5 lit. b BGB.
+// Duas notificações juridicamente distintas: `contract` (ReconsentRequired, nova aceitação
+// de uma alteração material do contrato — § 308 Nr. 5 lit. b BGB) e `informational`
+// (LegalChangeInformational, alteração APENAS INFORMATIVA, sem ação, sem ameaça de
+// restrição; de uma política de privacidade toma-se conhecimento, nunca se «aceita» —
+// EDPB 05/2020 § 122). Registo informal (tu), português europeu.
 return [
     'contract' => [
         'subject' => 'Importante: termos de utilização atualizados',
@@ -12,10 +14,27 @@ return [
         'cta' => 'Rever e aceitar agora',
         'consequence' => 'Aceita a tempo — caso contrário, a utilização ficará restrita a partir da data de entrada em vigor.',
     ],
-    'acknowledgement' => [
-        'subject' => 'Importante: política de privacidade atualizada',
-        'intro' => 'Atualizámos a nossa política de privacidade e pedimos-te que tomes conhecimento da nova versão.',
-        'cta' => 'Rever e confirmar a leitura agora',
-        'consequence' => 'Toma conhecimento a tempo — caso contrário, a utilização ficará restrita a partir da data de entrada em vigor.',
+    'informational' => [
+        'contract' => [
+            'subject' => 'Alterações ao nosso contrato',
+            'intro' => 'Atualizámos o nosso contrato. Não é necessária qualquer ação da tua parte.',
+            'cta' => 'Ver as alterações',
+            'effective' => 'As alterações entram em vigor a :deadline.',
+            'objection' => 'Se não concordares com as alterações, podes rescindir gratuitamente até :deadline.',
+        ],
+        'acknowledgement' => [
+            'subject' => 'Política de privacidade atualizada',
+            'intro' => 'Atualizámos a nossa política de privacidade. Toma conhecimento da nova versão — não é necessária qualquer ação.',
+            'cta' => 'Ver a nova versão',
+            'effective' => 'A versão atualizada aplica-se a partir de :deadline.',
+            'objection' => 'Podes opor-te ao tratamento a qualquer momento.',
+        ],
+    ],
+    'deemed' => [
+        'subject' => 'Uma alteração ao nosso contrato',
+        'intro' => 'Vamos atualizar o nosso contrato («:title»).',
+        'warning' => 'Se não te opuseres até :deadline, tal será considerado a tua aceitação das alterações.',
+        'cta' => 'Ver as alterações e opor-te, se quiseres',
+        'termination' => 'Podes rescindir o contrato gratuitamente até :effective.',
     ],
 ];

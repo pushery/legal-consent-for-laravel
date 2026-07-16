@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
-// Re-consent notification, split by legal basis: a contract asks for renewed AGREEMENT,
-// a privacy policy only for ACKNOWLEDGEMENT (never "agree" — EDPB 05/2020 §122). The
-// consequence line satisfies § 308 Nr. 5 lit. b BGB.
+// Dos notificaciones, jurídicamente distintas: `contract` (ReconsentRequired, nueva
+// aceptación de un cambio material del contrato — § 308 Nr. 5 lit. b BGB) e `informational`
+// (LegalChangeInformational, cambio SOLO INFORMATIVO, sin acción, sin amenaza de
+// restricción; una política de privacidad se toma en conocimiento, nunca se «acepta» —
+// EDPB 05/2020 § 122). Registro informal (tú).
 return [
     'contract' => [
         'subject' => 'Importante: condiciones de uso actualizadas',
@@ -12,10 +14,27 @@ return [
         'cta' => 'Revisar y aceptar ahora',
         'consequence' => 'Por favor, acepta a tiempo — de lo contrario, el uso quedará restringido a partir de la fecha de entrada en vigor.',
     ],
-    'acknowledgement' => [
-        'subject' => 'Importante: política de privacidad actualizada',
-        'intro' => 'Hemos actualizado nuestra política de privacidad y te pedimos que tomes nota de la nueva versión.',
-        'cta' => 'Revisar y confirmar la lectura ahora',
-        'consequence' => 'Por favor, toma nota a tiempo — de lo contrario, el uso quedará restringido a partir de la fecha de entrada en vigor.',
+    'informational' => [
+        'contract' => [
+            'subject' => 'Cambios en nuestro contrato',
+            'intro' => 'Hemos actualizado nuestro contrato. No es necesaria ninguna acción por tu parte.',
+            'cta' => 'Ver los cambios',
+            'effective' => 'Los cambios entran en vigor el :deadline.',
+            'objection' => 'Si no estás de acuerdo con los cambios, puedes cancelar de forma gratuita hasta el :deadline.',
+        ],
+        'acknowledgement' => [
+            'subject' => 'Política de privacidad actualizada',
+            'intro' => 'Hemos actualizado nuestra política de privacidad. Toma nota de la nueva versión — no es necesaria ninguna acción.',
+            'cta' => 'Ver la nueva versión',
+            'effective' => 'La versión actualizada se aplica a partir del :deadline.',
+            'objection' => 'Puedes oponerte al tratamiento en cualquier momento.',
+        ],
+    ],
+    'deemed' => [
+        'subject' => 'Una modificación de nuestro contrato',
+        'intro' => 'Vamos a actualizar nuestro contrato («:title»).',
+        'warning' => 'Si no te opones antes del :deadline, se considerará que aceptas los cambios.',
+        'cta' => 'Revisar los cambios y oponerte si lo deseas',
+        'termination' => 'Puedes rescindir el contrato de forma gratuita hasta el :effective.',
     ],
 ];

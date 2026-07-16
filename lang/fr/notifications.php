@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
-// Re-consent notification, split by legal basis: a contract asks for renewed AGREEMENT,
-// a privacy policy only for ACKNOWLEDGEMENT (never "agree" — EDPB 05/2020 §122). The
-// consequence line satisfies § 308 Nr. 5 lit. b BGB.
+// Deux notifications juridiquement distinctes : `contract` (ReconsentRequired, nouvel accord
+// pour une modification matérielle du contrat — § 308 Nr. 5 lit. b BGB) et `informational`
+// (LegalChangeInformational, modification PUREMENT INFORMATIVE, sans action, sans menace de
+// restriction ; une politique de confidentialité se prend en connaissance, ne s'« accepte »
+// jamais — EDPB 05/2020 § 122). Registre informel (tu).
 return [
     'contract' => [
         'subject' => 'Important : conditions d\'utilisation mises à jour',
@@ -12,10 +14,27 @@ return [
         'cta' => 'Consulter et accepter maintenant',
         'consequence' => 'Merci d\'accepter à temps — sinon, l\'utilisation sera restreinte à partir de la date d\'entrée en vigueur.',
     ],
-    'acknowledgement' => [
-        'subject' => 'Important : politique de confidentialité mise à jour',
-        'intro' => 'Nous avons mis à jour notre politique de confidentialité et te demandons de prendre connaissance de la nouvelle version.',
-        'cta' => 'Consulter et confirmer la lecture maintenant',
-        'consequence' => 'Merci d\'en prendre connaissance à temps — sinon, l\'utilisation sera restreinte à partir de la date d\'entrée en vigueur.',
+    'informational' => [
+        'contract' => [
+            'subject' => 'Modifications de notre contrat',
+            'intro' => 'Nous avons modifié notre contrat. Aucune action n\'est requise de ta part.',
+            'cta' => 'Voir les modifications',
+            'effective' => 'Les modifications entrent en vigueur le :deadline.',
+            'objection' => 'Si tu n\'es pas d\'accord avec les modifications, tu peux résilier gratuitement jusqu\'au :deadline.',
+        ],
+        'acknowledgement' => [
+            'subject' => 'Politique de confidentialité mise à jour',
+            'intro' => 'Nous avons mis à jour notre politique de confidentialité. Prends connaissance de la nouvelle version — aucune action n\'est requise.',
+            'cta' => 'Voir la nouvelle version',
+            'effective' => 'La version mise à jour s\'applique à partir du :deadline.',
+            'objection' => 'Tu peux t\'opposer au traitement à tout moment.',
+        ],
+    ],
+    'deemed' => [
+        'subject' => 'Une modification de notre contrat',
+        'intro' => 'Nous mettons à jour notre contrat (« :title »).',
+        'warning' => 'Si tu ne t\'y opposes pas avant le :deadline, cela vaudra acceptation des modifications.',
+        'cta' => 'Consulter les modifications et t\'y opposer si tu le souhaites',
+        'termination' => 'Tu peux résilier le contrat gratuitement jusqu\'au :effective.',
     ],
 ];

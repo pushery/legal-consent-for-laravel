@@ -8,10 +8,11 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentAction;
+use Pushery\LegalConsent\Events\ConsentObjected;
 use Pushery\LegalConsent\Events\ConsentRecorded;
+use Pushery\LegalConsent\Events\ConsentTerminated;
 use Pushery\LegalConsent\Events\ConsentWithdrawn;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Exceptions\NotWithdrawableException;
@@ -59,6 +60,20 @@ final readonly class DefaultConsentManager implements ConsentManager
         }
 
         return $this->append($subject, $document, ConsentAction::Withdrawn, $context);
+    }
+
+    public function object(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
+    {
+        $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
+
+        return $this->append($subject, $document, ConsentAction::Objected, $context);
+    }
+
+    public function terminate(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
+    {
+        $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
+
+        return $this->append($subject, $document, ConsentAction::Terminated, $context);
     }
 
     public function outstanding(Model $subject, ?string $locale = null): Collection
@@ -187,7 +202,12 @@ final readonly class DefaultConsentManager implements ConsentManager
             return LegalConsent::query()->create($attributes);
         });
 
-        event($action === ConsentAction::Withdrawn ? new ConsentWithdrawn($consent) : new ConsentRecorded($consent));
+        event(match ($action) {
+            ConsentAction::Withdrawn => new ConsentWithdrawn($consent),
+            ConsentAction::Objected => new ConsentObjected($consent),
+            ConsentAction::Terminated => new ConsentTerminated($consent),
+            default => new ConsentRecorded($consent),
+        });
 
         return $consent;
     }
@@ -242,12 +262,7 @@ final readonly class DefaultConsentManager implements ConsentManager
 
     private function tokenFor(Model $subject): string
     {
-        $existing = LegalConsent::query()
-            ->where('subject_type', $subject->getMorphClass())
-            ->where('subject_id', $subject->getKey())
-            ->whereNotNull('subject_token')
-            ->value('subject_token');
-
-        return is_string($existing) ? $existing : (string) Str::uuid();
+        // Shared with the notice-delivery ledger so both carry the SAME pseudonym for a subject.
+        return new SubjectToken()->forSubject($subject);
     }
 }
