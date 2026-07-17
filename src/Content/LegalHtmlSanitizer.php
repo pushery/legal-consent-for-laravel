@@ -167,11 +167,24 @@ final class LegalHtmlSanitizer
             return false;
         }
 
+        // A protocol-relative URL (`//host/path`) has no scheme yet is an ABSOLUTE cross-origin
+        // navigation — it inherits the page's scheme and points off-site. Treating it as "no scheme
+        // → relative → safe" would let an untrusted source slip `<a href="//phishing.example">` into
+        // a binding legal text. Reject it (require an explicit http/https to leave the origin).
+        //
+        // Both leading chars, not just `//`: for the special (http/https) schemes a <a href> is
+        // resolved under, the WHATWG URL parser normalizes `\` to `/` in the authority-delimiter
+        // position, so `\\host`, `/\host` and `\/host` open the same cross-origin authority as
+        // `//host`. A single leading `/` or `\` stays same-origin (relative) and is fine.
+        if (isset($probe[1]) && in_array($probe[0], ['/', '\\'], true) && in_array($probe[1], ['/', '\\'], true)) {
+            return false;
+        }
+
         if (preg_match('/^([a-z][a-z0-9+.-]*):/i', $probe, $matches) === 1) {
             return in_array(strtolower(rtrim($matches[1], ':')), ['http', 'https', 'mailto'], true);
         }
 
-        // No scheme → relative path, anchor, or query. Safe.
+        // No scheme and not protocol-relative → relative path, anchor, or query. Safe.
         return true;
     }
 }

@@ -2,8 +2,7 @@
 
 declare(strict_types=1);
 
-use Pushery\LegalConsent\Content\Drivers\CmsAdapterDriver;
-use Pushery\LegalConsent\Content\Drivers\DatabaseDriver;
+use Pushery\LegalConsent\Content\Drivers\DraftDocumentSource;
 use Pushery\LegalConsent\Content\Drivers\MarkdownFilesDriver;
 
 return [
@@ -45,7 +44,7 @@ return [
             'legal_basis' => 'acknowledgement',
         ],
         'newsletter' => [
-            'source' => 'database',
+            'source' => 'drafts',
             'legal_basis' => 'consent',
         ],
     ],
@@ -55,22 +54,31 @@ return [
     | Content sources
     |--------------------------------------------------------------------------
     |
-    | Where legal texts come from. `markdown` is the recommended default (git-
-    | diffable, PR-reviewable). `cms` adapts a foreign CMS via a resolver class or
-    | inline closure that returns a Pushery\LegalConsent\Content\RawDocument.
+    | Where legal texts come from.
+    |
+    | `markdown` is the recommended default (git-diffable, PR-reviewable, zero database).
+    |
+    | `drafts` is the admin-maintained store: texts are edited in your own screens, a human
+    | reviews the exact bytes, and only then can a publish freeze them. The gate lives in the
+    | source itself, so `php artisan legal-consent:publish` cannot bypass it either.
+    |
+    | Any other source is your own class implementing
+    | Pushery\LegalConsent\Content\LegalDocumentSource — name it as the `driver` and it is
+    | resolved from the container.
     |
     */
     'sources' => [
         'markdown' => [
             'driver' => MarkdownFilesDriver::class,
-            'path' => resource_path('legal'),
+
+            // null = the app's `resources/legal`. It is resolved at runtime rather than written
+            // here as `resource_path('legal')`, because this file is require'd on every app boot
+            // (mergeConfigFrom runs in register()) and that helper only exists in
+            // laravel/framework — which this package deliberately does not require.
+            'path' => null,
         ],
-        'database' => [
-            'driver' => DatabaseDriver::class,
-        ],
-        'cms' => [
-            'driver' => CmsAdapterDriver::class,
-            // 'resolver' => \App\Legal\PageResolver::class,
+        'drafts' => [
+            'driver' => DraftDocumentSource::class,
         ],
     ],
 
@@ -98,6 +106,12 @@ return [
         'store' => env('LEGAL_CONSENT_CACHE_STORE'),
         'ttl' => 86400,
         'prefix' => 'legal:doc',
+
+        // How long the gate may keep its cached "which versions are enforceable" set. Only the
+        // SET is cached, never a subject's satisfaction — so this bounds how late a scheduled
+        // enforce_from boundary starts gating, nothing about what gets recorded. A publish
+        // flushes it immediately; an out-of-band is_active write needs legal-consent:cache-flush.
+        'enforceable_ttl' => 60,
     ],
 
     /*
@@ -153,6 +167,11 @@ return [
     'schedule' => [
         'dispatch_notices' => true,
         'close_objection_windows' => true,
+
+        // OFF by default, unlike its two siblings: this sweep DELETES. Turning it on is how the
+        // `retention_after_end` period above stops being a statement and starts being enforced —
+        // until then nothing ever removes an expired record. Opt in deliberately, once.
+        'prune' => false,
     ],
 
     /*
@@ -242,11 +261,25 @@ return [
     |
     | Documents are published, gated, and recorded per tenant; each tenant gets its own
     | active version of a (key, locale). Admin sweeps (prune, dispatch-notices) run across
-    | all tenants. `column` is the tenant column on both tables ('' = the shared bucket).
+    | all tenants. The tenant column on both tables is the fixed constant `tenant_id`
+    | (Pushery\LegalConsent\Support\TenantContext::COLUMN) — there is no config knob for it.
     */
     'tenancy' => [
         'enabled' => false,
-        'column' => 'tenant_id',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Admin screens
+    |--------------------------------------------------------------------------
+    |
+    | The publishable LegalTextManager / LegalTextEditor Livewire components fail CLOSED: with
+    | no ability named here they 404, so the package never exposes an ungated publish button.
+    | Opt in by naming a Gate ability the current user must pass; there is no opt-out.
+    |
+    */
+    'admin' => [
+        'ability' => null,
     ],
 
 ];

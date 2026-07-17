@@ -6,7 +6,8 @@
       $informational — info-only "was updated, no action required" (ConsentBanner::informationalFor)
       $deemed        — deemed-consent objection window (ConsentBanner::deemedFor)
 
-    role="status" + aria-live="polite" so a screen reader hears it without interruption.
+    a named `region` landmark (an aria-live region present at page load never announces,
+    so it would be inert here; the landmark makes the banner discoverable in landmark navigation).
     Publishable, framework-agnostic stub. $consentUrl: where "review" links to.
 --}}
 @php
@@ -16,7 +17,7 @@
 @endphp
 
 @if (! empty($pending) || ! empty($informational) || ! empty($deemed))
-    <div class="legal-consent-banner" role="status" aria-live="polite">
+    <div class="legal-consent-banner" role="region" aria-label="{{ __('legal-consent::ui.banner_label') }}">
         @if (! empty($pending))
             <ul class="legal-consent-banner__list legal-consent-banner__list--reconsent">
                 @foreach ($pending as $item)

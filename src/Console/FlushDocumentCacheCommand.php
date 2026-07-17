@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
-use Pushery\LegalConsent\Content\LegalDocumentManager;
+use Pushery\LegalConsent\Content\LegalSourceRenderer;
 
 /**
  * Flush the cached, rendered legal documents. Rarely needed (the cache
@@ -17,7 +17,7 @@ final class FlushDocumentCacheCommand extends Command
 
     protected $description = 'Flush the cached, rendered legal documents.';
 
-    public function handle(LegalDocumentManager $manager): int
+    public function handle(LegalSourceRenderer $manager): int
     {
         $key = $this->argument('key');
         $locale = $this->argument('locale');

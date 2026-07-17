@@ -6,7 +6,9 @@ namespace Pushery\LegalConsent\Support;
 
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Content\SourceFactory;
+use Pushery\LegalConsent\Exceptions\InvalidDocumentVersion;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
+use Pushery\LegalConsent\Exceptions\MissingAcceptanceWording;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Throwable;
 
@@ -41,6 +43,11 @@ final readonly class LegalDriftChecker
         } catch (LegalDocumentNotFound) {
             // No source text to compare — not this checker's concern.
             return null;
+        } catch (InvalidDocumentVersion|MissingAcceptanceWording $e) {
+            // A source that cannot even be rendered into a valid document is a specific,
+            // actionable drift — surface it clearly rather than as a vague "could not be
+            // rendered", which reads like an infrastructure hiccup and hides the real cause.
+            return "'{$key}' ({$locale}) source is invalid — {$e->getMessage()}";
         } catch (Throwable $e) {
             return "source for '{$key}' ({$locale}) could not be rendered: {$e->getMessage()}";
         }

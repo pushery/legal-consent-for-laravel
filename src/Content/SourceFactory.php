@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Content;
 
-use Closure;
-use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Foundation\Application;
 use InvalidArgumentException;
-use Pushery\LegalConsent\Content\Drivers\CmsAdapterDriver;
-use Pushery\LegalConsent\Content\Drivers\DatabaseDriver;
+use Pushery\LegalConsent\Content\Drivers\DraftDocumentSource;
 use Pushery\LegalConsent\Content\Drivers\MarkdownFilesDriver;
 
 /**
@@ -24,7 +22,7 @@ final readonly class SourceFactory
      * @param  array<string, array<string, mixed>>  $sources
      */
     public function __construct(
-        private Container $container,
+        private Application $container,
         private array $documents,
         private array $sources,
     ) {}
@@ -53,9 +51,8 @@ final readonly class SourceFactory
         $driver = $config['driver'];
 
         return match ($driver) {
-            MarkdownFilesDriver::class => new MarkdownFilesDriver($this->stringConfig($config, 'path', resource_path('legal'))),
-            DatabaseDriver::class => new DatabaseDriver,
-            CmsAdapterDriver::class => new CmsAdapterDriver($this->buildResolver($config['resolver'] ?? null)),
+            MarkdownFilesDriver::class => new MarkdownFilesDriver($this->stringConfig($config, 'path', $this->container->resourcePath('legal'))),
+            DraftDocumentSource::class => new DraftDocumentSource,
             default => $this->makeCustom($driver),
         };
     }
@@ -69,40 +66,6 @@ final readonly class SourceFactory
         }
 
         return $instance;
-    }
-
-    private function buildResolver(mixed $resolver): CmsResolver
-    {
-        if ($resolver instanceof CmsResolver) {
-            return $resolver;
-        }
-
-        if ($resolver instanceof Closure) {
-            return new ClosureCmsResolver($resolver);
-        }
-
-        if (is_array($resolver)) {
-            $resolve = $resolver['resolve'] ?? null;
-            $fingerprint = $resolver['fingerprint'] ?? null;
-
-            if (! $resolve instanceof Closure) {
-                throw new InvalidArgumentException("A CMS resolver array must supply a 'resolve' closure.");
-            }
-
-            return new ClosureCmsResolver($resolve, $fingerprint instanceof Closure ? $fingerprint : null);
-        }
-
-        if (is_string($resolver)) {
-            $instance = $this->container->make($resolver);
-
-            if (! $instance instanceof CmsResolver) {
-                throw new InvalidArgumentException("CMS resolver '{$resolver}' must implement CmsResolver.");
-            }
-
-            return $instance;
-        }
-
-        throw new InvalidArgumentException('The cms source needs a resolver (class-string, closure, or CmsResolver).');
     }
 
     /**

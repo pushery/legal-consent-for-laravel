@@ -41,7 +41,7 @@
                     <form method="post" action="{{ $consent['withdraw_url'] ?? '#' }}">
                         @csrf
                         <input type="hidden" name="document_key" value="{{ $consent['key'] }}">
-                        <button type="submit">{{ __('legal-consent::ui.withdraw') }}</button>
+                        <button type="submit" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $consent['title']]) }}">{{ __('legal-consent::ui.withdraw') }}</button>
                     </form>
                 </li>
             @endforeach

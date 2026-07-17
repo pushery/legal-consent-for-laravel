@@ -10,7 +10,19 @@ return [
     'acknowledgements_heading' => 'Acknowledged',
     'consents_heading' => 'Consents',
     'withdraw' => 'Withdraw',
+    // Per-item accessible name for the withdraw control: with N consents, N buttons all
+    // labelled just 'withdraw' are indistinguishable in a screen reader's button list
+    // (WCAG 2.4.6). The grant was document-specific; the withdrawal must be too.
+    'withdraw_for' => 'Withdraw: :title',
     'review' => 'Review now',
+    // Accessible name for the banner region (it is a `complementary`/`region` landmark,
+    // not a live region — a live region present at page load never announces anyway).
+    'banner_label' => 'Legal notices',
+
+    // The countdown's expired states — a statement about the subject's position, so each
+    // is translated, never left to an English fallback on a legal surface.
+    'enforced_now' => 'In effect now',
+    'objection_closed' => 'Objection period closed',
     'submit' => 'Accept and continue',
     'all_current' => 'Everything is up to date — nothing to do.',
 
@@ -18,4 +30,29 @@ return [
     'days_left' => '{0}Effective today|{1}:count day left|[2,*]:count days left',
     'updated_note' => 'Updated — no action required.',
     'object_review' => 'Review or object',
+
+    // The withdraw confirmation. Art. 7(3) sentence 3: withdrawal must be as easy as
+    // giving consent — so this asks once, states the consequence, and never nags.
+    'withdraw_confirm_title' => 'Withdraw consent?',
+    'withdraw_confirm_body' => 'Your consent to “:title” will be withdrawn. It takes effect immediately and does not affect the lawfulness of processing before it.',
+    'cancel' => 'Cancel',
+
+    // Admin screens (LegalTextManager / LegalTextEditor).
+    'admin_heading' => 'Legal texts',
+    'admin_policy' => 'Texts are edited per locale, reviewed by a human, then released across every locale at once. A machine translation can never be published until someone reviews it, and the acceptance sentence is fixed copy — it is never machine-translated.',
+    'admin_document' => 'Document',
+    'admin_release' => 'Release',
+    'admin_not_written' => 'Not written',
+    'admin_machine' => 'Machine-drafted',
+    'admin_needs_update' => 'Needs update',
+    'admin_unpublished' => 'Unpublished changes',
+    'admin_release_all' => 'Release all locales',
+    'admin_release_confirm_title' => 'Release every locale?',
+    'admin_release_confirm_body' => 'All locales of this text are published together as one version. This cannot be undone — a change is a new, higher version.',
+    'admin_stale' => 'The source text changed after this translation was reviewed — review it again before releasing.',
+    'admin_save' => 'Save',
+    'admin_translate' => 'Translate from :locale',
+    'admin_mark_reviewed' => 'Mark reviewed',
+    'admin_preview' => 'Preview',
+    'withdrawn_confirmation' => 'Consent withdrawn. It takes effect immediately.',
 ];

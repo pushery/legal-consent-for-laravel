@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-// Zustimmungssätze je Dokumenttyp. WICHTIG: für Datenschutz nie „ich willige ein“ —
-// eine Datenschutzerklärung ist Information (Art. 13), keine Einwilligung
-// (EDPB 05/2020 Rz. 122). Informelle Ansprache (per Du).
+// Acceptance sentences per document type. IMPORTANT: for privacy, never "I consent" — a
+// Datenschutzerklärung is information (Art. 13), not consent (EDPB 05/2020 Rz. 122).
+// Informal tone (per Du).
 return [
     'terms' => 'Ich akzeptiere die Nutzungsbedingungen.',
     'privacy' => 'Ich habe die Datenschutzerklärung zur Kenntnis genommen.',

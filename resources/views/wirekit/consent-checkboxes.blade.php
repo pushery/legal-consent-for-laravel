@@ -1,30 +1,34 @@
 {{--
-    WireKit-flavored variant of the registration consent checkboxes. Publish with
-    `--tag=legal-consent-wirekit` and adapt to your WireKit form controls. WireKit spacing
-    tokens; never pre-checked (Planet49); a consent is never `required` (Art. 7(4)); the full
-    text stays linked and retrievable (§ 305 II BGB).
+    WireKit-native variant of the registration consent checkboxes. Publish with
+    `--tag=legal-consent-wirekit`. Built from real `x-wirekit::*` components; needs
+    `pushery/wirekit` in the host app.
 
-    $documents: ['key','title','wording','url','required'].
+    The legal invariants are in the markup, not in the styling — do not "simplify" them away:
+    - never pre-checked: a pre-ticked box is not consent (CJEU C-673/17 Planet49),
+    - a real consent is never `required`: coupling it to the service is prohibited (Art. 7(4)),
+    - the full text stays linked and retrievable before agreeing (§ 305 Abs. 2 BGB).
+
+    $documents: list{key, title, wording, url, required}.
 --}}
-@foreach ($documents as $document)
-    <div class="wk-field wk-row wk-gap-sm wk-items-start legal-consent-field">
-        {{-- Swap for <wk:checkbox name="legal_{{ $document['key'] }}" /> in a WireKit app. --}}
-        <label class="wk-checkbox-label" for="legal_{{ $document['key'] }}">
-            <input
-                class="wk-checkbox"
-                type="checkbox"
-                id="legal_{{ $document['key'] }}"
-                name="legal_{{ $document['key'] }}"
+<x-wirekit::stack gap="md" class="legal-consent-fields">
+    @foreach ($documents as $document)
+        <x-wirekit::stack gap="xs" class="legal-consent-field">
+            {{-- The wording is the SNAPSHOTTED consent text — it is what gets recorded in the
+                 ledger as what the subject agreed to, so it renders verbatim as the label. --}}
+            <x-wirekit::checkbox
+                :name="'legal_'.$document['key']"
+                :id="'legal_'.$document['key']"
                 value="1"
-                @checked(false)
-                @if ($document['required']) required @endif
-                aria-describedby="legal_{{ $document['key'] }}_link"
-            >
-            <span>{{ $document['wording'] }}</span>
-        </label>
+                :label="$document['wording']"
+                :required="$document['required']"
+                :aria-describedby="'legal_'.$document['key'].'_link'"
+            />
 
-        <a class="wk-link" id="legal_{{ $document['key'] }}_link" href="{{ $document['url'] }}" target="_blank" rel="noopener noreferrer">
-            {{ $document['title'] }}
-        </a>
-    </div>
-@endforeach
+            <x-wirekit::link
+                :id="'legal_'.$document['key'].'_link'"
+                :href="$document['url']"
+                external
+            >{{ $document['title'] }}</x-wirekit::link>
+        </x-wirekit::stack>
+    @endforeach
+</x-wirekit::stack>

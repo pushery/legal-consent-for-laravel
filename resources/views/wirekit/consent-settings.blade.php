@@ -1,48 +1,81 @@
 {{--
-    WireKit-flavored variant of the "My consents" settings screen. Publish it with
-    `--tag=legal-consent-wirekit` to override the plain stub, then adapt the elements to
-    your WireKit components (buttons, cards, headings). It uses WireKit spacing TOKENS
-    (never raw Tailwind) so it inherits your theme; a fully WireKit-native companion lives in
-    the separate pushery/legal-consent-wirekit package. All i18n + the legal separation of the
-    three blocks are preserved.
+    WireKit-native variant of the "My consents" settings screen. Publish with
+    `--tag=legal-consent-wirekit`. Built from real `x-wirekit::*` components; needs
+    `pushery/wirekit` in the host app and `@wirekitScripts` in the layout (the withdraw
+    confirmation is an alert-dialog).
 
-    $contracts / $acknowledgements / $consents: ['key','title','version','held','withdrawable'].
+    The three blocks stay legally separate and must not be merged into one list: a contract is
+    agreed, a privacy notice is only acknowledged ("zur Kenntnis genommen", never "ich willige
+    ein"), and only a real consent is withdrawable (Art. 7(3)). Collapsing them would blur exactly
+    the distinction this package exists to keep.
+
+    $contracts / $acknowledgements / $consents: list{key, title, version, held, withdrawable}.
 --}}
-<div class="wk-stack wk-gap-lg legal-consent-settings">
-    <h2 class="wk-heading">{{ __('legal-consent::ui.settings_heading') }}</h2>
+<x-wirekit::stack gap="lg" class="legal-consent-settings">
+    <x-wirekit::heading :level="2">{{ __('legal-consent::ui.settings_heading') }}</x-wirekit::heading>
 
-    <section class="wk-stack wk-gap-sm" aria-labelledby="lc-contracts">
-        <h3 class="wk-heading wk-heading-sm" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h3>
-        <ul class="wk-list">
+    <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-contracts">
+        <x-wirekit::heading :level="3" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</x-wirekit::heading>
+        <x-wirekit::stack gap="xs">
             @foreach ($contracts as $item)
-                <li class="wk-list-item">{{ $item['title'] }} (v{{ $item['version'] }})</li>
+                <x-wirekit::text>
+                    {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                </x-wirekit::text>
             @endforeach
-        </ul>
-    </section>
+        </x-wirekit::stack>
+    </x-wirekit::stack>
 
-    <section class="wk-stack wk-gap-sm" aria-labelledby="lc-acknowledgements">
-        <h3 class="wk-heading wk-heading-sm" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</h3>
-        <ul class="wk-list">
+    <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-acknowledgements">
+        <x-wirekit::heading :level="3" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</x-wirekit::heading>
+        <x-wirekit::stack gap="xs">
             @foreach ($acknowledgements as $item)
-                <li class="wk-list-item">{{ $item['title'] }} (v{{ $item['version'] }})</li>
+                <x-wirekit::text>
+                    {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                </x-wirekit::text>
             @endforeach
-        </ul>
-    </section>
+        </x-wirekit::stack>
+    </x-wirekit::stack>
 
-    <section class="wk-stack wk-gap-sm" aria-labelledby="lc-consents">
-        <h3 class="wk-heading wk-heading-sm" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</h3>
-        <ul class="wk-list">
+    <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-consents">
+        <x-wirekit::heading :level="3" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</x-wirekit::heading>
+        <x-wirekit::stack gap="xs">
             @foreach ($consents as $item)
-                <li class="wk-list-item wk-row wk-justify-between wk-items-center">
-                    <span>{{ $item['title'] }}</span>
+                <x-wirekit::stack gap="sm" :wrap="true" class="legal-consent-settings__consent">
+                    <x-wirekit::text>{{ $item['title'] }}</x-wirekit::text>
+
                     @if ($item['held'] && $item['withdrawable'])
-                        {{-- Swap for <wk:button variant="danger" wire:click=...> and a WireKit alert-dialog confirm. --}}
-                        <button type="button" class="wk-button wk-button-danger" wire:click="withdraw(@js($item['key']))">
-                            {{ __('legal-consent::ui.withdraw') }}
-                        </button>
+                        {{-- A withdrawal is irreversible: it appends a Withdrawn row to an
+                             append-only ledger and cannot be taken back. That earns a real
+                             confirmation — an alert-dialog, never the native browser confirm, which
+                             renders unstyled and outside the design system. --}}
+                        <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']">
+                            <x-slot:trigger>
+                                <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
+                                    {{ __('legal-consent::ui.withdraw') }}
+                                </x-wirekit::button>
+                            </x-slot:trigger>
+
+                            <x-wirekit::alert-dialog.title>
+                                {{ __('legal-consent::ui.withdraw_confirm_title') }}
+                            </x-wirekit::alert-dialog.title>
+
+                            <x-wirekit::alert-dialog.description>
+                                {{ __('legal-consent::ui.withdraw_confirm_body', ['title' => $item['title']]) }}
+                            </x-wirekit::alert-dialog.description>
+
+                            <x-wirekit::alert-dialog.actions>
+                                <x-wirekit::alert-dialog.cancel>
+                                    {{ __('legal-consent::ui.cancel') }}
+                                </x-wirekit::alert-dialog.cancel>
+
+                                <x-wirekit::button intent="danger" wire:click="withdraw(@js($item['key']))">
+                                    {{ __('legal-consent::ui.withdraw') }}
+                                </x-wirekit::button>
+                            </x-wirekit::alert-dialog.actions>
+                        </x-wirekit::alert-dialog>
                     @endif
-                </li>
+                </x-wirekit::stack>
             @endforeach
-        </ul>
-    </section>
-</div>
+        </x-wirekit::stack>
+    </x-wirekit::stack>
+</x-wirekit::stack>

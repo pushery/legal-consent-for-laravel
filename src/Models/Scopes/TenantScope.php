@@ -29,6 +29,6 @@ final class TenantScope implements Scope
 
         // Operate on the underlying query builder — a qualified string column is fine there,
         // whereas the Eloquent builder's model-aware where() rejects it on a generic model.
-        $builder->getQuery()->where($model->getTable().'.'.$tenant->column(), $tenant->current());
+        $builder->getQuery()->where($model->getTable().'.'.TenantContext::COLUMN, $tenant->current());
     }
 }

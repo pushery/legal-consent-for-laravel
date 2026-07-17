@@ -53,7 +53,7 @@ final readonly class ConsentBanner
             return [];
         }
 
-        $accepted = $this->gate->highestAcceptedMajors($subject, $locale);
+        $accepted = $this->gate->heldMajorByKey($subject);
         $pending = [];
 
         foreach ($upcoming as $document) {
@@ -144,7 +144,7 @@ final readonly class ConsentBanner
             return [];
         }
 
-        $accepted = $this->gate->highestAcceptedMajors($subject, $locale);
+        $accepted = $this->gate->heldMajorByKey($subject);
         $deemed = [];
 
         foreach ($upcoming as $document) {
@@ -152,7 +152,9 @@ final readonly class ConsentBanner
                 continue; // subject already holds this version
             }
 
-            $latest = $this->gate->latestActionFor($subject, $document->key, $locale);
+            // Cross-locale: an objection/termination rebuts the change (key, major), whichever
+            // locale's banner it was exercised through, so it suppresses the banner everywhere.
+            $latest = $this->gate->latestActionFor($subject, $document->key);
 
             if ($latest instanceof LegalConsent && ($latest->action === ConsentAction::Objected || $latest->action === ConsentAction::Terminated)) {
                 continue; // the subject already objected or terminated

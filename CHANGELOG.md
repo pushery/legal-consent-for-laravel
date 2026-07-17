@@ -4,6 +4,136 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-17
+
+> **Breaking (0.x minor).** This release turns the legal texts from a read-only source into an
+> admin-maintained, provable record. See [UPGRADE.md](UPGRADE.md) for the migration steps — new
+> migrations to run, removed config keys, and removed source drivers.
+
+### Changed
+
+- **Legal texts are now maintained in the app and frozen when published.** A document can be
+  authored and reviewed as a **draft** (`'source' => 'drafts'`), then released — and the released
+  version becomes immutable proof: the exact sanitized bytes a subject is shown and the exact hash
+  the ledger records are one text, because they are one row. Correcting a text is a new version,
+  never an in-place edit. A database trigger (PostgreSQL, MySQL and SQLite) plus a model hook reject
+  any edit to a published row's proof columns; a direct update now raises `LegalDocumentFrozenException`
+  (through the model) or a database error (through raw SQL).
+- **The publish gate moved into the resolver.** A document whose draft set is not release-ready can
+  no longer be enforced by any path, including the console — the check is where the text is resolved,
+  not in a wrapper a caller can skip.
+- **The tenant column name is fixed to `tenant_id`.** The `tenancy.column` knob is gone; the column
+  is the `TenantContext::COLUMN` constant. Apps that renamed it must rename the column back.
+
+### Removed
+
+- **`sources.database`** and its no-op driver — replaced by the draft store (`sources.drafts`).
+- **`sources.cms`** and the closure-resolver path (`CmsResolver`, `ClosureCmsResolver`,
+  `CmsAdapterDriver`) — replaced by the draft store and the admin editor.
+- **`tenancy.column`** — the tenant column is now the fixed constant `tenant_id`.
+- `Content\LegalDocumentManager` — renamed to `Content\LegalSourceRenderer` (`document()` →
+  `renderSource()`), so the class name says it renders the *source*, not the published record.
+
+### Fixed
+
+- **The tamper-evidence chain no longer forks under concurrency.** Two consent appends for one
+  subject could read the same chain tail and link to the same predecessor — a fork the verifier
+  could only report as tampering, training operators to ignore a real alarm. A unique index on
+  `(subject_token, prev_record_hash)` (migration `…_000012`) now makes the database reject the
+  second writer, and the manager retries against the advanced tail so the loser chains on cleanly
+  instead of failing. Proven on real PostgreSQL and MySQL, where the race actually occurs.
+- **Enabling tamper-evidence on a subject that already had rows no longer reports a false break.**
+  The first chained row was linking to the subject's last *unchained* row, but the verifier's walk
+  begins each subject at genesis — so every such subject failed verification. The first chained row
+  now starts at genesis, ignoring pre-feature unchained history (which was already unprotected).
+- **The WireKit admin stubs now render.** The editor stub named a `<x-wirekit::button-group>` that
+  does not exist (the component is `button.group`) and passed the draft body as a slot the editor
+  component ignores, so an existing draft rendered empty; the manager stub named `table.heading` /
+  `table.cell` (the components are `table.th` / `table.td`). Each is a hard exception the moment the
+  view renders. Both stubs are rebuilt against the real components, seed the editor via `:value`, and
+  are now render-verified against the installed WireKit — plus a real-browser suite drives the editor
+  end to end.
+- **The re-consent form now records the real acquisition method.** `ReConsentForm` always wrote its
+  ledger row with `SettingsToggle`, mislabeling every gate-driven re-consent's provenance; it now
+  takes a `$method` mount parameter (default `ReConsentGate`) so the recorded method matches how the
+  consent was actually obtained.
+- **The retention period is no longer a promise nothing kept.** `retention_after_end` defaults to
+  three years and the docs described it as the point at which records are removed — but the sweep
+  that removes them was never scheduled and, unlike the other two sweeps, reported no heartbeat. An
+  app could read the config, believe retention was handled, and keep expired personal data forever
+  with nothing failing. The sweep is now schedulable (`schedule.prune`), observable, and the README
+  states plainly that it is off until you turn it on.
+- **The WireKit views are now actually WireKit.** The `legal-consent-wirekit` stubs shipped
+  invented `wk-*` CSS classes and TODO comments pointing at a `<wk:…>` tag syntax that has never
+  existed in WireKit, and shipped no CSS — so publishing them produced unstyled output while the
+  tag reported success. They are rebuilt from real `<x-wirekit::*>` components (callout, checkbox,
+  badge, link, stack, heading, button) and inherit the app's theme.
+- **The `legal-consent-wirekit` tag no longer skips the Livewire views.** It overrode only the
+  three plain stubs, never `livewire/consent-settings` and `livewire/reconsent-form` — the views
+  the `ConsentSettings` / `ReConsentForm` components actually render. A WireKit + Livewire app got
+  unstyled reactive screens even with the tag set. Both are now covered.
+- **A withdrawal now asks before it acts.** The WireKit settings view confirms the irreversible
+  withdrawal through an alert-dialog; previously there was no confirmation at all.
+- **The WireKit banner drives each deadline with WireKit's live `countdown`** (fed the absolute
+  effective/objection instant, never a drifting day count), now that the component shipped in
+  WireKit 2.13.0. The WireKit views require `pushery/wirekit` **≥ 2.13**, and a `WireKitViewsTest`
+  renders every view against the installed package and fails on any component the release lacks —
+  so a view can never again reach for a component the consumer cannot resolve (the bug that briefly
+  shipped a develop-only `countdown` tag against WireKit 2.12).
+- **The package no longer calls Laravel Foundation helpers it does not depend on.** `config_path()`,
+  `database_path()`, `resource_path()` and `lang_path()` exist only in `laravel/framework`, while
+  this package requires just focused `illuminate/*` components — so every call declared a
+  dependency contract the package does not hold, and would fatal outside a full Laravel app. They
+  now go through the `Illuminate\Contracts\Foundation\Application` methods, which
+  `illuminate/contracts` genuinely provides. Behaviour is identical.
+
+  The worst offender was not in the service provider but in **`config/legal-consent.php`**, whose
+  `sources.markdown.path` defaulted to `resource_path('legal')`. `mergeConfigFrom()` runs in
+  `register()`, so that file is loaded on **every** app boot — the publishing calls it sat next to
+  only ran under `runningInConsole()`. The key now defaults to `null` and the path is resolved at
+  runtime. A `LeanDependencyContractTest` enforces the whole class from now on: this gap is
+  invisible in development, because testbench pulls `laravel/framework` into the vendor tree and
+  composer's `replace` map makes `illuminate/contracts` resolve to the framework's own copy.
+
+### Added
+
+- **`schedule.prune`** (default `false`) — auto-registers the daily retention sweep. It is off by
+  default because it deletes, so an app upgrading into this version never silently starts erasing
+  accumulated records. Turning it on is what makes `retention_after_end` an enforced period rather
+  than a statement.
+- `legal-consent:prune` now reports a `LegalConsentMonitor` heartbeat, like the other two sweeps —
+  so an operator can alert on it having stopped. That matters most here: a dispatch that stops
+  running leaves visibly missing mail, while a prune that stops running fails silently.
+- `ui.withdraw_confirm_title`, `ui.withdraw_confirm_body` and `ui.cancel`, translated in all seven
+  bundled locales.
+- **A draft store for legal texts.** Documents set to `'source' => 'drafts'` are authored per
+  locale, carry a review state, and are released as a set. A source-hash tracks when a reviewed
+  translation has drifted from the text it was translated from (staleness), so a release cannot
+  quietly ship an out-of-date locale.
+- **`LegalDraftSaved` and `LegalDraftReviewed` events** — dispatched when a draft's text changes and
+  when a human signs off on its exact bytes. Each carries an opaque actor string the consumer logs
+  under its own retention policy; the package deliberately never stores the editor identity itself.
+- **Two admin screens, opt-in and fail-closed**, shipped as publishable Blade stubs (plain and
+  WireKit): a manager that releases every locale of a document atomically, and a per-locale editor.
+  Both require a Gate ability named in `admin.ability` and return `404` when it is unset or denied —
+  there is no ungated publish path. The editor sanitizes on store, so its preview is the exact bytes
+  a publish freezes.
+- **`Consent::published($key, $locale)`** — the one read path for a public legal page. It returns
+  the frozen row's exact bytes and hash (or `null` before a locale is published), and never falls
+  back to another locale, so the page a subject reads and the ledger's proof can never diverge.
+- **`Consent::registrationChecklist($locale)`** — returns the consent controls a registration form
+  must render as `Support\RegistrationChecklistItem` value objects, derived from what is actually
+  published, so a form stops hardcoding its own checkbox list and can never block on a document that
+  no longer exists or omit one that does. Each item's `required` follows the legal basis (a real
+  consent is never required — Art. 7(4)), never a UI decision.
+- **An AI-translation seam.** Bind `Contracts\LegalTextTranslator` to enable the editor's
+  "Translate" action; unbound, it reports that no translator is configured. A machine translation is
+  always produced unreviewed and must be reviewed by a human before it can be released.
+- **`legal-consent:verify-documents`** — verifies every published row against its stored hash and
+  flags notice-mode or wording-locale divergence, so tampering or drift is detectable from outside.
+- **`admin.ability`**, **`sources.drafts`** and **`cache.enforceable_ttl`** configuration keys.
+- **`UPGRADE.md`** — a migration guide for breaking releases, starting with `0.3.x → 0.4.0`.
+
 ## [0.3.0] - 2026-07-16
 
 ### Added
