@@ -22,6 +22,15 @@ final class ConsentSettings extends Component
 {
     public string $locale = '';
 
+    /**
+     * A confirmation of the last action, for the view's live region. After a withdrawal the row's
+     * button vanishes on re-render, so a sighted user gets weak feedback and a screen-reader user
+     * gets nothing at all confirming the (irreversible, append-only) act (WCAG 4.1.3). Announcing
+     * it here is the confirmation, and the view moves focus to it so focus does not drop to <body>
+     * when the button it was on disappears (WCAG 2.4.3).
+     */
+    public string $status = '';
+
     public function mount(?string $locale = null): void
     {
         $this->locale = $locale ?? app()->getLocale();
@@ -38,6 +47,8 @@ final class ConsentSettings extends Component
                 ConsentContext::fromRequest(request(), ConsentMethod::SettingsToggle),
                 $this->locale,
             );
+
+            $this->status = (string) __('legal-consent::ui.withdrawn_confirmation');
         }
     }
 

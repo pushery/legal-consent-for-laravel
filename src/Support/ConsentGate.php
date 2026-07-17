@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -40,76 +41,99 @@ final class ConsentGate
     {
         $now ??= CarbonImmutable::now();
 
-        $enforceable = LegalDocument::query()
-            ->select(['id', 'key', 'locale', 'type', 'major_version', 'version', 'title', 'ui_wording', 'content_hash', 'announce_from', 'enforce_from'])
-            ->where('locale', $locale)
-            ->where('is_active', true)
-            ->where('requires_explicit_optin', false)
-            ->where('notice_mode', NoticeMode::ActiveReconsent->value) // only an active re-consent gates
-            ->whereNotNull('enforce_from')
-            ->where('enforce_from', '<=', $now)
-            ->get();
+        // The active set is cached (a global, publish-driven fact); the time/mode filter runs here
+        // because those windows move on a clock. A dormant install now pays no query at all — it
+        // used to run this on every authenticated request just to be told nothing is published.
+        $enforceable = app(EnforceableDocumentCache::class)
+            ->activeFor($locale)
+            ->filter(fn (LegalDocument $document): bool => ! $document->requires_explicit_optin
+                && $document->noticeMode() === NoticeMode::ActiveReconsent // only an active re-consent gates
+                && $document->enforce_from instanceof CarbonImmutable
+                && $document->enforce_from->lessThanOrEqualTo($now))
+            ->values();
 
         if ($enforceable->isEmpty()) {
             return $enforceable;
         }
 
-        $highestAccepted = $this->highestAcceptedMajors($subject, $locale);
+        $held = $this->heldMajorByKey($subject);
 
         return $enforceable
-            ->filter(fn (LegalDocument $document): bool => ($highestAccepted[$document->key] ?? 0) < $document->major_version)
+            ->filter(fn (LegalDocument $document): bool => ($held[$document->key] ?? 0) < $document->major_version)
             ->values();
     }
 
     /**
-     * The subject's highest accepted major version per document key IN A GIVEN LOCALE,
-     * considering only the "accepting" actions (granted / acknowledged / re-accepted /
-     * parental). Locale-scoped: acceptance of one locale's text never satisfies another's.
+     * The major version the subject CURRENTLY holds per document key, ACROSS ALL LOCALES.
+     *
+     * Consent attaches to a document's identity, not the language it was read in: accepting the
+     * terms in `en` satisfies the `de` gate for the same document (a locale switch is a display
+     * preference, not a fresh contractual encounter), and the recorded locale is provenance in
+     * the ledger. Computed as a fold over the subject's rows in legal-action order rather than a
+     * monotonic MAX, so it is withdrawal- and objection-aware:
+     *
+     *  - an accepting action (granted / acknowledged / re-accepted / parental / deemed-accepted)
+     *    sets the held major to that row's major;
+     *  - an ENDING action (withdrawn / declined / terminated) drops the holding to 0 — a monotonic
+     *    max cannot see this, which is why a withdrawn opt-in wrongly reported as still held
+     *    (Art. 7(3));
+     *  - an OBJECTED action rebuts a *deemed change* (§ 308 Nr. 5 lit. a BGB), not the contract, so
+     *    it keeps whatever state existed immediately before it — never a global max, which would
+     *    resurrect an earlier withdrawal.
      *
      * @return array<string, int>
      */
-    public function highestAcceptedMajors(Model $subject, string $locale): array
+    public function heldMajorByKey(Model $subject): array
     {
-        $accepting = array_map(static fn (ConsentAction $action): string => $action->value, ConsentAction::accepting());
-
         $tenant = app(TenantContext::class);
 
         $rows = DB::table('legal_consents')
-            ->select('document_key', DB::raw('MAX(document_major_version) as max_major'))
+            ->select('document_key', 'document_major_version', 'action')
             ->where('subject_type', $subject->getMorphClass())
             ->where('subject_id', $subject->getKey())
-            ->where('locale', $locale)
             ->when($tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $tenant->current()))
-            ->whereIn('action', $accepting)
-            ->groupBy('document_key')
+            ->orderBy('document_key')
+            ->orderBy('accepted_at')
+            ->orderBy('id')
             ->get();
 
-        $map = [];
+        $held = [];
 
         foreach ($rows as $row) {
             $key = $row->document_key;
-            $major = $row->max_major;
+            $actionValue = $row->action;
 
-            if (is_string($key)) {
-                $map[$key] = is_numeric($major) ? (int) $major : 0;
+            if (is_string($key) && is_string($actionValue)) {
+                $action = ConsentAction::from($actionValue);
+                $major = is_numeric($row->document_major_version) ? (int) $row->document_major_version : 0;
+
+                if ($action->isAccepting()) {
+                    $held[$key] = $major;
+                } elseif ($action === ConsentAction::Objected) {
+                    $held[$key] ??= 0; // keep the prior state; only anchor the key if it is the first row
+                } else {
+                    $held[$key] = 0; // withdrawn / declined / terminated end the holding
+                }
             }
         }
 
-        return $map;
+        return $held;
     }
 
     /**
-     * The subject's most recent ledger entry for a (document_key, locale) — the source of
-     * truth for whether they CURRENTLY hold it, since a monotonic max cannot see a later
-     * withdrawal (Art. 7(3)).
+     * The subject's most recent ledger entry for a document key — the source of truth for
+     * whether they CURRENTLY hold it, since a monotonic max cannot see a later withdrawal
+     * (Art. 7(3)). Cross-locale by default (identity-keyed); pass an explicit `$locale` only
+     * where the answer must be per-text — the deemed-consent sweep writes one § 308 proof row
+     * per locale, so it evaluates each locale's objection window on its own locale's actions.
      */
-    public function latestActionFor(Model $subject, string $documentKey, string $locale): ?LegalConsent
+    public function latestActionFor(Model $subject, string $documentKey, ?string $locale = null): ?LegalConsent
     {
         return LegalConsent::query()
             ->where('subject_type', $subject->getMorphClass())
             ->where('subject_id', $subject->getKey())
             ->where('document_key', $documentKey)
-            ->where('locale', $locale)
+            ->when($locale !== null, fn (Builder $query): Builder => $query->where('locale', $locale))
             ->orderByDesc('accepted_at')
             ->orderByDesc('id')
             ->first();

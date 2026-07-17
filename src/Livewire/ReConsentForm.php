@@ -26,9 +26,18 @@ final class ReConsentForm extends Component
 
     public string $locale = '';
 
-    public function mount(?string $locale = null): void
+    /**
+     * How the acceptance was obtained. This lands in the ledger as proof of HOW a subject agreed,
+     * so it must describe the surface it actually happened on: this component is a re-consent gate
+     * by default, and only a settings-page embed is a settings toggle. Recording every acceptance
+     * as a settings toggle would put a provenance in the ledger that never happened.
+     */
+    public ConsentMethod $method = ConsentMethod::ReConsentGate;
+
+    public function mount(?string $locale = null, ConsentMethod $method = ConsentMethod::ReConsentGate): void
     {
         $this->locale = $locale ?? app()->getLocale();
+        $this->method = $method;
     }
 
     public function submit(): void
@@ -43,7 +52,7 @@ final class ReConsentForm extends Component
 
         foreach ($manager->outstanding($subject, $this->locale) as $document) {
             if (($this->accept[$document->key] ?? false) === true) {
-                $manager->accept($subject, $document->key, ConsentContext::fromRequest(request(), ConsentMethod::SettingsToggle), $this->locale);
+                $manager->accept($subject, $document->key, ConsentContext::fromRequest(request(), $this->method), $this->locale);
             }
         }
     }
@@ -53,7 +62,7 @@ final class ReConsentForm extends Component
         $subject = $this->subject();
 
         if ($subject instanceof Model) {
-            app(ConsentManager::class)->object($subject, $key, ConsentContext::fromRequest(request(), ConsentMethod::SettingsToggle), $this->locale);
+            app(ConsentManager::class)->object($subject, $key, ConsentContext::fromRequest(request(), $this->method), $this->locale);
         }
     }
 
@@ -62,7 +71,7 @@ final class ReConsentForm extends Component
         $subject = $this->subject();
 
         if ($subject instanceof Model) {
-            app(ConsentManager::class)->terminate($subject, $key, ConsentContext::fromRequest(request(), ConsentMethod::SettingsToggle), $this->locale);
+            app(ConsentManager::class)->terminate($subject, $key, ConsentContext::fromRequest(request(), $this->method), $this->locale);
         }
     }
 

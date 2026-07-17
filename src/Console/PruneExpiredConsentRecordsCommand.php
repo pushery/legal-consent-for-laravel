@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
@@ -39,7 +40,7 @@ final class PruneExpiredConsentRecordsCommand extends Command
 
     protected $description = 'Delete consent and notice records older than the configured retention period.';
 
-    public function handle(): int
+    public function handle(LegalConsentMonitor $monitor): int
     {
         DB::disableQueryLog();
 
@@ -49,6 +50,12 @@ final class PruneExpiredConsentRecordsCommand extends Command
 
         $consents = $this->prune(LegalConsent::query(), 'legal_consents', 'accepted_at', $cutoff);
         $notices = $this->prune(LegalNotice::query(), 'legal_notices', 'sent_at', $cutoff);
+
+        // Report even a zero sweep: this is the one scheduled task whose SILENCE is the failure.
+        // A dispatch that stops running leaves visibly missing mail; a prune that stops running
+        // just keeps personal data past its retention period, with nothing failing and nobody
+        // noticing (Art. 5(1)(e)). The heartbeat is what makes that detectable.
+        $monitor->heartbeat('legal-consent:prune', $consents + $notices);
 
         $this->info("Pruned {$consents} consent record(s) and {$notices} notice record(s) older than {$retention}.");
 

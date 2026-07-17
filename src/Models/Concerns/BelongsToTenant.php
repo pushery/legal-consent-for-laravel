@@ -23,8 +23,8 @@ trait BelongsToTenant
         static::creating(function (Model $model): void {
             $tenant = app(TenantContext::class);
 
-            if ($tenant->enabled() && $model->getAttribute($tenant->column()) === null) {
-                $model->setAttribute($tenant->column(), $tenant->current());
+            if ($tenant->enabled() && $model->getAttribute(TenantContext::COLUMN) === null) {
+                $model->setAttribute(TenantContext::COLUMN, $tenant->current());
             }
         });
     }

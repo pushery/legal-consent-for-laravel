@@ -19,26 +19,36 @@ use Pushery\LegalConsent\Console\DispatchDueLegalNoticesCommand;
 use Pushery\LegalConsent\Console\FlushDocumentCacheCommand;
 use Pushery\LegalConsent\Console\PruneExpiredConsentRecordsCommand;
 use Pushery\LegalConsent\Console\PublishDocumentCommand;
+use Pushery\LegalConsent\Console\VerifyDocumentsCommand;
 use Pushery\LegalConsent\Console\VerifyLedgerCommand;
-use Pushery\LegalConsent\Content\LegalDocumentManager;
 use Pushery\LegalConsent\Content\LegalHtmlSanitizer;
+use Pushery\LegalConsent\Content\LegalSourceRenderer;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
+use Pushery\LegalConsent\Contracts\LegalTextTranslator;
+use Pushery\LegalConsent\Events\LegalDocumentPublished;
 use Pushery\LegalConsent\Http\Middleware\EnsureLegalConsent;
+use Pushery\LegalConsent\Listeners\FlushEnforceableCacheOnPublish;
 use Pushery\LegalConsent\Listeners\RecordConsentOnRegistration;
 use Pushery\LegalConsent\Livewire\ConsentSettings;
+use Pushery\LegalConsent\Livewire\LegalTextEditor;
+use Pushery\LegalConsent\Livewire\LegalTextManager;
 use Pushery\LegalConsent\Livewire\ReConsentForm;
+use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\ConsentBanner;
 use Pushery\LegalConsent\Support\ConsentGate;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
+use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
+use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
 use Pushery\LegalConsent\Support\NullMonitor;
 use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
 use Pushery\LegalConsent\Support\RegistrationRules;
 use Pushery\LegalConsent\Support\TenantContext;
+use Pushery\LegalConsent\Support\UnavailableTranslator;
 
 final class LegalConsentServiceProvider extends ServiceProvider
 {
@@ -60,12 +70,16 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         $this->app->singleton(TenantContext::class, fn (): TenantContext => new TenantContext(
             $this->boolConfig('legal-consent.tenancy.enabled', false),
-            $this->stringConfig('legal-consent.tenancy.column', 'tenant_id'),
         ));
 
         $this->app->singleton(ConsentManager::class, fn (): DefaultConsentManager => new DefaultConsentManager(new ConsentGate, $this->defaultLocale()));
 
         $this->app->bind(LegalConsentMonitor::class, NullMonitor::class);
+
+        // The package ships the SEAM and the human-review gate, never a provider: an app binds its
+        // own implementation. Unbound, a Translate action fails loud rather than filing the
+        // untranslated source as a translation.
+        $this->app->bind(LegalTextTranslator::class, UnavailableTranslator::class);
 
         $this->app->singleton(RegistrationRules::class, fn (): RegistrationRules => new RegistrationRules(
             $this->documentsConfig(),
@@ -83,12 +97,13 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         $this->app->singleton(RenderPipeline::class, fn (): RenderPipeline => new RenderPipeline(new LegalHtmlSanitizer, $this->markdownConfig()));
 
-        $this->app->singleton(LegalDocumentManager::class, fn (): LegalDocumentManager => new LegalDocumentManager(
+        $this->app->singleton(LegalSourceRenderer::class, fn (): LegalSourceRenderer => new LegalSourceRenderer(
             $this->app->make(SourceFactory::class),
             $this->app->make(RenderPipeline::class),
             $this->cacheStore(),
             $this->intConfig('legal-consent.cache.ttl', 86400),
             $this->stringConfig('legal-consent.cache.prefix', 'legal:doc'),
+            $this->app->make(TenantContext::class),
         ));
 
         $this->app->singleton(LegalDocumentPublisher::class, fn (): LegalDocumentPublisher => new LegalDocumentPublisher(
@@ -103,6 +118,18 @@ final class LegalConsentServiceProvider extends ServiceProvider
         ));
 
         $this->app->singleton(ConsentBanner::class, fn (): ConsentBanner => new ConsentBanner(new ConsentGate, $this->defaultLocale()));
+
+        $this->app->singleton(EnforceableDocumentCache::class, fn (): EnforceableDocumentCache => new EnforceableDocumentCache(
+            $this->cacheStore(),
+            $this->app->make(TenantContext::class),
+            $this->intConfig('legal-consent.cache.enforceable_ttl', 60),
+        ));
+
+        $this->app->singleton(LegalDocumentReleaser::class, fn (): LegalDocumentReleaser => new LegalDocumentReleaser(
+            $this->app->make(LegalDocumentPublisher::class),
+            $this->app->make(AffectedSubjectResolver::class),
+            $this->app->make(TenantContext::class),
+        ));
     }
 
     public function boot(): void
@@ -118,11 +145,15 @@ final class LegalConsentServiceProvider extends ServiceProvider
         if (class_exists(Livewire::class)) {
             Livewire::component('legal-consent.consent-settings', ConsentSettings::class);
             Livewire::component('legal-consent.reconsent-form', ReConsentForm::class);
+            Livewire::component('legal-consent.legal-text-manager', LegalTextManager::class);
+            Livewire::component('legal-consent.legal-text-editor', LegalTextEditor::class);
         }
 
         if (self::$runsMigrations) {
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         }
+
+        Event::listen(LegalDocumentPublished::class, FlushEnforceableCacheOnPublish::class);
 
         if ((bool) config('legal-consent.registration.listen_to_registered_event', true)) {
             Event::listen(Registered::class, RecordConsentOnRegistration::class);
@@ -142,6 +173,17 @@ final class LegalConsentServiceProvider extends ServiceProvider
                     ->withoutOverlapping()
                     ->onOneServer();
             }
+
+            // Opt-IN, unlike its two siblings: this sweep DELETES. An app upgrading into this
+            // version must not silently start erasing records it has been accumulating — that
+            // decision belongs to the consumer, once, deliberately. Daily is enough for a
+            // period measured in years, and it keeps the nightly window small.
+            if ((bool) config('legal-consent.schedule.prune', false)) {
+                $schedule->command('legal-consent:prune')
+                    ->daily()
+                    ->withoutOverlapping()
+                    ->onOneServer();
+            }
         });
 
         if ($this->app->runningInConsole()) {
@@ -154,45 +196,62 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 DispatchDueLegalNoticesCommand::class,
                 CloseObjectionWindowsCommand::class,
                 PruneExpiredConsentRecordsCommand::class,
+                VerifyDocumentsCommand::class,
                 VerifyLedgerCommand::class,
             ]);
         }
     }
 
+    /**
+     * Every host path below is resolved through `$this->app`, never through the global
+     * `config_path()` / `database_path()` / `resource_path()` / `lang_path()` helpers. Those are
+     * FOUNDATION helpers — defined only in laravel/framework's Foundation/helpers.php, which no
+     * focused `illuminate/*` component provides. This package requires only `illuminate/*`, so
+     * calling them would declare a dependency contract it does not hold: a fatal the moment the
+     * package is consumed outside a full Laravel app. The methods are on
+     * Illuminate\Contracts\Foundation\Application — the type `$this->app` already has.
+     */
     private function registerPublishing(): void
     {
         $this->publishes([
-            __DIR__.'/../config/legal-consent.php' => config_path('legal-consent.php'),
+            __DIR__.'/../config/legal-consent.php' => $this->app->configPath('legal-consent.php'),
         ], 'legal-consent-config');
 
         $this->publishes([
-            __DIR__.'/../database/migrations' => database_path('migrations'),
+            __DIR__.'/../database/migrations' => $this->app->databasePath('migrations'),
         ], 'legal-consent-migrations');
 
         // Optional, opt-in migrations (not auto-loaded — they touch the host `users`
         // table, so a consumer publishes them deliberately).
         $this->publishes([
-            __DIR__.'/../database/migrations/optional/0001_01_01_000003_add_legal_consent_cache_to_users_table.php' => database_path('migrations/0001_01_01_000003_add_legal_consent_cache_to_users_table.php'),
+            __DIR__.'/../database/migrations/optional/0001_01_01_000003_drop_legal_consent_cache_from_users_table.php' => $this->app->databasePath('migrations/0001_01_01_000003_drop_legal_consent_cache_from_users_table.php'),
         ], 'legal-consent-users-cache');
 
         $this->publishes([
-            __DIR__.'/../database/migrations/optional/0001_01_01_000004_backfill_v1_legal_acceptances.php' => database_path('migrations/0001_01_01_000004_backfill_v1_legal_acceptances.php'),
+            __DIR__.'/../database/migrations/optional/0001_01_01_000004_backfill_v1_legal_acceptances.php' => $this->app->databasePath('migrations/0001_01_01_000004_backfill_v1_legal_acceptances.php'),
         ], 'legal-consent-backfill');
 
         $this->publishes([
-            __DIR__.'/../resources/views' => resource_path('views/vendor/legal-consent'),
+            __DIR__.'/../resources/views' => $this->app->resourcePath('views/vendor/legal-consent'),
         ], 'legal-consent-views');
 
-        // WireKit-flavored variants — publishing this tag overrides the plain stubs with the
-        // WireKit-themed versions (opt-in; requires WireKit in the host app).
+        // WireKit-native variants — publishing this tag overrides the plain stubs with versions
+        // built from real <x-wirekit::*> components. It covers the Livewire views too: those are
+        // what the ConsentSettings/ReConsentForm components actually render, so a tag that skipped
+        // them would leave a WireKit+Livewire app with unstyled reactive screens while reporting
+        // that it had themed the UI.
         $this->publishes([
-            __DIR__.'/../resources/views/wirekit/consent-checkboxes.blade.php' => resource_path('views/vendor/legal-consent/consent-checkboxes.blade.php'),
-            __DIR__.'/../resources/views/wirekit/consent-banner.blade.php' => resource_path('views/vendor/legal-consent/consent-banner.blade.php'),
-            __DIR__.'/../resources/views/wirekit/consent-settings.blade.php' => resource_path('views/vendor/legal-consent/consent-settings.blade.php'),
+            __DIR__.'/../resources/views/wirekit/consent-checkboxes.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/consent-checkboxes.blade.php'),
+            __DIR__.'/../resources/views/wirekit/consent-banner.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/consent-banner.blade.php'),
+            __DIR__.'/../resources/views/wirekit/consent-settings.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/consent-settings.blade.php'),
+            __DIR__.'/../resources/views/wirekit/livewire/consent-settings.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/livewire/consent-settings.blade.php'),
+            __DIR__.'/../resources/views/wirekit/livewire/reconsent-form.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/livewire/reconsent-form.blade.php'),
+            __DIR__.'/../resources/views/wirekit/livewire/legal-text-manager.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/livewire/legal-text-manager.blade.php'),
+            __DIR__.'/../resources/views/wirekit/livewire/legal-text-editor.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/livewire/legal-text-editor.blade.php'),
         ], 'legal-consent-wirekit');
 
         $this->publishes([
-            __DIR__.'/../lang' => lang_path('vendor/legal-consent'),
+            __DIR__.'/../lang' => $this->app->langPath('vendor/legal-consent'),
         ], 'legal-consent-lang');
     }
 

@@ -74,8 +74,44 @@ final class VerifyLedgerCommand extends Command
                 $expectedPrev = $chain->hashRow($row);
             });
 
+        // A forged row inserted with prev_record_hash = NULL is skipped by the walk above (it
+        // filters on whereNotNull) — so on its own it would read as "intact" while the gate counts
+        // it as a valid consent. Once chaining has begun, though, EVERY row the writer appends
+        // carries a link, so a NULL-prev row with an id past the first chained row was never
+        // written through the manager: it is a direct insert. Pre-feature rows have lower ids and
+        // are legitimately unchained, so they are not flagged.
+        $firstChainedId = DB::table('legal_consents')->whereNotNull('prev_record_hash')->min('id');
+        $unprotected = 0;
+
+        if ($firstChainedId !== null) {
+            $suspects = DB::table('legal_consents')
+                ->whereNull('prev_record_hash')
+                ->where('id', '>', $firstChainedId)
+                ->orderBy('id')
+                ->get(['id']);
+
+            foreach ($suspects as $suspect) {
+                $rowId = is_int($suspect->id) || is_string($suspect->id) ? (string) $suspect->id : '?';
+                $breaks[] = "row #{$rowId}: unchained row inserted after tamper-evidence began — a chained ledger has no unchained inserts (direct DB write?)";
+            }
+
+            $unprotected = (int) DB::table('legal_consents')
+                ->whereNull('prev_record_hash')
+                ->where('id', '<=', $firstChainedId)
+                ->count();
+        }
+
         if ($breaks === []) {
             $this->info("Ledger chain intact: verified {$rows} chained record(s) across {$subjects} subject(s).");
+
+            if ($unprotected > 0) {
+                $this->warn("{$unprotected} row(s) predate tamper-evidence and carry no chain link — unprotected, not a break.");
+            }
+
+            // Honesty: with no signed head, deleting a subject's NEWEST row leaves nothing to
+            // mismatch, so a tail truncation is not detectable here. Say so rather than let the
+            // "intact" line imply a guarantee the chain does not give.
+            $this->line('Note: an intact chain proves no naive tampering, not that the ledger is untampered. The hash is unkeyed and the head unsigned, so an actor with table-write access can alter a row and re-chain its successors into a consistent chain, and a tail truncation leaves nothing to mismatch. HMAC-key the hash and/or notarize the head externally to close that gap.');
 
             return self::SUCCESS;
         }

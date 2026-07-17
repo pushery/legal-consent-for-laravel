@@ -12,7 +12,9 @@ use Illuminate\Support\Facades\DB;
 use Override;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 
 /**
  * One frozen, published version of a legal text.
@@ -71,6 +73,15 @@ final class LegalDocument extends Model
      * mapped mode, and a caller that sets only the mode gets the derived boolean — so a
      * notice-mode query and a legacy `requires_reconsent` query can never disagree.
      */
+    /**
+     * The columns that may legitimately change after a version is published: activation
+     * (`is_active`) plus the operational stamps written by the notice/objection sweeps.
+     * Everything else on a published row is frozen proof.
+     *
+     * @var list<string>
+     */
+    public const array MUTABLE_AFTER_PUBLISH = ['is_active', 'updated_at', 'notified_at', 'objection_closed_at'];
+
     #[Override]
     protected static function booted(): void
     {
@@ -87,6 +98,32 @@ final class LegalDocument extends Model
             $document->notice_mode = $mode;
             $document->requires_reconsent = $mode->gates();
         });
+
+        // A published version is frozen proof (EDPB 05/2020 Rz. 108): refuse any update that
+        // touches a column outside MUTABLE_AFTER_PUBLISH, in PHP, before any SQL is issued — a
+        // clean typed failure on an accidental `$doc->content = …; $doc->save()`. The database
+        // trigger (migration 000011) is the defense-in-depth layer that also catches the paths
+        // this hook cannot see: the two sweeps write via saveQuietly() (which bypasses events),
+        // and raw DB::table()/psql updates never reach a model at all.
+        self::updating(function (self $document): void {
+            $forbidden = array_values(array_diff(array_keys($document->getDirty()), self::MUTABLE_AFTER_PUBLISH));
+
+            if ($forbidden !== []) {
+                throw LegalDocumentFrozenException::for($forbidden);
+            }
+        });
+
+        // Any write to this table can change WHICH versions are enforceable, so it drops the gate's
+        // cached set. Tying invalidation to the publish event alone would leave every other path
+        // stale — an activate(), a seeder, a consumer inserting a row by hand — and a stale
+        // enforceable set is a gate that fires late or not at all. The after-commit listener still
+        // exists for the release transaction's ordering; this is the net underneath it.
+        $flush = static function (): void {
+            app(EnforceableDocumentCache::class)->flushAll();
+        };
+
+        self::saved($flush);
+        self::deleted($flush);
     }
 
     /**

@@ -6,10 +6,12 @@ namespace Pushery\LegalConsent\Contracts;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\ConsentContext;
+use Pushery\LegalConsent\Support\RegistrationChecklistItem;
 
 /**
  * The headless core for recording and querying consent. Works on any Eloquent model as
@@ -66,4 +68,25 @@ interface ConsentManager
      * @return list<array<string, mixed>>
      */
     public function history(Model $subject): array;
+
+    /**
+     * The PUBLISHED document a public page must render: the frozen row's verbatim bytes and
+     * stored hash — the same text the ledger proves the subject accepted. Null when nothing is
+     * published for that (key, locale); it never throws, so a public page can render an "in
+     * preparation" shell instead of failing.
+     *
+     * This is the read path. Rendering the configured SOURCE instead (see LegalSourceRenderer)
+     * shows text that may have drifted from the published row, which silently breaks the one
+     * promise the ledger makes.
+     */
+    public function published(string $documentKey, ?string $locale = null): ?PublishedDocument;
+
+    /**
+     * The consent controls a registration form must render, derived from what is actually
+     * PUBLISHED rather than from a list the form hardcodes — so renaming, unpublishing, or
+     * publishing a document in another language cannot leave the form silently wrong.
+     *
+     * @return list<RegistrationChecklistItem>
+     */
+    public function registrationChecklist(?string $locale = null): array;
 }

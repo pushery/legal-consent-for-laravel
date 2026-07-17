@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Generator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -22,6 +23,8 @@ use stdClass;
  */
 final readonly class AffectedSubjectResolver
 {
+    private const int CHUNK = 500;
+
     public function __construct(private TenantContext $tenant) {}
 
     /**
@@ -41,7 +44,7 @@ final readonly class AffectedSubjectResolver
     {
         $accepting = array_map(static fn (ConsentAction $action): string => $action->value, ConsentAction::accepting());
 
-        return DB::table('legal_consents')
+        $page = fn (): QueryBuilder => DB::table('legal_consents')
             ->select('subject_type', 'subject_id')
             ->where('document_key', $version->key)
             ->where('locale', $version->locale)
@@ -55,9 +58,74 @@ final readonly class AffectedSubjectResolver
             ->havingRaw('MAX(document_major_version) < ?', [$version->major_version])
             ->orderBy('subject_type')
             ->orderBy('subject_id')
-            ->lazy()
-            ->chunk(500)
+            ->limit(self::CHUNK);
+
+        // KEYSET paging on (subject_type, subject_id), NOT lazy()/chunk(): those page with
+        // LIMIT/OFFSET, and OFFSET on a GROUP BY … HAVING query re-runs the whole aggregation every
+        // page and discards the first OFFSET groups — quadratic (200 full aggregations at 100k
+        // subjects, offsetting to 99 500 on the last page). The group key is the sort key, so a
+        // strict `> (lastType, lastId)` resumes exactly where the last page ended, index-ordered,
+        // no offset. Filtering those columns pre-aggregation is equivalent to filtering groups —
+        // each group is one (subject_type, subject_id) pair.
+        return LazyCollection::make(function () use ($page): Generator {
+            $lastType = null;
+            $lastId = null;
+
+            do {
+                $query = $page();
+
+                if ($lastType !== null) {
+                    $query->where(function (QueryBuilder $seek) use ($lastType, $lastId): void {
+                        $seek->where('subject_type', '>', $lastType)
+                            ->orWhere(fn (QueryBuilder $tie): QueryBuilder => $tie->where('subject_type', $lastType)->where('subject_id', '>', $lastId));
+                    });
+                }
+
+                $rows = $query->get();
+
+                foreach ($rows as $row) {
+                    yield $row;
+                }
+
+                $last = $rows->last();
+                $lastType = $last instanceof stdClass ? $last->subject_type : null;
+                $lastId = $last instanceof stdClass ? $last->subject_id : null;
+            } while ($rows->count() === self::CHUNK);
+        })
+            ->chunk(self::CHUNK)
             ->flatMap(fn (LazyCollection $chunk): Collection => $this->hydrate($chunk));
+    }
+
+    /**
+     * How MANY subjects a version reaches, without hydrating any of them. `affects()` only needs the
+     * number for an advisory line, so counting the grouped set with one aggregate query
+     * (`COUNT(*) FROM (… GROUP BY subject HAVING MAX(major) < ?)`) is the right shape — the streaming
+     * hydrate path of {@see forVersion} loads real subject models 500 at a time, which is wasteful
+     * (and slow, and memory-heavy) purely to arrive at a count in a Livewire web request.
+     *
+     * This counts distinct (subject_type, subject_id) acceptance-groups in the ledger. It differs
+     * from `forVersion(...)->count()` only for an ORPHANED group whose `subject_type` no longer maps
+     * to a live model class — the hydrate path silently drops those (it cannot build the model),
+     * this counts them. For any app whose subjects still exist the two are identical; and counting
+     * every ledger population on the older major is the more faithful answer for an advisory number.
+     */
+    public function countForVersion(LegalDocument $version, ?int $maxConsentId = null): int
+    {
+        $accepting = array_map(static fn (ConsentAction $action): string => $action->value, ConsentAction::accepting());
+
+        $grouped = DB::table('legal_consents')
+            ->select('subject_type', 'subject_id')
+            ->where('document_key', $version->key)
+            ->where('locale', $version->locale)
+            ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id))
+            ->when($maxConsentId !== null, fn (QueryBuilder $query): QueryBuilder => $query->where('id', '<=', $maxConsentId))
+            ->whereNotNull('subject_type')
+            ->whereNotNull('subject_id')
+            ->whereIn('action', $accepting)
+            ->groupBy('subject_type', 'subject_id')
+            ->havingRaw('MAX(document_major_version) < ?', [$version->major_version]);
+
+        return DB::query()->fromSub($grouped, 'affected')->count();
     }
 
     /**

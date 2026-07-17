@@ -18,25 +18,27 @@ use Closure;
  * `current()` returns '' when tenancy is off, when no resolver is set, or when the resolver
  * yields nothing (a system/console context) — '' is the shared-tenant bucket, so an app that
  * never enables tenancy behaves exactly as before (every row shares '').
+ *
+ * The tenant column is fixed at `tenant_id`. It was briefly configurable, which it never could
+ * be: every migration declares the column literally, so pointing the option anywhere else only
+ * produced a "column not found" on the first read. An advertised option that can only break is
+ * worse than no option.
  */
 final class TenantContext
 {
+    /** The tenant column, as every migration declares it. */
+    public const string COLUMN = 'tenant_id';
+
     /** @var (Closure(): mixed)|null */
     private ?Closure $resolver = null;
 
     public function __construct(
         private readonly bool $enabled = false,
-        private readonly string $column = 'tenant_id',
     ) {}
 
     public function enabled(): bool
     {
         return $this->enabled;
-    }
-
-    public function column(): string
-    {
-        return $this->column;
     }
 
     /**

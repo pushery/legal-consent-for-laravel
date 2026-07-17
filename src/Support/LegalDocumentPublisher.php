@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Carbon\CarbonImmutable;
+use Pushery\LegalConsent\Content\Document;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Enums\DocumentType;
@@ -99,6 +100,16 @@ final readonly class LegalDocumentPublisher
         // early return must never become a path around them (re-publishing unchanged text under a
         // deemed-consent mode would otherwise skip "deemed consent is contract-only" entirely).
         $this->assertModeAllowedForType($mode, $type, $key);
+        $this->assertModeConsistentAcrossLocales($mode, $key, $locale, $rendered->majorVersion);
+
+        // Refuse a downgrade BEFORE the identical-version lookup below. This placement is
+        // load-bearing: the `$existing` branch re-activates an inactive matching row, so an
+        // inactive lower version whose row still exists (v1 after v2 went active) would
+        // otherwise be silently re-activated — retroactively un-gating everyone. The plain
+        // `>` major check further down runs only after that branch has already returned, so
+        // it never guards this vector. Version is monotonic by design; a revert is a new,
+        // higher version carrying the old text, never a re-activation of an old row.
+        $this->assertNotDowngrade($key, $locale, $rendered);
 
         $existing = LegalDocument::query()
             ->where('key', $key)
@@ -209,6 +220,69 @@ final readonly class LegalDocumentPublisher
         event(new LegalDocumentPublished($document));
 
         return $document;
+    }
+
+    /**
+     * Refuse to publish a version strictly lower than the one currently active for
+     * (key, locale). A downgrade is never a legitimate operation on a proof artifact: the
+     * active version is the text the population is gated against, and re-activating an older
+     * row would silently un-gate everyone who already accepted the newer major. Compared as a
+     * (major, minor, patch) tuple; an equal version is not a downgrade (it is the identical-
+     * version republish handled downstream), and there is intentionally no `--rollback` — a
+     * revert publishes a higher version carrying the old text.
+     */
+    private function assertNotDowngrade(string $key, string $locale, Document $rendered): void
+    {
+        $active = LegalDocument::query()
+            ->select(['major_version', 'minor_version', 'patch_version', 'version'])
+            ->where('key', $key)
+            ->where('locale', $locale)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $active instanceof LegalDocument) {
+            return;
+        }
+
+        // PHP compares equal-length lists element by element, so this is a (major, minor,
+        // patch) tuple comparison: true only when the incoming version is strictly lower.
+        $current = [(int) $active->major_version, (int) $active->minor_version, (int) $active->patch_version];
+        $incoming = [$rendered->majorVersion, $rendered->minorVersion, $rendered->patchVersion];
+
+        if ($incoming < $current) {
+            throw new RuntimeException(
+                "Cannot publish version {$rendered->version} of '{$key}' ({$locale}): it is lower than the active version {$active->version}. Versions are monotonic — publish a higher version carrying the reverted text instead of re-activating an old one."
+            );
+        }
+    }
+
+    /**
+     * One (key, major) is ONE change, so every locale of it must carry the SAME notice mode.
+     *
+     * Acceptance is identity-keyed — accepting `terms` major 2 in any language satisfies the gate
+     * for `terms` major 2 everywhere. If the same major were DeemedConsent in one locale and
+     * ActiveReconsent in another, a subject bound by silence in the first would silently satisfy
+     * the hard re-consent gate of the second: a weaker proof standing in for a stronger one. The
+     * atomic releaser makes this unreachable by construction; this guard covers the per-locale CLI
+     * escape hatch, which cannot see its sibling locales.
+     */
+    private function assertModeConsistentAcrossLocales(NoticeMode $mode, string $key, string $locale, int $major): void
+    {
+        $siblings = LegalDocument::query()
+            ->select(['locale', 'notice_mode', 'requires_reconsent'])
+            ->where('key', $key)
+            ->where('major_version', $major)
+            ->where('locale', '!=', $locale)
+            ->where('is_active', true)
+            ->get();
+
+        foreach ($siblings as $sibling) {
+            if ($sibling->noticeMode() !== $mode) {
+                throw new RuntimeException(
+                    "'{$key}' major {$major} is already active in '{$sibling->locale}' as {$sibling->noticeMode()->value}; publishing '{$locale}' as {$mode->value} would make one change bind by two different standards. Acceptance is identity-keyed, so the weaker one would satisfy the stronger one's gate — release every locale of a version with the same notice mode."
+                );
+            }
+        }
     }
 
     /**
@@ -372,8 +446,8 @@ final readonly class LegalDocumentPublisher
 
     private function sourceNameFor(string $key): string
     {
-        $source = $this->documents[$key]['source'] ?? 'database';
+        $source = $this->documents[$key]['source'] ?? 'markdown';
 
-        return is_string($source) ? $source : 'database';
+        return is_string($source) ? $source : 'markdown';
     }
 }

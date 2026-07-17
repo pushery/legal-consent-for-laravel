@@ -41,8 +41,8 @@ Highlights:
   payment-contract update, a material privacy notice) is *announced but never blocks*; a minor
   contract change can bind by silence with an objection window (Zustimmungsfiktion, § 308
   Nr. 5 BGB); only a material core change gates — each with durable-medium delivery proof.
-- **Interchangeable content sources** — Markdown files (default), the database, or any
-  foreign CMS via a small resolver.
+- **Interchangeable content sources** — Markdown files (default), or an admin-maintained draft
+  store, edited and reviewed in your own screens before a publish freezes it.
 - **Fortify-optional** — record consent three ways (a trait, an event listener, or a
   headless JSON API). `laravel/fortify` is never required.
 - **Optional, off by default** — a tamper-evidence hash chain (`legal-consent:verify-ledger`),
@@ -312,8 +312,10 @@ php artisan legal-consent:publish terms de --active \
 ```
 
 Both dates are validated — you cannot smuggle a short lead by omitting `--announce-at`, and
-the minimum period is per regime (§ 675g's two months is hard). From `enforce_from`, the
-middleware blocks the subject until they re-accept the new major version. A SHA-256 hash
+the minimum period is per regime (§ 675g's two months is hard). Use a **future** `--enforce-at`:
+the lead-time guard only runs while the effective date is still ahead, so an already-past date
+publishes an immediate gate with no grace (the dates above are illustrative — pick your own).
+From `enforce_from`, the middleware blocks the subject until they re-accept the new major version. A SHA-256 hash
 **detects** any text change; a human **classifies** it (the notice mode) at publish time; the
 gate compares `major_version` only.
 
@@ -321,10 +323,57 @@ gate compares `major_version` only.
 
 Each document declares a `source` in `config/legal-consent.php`:
 
-- **`markdown`** (recommended) — git-diffable, PR-reviewable `.md` files.
-- **`database`** — the active `legal_documents` row (edit via your own admin UI).
-- **`cms`** — a foreign CMS. Implement `Pushery\LegalConsent\Content\CmsResolver` (or pass
-  an inline closure) that returns a `RawDocument`; the package never learns what a "page" is.
+- **`markdown`** (default) — git-diffable, PR-reviewable `.md` files under `resources/legal`.
+- **`drafts`** — the admin-maintained draft store. Texts are authored and reviewed per locale in
+  your own screens (below), and only a reviewed draft set can be released. Opt a document in with
+  `'source' => 'drafts'`.
+
+Any other value is your own class implementing `Pushery\LegalConsent\Content\LegalDocumentSource`,
+named as the source's `driver` and resolved from the container.
+
+## Maintaining legal texts
+
+Two Livewire screens ship as publishable stubs — a **manager** (releases every locale of a document
+atomically) and a per-locale **editor**. They are **opt-in and fail-closed**: name a Gate ability in
+`admin.ability` and define it. With the ability unset, or the Gate denied, both screens return `404`
+and never reveal they exist — there is no ungated publish path.
+
+```php
+// config/legal-consent.php
+'admin' => ['ability' => 'manage-legal-texts'],
+
+// a service provider
+Gate::define('manage-legal-texts', fn ($user) => $user->isLegalAdmin());
+```
+
+Publish the plain stubs with `--tag=legal-consent-views`, the WireKit variants with
+`--tag=legal-consent-wirekit`. The editor sanitizes on store, so its preview is the exact bytes a
+publish freezes. Binding `Pushery\LegalConsent\Contracts\LegalTextTranslator` enables the editor's
+"Translate" action; a machine translation is always produced unreviewed and must be reviewed by a
+human before it can be released.
+
+### Published versions are frozen
+
+A published `legal_documents` row is immutable proof — the exact sanitized text a subject was shown
+and the hash the ledger snapshots, one text because they are one row. A database trigger
+(PostgreSQL, MySQL, SQLite) and a model hook reject any edit to a proof column after publish; a
+direct write raises `LegalDocumentFrozenException` (through the model) or a database error (raw
+SQL). Correcting a text is a **new version**, never an in-place edit.
+
+### Rendering the public legal page
+
+Render a public page from the frozen row — never the source, which can drift between an author's
+edit and the next publish:
+
+```php
+use Pushery\LegalConsent\Facades\Consent;
+
+$document = Consent::published('terms', app()->getLocale());
+
+// $document?->html is the exact stored bytes and $document?->contentHash the exact stored hash —
+// the same text the ledger proves. Returns null before that locale is published (render an "in
+// preparation" shell), and never falls back to another locale.
+```
 
 ## Commands
 
@@ -334,9 +383,10 @@ Each document declares a `source` in `config/legal-consent.php`:
 | `legal-consent:check-drift {key?} {locale?}` | Non-zero exit when a source has drifted from its published version (CI/cron). Narrow it to one document/locale with the optional arguments. |
 | `legal-consent:dispatch-notices` | Notify subjects of a due legal change, routing by notice mode (hourly, idempotent, auto-scheduled). |
 | `legal-consent:close-objection-windows` | Bind silence to deemed acceptance once a deemed-consent objection window closes (hourly, idempotent, auto-scheduled). |
-| `legal-consent:prune` | Delete records past the retention period (default 3 years); the current standing of an active subject is always kept. |
+| `legal-consent:prune` | Delete consent and notice records past the retention period (default 3 years); the current standing of an active subject is always kept. **Not scheduled by default** — see Retention below. |
 | `legal-consent:cache-flush {key?} {locale?}` | Flush cached, rendered documents. |
 | `legal-consent:verify-ledger` | Verify the tamper-evidence hash chain (non-zero exit on a break); only when `tamper_evidence` is on. |
+| `legal-consent:verify-documents` | Verify every published row against its stored hash, and flag notice-mode divergence across a version's locales or a wording-locale mismatch (non-zero exit on a hard failure). Read-only — a frozen row is never repaired. |
 
 ### `legal-consent:publish` flags
 
@@ -348,7 +398,7 @@ Exactly one mode flag per publish; the rest are optional metadata.
 | `--info` | Actively announced, no action required, takes effect regardless. |
 | `--deemed` | Silence counts as acceptance. Contract/terms only; requires `--objection-at`. |
 | `--active` (`--material`) | The subject must actively accept before it applies. |
-| `--regime=` | The legal regime the change falls under: `bgb_agb`, `psd2_675g`, `dcd_327r`, `gdpr`, `p2b`, or `eecc`. It selects the statutory advance period, so an unrecognised value is **refused** rather than quietly given the generic default. |
+| `--regime=` | The legal regime the change falls under: `bgb_agb`, `psd2_675g`, `dcd_327r`, `gdpr`, `p2b`, or `eecc`. Validated against that set — an unrecognised value is **refused**. Today only `psd2_675g` carries its own advance period (§ 675g's hard two months); the rest are recorded on the version but fall to the generic re-consent/deemed default. |
 | `--announce-at=` | ISO date the subjects are notified. Defaults to now. |
 | `--enforce-at=` | ISO date enforcement begins. Omit for an immediate publish. |
 | `--objection-at=` | ISO date the objection window closes (`--deemed`). Must leave the full statutory period after the announcement. |
@@ -380,14 +430,24 @@ Three levels, pick one:
    automatically **only if** you have `livewire/livewire` installed, so the package stays
    dependency-free otherwise.
 
-3. **WireKit-flavored variant** — if your app uses [WireKit](https://wirekit.app), publish
-   the WireKit-themed stubs to override the plain ones:
+3. **WireKit-native variant** — if your app uses [WireKit](https://wirekit.app), publish the
+   WireKit versions to override the plain ones:
 
    ```bash
    php artisan vendor:publish --tag=legal-consent-wirekit
    ```
 
-   These are a themed starting point; a fully WireKit-native companion package is planned.
+   Built from real `<x-wirekit::*>` components — callouts, checkboxes, badges, and a live countdown
+   on every deadline — so they inherit your theme instead of shipping their own CSS. The tag covers
+   the **Livewire** views too, so the reactive screens are themed as well, not just the static
+   stubs. Needs `pushery/wirekit` **≥ 2.13** (the countdown component landed there) and
+   `@wirekitScripts` in the layout for the live countdown and the withdraw alert-dialog.
+
+   The package's own test suite renders these views against the installed WireKit and fails on any
+   component the release lacks, so the published stubs never reach for one your app cannot resolve.
+
+   A withdrawal is irreversible — it appends a `Withdrawn` row to an append-only ledger — so it
+   asks first, via a themed alert-dialog rather than the browser's native confirm window.
 
 Every variant bakes in the non-negotiable anti-dark-pattern rules: checkboxes are never
 pre-checked (Planet49 C-673/17), a real consent is never `required` (Kopplungsverbot
@@ -415,16 +475,17 @@ Everything lives in `config/legal-consent.php`. The keys you are most likely to 
 | `documents` | `[]` | The registry: each key maps to its `legal_basis` (`contract` / `acknowledgement` / `consent`) and `source`. |
 | `default_locale` · `locales` | `de` · `[de, en]` | The primary locale and the allowed set (publishing an unlisted locale is refused). |
 | `fallback_locale` | `de` | When a document is unpublished in the requested locale, fall back to this one instead of failing. |
-| `retention_after_end` | `3 years` | How long proof is kept before `legal-consent:prune` removes superseded/orphaned records. |
+| `retention_after_end` | `3 years` | How long proof is kept before `legal-consent:prune` removes superseded/orphaned records. Enforced only once `schedule.prune` is on. |
 | `cache.store` · `cache.ttl` | app default · `86400` | Where/how long rendered documents are cached (self-invalidates on a content change). |
 | `notifications.channels` | `[mail, database]` | Channels for the change notifications. |
-| `notice_periods` | per regime | Minimum advance-notice days per regime/mode (`active_reconsent_min_days`, `deemed_consent_min_days`, `psd2_min_days`, `dcd_termination_days`, `p2b_standstill_days`, `eecc_min_days`, `privacy_advance_days`). A scheduled gating change is measured announcement → effective date; a deemed-consent change is measured announcement → **objection deadline** (the subject must have the full period to object) and is never exempt. Too short a period is refused. A per-document `min_lead_days` in `documents` may **raise** a period, but never undercut a statutory floor: § 675g's two months is hard — neither an override nor this config can talk it down. |
+| `notice_periods` | per regime | Advance-notice days per regime/mode. Three keys are wired today — `active_reconsent_min_days`, `deemed_consent_min_days`, and the hard `psd2_min_days`; the other four (`dcd_termination_days`, `p2b_standstill_days`, `eecc_min_days`, `privacy_advance_days`) are reserved for their regimes and not yet read, so tuning them has no effect until those regimes select their own period. A scheduled gating change is measured announcement → effective date; a deemed-consent change is measured announcement → **objection deadline** (the subject must have the full period to object) and is never exempt. Too short a period is refused. A per-document `min_lead_days` in `documents` may **raise** a period, but never undercut a statutory floor: § 675g's two months is hard — neither an override nor this config can talk it down. |
 | `durable_medium` | `proof: true`, `channels: [mail]` | Whether the notice dispatch writes an append-only `legal_notices` proof row, and on which durable-medium channels. |
-| `schedule.dispatch_notices` · `schedule.close_objection_windows` | `true` · `true` | Whether the two sweeps are auto-registered on the scheduler. |
+| `schedule.dispatch_notices` · `schedule.close_objection_windows` | `true` · `true` | Whether the two notice sweeps are auto-registered on the scheduler (hourly). |
+| `schedule.prune` | `false` | Whether the retention sweep is auto-registered (daily). **Off by default because it deletes** — see Retention. |
 | `middleware.allowlist_routes` · `middleware.allowlist_paths` | `[]` · `[]` | Extra route **names**, and extra URI **paths** (wildcards allowed, e.g. `billing/*`), the gate never blocks. The consent route and `logout` are always allowed. |
-| `routes.consent_name` · `routes.consent_path` | — · `/legal/consent` | Where to send a subject to act: `consent_name` is a route name (preferred — it survives a path change), `consent_path` the fallback URL. Used by the middleware redirect **and** by the link in every change notice, so a wrong value points the legally-required notice at a dead URL. |
+| `routes.consent_name` · `routes.consent_path` | `legal.consent` · `/legal-consent` | Where to send a subject to act: `consent_name` is a route name (preferred — it survives a path change), `consent_path` the fallback URL. Used by the middleware redirect **and** by the link in every change notice, so a wrong value points the legally-required notice at a dead URL. |
 | `routes.api` · `routes.api_prefix` · `routes.api_middleware` | `false` · `legal` · `[api, auth]` | Whether the headless JSON API is registered, under which prefix, behind which middleware. |
-| `markdown.html_input` · `markdown.allow_unsafe_links` · `markdown.max_nesting_level` | `strip` · `false` · `10` | CommonMark hardening for rendering document sources. Loosen `html_input` only for sources you fully control — a legal text is rendered into your users' browsers. |
+| `markdown.html_input` · `markdown.allow_unsafe_links` · `markdown.max_nesting_level` | `strip` · `false` · `20` | CommonMark hardening for rendering document sources. Loosen `html_input` only for sources you fully control — a legal text is rendered into your users' browsers. |
 
 ### Optional features (each off by default)
 
@@ -437,7 +498,7 @@ Everything lives in `config/legal-consent.php`. The keys you are most likely to 
   additionally requires an `age_confirmed` attestation. The package gates on the
   attestation; verifying the actual age stays your app's job.
 
-- **`tenancy`** (`enabled: false`, `column: tenant_id`) — scope documents and consents per
+- **`tenancy`** (`enabled: false`) — scope documents and consents per
   tenant. Register a resolver in a service provider's `boot()`:
 
   ```php
@@ -448,7 +509,38 @@ Everything lives in `config/legal-consent.php`. The keys you are most likely to 
   Each tenant gets its own active version of a `(key, locale)`; admin sweeps (prune,
   dispatch-notices) run across all tenants.
 
+## Retention — turn it on, or nothing is ever deleted
+
+`retention_after_end` (default `3 years`) is a **statement of policy, not an enforcement**. The
+sweep that acts on it — `legal-consent:prune` — is the one scheduled task this package does **not**
+register for you:
+
+```php
+// config/legal-consent.php
+'schedule' => [
+    'prune' => true,   // daily; off by default
+],
+```
+
+It is off by default on purpose: it deletes, and an app upgrading into a new version must never
+silently start erasing records it has been accumulating. That makes it your decision — but it is a
+decision, and not making it means **expired personal data is kept forever** while the config says
+otherwise (storage limitation, Art. 5(1)(e) GDPR).
+
+What it deletes is deliberately narrow: only rows past the period that are **superseded** (a newer
+row exists for the same subject + document + locale) or **orphaned** (the subject is gone). A
+subject's current standing is never deleted by age — that row is the Art. 7(1) proof the live
+relationship rests on.
+
+The sweep reports a heartbeat through `LegalConsentMonitor`, so you can alert on it having stopped.
+That matters more here than for the other sweeps: a dispatch that stops running leaves visibly
+missing mail, while a prune that stops running fails silently — nothing errors, data just stays.
+
 ## Upgrading
+
+[UPGRADE.md](UPGRADE.md) is the canonical upgrade guide — the **0.3.x → 0.4.0** steps (new
+migrations, removed config keys, removed source drivers, and the now-immutable published rows)
+live there in full. The note below covers the earlier, backward-compatible bump.
 
 ### 0.2.x → 0.3.0
 
@@ -483,6 +575,9 @@ Then, optionally:
 - `requires_explicit_optin` was removed from the published config's `documents` entries. It
   was never read — the value is derived from `legal_basis`. Delete it from your published
   config if you like; leaving it is harmless.
+- **New: `schedule.prune`** (default `false`). Nothing changes for you on upgrade — but if you
+  assumed `retention_after_end` was already deleting anything, it was not, and this is the switch
+  that makes it true. See [Retention](#retention--turn-it-on-or-nothing-is-ever-deleted).
 
 ## Testing
 

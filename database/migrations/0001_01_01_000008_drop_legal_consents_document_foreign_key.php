@@ -20,9 +20,10 @@ use Illuminate\Support\Facades\Schema;
  *
  * The constraint is not load-bearing: every ledger row is self-proving through its denormalized
  * `document_key` / `document_version` / `document_major_version` / `content_hash` snapshots, which
- * is the whole point of the table (Art. 5(2), Art. 7(1), EDPB 05/2020 Rz. 108). The plain indexed
- * column keeps the `document()` relation working; it simply resolves to null once the document is
- * gone — exactly what the SET NULL was reaching for, without the illegal write.
+ * is the whole point of the table (Art. 5(2), Art. 7(1), EDPB 05/2020 Rz. 108). The plain column
+ * keeps the `document()` relation working (its index is added explicitly in 000009 — dropping the
+ * foreign key leaves the column unindexed on PostgreSQL and SQLite); it simply resolves to null
+ * once the document is gone — exactly what the SET NULL was reaching for, without the illegal write.
  *
  * Only Postgres and MySQL carry the trigger (and the FK), so only they need the drop.
  */

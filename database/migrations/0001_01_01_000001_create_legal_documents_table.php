@@ -46,7 +46,7 @@ return new class extends Migration
             $table->text('ui_wording');                // exact acceptance sentence, this version+locale
 
             // Where the text came from (audit only; the row owns the content).
-            $table->string('source_driver', 32)->default('database'); // 'markdown' | 'database' | 'cms'
+            $table->string('source_driver', 32)->default('markdown'); // the configured source name that produced this row
             $table->string('source_reference')->nullable();
 
             // Change classification (set by a human at publish; the hash never judges this).

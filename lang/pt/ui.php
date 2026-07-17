@@ -10,7 +10,19 @@ return [
     'acknowledgements_heading' => 'Tomado conhecimento',
     'consents_heading' => 'Consentimentos',
     'withdraw' => 'Retirar',
+    // Per-item accessible name for the withdraw control: with N consents, N buttons all
+    // labelled just 'withdraw' are indistinguishable in a screen reader's button list
+    // (WCAG 2.4.6). The grant was document-specific; the withdrawal must be too.
+    'withdraw_for' => 'Retirar: :title',
     'review' => 'Rever agora',
+    // Accessible name for the banner region (it is a `complementary`/`region` landmark,
+    // not a live region — a live region present at page load never announces anyway).
+    'banner_label' => 'Avisos legais',
+
+    // The countdown's expired states — a statement about the subject's position, so each
+    // is translated, never left to an English fallback on a legal surface.
+    'enforced_now' => 'Em vigor agora',
+    'objection_closed' => 'Prazo de oposição encerrado',
     'submit' => 'Aceitar e continuar',
     'all_current' => 'Está tudo em dia — nada a fazer.',
 
@@ -18,4 +30,29 @@ return [
     'days_left' => '{0}Em vigor hoje|{1}Falta :count dia|[2,*]Faltam :count dias',
     'updated_note' => 'Atualizado — não é necessária qualquer ação.',
     'object_review' => 'Ver ou opor-te',
+
+    // The withdraw confirmation. Art. 7(3) sentence 3: withdrawal must be as easy as
+    // giving consent — so this asks once, states the consequence, and never nags.
+    'withdraw_confirm_title' => 'Retirar o consentimento?',
+    'withdraw_confirm_body' => 'O teu consentimento para «:title» será retirado. Produz efeitos imediatos e não afeta a licitude do tratamento anterior.',
+    'cancel' => 'Cancelar',
+
+    // Admin screens (LegalTextManager / LegalTextEditor).
+    'admin_heading' => 'Textos legais',
+    'admin_policy' => 'Os textos são editados por idioma, revistos por uma pessoa e depois publicados em todos os idiomas ao mesmo tempo. Uma tradução automática nunca pode ser publicada até alguém a rever, e a frase de aceitação é texto fixo — nunca é traduzida automaticamente.',
+    'admin_document' => 'Documento',
+    'admin_release' => 'Publicar',
+    'admin_not_written' => 'Por escrever',
+    'admin_machine' => 'Rascunho automático',
+    'admin_needs_update' => 'Precisa de atualização',
+    'admin_unpublished' => 'Alterações não publicadas',
+    'admin_release_all' => 'Publicar todos os idiomas',
+    'admin_release_confirm_title' => 'Publicar todos os idiomas?',
+    'admin_release_confirm_body' => 'Todos os idiomas deste texto são publicados juntos como uma versão. Isto não pode ser revertido — uma alteração é uma versão nova e superior.',
+    'admin_stale' => 'O texto de origem mudou depois de esta tradução ser revista — revê-a de novo antes de publicar.',
+    'admin_save' => 'Guardar',
+    'admin_translate' => 'Traduzir de :locale',
+    'admin_mark_reviewed' => 'Marcar como revisto',
+    'admin_preview' => 'Pré-visualização',
+    'withdrawn_confirmation' => 'Consentimento retirado. Produz efeito de imediato.',
 ];

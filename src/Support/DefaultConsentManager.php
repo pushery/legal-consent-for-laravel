@@ -7,7 +7,9 @@ namespace Pushery\LegalConsent\Support;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Events\ConsentObjected;
@@ -24,12 +26,55 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * immutable ledger entry, snapshotting the active version's proof fields plus the
  * server-side context, then fires the matching event.
  */
-final readonly class DefaultConsentManager implements ConsentManager
+/**
+ * Not `final`: the tamper-chain tail read is a `protected` seam ({@see latestChainedRow}) so a test
+ * can force the stale read a concurrent writer sees and exercise the fork-retry deterministically.
+ */
+readonly class DefaultConsentManager implements ConsentManager
 {
+    /** How many times an append retries after a concurrent fork before surfacing the violation. */
+    private const int MAX_CHAIN_ATTEMPTS = 5;
+
     public function __construct(
         private ConsentGate $gate,
         private string $defaultLocale = 'de',
+        private PublishedDocumentReader $reader = new PublishedDocumentReader,
     ) {}
+
+    public function published(string $documentKey, ?string $locale = null): ?PublishedDocument
+    {
+        return $this->reader->read($documentKey, $locale ?? $this->defaultLocale);
+    }
+
+    public function registrationChecklist(?string $locale = null): array
+    {
+        $locale ??= $this->defaultLocale;
+
+        $documents = LegalDocument::query()
+            ->select(['key', 'type', 'title', 'ui_wording', 'version', 'locale', 'requires_explicit_optin'])
+            ->where('locale', $locale)
+            ->where('is_active', true)
+            ->orderBy('key')
+            ->get();
+
+        $checklist = [];
+
+        foreach ($documents as $document) {
+            $checklist[] = new RegistrationChecklistItem(
+                key: $document->key,
+                type: $document->type,
+                title: $document->title,
+                wording: $document->ui_wording,
+                version: $document->version,
+                locale: $document->locale,
+                // Follows the legal basis, never a UI decision: a real consent is voluntary and may
+                // never be required (Art. 7(4)); everything else is mandatory.
+                required: ! $document->requires_explicit_optin,
+            );
+        }
+
+        return $checklist;
+    }
 
     public function record(Model $subject, string $documentKey, ConsentAction $action, ConsentContext $context, ?string $locale = null): LegalConsent
     {
@@ -93,21 +138,23 @@ final readonly class DefaultConsentManager implements ConsentManager
             ->first();
 
         if (! $active instanceof LegalDocument) {
-            return true; // nothing enforceable to accept
+            // No published document means the subject holds NOTHING — the honest answer to
+            // "does this subject currently hold the active version?". Returning true here made
+            // the permission read `if (hasCurrent(...)) { send() }` fire for a typo'd key or a
+            // deactivated document. The gate's separate "nothing to block on" question lives in
+            // outstandingFor(), not here.
+            return false;
         }
 
-        // The LATEST action decides — a monotonic max cannot see a later withdrawal.
-        $latest = $this->gate->latestActionFor($subject, $documentKey, $locale);
-
-        return $latest instanceof LegalConsent
-            && $latest->action->isAccepting()
-            && $latest->document_major_version >= $active->major_version;
+        // Held is computed cross-locale and withdrawal/objection-aware, via the SAME fold the
+        // gate uses — so hasCurrent() and outstandingFor() can never disagree about one subject.
+        return ($this->gate->heldMajorByKey($subject)[$documentKey] ?? 0) >= $active->major_version;
     }
 
     public function statusFor(Model $subject, ?string $locale = null): array
     {
         $locale ??= $this->defaultLocale;
-        $accepted = $this->gate->highestAcceptedMajors($subject, $locale);
+        $accepted = $this->gate->heldMajorByKey($subject);
 
         $documents = LegalDocument::query()
             ->select(['key', 'major_version', 'requires_explicit_optin'])
@@ -166,41 +213,30 @@ final readonly class DefaultConsentManager implements ConsentManager
     {
         $token = $this->tokenFor($subject);
 
-        $consent = DB::transaction(function () use ($subject, $document, $action, $context, $token): LegalConsent {
-            $attributes = [
-                'subject_type' => $subject->getMorphClass(),
-                'subject_id' => $subject->getKey(),
-                'subject_token' => $token,
-                'document_id' => $document->getKey(),
-                'document_key' => $document->key,
-                'document_type' => $document->type,
-                'document_version' => $document->version,
-                'document_major_version' => $document->major_version,
-                'content_hash' => $document->content_hash,
-                'locale' => $document->locale,
-                'ui_wording_snapshot' => $document->ui_wording,
-                'action' => $action,
-                'method' => $context->method,
-                'source' => $context->source,
-                'ip_address' => $context->ipAddress,
-                'user_agent' => $context->userAgent,
-                'request_id' => $context->requestId,
-                'accepted_at' => CarbonImmutable::now(),
-            ];
+        $attributes = [
+            'subject_type' => $subject->getMorphClass(),
+            'subject_id' => $subject->getKey(),
+            'subject_token' => $token,
+            'document_id' => $document->getKey(),
+            'document_key' => $document->key,
+            'document_type' => $document->type,
+            'document_version' => $document->version,
+            'document_major_version' => $document->major_version,
+            'content_hash' => $document->content_hash,
+            'locale' => $document->locale,
+            'ui_wording_snapshot' => $document->ui_wording,
+            'action' => $action,
+            'method' => $context->method,
+            'source' => $context->source,
+            'ip_address' => $context->ipAddress,
+            'user_agent' => $context->userAgent,
+            'request_id' => $context->requestId,
+            'accepted_at' => CarbonImmutable::now(),
+        ];
 
-            // Optional tamper-evidence: chain this row to the subject's previous one. Read
-            // inside the transaction so the link is taken against a consistent tail.
-            if ($this->tamperEvidenceEnabled()) {
-                $previous = DB::table('legal_consents')
-                    ->where('subject_token', $token)
-                    ->orderByDesc('id')
-                    ->first();
-
-                $attributes['prev_record_hash'] = (new LedgerHashChain)->linkFor($previous);
-            }
-
-            return LegalConsent::query()->create($attributes);
-        });
+        $consent = $this->tamperEvidenceEnabled()
+            ? $this->appendChained($token, $attributes)
+            : DB::transaction(fn (): LegalConsent => LegalConsent::query()->create($attributes));
 
         event(match ($action) {
             ConsentAction::Withdrawn => new ConsentWithdrawn($consent),
@@ -210,6 +246,67 @@ final readonly class DefaultConsentManager implements ConsentManager
         });
 
         return $consent;
+    }
+
+    /**
+     * Append a tamper-chained row, resilient to a concurrent fork.
+     *
+     * Two appends for one subject can read the same chain tail under READ COMMITTED and try to
+     * chain to the same predecessor. The `(subject_token, prev_record_hash)` unique index makes the
+     * database reject the second as a fork; we catch that and retry, re-reading the now-advanced
+     * tail so the loser chains on cleanly instead of forking. Without the retry the loser would
+     * surface a violation to the caller; without the index the fork would persist and the verifier
+     * would report it as tampering.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function appendChained(string $token, array $attributes): LegalConsent
+    {
+        $chain = new LedgerHashChain;
+
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                return DB::transaction(function () use ($token, $attributes, $chain): LegalConsent {
+                    // Chain onto the subject's last ALREADY-CHAINED row. Rows written before
+                    // tamper-evidence was enabled carry a NULL link and are skipped, so the first
+                    // chained row for such a subject starts at genesis — matching the verifier's
+                    // walk, which begins each subject at genesis.
+                    $attributes['prev_record_hash'] = $chain->linkFor($this->latestChainedRow($token));
+
+                    // fill()+save() rather than create(): the attributes are a runtime-assembled
+                    // array<string, mixed> (prev_record_hash is set here), which the model is
+                    // fully mass-assignable for ($guarded = []); create()'s shaped-array type would
+                    // reject it.
+                    $consent = new LegalConsent;
+                    $consent->fill($attributes)->save();
+
+                    return $consent;
+                });
+            } catch (UniqueConstraintViolationException $e) {
+                if ($attempt >= self::MAX_CHAIN_ATTEMPTS) {
+                    throw $e;
+                }
+            }
+        }
+    }
+
+    /**
+     * The subject's last already-chained row (or null when none is chained yet). `lockForUpdate`
+     * serializes contending appends on Postgres/MySQL to reduce retries (it is a no-op on SQLite,
+     * which serializes writers anyway); the unique index is the actual correctness guarantee.
+     *
+     * A `protected` seam: overriding it lets a test return the stale tail a concurrent writer sees
+     * and drive the fork-retry deterministically, which no single-connection test could otherwise
+     * provoke.
+     */
+    protected function latestChainedRow(string $token): ?object
+    {
+        return DB::table('legal_consents')
+            ->where('subject_token', $token)
+            ->whereNotNull('prev_record_hash')
+            ->orderByDesc('id')
+            ->lockForUpdate()
+            ->first();
     }
 
     private function tamperEvidenceEnabled(): bool
