@@ -8,6 +8,7 @@ use Illuminate\Contracts\View\View;
 use Livewire\Component;
 use Pushery\LegalConsent\Contracts\LegalTextTranslator;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
+use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\LegalDraftSet;
@@ -25,6 +26,7 @@ use Pushery\LegalConsent\Support\LegalDraftWriter;
  */
 final class LegalTextEditor extends Component
 {
+    use AnnouncesStatus;
     use AuthorizesLegalAdmin;
 
     public string $key = '';
@@ -32,8 +34,6 @@ final class LegalTextEditor extends Component
     public string $locale = '';
 
     public string $body = '';
-
-    public string $status = '';
 
     /**
      * The document key arrives as `documentKey`, never `key`: Livewire reserves `key` for its own
@@ -57,7 +57,7 @@ final class LegalTextEditor extends Component
 
         // A status message after a save, and after the two acts below — WCAG 4.1.3: an action that
         // changes the record must announce its result, not leave a screen reader in silence.
-        $this->status = (string) __('legal-consent::ui.admin_status_saved');
+        $this->setStatus((string) __('legal-consent::ui.admin_status_saved'));
     }
 
     public function translate(): void
@@ -65,7 +65,7 @@ final class LegalTextEditor extends Component
         $sourceLocale = $this->sourceLocale();
 
         if ($this->locale === $sourceLocale) {
-            $this->status = (string) __('legal-consent::ui.admin_status_source_not_translated');
+            $this->setStatus((string) __('legal-consent::ui.admin_status_source_not_translated'));
 
             return;
         }
@@ -73,7 +73,7 @@ final class LegalTextEditor extends Component
         $source = LegalDraftSet::for($this->key)->draft($sourceLocale);
 
         if (! $source instanceof LegalDraft) {
-            $this->status = (string) __('legal-consent::ui.admin_status_no_source');
+            $this->setStatus((string) __('legal-consent::ui.admin_status_no_source'));
 
             return;
         }
@@ -81,20 +81,20 @@ final class LegalTextEditor extends Component
         try {
             $translated = app(LegalTextTranslator::class)->translate($source->body, $sourceLocale, $this->locale);
         } catch (TranslatorNotConfigured $e) {
-            $this->status = $e->getMessage();
+            $this->setStatus($e->getMessage());
 
             return;
         }
 
         $draft = app(LegalDraftWriter::class)->applyTranslation($this->key, $this->locale, $translated, $source->content_hash, $this->actor());
         $this->body = $draft->body;
-        $this->status = (string) __('legal-consent::ui.admin_status_machine_translated');
+        $this->setStatus((string) __('legal-consent::ui.admin_status_machine_translated'));
     }
 
     public function markReviewed(): void
     {
         app(LegalDraftWriter::class)->markReviewed($this->key, $this->locale, $this->actor());
-        $this->status = (string) __('legal-consent::ui.admin_status_reviewed');
+        $this->setStatus((string) __('legal-consent::ui.admin_status_reviewed'));
     }
 
     public function render(): View

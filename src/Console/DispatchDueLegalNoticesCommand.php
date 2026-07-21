@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notification as BaseNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\LazyCollection;
 use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
 use Pushery\LegalConsent\Contracts\SendsNoticeMail;
 use Pushery\LegalConsent\Enums\NoticeMode;
@@ -28,18 +29,29 @@ use Pushery\LegalConsent\Support\TenantContext;
  * info-only, or deemed consent) whose announcement date has passed but which has not yet been
  * notified, notify the affected subjects with the notification that matches its NoticeMode and
  * — when durable-medium proof is on — write an append-only legal_notices proof row per subject.
- * Streams subjects lazily and collects garbage per version (128 MB budget).
+ * Streams subjects lazily in batches and collects garbage per version (128 MB budget): each chunk
+ * is notified with one send() call and — the actual round-trip saving — resolves its pseudonym tokens
+ * in one query per ledger instead of two per subject. The queued notification jobs and the proof-row
+ * inserts stay one per subject, as they inherently must.
  *
  * Routing: ActiveReconsent → ReconsentRequired, InfoPush → LegalChangeInformational,
  * DeemedConsent → DeemedConsentNotice. A voluntary consent is never swept (Art. 7(4)).
  *
  * Delivery is deliberately AT-LEAST-ONCE: the `notified_at` watermark is stamped only after a
- * version's full subject sweep completes, so a clean re-run never re-sends, but a process killed
- * mid-sweep re-notifies rather than silently dropping a legally required notice. A duplicate
- * email is tolerable; a missed § 308 / § 675g notice is not.
+ * version's full subject sweep completes, so a clean re-run never re-sends, and a missed § 308 /
+ * § 675g notice is never risked. A process killed mid-sweep — or a run overtaken when the 120-min
+ * `withoutOverlapping` lock expires on a large population — RESUMES: with durable-medium proof on,
+ * {@see AffectedSubjectResolver::forVersion()} skips subjects that already carry a proof row for the
+ * version, so the retry serves only those still owed a notice and does not write a second proof for
+ * one already notified. This removes the bulk of duplication without a unique constraint; a proof
+ * written by a genuinely simultaneous sweep in the same window is still tolerated (a duplicate email
+ * is acceptable, a missed notice is not).
  */
 final class DispatchDueLegalNoticesCommand extends Command
 {
+    /** Subjects processed per batch — one send() call and one token lookup per ledger per chunk. */
+    private const int CHUNK = 500;
+
     protected $signature = 'legal-consent:dispatch-notices';
 
     protected $description = 'Notify subjects of a now-announced legal change with the notification matching its notice mode.';
@@ -71,23 +83,42 @@ final class DispatchDueLegalNoticesCommand extends Command
             $notification = $this->notificationFor($version);
             $proof = $proofEnabled ? $this->renderProof($notification, $version, $medium) : null;
 
-            $resolver->forVersion($version)->each(function (Model $subject) use ($version, $notification, $proof, $tenant, $tokens, &$notified): void {
-                // Pin the delivery locale to the version's: the notice is QUEUED, so without this
-                // it renders in whatever locale the worker happens to run under — and the proof row
-                // (rendered in the version's locale) would then certify text the subject never
-                // received. Proof and delivery must be the same artifact.
-                Notification::locale($version->locale)->send($subject, $notification);
+            // RESUMABLE + BATCHED: skip subjects already proofed for this version (a killed or
+            // lock-expired run resumes on those still owed a notice), and process in chunks so the
+            // subject-token lookup is one query per ledger instead of two per subject (the queued
+            // notification jobs and the proof-row inserts stay one per subject). `skipNotified` only
+            // bites when proof is on; with proof off there is nothing to resume from and no proof to
+            // duplicate — a killed run then re-notifies the WHOLE population (tolerated duplicate
+            // emails under at-least-once), it simply writes no duplicate proof row.
+            $resolver->forVersion($version, skipNotified: $proofEnabled)
+                ->chunk(self::CHUNK)
+                ->each(function (LazyCollection $chunk) use ($version, $notification, $proof, $tenant, $tokens, &$notified): void {
+                    $subjects = $chunk->collect();
 
-                if ($proof !== null) {
-                    // Pin the version's tenant around the proof write: this sweep crosses tenants
-                    // and runs with no authenticated user, so an unpinned subject-token lookup
-                    // would read the shared '' bucket, miss the subject's pseudonym and mint a
-                    // fresh one — severing the notice proof from their consent ledger.
-                    $tenant->forTenant($version->tenant_id, fn (): LegalNotice => $this->writeProof($subject, $version, $proof, $tokens));
-                }
+                    // One locale-pinned send() for the whole chunk — still one queued job per subject
+                    // (the win is the shared locale-pin plus the batched token lookup below). The
+                    // locale pin matters because the notice is QUEUED: without it the worker would
+                    // render it — and the proof row, rendered in the version's locale — in whatever
+                    // locale it happens to run under, certifying text the subject never received.
+                    Notification::locale($version->locale)->send($subjects, $notification);
 
-                $notified++;
-            });
+                    if ($proof !== null) {
+                        // Pin the version's tenant around the token lookup + proof writes: this sweep
+                        // crosses tenants and runs unauthenticated, so an unpinned lookup would read
+                        // the shared '' bucket, miss the subject's pseudonym and mint a fresh one —
+                        // severing the notice proof from their consent ledger. Resolve the whole
+                        // chunk's tokens in one query per ledger, then write each proof with its token.
+                        $tenant->forTenant($version->tenant_id, function () use ($subjects, $version, $proof, $tokens): void {
+                            $tokenMap = $tokens->forSubjects($subjects);
+
+                            foreach ($subjects as $subject) {
+                                $this->writeProof($subject, $version, $proof, $tokenMap[$tokens->mapKey($subject)]);
+                            }
+                        });
+                    }
+
+                    $notified += $subjects->count();
+                });
 
             $version->forceFill(['notified_at' => CarbonImmutable::now()])->saveQuietly();
 
@@ -154,14 +185,15 @@ final class DispatchDueLegalNoticesCommand extends Command
     /**
      * @param  array{body: string, hash: string, medium: string, mandatory_ok: bool}  $proof
      */
-    private function writeProof(Model $subject, LegalDocument $version, array $proof, SubjectToken $tokens): LegalNotice
+    private function writeProof(Model $subject, LegalDocument $version, array $proof, string $subjectToken): LegalNotice
     {
         return LegalNotice::query()->forceCreate([
             'subject_type' => $subject->getMorphClass(),
             'subject_id' => $subject->getKey(),
             // The stable pseudonym, shared with this subject's consent ledger — it is what keeps
-            // the proof tied to them once an Art. 17 erasure nulls subject_type/subject_id.
-            'subject_token' => $tokens->forSubject($subject),
+            // the proof tied to them once an Art. 17 erasure nulls subject_type/subject_id. Resolved
+            // once per chunk (see forSubjects), not per subject.
+            'subject_token' => $subjectToken,
             // Carry the VERSION's tenant explicitly: this sweep crosses tenants and runs without
             // an authenticated user, so the ambient tenant would resolve to the shared '' bucket
             // and the proof would be invisible to the tenant it belongs to. An explicitly-set

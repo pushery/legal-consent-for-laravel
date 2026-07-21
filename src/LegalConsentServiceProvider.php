@@ -91,7 +91,9 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // untranslated source as a translation.
         $this->app->bind(LegalTextTranslator::class, UnavailableTranslator::class);
 
-        $this->app->singleton(RegistrationRules::class, fn (): RegistrationRules => new RegistrationRules(
+        // scoped, not singleton: RegistrationRules memoizes its active-row lookups per request, so the
+        // memo must be discarded between requests (a publish in a later request must be seen).
+        $this->app->scoped(RegistrationRules::class, fn (): RegistrationRules => new RegistrationRules(
             $this->documentsConfig(),
             $this->boolConfig('legal-consent.age_gate.enabled', false),
             $this->intConfig('legal-consent.age_gate.threshold', 16),

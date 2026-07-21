@@ -16,7 +16,7 @@
              in this one would double-announce. --}}
         <div role="status" aria-live="polite" wire:key="lc-status">
             @if ($status !== '')
-                <x-wirekit::text>{{ $status }}</x-wirekit::text>
+                <div wire:key="lc-status-{{ $statusNonce }}"><x-wirekit::text>{{ $status }}</x-wirekit::text></div>
             @endif
         </div>
 

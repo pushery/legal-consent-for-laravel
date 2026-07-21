@@ -4,7 +4,7 @@
 
         {{-- WCAG 4.1.3: the result of Save / Translate / Mark reviewed is announced here. Always in
              the DOM so a live region added together with its text still announces. --}}
-        <p role="status" aria-live="polite" wire:key="legal-text-editor-status">{{ $status }}</p>
+        <p role="status" aria-live="polite" wire:key="legal-text-editor-status"><span wire:key="legal-text-editor-status-{{ $statusNonce }}">{{ $status }}</span></p>
 
         {{-- WCAG 4.1.3: the stale-source warning stays always-present and only its inner text is gated,
              so a staleness that flips true as the RESULT of a Livewire action is still announced (an

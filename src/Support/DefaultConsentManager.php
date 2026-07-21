@@ -61,14 +61,18 @@ readonly class DefaultConsentManager implements ConsentManager
 
         $documents = $this->checklistRows($locale);
 
-        if ($locale !== $this->defaultLocale) {
-            // A MANDATORY document published only in the default locale is still legally required at
-            // registration, so it must be SHOWN — as its default-locale control, the one language the
-            // visitor has to read before agreeing to it. This mirrors the fallback in
-            // RegistrationConsentRecorder and RegistrationRules, so the DISPLAYED set, the VALIDATED
-            // set and the RECORDED set resolve identically: the form can never require or record a
-            // document it did not show. An optional consent has nothing to fall back to.
-            foreach ($this->checklistRows($this->defaultLocale) as $key => $document) {
+        // A MANDATORY document not published in the locale the visitor sees is still legally required,
+        // so walk the rest of the resolution chain (fallback_locale, then default_locale) and SHOW it —
+        // as its own-locale control, the one language they have to read before agreeing. This mirrors
+        // RegistrationConsentRecorder and RegistrationRules, so the DISPLAYED, VALIDATED and RECORDED
+        // sets resolve identically: the form can never require or record a document it did not show.
+        // An optional consent has nothing to fall back to.
+        foreach (RegistrationLocaleChain::resolve($locale, $this->defaultLocale) as $candidate) {
+            if ($candidate === $locale) {
+                continue; // already the base set
+            }
+
+            foreach ($this->checklistRows($candidate) as $key => $document) {
                 if (! $documents->has($key) && $document->type->isMandatory()) {
                     $documents->put($key, $document);
                 }
@@ -87,7 +91,11 @@ readonly class DefaultConsentManager implements ConsentManager
             );
         }
 
-        $documents = $documents->sortKeys();
+        // Order the checklist by document key in a package-defined, engine-independent way. SORT_STRING
+        // (byte order) is explicit: the default SORT_REGULAR would compare numeric-looking keys
+        // numerically, and the pre-cache v0.4 path ordered by the DB collation (locale/case-folding) —
+        // both make the checkbox order depend on something outside the package. This pins it here.
+        $documents = $documents->sortKeys(SORT_STRING);
 
         $checklist = [];
 
@@ -102,6 +110,9 @@ readonly class DefaultConsentManager implements ConsentManager
                 // Follows the legal basis, never a UI decision: a real consent is voluntary and may
                 // never be required (Art. 7(4)); everything else is mandatory.
                 required: ! $document->requires_explicit_optin,
+                // The render-time fingerprint, so a form that renders hashField() activates the
+                // accept-time guard for the version actually shown (opt-in — see the recorder).
+                contentHash: self::acceptanceFingerprint($document),
             );
         }
 
@@ -134,7 +145,7 @@ readonly class DefaultConsentManager implements ConsentManager
     private function checklistRows(string $locale): Collection
     {
         return LegalDocument::query()
-            ->select(['key', 'type', 'title', 'ui_wording', 'version', 'locale', 'requires_explicit_optin'])
+            ->select(['key', 'type', 'title', 'ui_wording', 'version', 'locale', 'requires_explicit_optin', 'content_hash'])
             ->where('locale', $locale)
             ->where('is_active', true)
             ->get()

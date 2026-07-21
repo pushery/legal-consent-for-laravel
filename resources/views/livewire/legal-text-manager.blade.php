@@ -6,7 +6,7 @@
         {{-- Status: an assertive live region, so a screen reader hears the result of a release (or
              why it did not happen) immediately after the action — WCAG 4.1.3. It is always present
              in the DOM (an aria-live region added at the same time as its text is not announced). --}}
-        <p role="alert" aria-live="assertive" wire:key="legal-text-manager-status">{{ $status }}</p>
+        <p role="alert" aria-live="assertive" wire:key="legal-text-manager-status"><span wire:key="legal-text-manager-status-{{ $statusNonce }}">{{ $status }}</span></p>
 
         <p>{{ __('legal-consent::ui.admin_policy') }}</p>
 

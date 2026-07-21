@@ -12,6 +12,7 @@ use Livewire\Component;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Exceptions\DocumentChangedException;
+use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
 
@@ -24,6 +25,8 @@ use Pushery\LegalConsent\Support\DefaultConsentManager;
  */
 final class ReConsentForm extends Component
 {
+    use AnnouncesStatus;
+
     /** @var array<string, bool> */
     public array $accept = [];
 
@@ -49,15 +52,6 @@ final class ReConsentForm extends Component
      */
     #[Locked]
     public string $locale = '';
-
-    /**
-     * A confirmation of the last submit, for the view's live region. When the outstanding list
-     * empties on submit the whole <form> is replaced by the "all current" message — inserted WITH
-     * its content, so a screen reader never announces it, and the focused submit button vanishes so
-     * focus drops to <body> (WCAG 4.1.3 + 2.4.3). Announcing here, in an always-present region the
-     * view moves focus to, is the confirmation — mirroring the hardened ConsentSettings component.
-     */
-    public string $status = '';
 
     /**
      * How the acceptance was obtained. This lands in the ledger as proof of HOW a subject agreed,
@@ -90,17 +84,29 @@ final class ReConsentForm extends Component
 
         foreach ($manager->outstanding($subject, $this->locale) as $document) {
             if (($this->accept[$document->key] ?? false) === true) {
+                if (! array_key_exists($document->key, $this->hashes)) {
+                    // Fail closed: this document is ticked but carries no render-time hash — it was
+                    // ticked while momentarily not outstanding, so render() never captured one. Passing
+                    // null would skip the accept-time guard entirely and freeze a version whose text was
+                    // never rendered. Take the same path as a changed document: clear the stale ticks
+                    // and ask the subject to review the version they are actually shown.
+                    $this->accept = [];
+                    $this->setStatus((string) __('legal-consent::ui.reconsent_changed'));
+
+                    return;
+                }
+
                 try {
                     // Pass the hash captured at RENDER, not the live one: a version released between
                     // render and this submit must be caught, not silently frozen (Art. 7(1)).
-                    $manager->accept($subject, $document->key, ConsentContext::fromRequest(request(), $this->method), $this->locale, $this->hashes[$document->key] ?? null);
+                    $manager->accept($subject, $document->key, ConsentContext::fromRequest(request(), $this->method), $this->locale, $this->hashes[$document->key]);
                     $recorded++;
                 } catch (DocumentChangedException) {
                     // The subject would freeze text they never saw. Clear the stale ticks and ask them
                     // to review — the re-render re-shows the current version and re-captures its hash,
                     // so a conscious re-acceptance records the version actually read.
                     $this->accept = [];
-                    $this->status = (string) __('legal-consent::ui.reconsent_changed');
+                    $this->setStatus((string) __('legal-consent::ui.reconsent_changed'));
 
                     return;
                 }
@@ -108,7 +114,7 @@ final class ReConsentForm extends Component
         }
 
         if ($recorded > 0) {
-            $this->status = (string) __('legal-consent::ui.reconsent_recorded');
+            $this->setStatus((string) __('legal-consent::ui.reconsent_recorded'));
 
             // A re-consent GATE that is now fully cleared returns the subject to where the
             // enforcement middleware intercepted them (redirect()->guest stashed it), falling back
@@ -119,12 +125,20 @@ final class ReConsentForm extends Component
                 $fallback = is_string($home) && $home !== '' ? $home : '/';
 
                 // Read the URL the enforcement middleware stashed (redirect()->guest set url.intended)
-                // straight from the session, not via redirect()->intended(): inside a Livewire
-                // component redirect() is Livewire's own capturing redirector, which has no such value.
+                // straight from the session so the raw value can be range-checked before use. It is
+                // derived from redirect()->guest, which on a non-GET or pre-routing request falls back
+                // to the Referer header — an attacker can poison it with an external origin. Returning
+                // there right after a trust-establishing legal flow is an ideal phishing hand-off, so a
+                // target that is not same-origin is dropped for the home route.
                 $intended = session()->pull('url.intended', $fallback);
+                $target = is_string($intended) && $this->isSameOrigin($intended) ? $intended : $fallback;
 
-                $this->redirect(is_string($intended) && $intended !== '' ? $intended : $fallback);
+                $this->redirect($target);
             }
+        } else {
+            // Nothing was ticked: with no status the submit reads as a dead no-op. Announce a prompt
+            // so the subject learns their click registered and that a box still needs ticking.
+            $this->setStatus((string) __('legal-consent::ui.reconsent_none_selected'));
         }
     }
 
@@ -132,6 +146,30 @@ final class ReConsentForm extends Component
     {
         return $this->method === ConsentMethod::ReConsentGate
             && config('legal-consent.routes.return_to_intended', false) === true;
+    }
+
+    /**
+     * A redirect target is safe only when it stays on this application's origin: a relative path
+     * (no host), or an absolute URL whose host matches the current request. A protocol-relative
+     * '//host/…' or an external absolute URL — a Referer-poisoned url.intended — is unsafe.
+     */
+    private function isSameOrigin(string $target): bool
+    {
+        // Strip the leading control chars / whitespace a browser ignores before resolving a URL,
+        // then reject the shapes parse_url does NOT read as an authority but a browser does: a
+        // backslash (browsers treat `\` as `/`, so `/\evil` becomes `//evil`) and a protocol-relative
+        // `//host`. Do not trust the caller to have pre-sanitised the value — honour the contract here.
+        $target = ltrim($target, " \t\n\r\0\x0B");
+
+        if ($target === '' || str_contains($target, '\\') || str_starts_with($target, '//')) {
+            return false;
+        }
+
+        $host = parse_url($target, PHP_URL_HOST);
+
+        // No host → accept only a rooted relative path (`/…`); a scheme like `mailto:`/`tel:`, a bare
+        // word or a fragment is dropped. Otherwise the host must match this request's.
+        return $host === null ? str_starts_with($target, '/') : $host === request()->getHost();
     }
 
     public function object(string $key): void

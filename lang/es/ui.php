@@ -59,6 +59,7 @@ return [
     // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
     'reconsent_recorded' => 'Gracias — tu consentimiento se ha registrado.',
     'reconsent_changed' => 'Este documento cambió desde que abriste esta página. Revisa la versión actual antes de dar tu consentimiento.',
+    'reconsent_none_selected' => 'Marca cada elemento que aceptas antes de continuar.',
     'admin_body_label' => 'Texto (HTML saneado)',
     'admin_preview_label' => 'Vista previa del texto publicado',
     'admin_edit' => 'editar',

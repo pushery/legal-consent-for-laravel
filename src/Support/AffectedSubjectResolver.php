@@ -41,6 +41,18 @@ readonly class AffectedSubjectResolver
     }
 
     /**
+     * Whether {@see forVersion}'s keyset seek uses the sargable ROW-VALUE tuple. Only PostgreSQL and
+     * SQLite range-scan the composite index for it. Every other engine keeps the portable OR/tie-break
+     * form: MySQL will not range-scan the tuple, MariaDB reports its own driver name (`mariadb`, never
+     * `mysql`, since Laravel 11), SQL Server does not compile the tuple to valid syntax, and an unknown
+     * driver is unproven — so the row-value seek is opt-in per proven engine, not the default.
+     */
+    protected function usesRowValueSeek(string $driver): bool
+    {
+        return $driver === 'pgsql' || $driver === 'sqlite';
+    }
+
+    /**
      * @param  int|null  $maxConsentId  Only consider ledger rows up to this id — a snapshot of the
      *                                  ledger taken before the caller starts writing. The stream
      *                                  keyset-pages over a `HAVING MAX(major) < …` set, so a caller
@@ -53,7 +65,7 @@ readonly class AffectedSubjectResolver
      *                                  subjects already accepted.
      * @return LazyCollection<int, Model>
      */
-    public function forVersion(LegalDocument $version, ?int $maxConsentId = null): LazyCollection
+    public function forVersion(LegalDocument $version, ?int $maxConsentId = null, bool $skipNotified = false): LazyCollection
     {
         $accepting = array_map(static fn (ConsentAction $action): string => $action->value, ConsentAction::accepting());
 
@@ -64,6 +76,19 @@ readonly class AffectedSubjectResolver
             // The notice sweep crosses tenants, so scope subjects to THIS version's tenant.
             ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id))
             ->when($maxConsentId !== null, fn (QueryBuilder $query): QueryBuilder => $query->where('id', '<=', $maxConsentId))
+            // RESUMABILITY (notice sweep): skip subjects who already have a durable-medium proof row
+            // for THIS version. A run killed or overtaken mid-sweep (the 120-min lock can expire on a
+            // large population) resumes on the subjects still owed a notice instead of re-sending from
+            // the top — and, crucially, it stops the concurrent/re-run case from writing a SECOND
+            // proof row for a subject already notified. Delivery stays at-least-once (a proof written
+            // by a genuinely simultaneous sweep in the same window is still tolerated — see the
+            // command docblock); this removes the bulk of the duplication, not a unique constraint.
+            ->when($skipNotified, fn (QueryBuilder $query): QueryBuilder => $query->whereNotExists(
+                fn (QueryBuilder $sub): QueryBuilder => $sub->from('legal_notices')
+                    ->whereColumn('legal_notices.subject_type', 'legal_consents.subject_type')
+                    ->whereColumn('legal_notices.subject_id', 'legal_consents.subject_id')
+                    ->where('legal_notices.document_id', $version->getKey())
+            ))
             ->whereNotNull('subject_type')
             ->whereNotNull('subject_id')
             ->whereIn('action', $accepting)
@@ -93,17 +118,18 @@ readonly class AffectedSubjectResolver
                 if ($lastType !== null) {
                     // PostgreSQL + SQLite range-scan the composite index for the sargable ROW-VALUE
                     // tuple form, so the whole sweep is LINEAR (measured ~20x faster than the OR form
-                    // at 160k rows). MySQL's optimiser will NOT range-scan the index for a row-value
-                    // comparison — it is slower that way — so MySQL keeps the OR form, where the
-                    // index still cuts the constant enormously (seconds, not minutes) though that
-                    // path stays super-linear. An engine-appropriate seek, not one shape for all.
-                    if ($driver === 'mysql') {
+                    // at 160k rows). Every OTHER engine keeps the portable OR/tie-break form (see
+                    // {@see usesRowValueSeek}): MySQL will not range-scan the index for a row-value
+                    // comparison, MariaDB reports its own driver name, and an unknown driver may not
+                    // compile whereRowValues at all — the index still cuts the constant enormously
+                    // there, though that path stays super-linear. An engine-appropriate seek.
+                    if ($this->usesRowValueSeek($driver)) {
+                        $query->whereRowValues(['subject_type', 'subject_id'], '>', [$lastType, $lastId]);
+                    } else {
                         $query->where(function (QueryBuilder $seek) use ($lastType, $lastId): void {
                             $seek->where('subject_type', '>', $lastType)
                                 ->orWhere(fn (QueryBuilder $tie): QueryBuilder => $tie->where('subject_type', $lastType)->where('subject_id', '>', $lastId));
                         });
-                    } else {
-                        $query->whereRowValues(['subject_type', 'subject_id'], '>', [$lastType, $lastId]);
                     }
                 }
 

@@ -59,6 +59,7 @@ return [
     // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
     'reconsent_recorded' => 'Thank you — your consent has been recorded.',
     'reconsent_changed' => 'This document changed since you opened this page. Please review the current version before consenting.',
+    'reconsent_none_selected' => 'Please tick the box for each item you agree to before continuing.',
     'admin_body_label' => 'Text (sanitized HTML)',
     'admin_preview_label' => 'Preview of the published text',
     'admin_edit' => 'edit',

@@ -34,6 +34,9 @@ final readonly class RegistrationChecklistItem
         public string $version,
         public string $locale,
         public bool $required,
+        // The render-time acceptance fingerprint of this document, for the OPT-IN accept-time guard
+        // (see hashField()). Empty for an attestation, which has no version to freeze.
+        public string $contentHash = '',
     ) {}
 
     /**
@@ -49,7 +52,22 @@ final readonly class RegistrationChecklistItem
     }
 
     /**
-     * @return array{key: string, type: string|null, title: string, wording: string, version: string, locale: string, required: bool, field: string}
+     * The hidden field a form renders to ACTIVATE the accept-time content-hash guard for this
+     * document: it carries {@see $contentHash} (the render-time fingerprint), and
+     * RegistrationConsentRecorder passes it to `accept()` so a version released mid-form is caught
+     * (a 409) instead of silently frozen. Named `{field}_hash`.
+     *
+     * Rendering it is OPT-IN and adds no behaviour by itself: a form that omits it keeps the prior
+     * no-guard registration path (the recorder simply receives no expected hash). Empty for an
+     * attestation, which has no document to guard.
+     */
+    public function hashField(): string
+    {
+        return $this->type instanceof DocumentType ? "legal_{$this->key}_hash" : '';
+    }
+
+    /**
+     * @return array{key: string, type: string|null, title: string, wording: string, version: string, locale: string, required: bool, field: string, contentHash: string, hashField: string}
      */
     public function toArray(): array
     {
@@ -62,6 +80,8 @@ final readonly class RegistrationChecklistItem
             'locale' => $this->locale,
             'required' => $this->required,
             'field' => $this->field(),
+            'contentHash' => $this->contentHash,
+            'hashField' => $this->hashField(),
         ];
     }
 }

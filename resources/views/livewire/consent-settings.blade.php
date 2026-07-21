@@ -12,7 +12,7 @@
          always-present element and does NOT re-run when Livewire morphs it, so the focus never moved.
          x-effect re-runs whenever $wire.status changes, i.e. exactly when a withdrawal sets it. --}}
     <p role="status" aria-live="polite" tabindex="-1" wire:key="lc-settings-status"
-        x-effect="($wire.status ?? '') !== '' && $el.focus()">{{ $status ?? '' }}</p>
+        x-effect="$wire.statusNonce > 0 && $el.focus()"><span wire:key="lc-settings-status-{{ $statusNonce }}">{{ $status ?? '' }}</span></p>
 
     <section aria-labelledby="lc-contracts">
         <h3 id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h3>

@@ -4,6 +4,46 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.5.0 → 0.6.0
+
+`0.6.0` is deep-audit hardening. It is a **minor** bump but carries one breaking change to the
+tamper-evidence chain format, plus additive, opt-in features. **No new migrations ship** — nothing in
+your schema changes.
+
+### 1. Tamper-evidence chains reset (only if you enabled `tamper_evidence`)
+
+The canonical serialization that feeds each ledger row's `prev_record_hash` is now **injective**:
+`null` is distinguished from `''`, and every field is length-prefixed so an embedded separator can no
+longer shift field boundaries — closing a hole where two distinct rows could share a hash. This
+**changes every computed chain hash**, so a chain written by any earlier version no longer verifies
+(the previous `\x1f` format was byte-identical across **v0.1.0–v0.5.0**, so every prior release is
+affected, not only v0.5.0).
+
+- If `legal-consent.tamper_evidence` was **off** (the default), there is nothing to do.
+- If it was **on** with persisted rows, `legal-consent:verify-ledger` reports a break after upgrading.
+  Treat it as a one-time **chain reset**. The rows themselves are untouched and remain valid proof —
+  each row's `content_hash`, `ui_wording_snapshot` and `subject_token` are unaffected; only the chain
+  *linkage* no longer verifies. From `0.6.0` on, newly appended rows chain under the injective format
+  and verify normally; if your compliance process needs a clean verify, archive/export the pre-upgrade
+  ledger as the baseline and start the verified chain from the first `0.6.0` append.
+- **Rolling deploy:** during a mixed-version window, old (`\x1f`) and new (`S<len>:`) writers append
+  interleaved link formats and the verifier surfaces transient breaks. Quiesce the ledger writers (or
+  run appends/sweeps from a single version) across the cutover, and run `verify-ledger` only once the
+  whole fleet is on `0.6.0`.
+
+### 2. Opt into the registration accept-time guard (optional)
+
+The registration path can now catch a version published between page load and submit — the guard the
+re-consent form already has. It is **opt-in** and off by default:
+
+- Each `Consent::registrationChecklist()` item exposes `contentHash` (the render-time fingerprint) and
+  `hashField()` (`legal_{key}_hash`). Render that hidden input — the shipped `consent-checkboxes` stub
+  does it automatically when you feed it a checklist item's `->toArray()` — and a mid-form version
+  change throws `DocumentChangedException` instead of silently freezing a text the registrant never
+  saw.
+- A form that does **not** render the field behaves exactly as before; no action is required to keep
+  the current behaviour.
+
 ## 0.3.x → 0.4.0
 
 `0.4.0` turns the legal texts from a read-only source into an admin-maintained,
