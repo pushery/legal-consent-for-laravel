@@ -4,6 +4,179 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-21
+
+Two changes alter existing behaviour — both deliberate, both about the proof being right rather than
+merely present. The ledger models are no longer mass-assignable (write through `forceCreate()` /
+`forceFill()` if you wrote rows directly), and registration now derives its rules, its checklist and
+its recorded row from the same resolution, so the consent section stays dormant until you publish.
+
+### Added
+
+- **A bundled Laravel Boost skill.** `resources/boost/skills/legal-consent-for-laravel/SKILL.md`
+  ships adoption guidance Boost surfaces inside consuming applications — install, publish a version,
+  enforce the gate, read the frozen row, and the anti-patterns that silently break the proof. The
+  release pipeline refuses to publish without it, or while the scaffold placeholder is still present.
+- **An umbrella publish tag.** `php artisan vendor:publish --tag=legal-consent` publishes the
+  standard set — config, migrations, views and lang — in one command, while every group stays
+  individually addressable. Three groups stay deliberately outside it, because publishing them
+  unasked would be destructive or contradictory: `legal-consent-users-cache` (drops a column from
+  your `users` table), `legal-consent-backfill`, and `legal-consent-wirekit` (overwrites the plain
+  view stubs). The README shows both forms, and the package now carries a Laravel version badge.
+- **The enforcement gate takes a configurable subject predicate.** `legal-consent.gate.subject_filter`
+  — a `fn (Model): bool`, or an invokable class-string which stays `config:cache`-safe — scopes which
+  authenticated subjects the gate blocks, so it can be ordered after the app's own
+  verification / onboarding gates instead of overtaking them (e.g. not asking an unverified user for
+  legally-binding consent first). Null keeps the default of gating every authenticated subject; a
+  misconfigured predicate fails safe (the subject stays gated).
+- **Accept-time content-hash guard against a mid-session release (Art. 7(1)).** `Consent::accept()`
+  takes an optional `$expectedContentHash` — the hash the subject was shown, captured at render. If
+  the active document has since been re-released to different content, acceptance is refused with a
+  `DocumentChangedException` (the headless API returns `409 document_changed`) instead of freezing a
+  version the subject never read. The bundled re-consent form captures the hash at render and
+  re-shows the current text on a mismatch; passing no hash keeps the prior behaviour.
+- **The tamper-evidence chain can be HMAC-keyed.** Set `legal-consent.tamper_evidence_key` (from
+  `LEGAL_CONSENT_TAMPER_KEY`, held outside the database) and each ledger row is hashed with
+  HMAC-SHA-256 instead of a bare SHA-256, so an actor with only table-write access — who does not
+  hold the secret — can no longer **re-chain** an edited row into a chain the verifier reports as
+  intact. Unset keeps the legacy unkeyed hash; the secret must be fixed before the first chained row,
+  because append-only rows cannot be re-keyed.
+
+  **What keying does not close, stated plainly:** the chain root is still a public constant and each
+  row stores only the link to its predecessor, never its own hash. So an attacker who can INSERT can
+  still replace — not merely truncate — the newest row of any chain. (The other half, *fabricating a
+  whole new chain* for a subject under a fresh token, is now caught: see the verifier entry below.) Keying raises the bar for editing existing history; it does not make the ledger
+  unforgeable. Treat the append-only database trigger (and restricting INSERT to the application role)
+  as the primary defense, and read `verify-ledger`'s "intact" as "no evidence of re-chaining", not as
+  proof of authenticity.
+- **The re-consent gate can return a deep-linked subject to where they were headed.** Opt-in via
+  `legal-consent.routes.return_to_intended` (off by default): the enforcement middleware now stashes
+  the intercepted URL as the intended target, and once a subject clears every outstanding document in
+  the re-consent form they are redirected back to it, falling back to `legal-consent.routes.home`. A
+  settings-page embed and a partially-completed gate never redirect, so existing behaviour is
+  unchanged unless you opt in.
+
+### Changed
+
+- **Registration rules, the displayed checklist and the recorded proof now resolve identically.**
+  The validation rules came from the config registry while the checklist read published rows and the
+  recorder fell back to the default-locale version of a mandatory document — three answers to one
+  question. A registration could therefore require a checkbox for a document that was not published,
+  omit a control whose acceptance was then recorded anyway, or record a version it never displayed.
+  All three sides now use the recorder's resolution: configured keys intersected with the ACTIVE
+  rows, with the default-locale fallback for mandatory documents only (a voluntary consent may never
+  be required, Art. 7(4)). Two consequences worth knowing: the consent section is **dormant until you
+  publish** — an unpublished document demands nothing — and a document's legal nature is read from
+  the published row rather than the config entry, so a drifted `legal_basis` can no longer decide
+  whether a checkbox is mandatory. The age-gate attestation is unaffected; it is about the person,
+  not a document.
+- **The append-only ledger models are no longer mass-assignable.** `LegalConsent`, `LegalNotice` and
+  `LegalDocument` carried `$guarded = []`, so a consumer or extension writing
+  `LegalConsent::create($request->all())` could forge or backdate a **fresh** proof row — the
+  append-only guard only refuses mutation *after* insert, and a forgery is an insert. Nothing is
+  mass-assignable now; the package writes through its own curated attribute arrays. If you wrote
+  these rows directly, switch to `forceCreate()` / `forceFill()` — the deliberate, auditable door.
+- **The consent banner no longer queries the database on every authenticated render.** It runs on
+  every page (a Blade `@php` in the layout) and paid three uncached `legal_documents` lookups each
+  time. Those lookups are global and publish-driven, so they now come from the publish-invalidated
+  cache the package already maintains, with the announce/enforce window filtering done in memory — a
+  render with nothing pending costs zero queries. The two per-subject folds are shared as well, so an
+  open re-consent *and* deemed window no longer folds the subject's history twice.
+
+### Fixed
+
+- **The registration checklist now describes a form that can actually be submitted.** Two gaps:
+  it listed every published document instead of intersecting with the configured registry — so a
+  published-but-unregistered document rendered a checkbox that neither the rules validated nor the
+  recorder wrote — and it omitted the Art. 8 age attestation entirely while the rules required it,
+  which made a form built from the checklist alone impossible to submit. Both are fixed, and each
+  item now exposes `field()` (`legal_{key}`, or the key itself for an attestation) so a consumer
+  never has to guess the naming convention the rules validate against. `RegistrationChecklistItem`
+  gained a nullable `type` (an attestation is about the person, not a document) and a `field` key in
+  `toArray()`.
+- **The accept-time guard now covers the acceptance sentence, not just the document body.**
+  `content_hash` is taken over the text, but a re-consent form shows only `ui_wording` — the one
+  sentence a subject reads before ticking — so a release that rewrote just that sentence slipped
+  past the guard and was recorded as accepted. Capture and comparison both use
+  `DefaultConsentManager::acceptanceFingerprint()` now (body hash folded with the sentence). A bare
+  `content_hash` from a pre-0.5.0 caller is still accepted; it simply guards the body alone.
+- **The re-consent form's proof inputs are no longer client-writable.** `$hashes` (the accept-time
+  TOCTOU guard), `$locale` (which version gets frozen) and `$method` (recorded as HOW the subject
+  agreed) were plain public Livewire properties, so a client could rewrite them at submit — defeating
+  the guard, freezing another language's version, or planting a provenance that never happened. All
+  three are `#[Locked]` now: server-set only.
+- **A ticked mandatory checkbox can no longer record nothing.** The registration rules resolved
+  documents against the app locale while the recorder fell back to `default_locale`, and the
+  registration listener passed no locale at all — so an English app that kept the shipped
+  `default_locale => 'de'` and published in `en` only demanded both checkboxes, passed validation,
+  and wrote **no ledger row**: a consent the application believes it holds and cannot prove
+  (Art. 7(1)). The recorder now resolves against the locale the subject actually saw, then the
+  configured `fallback_locale` (which every registration path ignored until now), then the default —
+  first hit wins, and a fallback is logged as a warning because the subject agreed to a text in a
+  language they may not have been shown (the ledger row records which locale was frozen). A mandatory
+  document that resolves in **no** locale of that chain now raises `UnrecordableConsentException`
+  instead of being skipped silently. An optional consent still never falls back (Art. 7(4)).
+- **`legal-consent:verify-ledger` now catches a forged consent planted as a new chain.** The walk
+  groups by `subject_token` and restarts at the public genesis constant on every new one, while the
+  consent gate reads a subject by id and never looks at the token — two different keys for one
+  question. An attacker who could only `INSERT` exploited exactly that: invent a token nobody used,
+  link it to genesis, and the ledger verified as intact while the gate counted the row as a real
+  holding. No re-chaining, so keying the hash did not help. The verifier now also enforces the
+  binding the token was always meant to have — one subject owns exactly one token, one token belongs
+  to exactly one subject — and flags rows written with no token after chaining began, which the walk
+  skipped entirely. The check is structural, so it works with or without a key and covers rows that
+  predate both. Anonymized rows (erasure nulls the subject id on purpose) are exempt.
+- **The verifier no longer claims the hash is unkeyed when it is keyed.** Its closing note was a
+  fixed string; it now describes the mode actually in force.
+- **One active document version per key is now guaranteed on MySQL and SQLite too.** PostgreSQL
+  enforces it with a partial unique index; the other engines relied on `activate()`, which took no
+  lock — so two concurrent publishes of the same document could each deactivate the other's
+  predecessors and both end up active. Activation is now serialized behind a named lock per
+  (tenant, key, locale); a row lock would not do, because a first publish has no rows to lock.
+- **The enforceable-document cache no longer 500s under Laravel's default cache hardening.** The gate
+  runs on every authenticated request through a cache of the active document set. It cached an Eloquent
+  collection, which a serializing store (redis) reads back as an incomplete class when
+  `cache.serializable_classes` is `false` — the shipped Laravel default — failing the method's return
+  type on every cache hit, i.e. an app-wide 500. The cache now holds plain attribute rows and
+  rehydrates them on read, and treats any non-row value as a miss.
+- **The WireKit legal-text manager's "release all locales" confirmation now works against the required
+  WireKit release.** Its confirm dialog was built with named title/description/confirm slots the
+  installed `alert-dialog` (WireKit >= 2.13) does not read, so the trigger opened an empty dialog with
+  no way to confirm the release. Rebuilt against the real `alert-dialog` sub-component API.
+- **The re-consent affected-subject sweep no longer re-scans the whole document range per page.**
+  `AffectedSubjectResolver` keyset-pages the subjects who must re-consent to a new major version. On
+  PostgreSQL and SQLite it now issues a sargable ROW-VALUE seek `(subject_type, subject_id) > (…)`
+  backed by a new composite index `legal_consents (document_key, locale, subject_type, subject_id)`,
+  making the sweep linear — previously every page rebuilt a temporary B-tree and re-scanned the full
+  range (quadratic, a term that survived the earlier move off `OFFSET`). On MySQL, whose optimiser
+  will not range-scan the index for a row-value comparison, the sweep keeps the OR-form seek, where
+  the same index cuts the cost from minutes to seconds at scale (still super-linear there). Run the
+  new migration.
+- **SQLite no longer nulls an append-only ledger row when its document is deleted.** The
+  `legal_consents.document_id` foreign key's `ON DELETE SET NULL` was already dropped on PostgreSQL and
+  MySQL (it fought the append-only guarantee) but had been left on SQLite; deleting a superseded document
+  on a SQLite consumer with foreign keys enabled silently nulled the immutable row. The foreign key is
+  now dropped on SQLite too. Run the new migration.
+- **The re-consent form now confirms a recorded acceptance to assistive tech.** Like the settings
+  component, it announces the result in an always-present status live region and moves focus to it, so
+  a screen-reader user who completes a re-consent gate is no longer left without confirmation and with
+  focus dropped to `<body>` (WCAG 4.1.3, 2.4.3).
+- **The plain (non-WireKit) admin stubs are now localized.** The legal-text manager and editor stubs
+  used hardcoded English while their WireKit variants were fully translated; a non-English deployment
+  rendered English chrome with no `lang` marker (WCAG 3.1.2). They now use the shipped `ui.admin_*`
+  keys, and the stale-source warning stays in the DOM so a mid-session staleness is announced.
+- **A stuck sweep can no longer stay silent for a day.** The two hourly sweeps (`dispatch-notices`,
+  `close-objection-windows`) now cap their overlap lock at 2 hours instead of the framework's 24-hour
+  default, so a hung run self-clears — and the sweep resumes reporting its heartbeat — well before the
+  next legally time-boxed check.
+- **Documentation corrections.** The Configuration table now shows that `documents` ships
+  pre-populated with an example `terms`/`privacy`/`newsletter` registry (it was documented as `[]`,
+  which read as "author the whole registry yourself"); the admin screens now list the Livewire tags
+  needed to mount them; a missing `cache.enforceable_ttl` row was added; the tamper-evidence summary
+  now states its unkeyed-hash limits honestly (a re-chaining write-capable actor and a tail truncation
+  are not caught); and the public `CONTRIBUTING.md` no longer tells contributors to run tooling that
+  is not shipped to the public package.
+
 ## [0.4.0] - 2026-07-17
 
 > **Breaking (0.x minor).** This release turns the legal texts from a read-only source into an

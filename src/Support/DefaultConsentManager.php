@@ -16,6 +16,7 @@ use Pushery\LegalConsent\Events\ConsentObjected;
 use Pushery\LegalConsent\Events\ConsentRecorded;
 use Pushery\LegalConsent\Events\ConsentTerminated;
 use Pushery\LegalConsent\Events\ConsentWithdrawn;
+use Pushery\LegalConsent\Exceptions\DocumentChangedException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Exceptions\NotWithdrawableException;
 use Pushery\LegalConsent\Models\LegalConsent;
@@ -35,10 +36,18 @@ readonly class DefaultConsentManager implements ConsentManager
     /** How many times an append retries after a concurrent fork before surfacing the violation. */
     private const int MAX_CHAIN_ATTEMPTS = 5;
 
+    /**
+     * @param  array<string, array<string, mixed>>  $documents  the configured registration registry;
+     *                                                          empty means "do not filter" (a bare
+     *                                                          manager built in a test or by hand)
+     */
     public function __construct(
         private ConsentGate $gate,
         private string $defaultLocale = 'de',
         private PublishedDocumentReader $reader = new PublishedDocumentReader,
+        private array $documents = [],
+        private bool $ageGateEnabled = false,
+        private int $ageThreshold = 16,
     ) {}
 
     public function published(string $documentKey, ?string $locale = null): ?PublishedDocument
@@ -50,12 +59,35 @@ readonly class DefaultConsentManager implements ConsentManager
     {
         $locale ??= $this->defaultLocale;
 
-        $documents = LegalDocument::query()
-            ->select(['key', 'type', 'title', 'ui_wording', 'version', 'locale', 'requires_explicit_optin'])
-            ->where('locale', $locale)
-            ->where('is_active', true)
-            ->orderBy('key')
-            ->get();
+        $documents = $this->checklistRows($locale);
+
+        if ($locale !== $this->defaultLocale) {
+            // A MANDATORY document published only in the default locale is still legally required at
+            // registration, so it must be SHOWN — as its default-locale control, the one language the
+            // visitor has to read before agreeing to it. This mirrors the fallback in
+            // RegistrationConsentRecorder and RegistrationRules, so the DISPLAYED set, the VALIDATED
+            // set and the RECORDED set resolve identically: the form can never require or record a
+            // document it did not show. An optional consent has nothing to fall back to.
+            foreach ($this->checklistRows($this->defaultLocale) as $key => $document) {
+                if (! $documents->has($key) && $document->type->isMandatory()) {
+                    $documents->put($key, $document);
+                }
+            }
+        }
+
+        // Intersect with the CONFIGURED registry, exactly as the rules and the recorder do. Without
+        // this the checklist offered controls those two never validate or record — a published
+        // document nobody registered would render a checkbox whose tick goes nowhere.
+        if ($this->documents !== []) {
+            // filter(), NOT only(): Eloquent\Collection::only() selects by PRIMARY KEY, not by the
+            // array key — an override that silently returns an empty set here.
+            $registered = $this->documents;
+            $documents = $documents->filter(
+                static fn (LegalDocument $document): bool => array_key_exists($document->key, $registered)
+            );
+        }
+
+        $documents = $documents->sortKeys();
 
         $checklist = [];
 
@@ -73,7 +105,40 @@ readonly class DefaultConsentManager implements ConsentManager
             );
         }
 
+        // The age attestation is a control the form MUST render, because the rules require it — a
+        // form built from this checklist alone would omit the field and could then never pass
+        // validation. It is about the PERSON, not a document, so it carries no type, version or
+        // locale: there is nothing to freeze, and nothing is recorded for it (Art. 8 DSGVO is an
+        // attestation the app gates on; the package does not claim to prove an age).
+        if ($this->ageGateEnabled) {
+            $checklist[] = new RegistrationChecklistItem(
+                key: 'age_confirmed',
+                type: null,
+                title: '',
+                wording: (string) trans('legal-consent::validation.age_required', ['threshold' => $this->ageThreshold]),
+                version: '',
+                locale: $locale,
+                required: true,
+            );
+        }
+
         return $checklist;
+    }
+
+    /**
+     * The active documents for a locale, keyed by document key — the raw material both the checklist
+     * and its default-locale fallback are built from.
+     *
+     * @return Collection<string, LegalDocument>
+     */
+    private function checklistRows(string $locale): Collection
+    {
+        return LegalDocument::query()
+            ->select(['key', 'type', 'title', 'ui_wording', 'version', 'locale', 'requires_explicit_optin'])
+            ->where('locale', $locale)
+            ->where('is_active', true)
+            ->get()
+            ->keyBy('key');
     }
 
     public function record(Model $subject, string $documentKey, ConsentAction $action, ConsentContext $context, ?string $locale = null): LegalConsent
@@ -89,9 +154,23 @@ readonly class DefaultConsentManager implements ConsentManager
         return $this->append($subject, $document, $action, $context);
     }
 
-    public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
+    public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent
     {
         $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
+
+        // TOCTOU guard: if the subject was shown a hash (captured at render) and the active document
+        // has since been re-released, refuse rather than freeze a version they never read
+        // (Art. 7(1)). The caller re-shows the current text before recording consent.
+        //
+        // The comparison covers the acceptance SENTENCE as well as the body. content_hash is taken
+        // over the document text alone, but a re-consent form shows only `ui_wording` — so a release
+        // that changed nothing but that one sentence (the single string the subject actually reads
+        // before ticking) would have slipped through the guard untouched.
+        // A bare content_hash is still accepted (the pre-0.5.0 shape a consumer may already send);
+        // it just guards the body alone, which is the weaker of the two.
+        if (! in_array($expectedContentHash, [null, self::acceptanceFingerprint($document), $document->content_hash], true)) {
+            throw DocumentChangedException::for($documentKey, $expectedContentHash, self::acceptanceFingerprint($document));
+        }
 
         return $this->append($subject, $document, $document->type->defaultAcceptAction(), $context);
     }
@@ -236,7 +315,7 @@ readonly class DefaultConsentManager implements ConsentManager
 
         $consent = $this->tamperEvidenceEnabled()
             ? $this->appendChained($token, $attributes)
-            : DB::transaction(fn (): LegalConsent => LegalConsent::query()->create($attributes));
+            : DB::transaction(fn (): LegalConsent => LegalConsent::query()->forceCreate($attributes));
 
         event(match ($action) {
             ConsentAction::Withdrawn => new ConsentWithdrawn($consent),
@@ -273,12 +352,12 @@ readonly class DefaultConsentManager implements ConsentManager
                     // walk, which begins each subject at genesis.
                     $attributes['prev_record_hash'] = $chain->linkFor($this->latestChainedRow($token));
 
-                    // fill()+save() rather than create(): the attributes are a runtime-assembled
-                    // array<string, mixed> (prev_record_hash is set here), which the model is
-                    // fully mass-assignable for ($guarded = []); create()'s shaped-array type would
-                    // reject it.
+                    // forceFill()+save(): the attributes are a runtime-assembled array<string, mixed>
+                    // (prev_record_hash is set here), which create()'s shaped-array type would reject —
+                    // and the model is guarded against mass assignment ($guarded = ['*']), so filling a
+                    // proof row is deliberately something only this curated write path may do.
                     $consent = new LegalConsent;
-                    $consent->fill($attributes)->save();
+                    $consent->forceFill($attributes)->save();
 
                     return $consent;
                 });
@@ -361,5 +440,19 @@ readonly class DefaultConsentManager implements ConsentManager
     {
         // Shared with the notice-delivery ledger so both carry the SAME pseudonym for a subject.
         return new SubjectToken()->forSubject($subject);
+    }
+
+    /**
+     * What the subject was shown, as one comparable value: the document body's content hash folded
+     * with the acceptance sentence rendered next to it.
+     *
+     * Public and static so every capture point (the bundled form, a consumer's own screen, the JSON
+     * API) derives it identically — a guard whose two sides compute the value differently is not a
+     * guard. A bare `content_hash` is still accepted for the body-only case, so an existing consumer
+     * passing one keeps working.
+     */
+    public static function acceptanceFingerprint(LegalDocument $document): string
+    {
+        return hash('sha256', $document->content_hash."\x1f".$document->ui_wording);
     }
 }

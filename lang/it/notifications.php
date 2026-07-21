@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-// Due notifiche giuridicamente distinte: `contract` (ReconsentRequired, nuova accettazione
-// di una modifica sostanziale del contratto — § 308 Nr. 5 lit. b BGB) e `informational`
-// (LegalChangeInformational, modifica SOLO INFORMATIVA, senza azione, senza minaccia di
-// limitazione; un'informativa sulla privacy si prende atto, non si «accetta» mai —
-// EDPB 05/2020 § 122). Registro informale (tu).
+// Two notifications, kept legally distinct:
+//  - `contract`      ReconsentRequired: a material CONTRACT change asks for renewed
+//                    AGREEMENT; the consequence line satisfies § 308 Nr. 5 lit. b BGB.
+//  - `informational` LegalChangeInformational: an INFO-ONLY change — NO action required,
+//                    never a threat of restriction. A privacy notice is acknowledged, never
+//                    agreed to (EDPB 05/2020 § 122).
 return [
     'contract' => [
         'subject' => 'Importante: condizioni d\'uso aggiornate',

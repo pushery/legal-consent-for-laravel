@@ -9,6 +9,18 @@
     the subject agreed to, so it renders verbatim and is never re-phrased here.
 --}}
 <div class="legal-consent-reconsent">
+    {{-- WCAG 4.1.3 + 2.4.3: on submit the outstanding list can empty and the whole <form> is replaced
+         by the "all current" callout — inserted WITH its text, so not announced, and the focused submit
+         button vanishes. This always-present region carries the confirmation and takes focus so it does
+         not drop to <body>. The text is a plain x-wirekit::text, NOT a nested alert/callout (those are
+         themselves role="status" — nesting double-announces). Focus via x-effect, not x-init. --}}
+    <div role="status" aria-live="polite" tabindex="-1" wire:key="lc-reconsent-status"
+        x-effect="($wire.status ?? '') !== '' && $el.focus()">
+        @if (($status ?? '') !== '')
+            <x-wirekit::text>{{ $status }}</x-wirekit::text>
+        @endif
+    </div>
+
     @if ($pending->isEmpty())
         <x-wirekit::callout variant="success" icon>
             {{ __('legal-consent::ui.all_current') }}

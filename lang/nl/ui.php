@@ -55,4 +55,19 @@ return [
     'admin_mark_reviewed' => 'Als gecontroleerd markeren',
     'admin_preview' => 'Voorbeeld',
     'withdrawn_confirmation' => 'Toestemming ingetrokken. Het gaat direct in.',
+
+    // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
+    'reconsent_recorded' => 'Bedankt — je toestemming is vastgelegd.',
+    'reconsent_changed' => 'Dit document is gewijzigd sinds je deze pagina hebt geopend. Bekijk de huidige versie voordat je toestemming geeft.',
+    'admin_body_label' => 'Tekst (opgeschoonde HTML)',
+    'admin_preview_label' => 'Voorbeeld van de gepubliceerde tekst',
+    'admin_edit' => 'bewerken',
+    'admin_edit_for' => ':key bewerken (:locale)',
+    'admin_status_saved' => 'Opgeslagen. Voor publicatie is een controle vereist.',
+    'admin_status_source_not_translated' => 'De brontaal wordt geschreven, niet vertaald.',
+    'admin_status_no_source' => 'Schrijf eerst de brontekst — er is niets om uit te vertalen.',
+    'admin_status_machine_translated' => 'Machinaal vertaald. Iemand moet de tekst controleren voordat die gepubliceerd kan worden.',
+    'admin_status_reviewed' => 'Als gecontroleerd gemarkeerd. Deze tekst kan nu gepubliceerd worden.',
+    'admin_status_release_blocked' => '\':key\' is niet gepubliceerd: :reasons',
+    'admin_status_released' => '\':key\' gepubliceerd in :count taal/talen — betreft :affects perso(o)n(en).',
 ];

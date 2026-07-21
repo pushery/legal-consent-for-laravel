@@ -185,7 +185,7 @@ final readonly class LegalDocumentPublisher
             }
         }
 
-        $document = LegalDocument::query()->create([
+        $document = LegalDocument::query()->forceCreate([
             'key' => $key,
             'type' => $type,
             'requires_explicit_optin' => $type->requiresExplicitOptin(),

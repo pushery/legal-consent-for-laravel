@@ -18,6 +18,14 @@ use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 interface LegalDocumentSource
 {
     /**
+     * Resolve the raw text for a (type, locale).
+     *
+     * PIN the given `$locale` for anything you render or translate. A source that calls `__()` — or
+     * otherwise reads the ambient app/session locale — hashes the same published text differently per
+     * viewer, producing several conflicting hashes for one version and making `check-drift` flap
+     * silently. Render in `$locale`, never the request locale. (This is the seam a consumer uses to
+     * interpolate operator identity from a single source and still hash exactly what was shown.)
+     *
      * @throws LegalDocumentNotFound when no document exists for (type, locale)
      */
     public function resolve(string $type, string $locale): RawDocument;

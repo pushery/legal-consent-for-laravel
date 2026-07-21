@@ -1,16 +1,14 @@
 <div>
     {{-- A named landmark region so the whole admin surface is reachable by assistive tech. --}}
     <section aria-labelledby="legal-text-manager-heading">
-        <h1 id="legal-text-manager-heading">Legal texts</h1>
+        <h1 id="legal-text-manager-heading">{{ __('legal-consent::ui.admin_heading') }}</h1>
 
         {{-- Status: an assertive live region, so a screen reader hears the result of a release (or
              why it did not happen) immediately after the action — WCAG 4.1.3. It is always present
              in the DOM (an aria-live region added at the same time as its text is not announced). --}}
         <p role="alert" aria-live="assertive" wire:key="legal-text-manager-status">{{ $status }}</p>
 
-        <p>Texts are edited per locale, reviewed by a human, then released across every locale at once.
-            A machine translation can never be published until someone reviews it, and the acceptance
-            sentence is fixed vendor copy — it is never machine-translated.</p>
+        <p>{{ __('legal-consent::ui.admin_policy') }}</p>
 
         {{-- The grid has Document + one column per locale + Release, so it can exceed a narrow
              viewport. A keyboard-focusable horizontal-scroll region keeps it reachable without
@@ -19,11 +17,11 @@
         <table>
             <thead>
                 <tr>
-                    <th scope="col">Document</th>
+                    <th scope="col">{{ __('legal-consent::ui.admin_document') }}</th>
                     @foreach ($locales as $locale)
                         <th scope="col">{{ $locale }}</th>
                     @endforeach
-                    <th scope="col">Release</th>
+                    <th scope="col">{{ __('legal-consent::ui.admin_release') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -34,29 +32,36 @@
                             @php($cell = $rows[$key][$locale])
                             <td>
                                 @if (! $cell['written'])
-                                    <span>Not written</span>
+                                    <span>{{ __('legal-consent::ui.admin_not_written') }}</span>
                                 @else
                                     <span>{{ $cell['review_state'] }}</span>
                                     @if ($cell['machine'])
-                                        <span> · machine-drafted</span>
+                                        <span> · {{ __('legal-consent::ui.admin_machine') }}</span>
                                     @endif
                                     @if ($cell['stale'])
-                                        <span> · needs update</span>
+                                        <span> · {{ __('legal-consent::ui.admin_needs_update') }}</span>
                                     @elseif ($cell['unpublished_changes'])
-                                        <span> · unpublished changes</span>
+                                        <span> · {{ __('legal-consent::ui.admin_unpublished') }}</span>
                                     @endif
                                 @endif
-                                {{-- Placeholder link: the package ships no admin routes, so wire
-                                     href to your own editor route. The per-cell aria-label keeps a
-                                     screen-reader link list from reading "edit, edit, edit…". --}}
-                                <a href="#" wire:navigate aria-label="Edit {{ $key }} ({{ $locale }})">edit</a>
+                                {{-- Placeholder link: the package ships no admin routes, so wire href
+                                     to your own editor route. The per-cell aria-label keeps a screen
+                                     reader's link list from reading "edit, edit, edit…". --}}
+                                <a href="#" wire:navigate aria-label="{{ __('legal-consent::ui.admin_edit_for', ['key' => $key, 'locale' => $locale]) }}">{{ __('legal-consent::ui.admin_edit') }}</a>
                             </td>
                         @endforeach
                         <td>
                             @if ($rows[$key]['_release']['ready'])
-                                <button type="button" wire:click="releaseAll('{{ $key }}')">Release all locales</button>
+                                {{-- Per-document accessible name: with N rows, N buttons all reading
+                                     "Release all locales" are indistinguishable in a screen reader's
+                                     button list (WCAG 2.4.6) — the same rule this package already
+                                     enforces for the withdraw control. --}}
+                                <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.$key }}" wire:click="releaseAll('{{ $key }}')">{{ __('legal-consent::ui.admin_release_all') }}</button>
                             @else
-                                <button type="button" disabled aria-describedby="blocking-{{ $key }}">Release all locales</button>
+                                {{-- The blocking reasons stay OUTSIDE aria-describedby on a disabled
+                                     button (a disabled control is skipped, so its description is never
+                                     announced) — they are rendered as visible text below instead. --}}
+                                <button type="button" disabled aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.$key }}">{{ __('legal-consent::ui.admin_release_all') }}</button>
                                 <ul id="blocking-{{ $key }}">
                                     @foreach ($rows[$key]['_release']['blocking'] as $locale => $reason)
                                         <li>{{ $locale }}: {{ $reason }}</li>

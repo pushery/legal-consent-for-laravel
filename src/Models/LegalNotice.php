@@ -43,8 +43,15 @@ final class LegalNotice extends Model
 
     public $timestamps = false;
 
-    /** @var list<string> */
-    protected $guarded = [];
+    /**
+     * Nothing is mass-assignable. A notice row is the durable-medium proof that a legally required
+     * notice actually went out; its only legitimate writer is the dispatch sweep's curated attribute
+     * array (forceCreate). Blocking mass assignment keeps a stray LegalNotice::create($input) from
+     * fabricating proof of a notice nobody ever sent.
+     *
+     * @var list<string>
+     */
+    protected $guarded = ['*'];
 
     /**
      * @return MorphTo<Model, $this>

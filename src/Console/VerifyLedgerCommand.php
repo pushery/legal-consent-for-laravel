@@ -101,6 +101,21 @@ final class VerifyLedgerCommand extends Command
                 ->count();
         }
 
+        // The forged-chain check. The walk above groups by `subject_token` and restarts at genesis on
+        // every new one — but the GATE reads a subject by `subject_type` + `subject_id` and never
+        // looks at the token at all. Those two different keys for one question are the hole: an
+        // attacker who can INSERT invents a fresh token, links it to the public genesis constant, and
+        // gets a self-consistent chain the walk happily verifies, while the gate counts the row as a
+        // real holding. No re-chaining, so no secret needed — keying the hash cannot close this.
+        //
+        // What closes it is the invariant SubjectToken already intends but never enforced: ONE
+        // subject has exactly ONE token (its docblock: "two tokens for one subject silently defeats
+        // the whole point"). This check is structural, so it holds with or without a key, and it sees
+        // rows that predate any of it.
+        foreach ($this->tokenBindingBreaks() as $break) {
+            $breaks[] = $break;
+        }
+
         if ($breaks === []) {
             $this->info("Ledger chain intact: verified {$rows} chained record(s) across {$subjects} subject(s).");
 
@@ -111,7 +126,13 @@ final class VerifyLedgerCommand extends Command
             // Honesty: with no signed head, deleting a subject's NEWEST row leaves nothing to
             // mismatch, so a tail truncation is not detectable here. Say so rather than let the
             // "intact" line imply a guarantee the chain does not give.
-            $this->line('Note: an intact chain proves no naive tampering, not that the ledger is untampered. The hash is unkeyed and the head unsigned, so an actor with table-write access can alter a row and re-chain its successors into a consistent chain, and a tail truncation leaves nothing to mismatch. HMAC-key the hash and/or notarize the head externally to close that gap.');
+            // Honesty, and it has to be CONDITIONAL: the old note claimed "the hash is unkeyed"
+            // unconditionally, which is simply false output whenever a key is configured.
+            $keyed = is_string(config('legal-consent.tamper_evidence_key')) && config('legal-consent.tamper_evidence_key') !== '';
+
+            $this->line($keyed
+                ? 'Note: an intact chain proves no naive tampering and no re-chaining, not that the ledger is untampered. The hash is HMAC-keyed, so editing history requires the secret — but the head is unsigned and each row stores only the link to its predecessor, so a tail truncation and a replacement of a chain'."'".'s newest row remain undetectable here. Restrict INSERT on legal_consents to the application role, and notarize the head externally to close the rest.'
+                : 'Note: an intact chain proves no naive tampering, not that the ledger is untampered. The hash is unkeyed and the head unsigned, so an actor with table-write access can alter a row and re-chain its successors into a consistent chain, and a tail truncation leaves nothing to mismatch. Set legal-consent.tamper_evidence_key to close the re-chain path, and notarize the head externally for the rest.');
 
             return self::SUCCESS;
         }
@@ -127,5 +148,77 @@ final class VerifyLedgerCommand extends Command
         }
 
         return self::FAILURE;
+    }
+
+    /**
+     * Breaks in the subject↔token binding: one subject must own exactly one token, and one token
+     * must belong to exactly one subject.
+     *
+     * Deliberately raw and structural — no hashes, no key. Two aggregate queries, so it also covers
+     * the two shapes the chain walk cannot see: a fabricated chain under a FRESH token (the walk
+     * verifies it happily; here the victim suddenly owns two tokens) and a row written with
+     * `subject_token = NULL`, which the walk filters out entirely (`whereNotNull`) — counted here
+     * only from the point chaining began, since pre-feature rows legitimately have none.
+     *
+     * Anonymized rows are exempt: erasure nulls `subject_id` on purpose and the token is what keeps
+     * the proof linkable afterwards, so a null subject is not a binding violation.
+     *
+     * @return list<string>
+     */
+    private function tokenBindingBreaks(): array
+    {
+        $breaks = [];
+
+        // One subject, several tokens — the shape a fabricated chain creates.
+        $multiToken = DB::table('legal_consents')
+            ->selectRaw('subject_type, subject_id, COUNT(DISTINCT subject_token) AS tokens')
+            ->whereNotNull('subject_id')
+            ->whereNotNull('subject_token')
+            ->groupBy('subject_type', 'subject_id')
+            ->havingRaw('COUNT(DISTINCT subject_token) > 1')
+            ->get();
+
+        foreach ($multiToken as $row) {
+            $breaks[] = sprintf(
+                'subject %s#%s carries %s distinct subject_tokens — one subject has exactly one token, so a second chain was fabricated for them (the chain walk verifies each token separately and cannot see this)',
+                is_string($row->subject_type) ? $row->subject_type : '?',
+                is_scalar($row->subject_id) ? (string) $row->subject_id : '?',
+                is_scalar($row->tokens) ? (string) $row->tokens : '?',
+            );
+        }
+
+        // One token, several subjects — a token stolen onto another subject's rows.
+        $sharedToken = DB::table('legal_consents')
+            ->selectRaw('subject_token, COUNT(DISTINCT subject_id) AS subjects')
+            ->whereNotNull('subject_id')
+            ->whereNotNull('subject_token')
+            ->groupBy('subject_token')
+            ->havingRaw('COUNT(DISTINCT subject_id) > 1')
+            ->get();
+
+        foreach ($sharedToken as $row) {
+            $breaks[] = sprintf(
+                'subject_token %s is shared by %s subjects — a token belongs to exactly one subject',
+                is_string($row->subject_token) ? substr($row->subject_token, 0, 12).'…' : '?',
+                is_scalar($row->subjects) ? (string) $row->subjects : '?',
+            );
+        }
+
+        // A row with NO token, written after chaining began. The walk filters those out, so without
+        // this they are invisible — while the gate, which reads by subject id, still counts them.
+        $firstChainedId = DB::table('legal_consents')->whereNotNull('prev_record_hash')->min('id');
+
+        if ($firstChainedId !== null) {
+            $tokenless = (int) DB::table('legal_consents')
+                ->whereNull('subject_token')
+                ->where('id', '>', $firstChainedId)
+                ->count();
+
+            if ($tokenless > 0) {
+                $breaks[] = "{$tokenless} row(s) written after chaining began carry no subject_token — the chain walk skips them entirely, while the gate still counts them (direct DB write?)";
+            }
+        }
+
+        return $breaks;
     }
 }

@@ -5,16 +5,24 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Models;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Cache\ArrayStore;
+use Illuminate\Cache\NullStore;
+use Illuminate\Contracts\Cache\LockProvider;
+use Illuminate\Contracts\Cache\Store;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Override;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
+use Pushery\LegalConsent\Support\LegalDocumentPublisher;
+use Pushery\LegalConsent\Support\TenantContext;
 
 /**
  * One frozen, published version of a legal text.
@@ -60,8 +68,16 @@ final class LegalDocument extends Model
 {
     use BelongsToTenant;
 
-    /** @var list<string> */
-    protected $guarded = [];
+    /**
+     * Nothing is mass-assignable. A published row is the frozen text every acceptance is proved
+     * against; its only legitimate writer is {@see LegalDocumentPublisher}'s
+     * curated attribute array (forceCreate). Blocking mass assignment keeps a stray
+     * LegalDocument::create($input) from planting a version nobody authored — the immutability
+     * trigger already refuses edits after insert, so this closes the insert side.
+     *
+     * @var list<string>
+     */
+    protected $guarded = ['*'];
 
     /** @var list<string> */
     protected $hidden = ['content'];
@@ -174,6 +190,63 @@ final class LegalDocument extends Model
      */
     public function activate(): void
     {
+        // Serialize concurrent activations of the same document. PostgreSQL enforces
+        // one-active-version with a partial unique index, but MySQL and SQLite have none — so two
+        // concurrent publishes could each deactivate the other's predecessors and BOTH end up
+        // active, failing OPEN on a production engine. A row lock is not enough: on a first publish
+        // there are no rows to lock (the gap the chain race taught us), so the set is serialized by
+        // NAME instead.
+        //
+        // Already inside a transaction? Then an orchestrating caller — the atomic multi-locale
+        // releaser — owns this: it holds the very same lock across the OUTER transaction, while a
+        // lock taken here would be released when this method returns, BEFORE that commit. That is
+        // false comfort, not serialization, and re-taking the shared name would self-deadlock. The
+        // rule is therefore explicit: whoever opens the transaction owns the lock.
+        if (DB::transactionLevel() > 0) {
+            $this->activateNow();
+
+            return;
+        }
+
+        $this->activateSerialized();
+    }
+
+    /**
+     * Take the activation lock, then activate. Public because it is the whole serialization path and
+     * must be exercisable on its own: a transactional test suite can never reach it through
+     * activate(), which correctly delegates whenever a transaction is already open.
+     */
+    public function activateSerialized(): void
+    {
+        $store = $this->lockStore();
+
+        // Two different failure shapes, and only the first is obvious:
+        //  - a store with no LockProvider at all (session, storage, apc, a custom one) would make
+        //    publishing FATAL, so degrade instead of throwing;
+        //  - `array` and `null` DO implement LockProvider, but their locks do not serialize across
+        //    processes (array is process-local; a null lock always succeeds). Those are the stores
+        //    that look protected and are not, so they get the same warning.
+        // Either way the activation still runs, and on PostgreSQL the partial unique index remains
+        // the real guarantee. Say it rather than let the lock imply a protection it does not give.
+        if (! $store instanceof LockProvider || $store instanceof ArrayStore || $store instanceof NullStore) {
+            Log::warning('legal-consent: cache store cannot serialize activation, running unserialized', [
+                'document_key' => $this->key,
+                'store' => $store::class,
+            ]);
+
+            $this->activateNow();
+
+            return;
+        }
+
+        $store->lock($this->activationLockKey(), 10)->block(5, function (): void {
+            $this->activateNow();
+        });
+    }
+
+    /** The activation itself. Always transactional; the caller decides who holds the lock. */
+    private function activateNow(): void
+    {
         DB::transaction(function (): void {
             self::query()
                 ->where('key', $this->key)
@@ -183,6 +256,42 @@ final class LegalDocument extends Model
 
             $this->forceFill(['is_active' => true])->save();
         });
+    }
+
+    /**
+     * The name the one-active-version set is serialized under: one lock per (tenant, KEY).
+     *
+     * Deliberately NOT per locale, and deliberately the same name {@see LegalDocumentReleaser} takes:
+     * an atomic multi-locale release and a single `legal-consent:publish` of the same document must
+     * exclude each other. Two different lock names would let them interleave — which is exactly how
+     * a "serialized" activation still ends with two active rows.
+     */
+    public function activationLockKey(): string
+    {
+        return self::activationLockName($this->key);
+    }
+
+    /** The shared lock name, so every writer of a document's active version queues on one lock. */
+    public static function activationLockName(string $key): string
+    {
+        return sprintf('legal-consent:activate:%s:%s', app(TenantContext::class)->current(), $key);
+    }
+
+    /**
+     * The cache store the lock lives on — the package's own (`legal-consent.cache.store`), not
+     * whatever happens to be the app default.
+     *
+     * Be honest about the limit: this guarantee is only as real as the store's lock. `array` and
+     * `null` both implement LockProvider — so an interface check alone would call them protected —
+     * but an array lock is process-local and a null lock always succeeds, so neither serializes
+     * anything. On those the one-active-version invariant rests on PostgreSQL's partial unique index
+     * alone (MySQL and SQLite have none). Use redis, memcached or database in production.
+     */
+    private function lockStore(): Store
+    {
+        $name = config('legal-consent.cache.store');
+
+        return Cache::store(is_string($name) ? $name : null)->getStore();
     }
 
     /**

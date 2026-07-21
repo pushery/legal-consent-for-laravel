@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentMethod;
+use Pushery\LegalConsent\Exceptions\DocumentChangedException;
 use Pushery\LegalConsent\Exceptions\NotWithdrawableException;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -23,13 +24,28 @@ final readonly class ConsentController
 
     public function store(Request $request): JsonResponse
     {
-        $request->validate(['document_key' => ['required', 'string']]);
+        $request->validate([
+            'document_key' => ['required', 'string'],
+            'expected_content_hash' => ['nullable', 'string'],
+        ]);
 
-        $record = $this->consent->accept(
-            $this->subject($request),
-            $request->string('document_key')->toString(),
-            ConsentContext::fromRequest($request, ConsentMethod::Api),
-        );
+        try {
+            $record = $this->consent->accept(
+                $this->subject($request),
+                $request->string('document_key')->toString(),
+                ConsentContext::fromRequest($request, ConsentMethod::Api),
+                null,
+                // The hash the client last showed the subject; a mismatch means a version was
+                // released since, and the client must re-show it (409) before recording.
+                $request->filled('expected_content_hash') ? $request->string('expected_content_hash')->toString() : null,
+            );
+        } catch (DocumentChangedException $e) {
+            return response()->json([
+                'error' => 'document_changed',
+                'message' => $e->getMessage(),
+                'document_key' => $e->documentKey,
+            ], JsonResponse::HTTP_CONFLICT);
+        }
 
         return response()->json([
             'id' => $record->id,

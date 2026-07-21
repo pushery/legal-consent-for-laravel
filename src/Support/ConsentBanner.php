@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Enums\NoticeMode;
@@ -30,30 +31,28 @@ final readonly class ConsentBanner
      * Pending material changes the subject has not yet accepted, currently within their
      * grace window.
      *
+     * @param  array<string, int>|null  $accepted  the subject's held majors, folded here when null and
+     *                                             handed back so a sibling banner can reuse it
      * @return list<array{key: string, version: string, title: string, announce_from: ?string, enforce_from: ?string, days_left: int}>
      */
-    public function pendingFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null): array
+    public function pendingFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array &$accepted = null): array
     {
         $now ??= CarbonImmutable::now();
         $locale ??= $this->defaultLocale;
 
-        $upcoming = LegalDocument::query()
-            ->select(['key', 'version', 'title', 'major_version', 'announce_from', 'enforce_from'])
-            ->where('locale', $locale)
-            ->where('is_active', true)
-            ->where('requires_explicit_optin', false)
-            ->where('requires_reconsent', true)
-            ->whereNotNull('announce_from')
-            ->where('announce_from', '<=', $now)
-            ->whereNotNull('enforce_from')
-            ->where('enforce_from', '>', $now)
-            ->get();
+        $upcoming = $this->activeFor($locale)->filter(
+            fn (LegalDocument $document): bool => ! $document->requires_explicit_optin
+                && $document->requires_reconsent
+                && $this->announced($document, $now)
+                && $document->enforce_from instanceof CarbonImmutable
+                && $document->enforce_from->greaterThan($now)
+        );
 
         if ($upcoming->isEmpty()) {
             return [];
         }
 
-        $accepted = $this->gate->heldMajorByKey($subject);
+        $accepted ??= $this->gate->heldMajorByKey($subject);
         $pending = [];
 
         foreach ($upcoming as $document) {
@@ -89,16 +88,14 @@ final readonly class ConsentBanner
         $now ??= CarbonImmutable::now();
         $locale ??= $this->defaultLocale;
 
-        $active = LegalDocument::query()
-            ->select(['key', 'version', 'title', 'enforce_from', 'offers_termination'])
-            ->where('locale', $locale)
-            ->where('is_active', true)
-            ->where('notice_mode', NoticeMode::InfoPush->value)
-            ->whereNotNull('announce_from')
-            ->where('announce_from', '<=', $now)
-            ->whereNotNull('enforce_from')
-            ->where('enforce_from', '>', $now)
-            ->get();
+        $active = $this->activeFor($locale)->filter(
+            // The stored column, not noticeMode(): a null notice_mode is NOT an info push (the
+            // accessor would derive one from requires_reconsent), matching the previous SQL filter.
+            fn (LegalDocument $document): bool => $document->notice_mode === NoticeMode::InfoPush
+                && $this->announced($document, $now)
+                && $document->enforce_from instanceof CarbonImmutable
+                && $document->enforce_from->greaterThan($now)
+        );
 
         $informational = [];
 
@@ -122,29 +119,27 @@ final readonly class ConsentBanner
      * still exercise them (§ 308 Nr. 5 lit. a BGB). `days_left` counts down to the objection
      * deadline, not the effective date.
      *
+     * @param  array<string, int>|null  $accepted  the subject's held majors, folded here when null and
+     *                                             handed back so a sibling banner can reuse it
      * @return list<array{key: string, version: string, title: string, objection_deadline: ?string, enforce_from: ?string, days_left: int}>
      */
-    public function deemedFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null): array
+    public function deemedFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array &$accepted = null): array
     {
         $now ??= CarbonImmutable::now();
         $locale ??= $this->defaultLocale;
 
-        $upcoming = LegalDocument::query()
-            ->select(['key', 'version', 'title', 'major_version', 'objection_deadline', 'enforce_from'])
-            ->where('locale', $locale)
-            ->where('is_active', true)
-            ->where('notice_mode', NoticeMode::DeemedConsent->value)
-            ->whereNotNull('announce_from')
-            ->where('announce_from', '<=', $now)
-            ->whereNotNull('objection_deadline')
-            ->where('objection_deadline', '>', $now)
-            ->get();
+        $upcoming = $this->activeFor($locale)->filter(
+            fn (LegalDocument $document): bool => $document->notice_mode === NoticeMode::DeemedConsent
+                && $this->announced($document, $now)
+                && $document->objection_deadline instanceof CarbonImmutable
+                && $document->objection_deadline->greaterThan($now)
+        );
 
         if ($upcoming->isEmpty()) {
             return [];
         }
 
-        $accepted = $this->gate->heldMajorByKey($subject);
+        $accepted ??= $this->gate->heldMajorByKey($subject);
         $deemed = [];
 
         foreach ($upcoming as $document) {
@@ -184,10 +179,36 @@ final readonly class ConsentBanner
      */
     public function forSubject(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null): array
     {
+        // The two per-subject banners each fold the subject's held majors; share ONE fold so an open
+        // reconsent AND deemed window no longer pays for it twice. Still lazy — neither folds at all
+        // while its window is closed, so the common "nothing pending" render stays query-free.
+        $accepted = null;
+
         return [
-            'reconsent' => $this->pendingFor($subject, $locale, $now),
+            'reconsent' => $this->pendingFor($subject, $locale, $now, $accepted),
             'informational' => $this->informationalFor($locale, $now),
-            'deemed' => $this->deemedFor($subject, $locale, $now),
+            'deemed' => $this->deemedFor($subject, $locale, $now, $accepted),
         ];
+    }
+
+    /**
+     * The active document set for a locale, taken from the publish-invalidated cache the package
+     * already maintains — so the banner's three global lookups cost ZERO queries on a warm cache
+     * instead of three on every authenticated render. The time filtering stays in memory: the
+     * announce/enforce windows move on a clock, so caching an already-filtered set would need a TTL
+     * short enough to be pointless.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    private function activeFor(string $locale): Collection
+    {
+        return app(EnforceableDocumentCache::class)->activeFor($locale);
+    }
+
+    /** Whether the document's announce window has opened. */
+    private function announced(LegalDocument $document, CarbonImmutable $now): bool
+    {
+        return $document->announce_from instanceof CarbonImmutable
+            && $document->announce_from->lessThanOrEqualTo($now);
     }
 }

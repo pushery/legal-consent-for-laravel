@@ -17,12 +17,18 @@ use Pushery\LegalConsent\Enums\DocumentType;
  * mandatory, a real consent is voluntary and may never be required (Art. 7(4) Kopplungsverbot).
  * `locale` is carried per item because a form may legitimately show one control in a language the
  * rest of the page is not in — the one control a visitor must understand before agreeing to it.
+ *
+ * LINK THE FULL TEXT WITH THIS ITEM'S `locale`, never the app locale. A mandatory document published
+ * only in the default locale appears here as its default-locale control, and
+ * `Consent::published($key, $locale)` has NO fallback by design (a page shows the text of the locale
+ * it claims, or nothing). Passing the app locale therefore yields `null` and the visitor gets a
+ * required checkbox whose text they cannot open — a clickwrap that is not informed (Art. 7(1)).
  */
 final readonly class RegistrationChecklistItem
 {
     public function __construct(
         public string $key,
-        public DocumentType $type,
+        public ?DocumentType $type,
         public string $title,
         public string $wording,
         public string $version,
@@ -31,18 +37,31 @@ final readonly class RegistrationChecklistItem
     ) {}
 
     /**
-     * @return array{key: string, type: string, title: string, wording: string, version: string, locale: string, required: bool}
+     * The form field this control must be named, so a form built from the checklist validates
+     * against the rules without the consumer guessing the convention.
+     *
+     * A document control is `legal_{key}`; an ATTESTATION (no document, hence no type — today the
+     * Art. 8 age gate) is named by its key directly.
+     */
+    public function field(): string
+    {
+        return $this->type instanceof DocumentType ? "legal_{$this->key}" : $this->key;
+    }
+
+    /**
+     * @return array{key: string, type: string|null, title: string, wording: string, version: string, locale: string, required: bool, field: string}
      */
     public function toArray(): array
     {
         return [
             'key' => $this->key,
-            'type' => $this->type->value,
+            'type' => $this->type?->value,
             'title' => $this->title,
             'wording' => $this->wording,
             'version' => $this->version,
             'locale' => $this->locale,
             'required' => $this->required,
+            'field' => $this->field(),
         ];
     }
 }
