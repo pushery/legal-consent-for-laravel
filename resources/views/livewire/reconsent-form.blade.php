@@ -4,6 +4,14 @@
     submit records the ticked documents. Style freely.
 --}}
 <div class="legal-consent-reconsent">
+    {{-- WCAG 4.1.3 + 2.4.3: on submit the outstanding list can empty and the whole <form> is
+         replaced by the "all current" message. That message is inserted WITH its text (so it is not
+         announced) and the focused submit button vanishes. This always-present polite region carries
+         the confirmation instead and takes focus so it does not drop to <body>. Focus is driven by
+         x-effect, not x-init: x-init runs once and does not re-run on a Livewire morph. --}}
+    <p role="status" aria-live="polite" tabindex="-1" wire:key="lc-reconsent-status"
+        x-effect="($wire.status ?? '') !== '' && $el.focus()">{{ $status ?? '' }}</p>
+
     @if ($pending->isEmpty())
         <p>{{ __('legal-consent::ui.all_current') }}</p>
     @else

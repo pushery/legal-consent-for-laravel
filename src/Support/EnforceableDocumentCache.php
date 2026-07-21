@@ -41,20 +41,57 @@ final readonly class EnforceableDocumentCache
      * enforce/announce windows move on a clock, so caching the ALREADY-filtered set would need a
      * TTL short enough to be pointless.
      *
+     * The cached shape is a list of primitive attribute rows, never an `Eloquent\Collection` of
+     * models. A serializing store (redis) run under Laravel's default `cache.serializable_classes
+     * => false` reads any cached OBJECT back as `__PHP_Incomplete_Class`, which would then fail this
+     * method's `: Collection` return on every cache HIT — an app-wide 500 on the gate's per-request
+     * path. Scalar rows survive `unserialize(..., ['allowed_classes' => false])` untouched and are
+     * rehydrated to models here. A cached value that is not a row list (a legacy object entry, a
+     * corrupt payload) is treated as a miss and recomputed, so the gate degrades to a fresh read
+     * rather than throwing.
+     *
      * @return Collection<int, LegalDocument>
      */
     public function activeFor(string $locale): Collection
     {
-        /** @var Collection<int, LegalDocument> */
-        return $this->cache->remember($this->keyFor($locale), $this->ttl, fn (): Collection => LegalDocument::query()
+        $key = $this->keyFor($locale);
+        $cached = $this->cache->get($key);
+
+        if (is_array($cached)) {
+            $rows = $cached;
+        } else {
+            $rows = $this->freshRows($locale);
+            $this->cache->put($key, $rows, $this->ttl);
+        }
+
+        return LegalDocument::hydrate($rows);
+    }
+
+    /**
+     * The active-document rows as plain attribute arrays — the serialization-safe cache payload.
+     * Only the columns the gate reads are selected, so a rehydrated model carries exactly what the
+     * old cached model did.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function freshRows(string $locale): array
+    {
+        return LegalDocument::query()
             ->select([
                 'id', 'key', 'locale', 'type', 'major_version', 'version', 'title', 'ui_wording',
                 'content_hash', 'requires_explicit_optin', 'requires_reconsent', 'notice_mode',
                 'announce_from', 'enforce_from', 'objection_deadline', 'offers_termination',
+                // Every row here is active by definition, but the column must be SELECTED: a
+                // consumer calling isEnforceable() on a document handed out by the gate would
+                // otherwise read an unset is_active as false — or, under Model::shouldBeStrict(),
+                // hit a MissingAttributeException.
+                'is_active',
             ])
             ->where('locale', $locale)
             ->where('is_active', true)
-            ->get());
+            ->get()
+            ->map(static fn (LegalDocument $document): array => $document->getAttributes())
+            ->all();
     }
 
     public function flush(string $locale): void

@@ -55,4 +55,19 @@ return [
     'admin_mark_reviewed' => 'Mark reviewed',
     'admin_preview' => 'Preview',
     'withdrawn_confirmation' => 'Consent withdrawn. It takes effect immediately.',
+
+    // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
+    'reconsent_recorded' => 'Thank you — your consent has been recorded.',
+    'reconsent_changed' => 'This document changed since you opened this page. Please review the current version before consenting.',
+    'admin_body_label' => 'Text (sanitized HTML)',
+    'admin_preview_label' => 'Preview of the published text',
+    'admin_edit' => 'edit',
+    'admin_edit_for' => 'Edit :key (:locale)',
+    'admin_status_saved' => 'Saved. Review is required before this text can be published.',
+    'admin_status_source_not_translated' => 'The source locale is authored, not translated.',
+    'admin_status_no_source' => 'Write the source text first — there is nothing to translate from.',
+    'admin_status_machine_translated' => 'Machine-translated. A human must review it before it can be published.',
+    'admin_status_reviewed' => 'Marked reviewed. This text is now publishable.',
+    'admin_status_release_blocked' => '\':key\' was not released: :reasons',
+    'admin_status_released' => 'Released \':key\' across :count locale(s) — affects :affects subject(s).',
 ];

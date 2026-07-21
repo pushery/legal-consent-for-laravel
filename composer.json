@@ -1,4 +1,5 @@
 {
+    "$schema": "https://getcomposer.org/schema.json",
     "name": "pushery/legal-consent-for-laravel",
     "description": "Court-proof, versioned legal consent for Laravel \u2014 GDPR-correct separation of contract acceptance, notice acknowledgement, and consent, with an append-only audit trail.",
     "keywords": [
@@ -25,6 +26,7 @@
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
+        "laravel/pao": "^1.1",
         "laravel/pint": "^1.0",
         "livewire/livewire": "^4.3",
         "orchestra/testbench": "^11.0",

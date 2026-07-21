@@ -122,8 +122,16 @@ fail-closed**:
    Gate::define('manage-legal-texts', fn ($user) => $user->isLegalAdmin());
    ```
 
-2. Route the components behind your own admin middleware. With `admin.ability`
-   unset, or the Gate denied, both screens `404` (they never reveal they exist).
+2. Route the components behind your own admin middleware, mounting them as Livewire
+   components. With `admin.ability` unset, or the Gate denied, both screens `404`
+   (they never reveal they exist).
+
+   ```blade
+   <livewire:legal-consent.legal-text-manager />
+   <livewire:legal-consent.legal-text-editor :document-key="'terms'" :locale="'de'" />
+   ```
+
+   The editor mounts with a document `key` and a `locale`; the manager takes none.
 
 Plain stubs are published with `--tag=legal-consent-views`; the WireKit variants
 with `--tag=legal-consent-wirekit`. AI translation is an optional seam: bind

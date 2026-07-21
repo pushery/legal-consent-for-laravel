@@ -14,6 +14,7 @@ use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Exceptions\LedgerImmutableException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Support\DefaultConsentManager;
 
 /**
  * One append-only ledger entry. Never updated: the model blocks UPDATE in every
@@ -48,8 +49,17 @@ final class LegalConsent extends Model
 
     public $timestamps = false;
 
-    /** @var list<string> */
-    protected $guarded = [];
+    /**
+     * Nothing is mass-assignable. A consent row is court-proof evidence, and every legitimate write
+     * goes through the curated attribute array in {@see DefaultConsentManager}
+     * (forceCreate / forceFill). Blocking mass assignment makes "the manager is the only door"
+     * structural: a stray LegalConsent::create($request->all()) can never forge or backdate a FRESH
+     * proof row — subject_id, subject_token, prev_record_hash, accepted_at, content_hash. Mutation
+     * AFTER insert is already refused by the append-only guard; this closes the insert side.
+     *
+     * @var list<string>
+     */
+    protected $guarded = ['*'];
 
     /**
      * @return MorphTo<Model, $this>

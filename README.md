@@ -8,6 +8,7 @@
 
 [![Latest Version](https://img.shields.io/packagist/v/pushery/legal-consent-for-laravel.svg)](https://packagist.org/packages/pushery/legal-consent-for-laravel)
 [![PHP Version](https://img.shields.io/packagist/dependency-v/pushery/legal-consent-for-laravel/php.svg)](https://packagist.org/packages/pushery/legal-consent-for-laravel)
+[![Laravel Versions](https://badge.laravel.cloud/badge/pushery/legal-consent-for-laravel?style=flat)](https://packagist.org/packages/pushery/legal-consent-for-laravel)
 [![PHPStan](https://img.shields.io/badge/PHPStan-max-blue.svg)](https://phpstan.org)
 [![Code Style](https://img.shields.io/badge/code%20style-pint-orange.svg)](https://laravel.com/docs/pint)
 [![License](https://img.shields.io/packagist/l/pushery/legal-consent-for-laravel.svg)](LICENSE)
@@ -69,13 +70,23 @@ enforced portably in the app layer on every engine.
 composer require pushery/legal-consent-for-laravel
 ```
 
-The service provider is registered automatically. Publish the config and run the
-migrations:
+The service provider is registered automatically. Publish everything at once, or only the group you
+need, then run the migrations:
 
 ```bash
-php artisan vendor:publish --tag=legal-consent-config
+php artisan vendor:publish --tag=legal-consent          # config + migrations + views + lang
+php artisan vendor:publish --tag=legal-consent-config   # or just one group
 php artisan migrate
 ```
+
+The umbrella tag covers the **standard** set only. Two groups stay deliberately separate because
+publishing them unasked would be destructive: `legal-consent-users-cache` (drops a column from your
+`users` table) and `legal-consent-backfill` (backfills historical rows).
+
+`legal-consent-wirekit` is separate for a different reason: it **overwrites** the plain stubs with
+their WireKit twins, and that override only ever happens when you ask for it. Note that publishing
+views (umbrella or `legal-consent-views`) copies the whole `resources/views` tree, so the WireKit
+twins land alongside under `views/vendor/legal-consent/wirekit/` — inert copies, not an override.
 
 ## Quick start
 
@@ -137,6 +148,20 @@ php artisan migrate
 All three write the same ledger through one recorder and share an idempotency flag, so
 they never double-write.
 
+When you render a control from `registrationChecklist()`, link its full text with **that item's**
+`locale` — `Consent::published($item->key, $item->locale)`. `published()` deliberately has no fallback,
+so passing the app locale returns `null` for a document that exists only in the default locale, and the
+visitor gets a required checkbox whose text they cannot open. Each item also exposes `field()`, the
+input name the rules validate (`legal_{key}`, or the key itself for the age attestation).
+
+The validation rules, the checklist you render, and the row that gets recorded all resolve the **same**
+document: your configured keys intersected with what is actually **published**, falling back to the
+default-locale version for a *mandatory* document (a voluntary consent is never required — Art. 7(4) —
+and is simply not offered where it is unpublished). So the registration form is **dormant until you
+publish**: an unpublished document demands nothing, and the section appears the moment
+`legal-consent:publish` runs. A document's legal nature comes from the published row, not from the
+config entry, so a drifted `legal_basis` cannot decide whether a checkbox is mandatory.
+
 **Way A — Fortify `CreateNewUser` trait** (strongest proof context):
 
 ```php
@@ -171,6 +196,11 @@ POST /legal/object     { "document_key": "terms" }       → 201 (a Widerspruch)
 POST /legal/terminate  { "document_key": "terms" }       → 201 (a free termination)
 GET  /legal/status                                        → 200 per-document status
 ```
+
+`POST /legal/consent` also accepts an optional `expected_content_hash` — the hash the subject was
+shown. If the active document has been re-released since, the endpoint returns `409 document_changed`
+instead of recording consent to a version the subject never saw (Art. 7(1)). The facade twin is the
+fifth argument: `Consent::accept($user, $key, $context, $locale, $expectedContentHash)`.
 
 Or use the facade / manager directly:
 
@@ -265,6 +295,8 @@ php artisan legal-consent:publish terms de --info --regime=psd2_675g \
     --announce-at=2026-07-01 --enforce-at=2026-09-01
 ```
 
+The dates above are illustrative — pick your own future dates.
+
 Once the announcement date passes, `dispatch-notices` emails each affected subject a
 `LegalChangeInformational` ("we've updated our contract; no action is required"), records a
 durable-medium proof row, and the change takes effect on the effective date — **no one is
@@ -294,6 +326,8 @@ announcement, and the change takes effect after it:
 php artisan legal-consent:publish terms de --deemed --regime=bgb_agb --offers-termination \
     --announce-at=2026-07-01 --objection-at=2026-08-30 --enforce-at=2026-09-01
 ```
+
+The dates above are illustrative — pick your own future dates.
 
 `dispatch-notices` sends a `DeemedConsentNotice` carrying the warning and the free-termination
 right. A subject who does nothing is bound: once the objection deadline passes,
@@ -331,6 +365,15 @@ Each document declares a `source` in `config/legal-consent.php`:
 Any other value is your own class implementing `Pushery\LegalConsent\Content\LegalDocumentSource`,
 named as the source's `driver` and resolved from the container.
 
+A custom source is also the seam for **interpolating operator identity** (Impressum, Art. 13 contact,
+VAT id, jurisdiction) from a single config source at render time: render your own Blade/HTML with the
+values filled in and return it as an `Html`-format body — the pipeline hashes exactly what you
+rendered, so the acceptance proof still covers precisely what the subject saw. Two rules keep it
+safe: **pin the `$locale` you are handed** (a source that calls `__()` on the ambient locale hashes
+the same text differently per viewer and makes `check-drift` flap), and **give every document a real
+`MAJOR.MINOR.PATCH` version** — a null version defaults to `0.0.0`, which can never gate (the gate
+compares major versions and `held >= 0` is always true), so always set one on a gating document.
+
 ## Maintaining legal texts
 
 Two Livewire screens ship as publishable stubs — a **manager** (releases every locale of a document
@@ -345,6 +388,16 @@ and never reveal they exist — there is no ungated publish path.
 // a service provider
 Gate::define('manage-legal-texts', fn ($user) => $user->isLegalAdmin());
 ```
+
+Mount them as Livewire components inside your own admin routing:
+
+```blade
+<livewire:legal-consent.legal-text-manager />
+<livewire:legal-consent.legal-text-editor :document-key="'terms'" :locale="'de'" />
+```
+
+The editor mounts with a document `key` and a `locale` (it edits one draft at a time); the
+manager takes no parameters.
 
 Publish the plain stubs with `--tag=legal-consent-views`, the WireKit variants with
 `--tag=legal-consent-wirekit`. The editor sanitizes on store, so its preview is the exact bytes a
@@ -455,7 +508,7 @@ Art. 7(4)), and the full text is always linked and retrievable (clickwrap, § 30
 
 **Bundled translations.** Every string the package renders — the grace-period banner, the
 consent and settings stubs, the re-consent notification, the validation messages, and the
-acceptance wording — ships translated in seven locales out of the box: German, English,
+acceptance wording — ships translated in every bundled locale out of the box: German, English,
 Spanish, French, Italian, Dutch, and Portuguese. Override any of them by publishing the
 language files:
 
@@ -464,7 +517,7 @@ php artisan vendor:publish --tag=legal-consent-lang
 ```
 
 This is independent of `legal-consent.locales`, which is the set of locales you publish your
-own legal *documents* in — leave it at `[de, en]` even while the UI is available in all seven.
+own legal *documents* in — leave it at `[de, en]` even while the UI is available in every bundled locale.
 
 ## Configuration
 
@@ -472,27 +525,40 @@ Everything lives in `config/legal-consent.php`. The keys you are most likely to 
 
 | Key | Default | What it does |
 |---|---|---|
-| `documents` | `[]` | The registry: each key maps to its `legal_basis` (`contract` / `acknowledgement` / `consent`) and `source`. |
+| `documents` | example `terms` / `privacy` / `newsletter` registry (ships pre-populated — edit it, don't author it from scratch) | The registry: each key maps to its `legal_basis` (`contract` / `acknowledgement` / `consent`) and `source`. The Quick Start works precisely because `terms` is already registered here. |
 | `default_locale` · `locales` | `de` · `[de, en]` | The primary locale and the allowed set (publishing an unlisted locale is refused). |
 | `fallback_locale` | `de` | When a document is unpublished in the requested locale, fall back to this one instead of failing. |
 | `retention_after_end` | `3 years` | How long proof is kept before `legal-consent:prune` removes superseded/orphaned records. Enforced only once `schedule.prune` is on. |
 | `cache.store` · `cache.ttl` | app default · `86400` | Where/how long rendered documents are cached (self-invalidates on a content change). |
+| `cache.enforceable_ttl` | `60` | How long (seconds) the gate caches the set of currently-enforceable versions — it bounds how late a scheduled `enforce_from` boundary or an out-of-band deactivation begins gating. A publish flushes it immediately; an out-of-band `is_active` write needs `legal-consent:cache-flush`. |
 | `notifications.channels` | `[mail, database]` | Channels for the change notifications. |
 | `notice_periods` | per regime | Advance-notice days per regime/mode. Three keys are wired today — `active_reconsent_min_days`, `deemed_consent_min_days`, and the hard `psd2_min_days`; the other four (`dcd_termination_days`, `p2b_standstill_days`, `eecc_min_days`, `privacy_advance_days`) are reserved for their regimes and not yet read, so tuning them has no effect until those regimes select their own period. A scheduled gating change is measured announcement → effective date; a deemed-consent change is measured announcement → **objection deadline** (the subject must have the full period to object) and is never exempt. Too short a period is refused. A per-document `min_lead_days` in `documents` may **raise** a period, but never undercut a statutory floor: § 675g's two months is hard — neither an override nor this config can talk it down. |
 | `durable_medium` | `proof: true`, `channels: [mail]` | Whether the notice dispatch writes an append-only `legal_notices` proof row, and on which durable-medium channels. |
 | `schedule.dispatch_notices` · `schedule.close_objection_windows` | `true` · `true` | Whether the two notice sweeps are auto-registered on the scheduler (hourly). |
 | `schedule.prune` | `false` | Whether the retention sweep is auto-registered (daily). **Off by default because it deletes** — see Retention. |
 | `middleware.allowlist_routes` · `middleware.allowlist_paths` | `[]` · `[]` | Extra route **names**, and extra URI **paths** (wildcards allowed, e.g. `billing/*`), the gate never blocks. The consent route and `logout` are always allowed. |
+| `gate.subject_filter` | `null` | Which authenticated subjects the gate blocks. Null gates all; a `fn (Model): bool` (or invokable class-string) returning **false** lets a subject through, so the gate can sit **after** your own verification/onboarding gates. A closure blocks `config:cache` — use a class-string in production. A misconfigured value fails safe (gated). |
 | `routes.consent_name` · `routes.consent_path` | `legal.consent` · `/legal-consent` | Where to send a subject to act: `consent_name` is a route name (preferred — it survives a path change), `consent_path` the fallback URL. Used by the middleware redirect **and** by the link in every change notice, so a wrong value points the legally-required notice at a dead URL. |
+| `routes.return_to_intended` · `routes.home` | `false` · `/` | Opt-in: after a re-consent **gate** is fully cleared, return the subject to the URL the middleware intercepted (stashed automatically), falling back to `home`. Off keeps the in-place confirmation; a settings-page embed never redirects. |
 | `routes.api` · `routes.api_prefix` · `routes.api_middleware` | `false` · `legal` · `[api, auth]` | Whether the headless JSON API is registered, under which prefix, behind which middleware. |
 | `markdown.html_input` · `markdown.allow_unsafe_links` · `markdown.max_nesting_level` | `strip` · `false` · `20` | CommonMark hardening for rendering document sources. Loosen `html_input` only for sources you fully control — a legal text is rendered into your users' browsers. |
 
 ### Optional features (each off by default)
 
 - **`tamper_evidence`** (`false`) — turn on the append-only hash chain. Every new ledger row
-  links to the subject's previous one, so a later edit, deletion, or reorder is detectable.
-  Audit it with `php artisan legal-consent:verify-ledger` (non-zero exit on a break);
-  combine with the DB append-only trigger for the strongest guarantee.
+  links to the subject's previous one, so tampering that does **not** re-chain — a naive edit,
+  deletion, or reorder — is detectable. By default the hash is **unkeyed**, so it does **not** catch
+  an actor with write access who recomputes the chain to hide a change. Set **`tamper_evidence_key`**
+  (from `LEGAL_CONSENT_TAMPER_KEY`, held outside the database) to HMAC-key the chain — a table-write
+  attacker without the secret can then no longer **re-chain** edited history. Fix the secret before
+  the first chained row; append-only rows cannot be re-keyed.
+  **Keying does not make the ledger unforgeable.** The chain root is a public constant and each row
+  stores only the link to its predecessor, never its own hash, so an attacker who can `INSERT` can
+  still (a) fabricate an entirely new chain for a subject (a fresh `subject_token` pointing at
+  genesis), which the verifier walks as a valid chain of its own, and (b) replace — not merely
+  truncate — a subject's newest row. Read `php artisan legal-consent:verify-ledger`'s "intact" as
+  *no evidence of re-chaining*, never as proof of authenticity. The primary defense is the database
+  append-only trigger plus restricting `INSERT` on `legal_consents` to the application role.
 
 - **`age_gate`** (`enabled: false`, `threshold: 16`) — Art. 8 DSGVO. When on, registration
   additionally requires an `age_confirmed` attestation. The package gates on the
@@ -535,6 +601,19 @@ relationship rests on.
 The sweep reports a heartbeat through `LegalConsentMonitor`, so you can alert on it having stopped.
 That matters more here than for the other sweeps: a dispatch that stops running leaves visibly
 missing mail, while a prune that stops running fails silently — nothing errors, data just stays.
+
+The seam defaults to a no-op `NullMonitor` (bound in the provider), so every heartbeat is silently
+discarded until the host app binds its own. Wire it to your metrics/heartbeat stack in a service
+provider's `register()`:
+
+```php
+$this->app->bind(
+    \Pushery\LegalConsent\Contracts\LegalConsentMonitor::class,
+    \App\Legal\MyMonitor::class,
+);
+```
+
+Your implementation receives `heartbeat(string $task, int $processed)` after each scheduled sweep.
 
 ## Upgrading
 

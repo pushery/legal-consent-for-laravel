@@ -45,6 +45,7 @@ use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
 use Pushery\LegalConsent\Support\NullMonitor;
+use Pushery\LegalConsent\Support\PublishedDocumentReader;
 use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
 use Pushery\LegalConsent\Support\RegistrationRules;
 use Pushery\LegalConsent\Support\TenantContext;
@@ -72,7 +73,16 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->boolConfig('legal-consent.tenancy.enabled', false),
         ));
 
-        $this->app->singleton(ConsentManager::class, fn (): DefaultConsentManager => new DefaultConsentManager(new ConsentGate, $this->defaultLocale()));
+        $this->app->singleton(ConsentManager::class, fn (): DefaultConsentManager => new DefaultConsentManager(
+            new ConsentGate,
+            $this->defaultLocale(),
+            new PublishedDocumentReader,
+            // The registration checklist resolves against the SAME registry and age gate the rules
+            // and the recorder use, so the displayed, validated and recorded sets cannot diverge.
+            $this->documentsConfig(),
+            $this->boolConfig('legal-consent.age_gate.enabled', false),
+            $this->intConfig('legal-consent.age_gate.threshold', 16),
+        ));
 
         $this->app->bind(LegalConsentMonitor::class, NullMonitor::class);
 
@@ -85,6 +95,9 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->documentsConfig(),
             $this->boolConfig('legal-consent.age_gate.enabled', false),
             $this->intConfig('legal-consent.age_gate.threshold', 16),
+            // Same default locale the recorder resolves against — the two must agree on the
+            // fallback, or the rules could require a version the ledger will not freeze.
+            $this->defaultLocale(),
         ));
 
         $this->app->singleton(RegistrationConsentRecorder::class, fn (): RegistrationConsentRecorder => new RegistrationConsentRecorder(
@@ -128,7 +141,6 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $this->app->singleton(LegalDocumentReleaser::class, fn (): LegalDocumentReleaser => new LegalDocumentReleaser(
             $this->app->make(LegalDocumentPublisher::class),
             $this->app->make(AffectedSubjectResolver::class),
-            $this->app->make(TenantContext::class),
         ));
     }
 
@@ -163,14 +175,18 @@ final class LegalConsentServiceProvider extends ServiceProvider
             if ((bool) config('legal-consent.schedule.dispatch_notices', true)) {
                 $schedule->command('legal-consent:dispatch-notices')
                     ->hourly()
-                    ->withoutOverlapping()
+                    // Cap the overlap lock at 2h, not the 24h default: a hung hourly run should
+                    // self-clear well before the next legally time-boxed sweep, so a stuck lock
+                    // cannot silence the sweep — and its heartbeat — for a whole day.
+                    ->withoutOverlapping(120)
                     ->onOneServer();
             }
 
             if ((bool) config('legal-consent.schedule.close_objection_windows', true)) {
                 $schedule->command('legal-consent:close-objection-windows')
                     ->hourly()
-                    ->withoutOverlapping()
+                    // See dispatch-notices above: a 2h overlap cap, not the 24h default.
+                    ->withoutOverlapping(120)
                     ->onOneServer();
             }
 
@@ -213,13 +229,18 @@ final class LegalConsentServiceProvider extends ServiceProvider
      */
     private function registerPublishing(): void
     {
+        // Each standard group carries the umbrella tag `legal-consent` as well, so
+        // `vendor:publish --tag=legal-consent` publishes the whole normal set in one go while each
+        // group stays individually addressable. The umbrella deliberately EXCLUDES the opt-in
+        // migrations below (one drops a column, one backfills) and the WireKit view variant (it
+        // OVERWRITES the plain stubs — publishing both at once would be self-contradictory).
         $this->publishes([
             __DIR__.'/../config/legal-consent.php' => $this->app->configPath('legal-consent.php'),
-        ], 'legal-consent-config');
+        ], ['legal-consent', 'legal-consent-config']);
 
         $this->publishes([
             __DIR__.'/../database/migrations' => $this->app->databasePath('migrations'),
-        ], 'legal-consent-migrations');
+        ], ['legal-consent', 'legal-consent-migrations']);
 
         // Optional, opt-in migrations (not auto-loaded — they touch the host `users`
         // table, so a consumer publishes them deliberately).
@@ -233,7 +254,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         $this->publishes([
             __DIR__.'/../resources/views' => $this->app->resourcePath('views/vendor/legal-consent'),
-        ], 'legal-consent-views');
+        ], ['legal-consent', 'legal-consent-views']);
 
         // WireKit-native variants — publishing this tag overrides the plain stubs with versions
         // built from real <x-wirekit::*> components. It covers the Livewire views too: those are
@@ -252,7 +273,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         $this->publishes([
             __DIR__.'/../lang' => $this->app->langPath('vendor/legal-consent'),
-        ], 'legal-consent-lang');
+        ], ['legal-consent', 'legal-consent-lang']);
     }
 
     /**

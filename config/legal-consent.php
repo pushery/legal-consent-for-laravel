@@ -131,10 +131,17 @@ return [
     | `consent_name` is the named route the enforcement middleware redirects to
     | (your app defines it). The headless JSON API is opt-in via `api`.
     |
+    | `return_to_intended` (opt-in): when a re-consent GATE is fully cleared, send the
+    | subject back to the URL the middleware intercepted (stashed via redirect()->guest),
+    | falling back to `home`. Off by default so an existing embed keeps its in-place
+    | "all current" confirmation; a settings-page embed never redirects regardless.
+    |
     */
     'routes' => [
         'consent_name' => 'legal.consent',
         'consent_path' => '/legal-consent',
+        'return_to_intended' => false,
+        'home' => '/',
         'api' => false,
         'api_prefix' => 'legal',
         'api_middleware' => ['api', 'auth'],
@@ -148,6 +155,27 @@ return [
     'middleware' => [
         'allowlist_routes' => [],
         'allowlist_paths' => [],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gate subject predicate
+    |--------------------------------------------------------------------------
+    |
+    | Which authenticated subjects the enforcement middleware gates. Null gates every
+    | authenticated `Model` (the default). Set a predicate `fn (Model $subject): bool`
+    | — return false to let a subject through — so the gate can be ordered AFTER your own
+    | verification / onboarding / suspension gates instead of overtaking them (e.g. do not
+    | ask an unverified user for legally-binding consent before they confirm their address):
+    |
+    |   'subject_filter' => fn ($subject) => ! $subject instanceof MustVerifyEmail || $subject->hasVerifiedEmail(),
+    |
+    | A closure blocks `config:cache`; pass an invokable class-string
+    | (`SubjectFilter::class` with `__invoke(Model): bool`) to stay cacheable in production.
+    | A misconfigured predicate fails SAFE — the subject stays gated.
+    */
+    'gate' => [
+        'subject_filter' => null,
     ],
 
     /*
@@ -239,6 +267,18 @@ return [
     | strongest guarantee. Off by default (adds one read per write when on).
     */
     'tamper_evidence' => false,
+
+    /*
+    | Optional HMAC secret that KEYS the tamper-evidence chain. Held OUTSIDE the database
+    | (env / secret store, never in `legal_consents`). When set, row hashes use HMAC-SHA-256
+    | instead of a bare SHA-256, so an actor with only table-write access — who does not hold the
+    | secret — can no longer re-chain a tampered row into a self-consistent chain the verifier
+    | reports as intact (the re-chain gap called out in the tamper-evidence notes). Set it BEFORE
+    | the first chained row: the rows are append-only and cannot be re-keyed, so changing the secret
+    | invalidates prior links. Null keeps the legacy unkeyed hash. Rotation / KMS sourcing is the
+    | app's concern — this reads whatever the env provides.
+    */
+    'tamper_evidence_key' => env('LEGAL_CONSENT_TAMPER_KEY'),
 
     /*
     | Age gate (Art. 8 DSGVO). When enabled, the registration ruleset additionally

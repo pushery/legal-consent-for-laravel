@@ -26,7 +26,7 @@ return [
     'submit' => 'Zustimmen und fortfahren',
     'all_current' => 'Alles aktuell — nichts zu tun.',
 
-    // Grace-Period-Restzeit (trans_choice): Pluralisierung + Stichtag-Fall.
+    // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}Ab heute wirksam|{1}Noch :count Tag|[2,*]Noch :count Tage',
     'updated_note' => 'Aktualisiert — keine Aktion erforderlich.',
     'object_review' => 'Ansehen oder widersprechen',
@@ -55,4 +55,19 @@ return [
     'admin_mark_reviewed' => 'Als geprüft markieren',
     'admin_preview' => 'Vorschau',
     'withdrawn_confirmation' => 'Einwilligung widerrufen. Sie wirkt ab sofort.',
+
+    // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
+    'reconsent_recorded' => 'Danke — deine Zustimmung wurde gespeichert.',
+    'reconsent_changed' => 'Das Dokument wurde geändert, seit du diese Seite geöffnet hast. Bitte prüfe die aktuelle Fassung, bevor du zustimmst.',
+    'admin_body_label' => 'Text (bereinigtes HTML)',
+    'admin_preview_label' => 'Vorschau des veröffentlichten Texts',
+    'admin_edit' => 'bearbeiten',
+    'admin_edit_for' => ':key bearbeiten (:locale)',
+    'admin_status_saved' => 'Gespeichert. Vor der Veröffentlichung ist eine Prüfung erforderlich.',
+    'admin_status_source_not_translated' => 'Die Quellsprache wird verfasst, nicht übersetzt.',
+    'admin_status_no_source' => 'Schreibe zuerst den Quelltext — es gibt nichts, wovon übersetzt werden könnte.',
+    'admin_status_machine_translated' => 'Maschinell übersetzt. Ein Mensch muss den Text prüfen, bevor er veröffentlicht werden kann.',
+    'admin_status_reviewed' => 'Als geprüft markiert. Dieser Text ist jetzt veröffentlichbar.',
+    'admin_status_release_blocked' => '„:key" wurde nicht veröffentlicht: :reasons',
+    'admin_status_released' => '„:key" in :count Sprache(n) veröffentlicht — betrifft :affects Person(en).',
 ];

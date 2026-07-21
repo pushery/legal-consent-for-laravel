@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-// Twee juridisch onderscheiden meldingen: `contract` (ReconsentRequired, hernieuwd akkoord
-// voor een materiële contractwijziging — § 308 Nr. 5 lit. b BGB) en `informational`
-// (LegalChangeInformational, ENKEL INFORMATIEVE wijziging, geen actie, geen dreiging van
-// beperking; van een privacyverklaring neem je kennis, je gaat er nooit mee «akkoord» —
-// EDPB 05/2020 § 122). Informeel register (je).
+// Two notifications, kept legally distinct:
+//  - `contract`      ReconsentRequired: a material CONTRACT change asks for renewed
+//                    AGREEMENT; the consequence line satisfies § 308 Nr. 5 lit. b BGB.
+//  - `informational` LegalChangeInformational: an INFO-ONLY change — NO action required,
+//                    never a threat of restriction. A privacy notice is acknowledged, never
+//                    agreed to (EDPB 05/2020 § 122).
 return [
     'contract' => [
         'subject' => 'Belangrijk: bijgewerkte gebruiksvoorwaarden',

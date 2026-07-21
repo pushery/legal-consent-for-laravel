@@ -33,7 +33,6 @@ final readonly class LegalDocumentReleaser
     public function __construct(
         private LegalDocumentPublisher $publisher,
         private AffectedSubjectResolver $resolver,
-        private TenantContext $tenant,
     ) {}
 
     /**
@@ -43,8 +42,11 @@ final readonly class LegalDocumentReleaser
     public function release(string $key, NoticeMode $mode, array $locales, ReleaseOptions $options = new ReleaseOptions): Collection
     {
         // Serialize concurrent releases of the same text: two admins pressing "Release" at once
-        // would otherwise race on the one-active-version guard and leave a half-applied set.
-        $lock = Cache::lock("legal-consent:release:{$this->tenant->current()}:{$key}", 10);
+        // would otherwise race on the one-active-version guard and leave a half-applied set. The
+        // SAME lock name LegalDocument::activate() uses, so a direct `legal-consent:publish` cannot
+        // interleave with a release — this lock is the one that spans the outer transaction, while
+        // activate()'s own is a savepoint inside it and would be released before the commit.
+        $lock = Cache::lock(LegalDocument::activationLockName($key), 10);
 
         /** @var Collection<int, LegalDocument> $released */
         $released = $lock->block(5, fn (): Collection => $this->releaseNow($key, $mode, $locales, $options));

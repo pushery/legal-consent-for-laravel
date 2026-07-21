@@ -156,7 +156,7 @@ final class DispatchDueLegalNoticesCommand extends Command
      */
     private function writeProof(Model $subject, LegalDocument $version, array $proof, SubjectToken $tokens): LegalNotice
     {
-        return LegalNotice::query()->create([
+        return LegalNotice::query()->forceCreate([
             'subject_type' => $subject->getMorphClass(),
             'subject_id' => $subject->getKey(),
             // The stable pseudonym, shared with this subject's consent ledger — it is what keeps

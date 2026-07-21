@@ -55,4 +55,19 @@ return [
     'admin_mark_reviewed' => 'Marcar como revisado',
     'admin_preview' => 'Vista previa',
     'withdrawn_confirmation' => 'Consentimiento retirado. Surte efecto de inmediato.',
+
+    // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
+    'reconsent_recorded' => 'Gracias — tu consentimiento se ha registrado.',
+    'reconsent_changed' => 'Este documento cambió desde que abriste esta página. Revisa la versión actual antes de dar tu consentimiento.',
+    'admin_body_label' => 'Texto (HTML saneado)',
+    'admin_preview_label' => 'Vista previa del texto publicado',
+    'admin_edit' => 'editar',
+    'admin_edit_for' => 'Editar :key (:locale)',
+    'admin_status_saved' => 'Guardado. Se requiere una revisión antes de poder publicar este texto.',
+    'admin_status_source_not_translated' => 'El idioma de origen se redacta, no se traduce.',
+    'admin_status_no_source' => 'Escribe primero el texto de origen — no hay nada que traducir.',
+    'admin_status_machine_translated' => 'Traducido automáticamente. Una persona debe revisarlo antes de poder publicarlo.',
+    'admin_status_reviewed' => 'Marcado como revisado. Este texto ya se puede publicar.',
+    'admin_status_release_blocked' => '«:key» no se publicó: :reasons',
+    'admin_status_released' => '«:key» publicado en :count idioma(s) — afecta a :affects persona(s).',
 ];

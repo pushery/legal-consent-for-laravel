@@ -24,8 +24,13 @@ interface ConsentManager
     /**
      * Record acceptance using the document type's natural action (granted for a real
      * consent, acknowledged for a mandatory document).
+     *
+     * Pass `$expectedContentHash` — the `content_hash` the subject was actually shown, captured at
+     * render time — to guard against a mid-session release: if the active document no longer hashes
+     * to it, a `DocumentChangedException` (409) is thrown instead of freezing a version the subject
+     * never read (Art. 7(1)). Null skips the check.
      */
-    public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
+    public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent;
 
     public function withdraw(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
 

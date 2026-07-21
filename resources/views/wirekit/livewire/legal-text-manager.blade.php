@@ -61,15 +61,39 @@
                         @endforeach
                         <x-wirekit::table.td>
                             @if ($rows[$key]['_release']['ready'])
-                                <x-wirekit::alert-dialog>
+                                {{-- The installed alert-dialog (WireKit >= 2.13) exposes a `trigger` slot
+                                     plus a default-slot panel body built from alert-dialog.title /
+                                     .description / .actions sub-components — NOT named title/description/
+                                     confirm slots, which it silently drops (leaving an empty dialog with no
+                                     confirm button, so the release is unreachable through the UI). --}}
+                                <x-wirekit::alert-dialog :name="'lc-release-'.$key">
                                     <x-slot:trigger>
                                         <x-wirekit::button size="sm" :aria-label="__('legal-consent::ui.admin_release_all').' — '.$key">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
                                     </x-slot:trigger>
-                                    <x-slot:title>{{ __('legal-consent::ui.admin_release_confirm_title') }}</x-slot:title>
-                                    <x-slot:description>{{ __('legal-consent::ui.admin_release_confirm_body') }}</x-slot:description>
-                                    <x-slot:confirm>
-                                        <x-wirekit::button wire:click="releaseAll('{{ $key }}')">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
-                                    </x-slot:confirm>
+
+                                    <x-wirekit::alert-dialog.title>
+                                        {{ __('legal-consent::ui.admin_release_confirm_title') }}
+                                    </x-wirekit::alert-dialog.title>
+
+                                    <x-wirekit::alert-dialog.description>
+                                        {{ __('legal-consent::ui.admin_release_confirm_body') }}
+                                    </x-wirekit::alert-dialog.description>
+
+                                    <x-wirekit::alert-dialog.actions>
+                                        <x-wirekit::alert-dialog.cancel>
+                                            {{ __('legal-consent::ui.cancel') }}
+                                        </x-wirekit::alert-dialog.cancel>
+
+                                        {{-- x-on:click="close()" alongside wire:click: without it the
+                                             dialog stays open behind aria-modal after confirming, so the
+                                             status live region underneath is never announced and the
+                                             backdrop keeps the page unreachable (WCAG 4.1.3). The parent
+                                             alert-dialog provides close(); alert-dialog.cancel does the
+                                             same for the cancel side. --}}
+                                        <x-wirekit::button x-on:click="close()" wire:click="releaseAll(@js($key))">
+                                            {{ __('legal-consent::ui.admin_release_all') }}
+                                        </x-wirekit::button>
+                                    </x-wirekit::alert-dialog.actions>
                                 </x-wirekit::alert-dialog>
                             @else
                                 <x-wirekit::button size="sm" disabled aria-describedby="blocking-{{ $key }}" :aria-label="__('legal-consent::ui.admin_release_all').' — '.$key">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>

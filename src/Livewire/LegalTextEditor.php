@@ -35,12 +35,19 @@ final class LegalTextEditor extends Component
 
     public string $status = '';
 
-    public function mount(string $key, string $locale): void
+    /**
+     * The document key arrives as `documentKey`, never `key`: Livewire reserves `key` for its own
+     * DOM-diffing identity and strips it before mount(), so `<livewire:… :key="'terms'" />` — the
+     * form the docs used to show — could never reach this method. Mount it as
+     * `<livewire:legal-consent.legal-text-editor :document-key="'terms'" :locale="'de'" />`.
+     * The internal property stays `$key`; only the mount parameter had to move.
+     */
+    public function mount(string $documentKey, string $locale): void
     {
-        $this->key = $key;
+        $this->key = $documentKey;
         $this->locale = $locale;
 
-        $draft = LegalDraftSet::for($key)->draft($locale);
+        $draft = LegalDraftSet::for($documentKey)->draft($locale);
         $this->body = $draft instanceof LegalDraft ? $draft->body : '';
     }
 
@@ -50,7 +57,7 @@ final class LegalTextEditor extends Component
 
         // A status message after a save, and after the two acts below — WCAG 4.1.3: an action that
         // changes the record must announce its result, not leave a screen reader in silence.
-        $this->status = 'Saved. Review is required before this text can be published.';
+        $this->status = (string) __('legal-consent::ui.admin_status_saved');
     }
 
     public function translate(): void
@@ -58,7 +65,7 @@ final class LegalTextEditor extends Component
         $sourceLocale = $this->sourceLocale();
 
         if ($this->locale === $sourceLocale) {
-            $this->status = 'The source locale is authored, not translated.';
+            $this->status = (string) __('legal-consent::ui.admin_status_source_not_translated');
 
             return;
         }
@@ -66,7 +73,7 @@ final class LegalTextEditor extends Component
         $source = LegalDraftSet::for($this->key)->draft($sourceLocale);
 
         if (! $source instanceof LegalDraft) {
-            $this->status = 'Write the source text first — there is nothing to translate from.';
+            $this->status = (string) __('legal-consent::ui.admin_status_no_source');
 
             return;
         }
@@ -81,13 +88,13 @@ final class LegalTextEditor extends Component
 
         $draft = app(LegalDraftWriter::class)->applyTranslation($this->key, $this->locale, $translated, $source->content_hash, $this->actor());
         $this->body = $draft->body;
-        $this->status = 'Machine-translated. A human must review it before it can be published.';
+        $this->status = (string) __('legal-consent::ui.admin_status_machine_translated');
     }
 
     public function markReviewed(): void
     {
         app(LegalDraftWriter::class)->markReviewed($this->key, $this->locale, $this->actor());
-        $this->status = 'Marked reviewed. This text is now publishable.';
+        $this->status = (string) __('legal-consent::ui.admin_status_reviewed');
     }
 
     public function render(): View

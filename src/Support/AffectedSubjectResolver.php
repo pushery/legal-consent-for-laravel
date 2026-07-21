@@ -20,21 +20,34 @@ use stdClass;
  * accepted this document but only at an older major version. Streamed lazily in bounded
  * chunks and hydrated per subject_type in ONE query each (no N+1), so a large user base
  * never loads into memory at once (128 MB budget).
+ *
+ * Not final: a test overrides {@see keysetSeekDriver} to cover the MySQL OR-form seek branch on the
+ * SQLite suite (the protected-seam pattern DefaultConsentManager uses for its retry test).
  */
-final readonly class AffectedSubjectResolver
+readonly class AffectedSubjectResolver
 {
     private const int CHUNK = 500;
 
     public function __construct(private TenantContext $tenant) {}
 
     /**
+     * The driver whose keyset-seek shape {@see forVersion} uses. A protected seam: a test forces the
+     * `mysql` value to exercise (and prove correct) the OR-form branch on the SQLite suite; in
+     * production this always resolves the live connection driver.
+     */
+    protected function keysetSeekDriver(): string
+    {
+        return DB::connection()->getDriverName();
+    }
+
+    /**
      * @param  int|null  $maxConsentId  Only consider ledger rows up to this id — a snapshot of the
      *                                  ledger taken before the caller starts writing. The stream
-     *                                  pages with LIMIT/OFFSET over a `HAVING MAX(major) < …` set,
-     *                                  so a caller that APPENDS an accepting row per subject while
-     *                                  iterating (the deemed-acceptance sweep) would shrink that
-     *                                  set mid-stream and the next page's offset would skip
-     *                                  subjects it never returns. Pinning the ledger to a snapshot
+     *                                  keyset-pages over a `HAVING MAX(major) < …` set, so a caller
+     *                                  that APPENDS an accepting row per subject while iterating
+     *                                  (the deemed-acceptance sweep) would shrink that set
+     *                                  mid-stream and a later page could skip subjects it never
+     *                                  returned. Pinning the ledger to a snapshot
      *                                  keeps the paged set immutable for the whole sweep; a re-run
      *                                  takes a fresh snapshot, which then correctly excludes the
      *                                  subjects already accepted.
@@ -62,12 +75,15 @@ final readonly class AffectedSubjectResolver
 
         // KEYSET paging on (subject_type, subject_id), NOT lazy()/chunk(): those page with
         // LIMIT/OFFSET, and OFFSET on a GROUP BY … HAVING query re-runs the whole aggregation every
-        // page and discards the first OFFSET groups — quadratic (200 full aggregations at 100k
-        // subjects, offsetting to 99 500 on the last page). The group key is the sort key, so a
-        // strict `> (lastType, lastId)` resumes exactly where the last page ended, index-ordered,
-        // no offset. Filtering those columns pre-aggregation is equivalent to filtering groups —
-        // each group is one (subject_type, subject_id) pair.
-        return LazyCollection::make(function () use ($page): Generator {
+        // page and discards the first OFFSET groups — quadratic. The group key is the sort key, so a
+        // strict `> (lastType, lastId)` resumes where the last page ended — but HOW that seek is
+        // written decides whether the whole sweep is linear (see the engine branch below). Both
+        // forms lean on `legal_consents_affected_subject_idx` (document_key, locale, subject_type,
+        // subject_id; migration 000013). Filtering those columns pre-aggregation is equivalent to
+        // filtering groups — each group is one (subject_type, subject_id) pair.
+        $driver = $this->keysetSeekDriver();
+
+        return LazyCollection::make(function () use ($page, $driver): Generator {
             $lastType = null;
             $lastId = null;
 
@@ -75,10 +91,20 @@ final readonly class AffectedSubjectResolver
                 $query = $page();
 
                 if ($lastType !== null) {
-                    $query->where(function (QueryBuilder $seek) use ($lastType, $lastId): void {
-                        $seek->where('subject_type', '>', $lastType)
-                            ->orWhere(fn (QueryBuilder $tie): QueryBuilder => $tie->where('subject_type', $lastType)->where('subject_id', '>', $lastId));
-                    });
+                    // PostgreSQL + SQLite range-scan the composite index for the sargable ROW-VALUE
+                    // tuple form, so the whole sweep is LINEAR (measured ~20x faster than the OR form
+                    // at 160k rows). MySQL's optimiser will NOT range-scan the index for a row-value
+                    // comparison — it is slower that way — so MySQL keeps the OR form, where the
+                    // index still cuts the constant enormously (seconds, not minutes) though that
+                    // path stays super-linear. An engine-appropriate seek, not one shape for all.
+                    if ($driver === 'mysql') {
+                        $query->where(function (QueryBuilder $seek) use ($lastType, $lastId): void {
+                            $seek->where('subject_type', '>', $lastType)
+                                ->orWhere(fn (QueryBuilder $tie): QueryBuilder => $tie->where('subject_type', $lastType)->where('subject_id', '>', $lastId));
+                        });
+                    } else {
+                        $query->whereRowValues(['subject_type', 'subject_id'], '>', [$lastType, $lastId]);
+                    }
                 }
 
                 $rows = $query->get();
