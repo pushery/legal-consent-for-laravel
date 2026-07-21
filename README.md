@@ -154,6 +154,14 @@ so passing the app locale returns `null` for a document that exists only in the 
 visitor gets a required checkbox whose text they cannot open. Each item also exposes `field()`, the
 input name the rules validate (`legal_{key}`, or the key itself for the age attestation).
 
+Each item additionally exposes `contentHash` (the render-time fingerprint) and `hashField()`
+(`legal_{key}_hash`) — the **opt-in accept-time guard**. Render a hidden input named `hashField()`
+carrying `contentHash` and a version published between page load and submit is caught (a
+`DocumentChangedException`) instead of silently freezing a text the visitor never saw — the same
+guarantee the re-consent form gives. The shipped `consent-checkboxes` stub renders it automatically
+when you pass a checklist item's `->toArray()`; omit those keys (the minimal `$documents` shape) and
+the registration path behaves exactly as before.
+
 The validation rules, the checklist you render, and the row that gets recorded all resolve the **same**
 document: your configured keys intersected with what is actually **published**, falling back to the
 default-locale version for a *mandatory* document (a voluntary consent is never required — Art. 7(4) —

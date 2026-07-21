@@ -4,6 +4,88 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-07-22
+
+Deep-audit hardening. **One breaking change:** the tamper-evidence chain serialization is now
+injective, which changes every computed chain hash — a chain written by any earlier version no longer
+verifies, and UPGRADE.md documents the one-time chain reset. Everything else is additive or a fix: the
+registration path can opt into the accept-time guard the re-consent form already had, the legal-notice
+sweep is resumable and batched, the registration trio resolves through one locale chain, and a
+repeated identical status message is announced instead of passing in silence.
+
+### Added
+
+- **An opt-in accept-time guard for the registration path.** A registration checklist item now exposes
+  `contentHash` (the render-time fingerprint) and `hashField()` (`legal_{key}_hash`); render that hidden
+  input — the `consent-checkboxes` stub does it automatically from an item's `->toArray()` — and a
+  version published between page load and submit is caught (`DocumentChangedException`) instead of
+  silently freezing a text the visitor never saw, the same guarantee the re-consent form gives. It is
+  opt-in: a form that does not render the field keeps the prior behaviour exactly.
+
+### Changed
+
+- **The legal-notice sweep is resumable and batched.** `legal-consent:dispatch-notices` processes
+  affected subjects in chunks — one notification `send()` call and, the actual round-trip saving, one
+  pseudonym-token lookup per ledger instead of two per subject (the queued notification jobs and the
+  proof-row inserts stay one per subject). When durable-medium proof is on, a run
+  killed or overtaken mid-sweep (the 120-minute overlap lock can expire on a large population) now
+  resumes on the subjects still owed a notice and does not write a second proof row for one already
+  notified — delivery stays at-least-once (no unique constraint), but the bulk of the duplication a
+  lock-expiry overlap used to cause is gone.
+- **BREAKING (tamper-evidence): the ledger hash-chain serialization is now injective.** The canonical
+  form that feeds each row's `prev_record_hash` collapsed `null`, `''` and a `false`/`0` to the same
+  bytes and joined fields with an unescaped `\x1f`, so two distinct rows could share a hash — a forged
+  row could be crafted to collide onto a real one. Each field is now emitted self-delimiting
+  (`N` for null, else `S<len>:<value>`). This **changes the computed hashes**, so any tamper-evidence
+  chain written by an earlier version no longer verifies after upgrading — the previous `\x1f` format
+  was byte-identical across **v0.1.0–v0.5.0**, so every prior release is affected, not only v0.5.0
+  (`legal-consent:verify-ledger` will report a break). This is a deliberate pre-1.0 correctness break;
+  if you enabled `tamper_evidence` on any prior version with persisted rows, treat this as a chain
+  reset — see UPGRADE.md for the re-baseline steps.
+- **The registration checklist order is pinned to engine-independent byte order.** Keys are sorted
+  with `SORT_STRING` so the checkbox order never depends on the database collation or on numeric
+  coercion — a package-defined order rather than one inherited from the environment.
+
+### Fixed
+
+- **The notice sweep uses the portable keyset seek on MariaDB and unknown drivers.** The sargable
+  row-value tuple seek is now opt-in for PostgreSQL and SQLite — the engines proven to range-scan the
+  composite index. MariaDB (which reports its own driver name, never `mysql`, since Laravel 11),
+  MySQL, SQL Server and any unknown driver keep the portable OR-form seek, so a large affected
+  population no longer silently degrades to a non-sargable plan (or invalid syntax) on those engines.
+- **The WireKit admin editor now announces a stale-source warning.** Its stale-source region is
+  always present in the DOM with only the text gated (matching the plain stub), so a staleness that
+  flips true as the result of a save is announced by the screen reader instead of being inserted
+  together with its text, which is never spoken (WCAG 4.1.3).
+- **The v0.5.0 "banner render costs zero queries" claim is store-qualified.** It holds on a non-DB
+  cache store (redis/memcached/file/array); on the framework-default `database` store each active-set
+  lookup is itself a cache-table read, so the reads move to the cache table rather than disappearing.
+  Point `LEGAL_CONSENT_CACHE_STORE` at a non-DB store for the full saving.
+- **A repeated identical status message is re-announced (WCAG 4.1.3).** The re-consent form, the
+  "my consents" screen and the admin manager and editor now bump a monotonic nonce on every status
+  write, so a message set twice (a re-consent race firing twice, a repeated save) re-announces in the
+  `aria-live` region instead of staying silent. A re-consent submit with nothing ticked now shows a
+  prompt (new string in all seven locales) instead of reading as a dead no-op.
+- **Registration resolves its rules, checklist and recorded row through the same locale chain.** A
+  mandatory document published only in the configured `fallback_locale` (not the default) is now
+  validated and displayed, not merely recorded — all three sides resolve
+  `seen → fallback_locale → default_locale` identically, so the form can never require or record a
+  document it did not show.
+
+### Security
+
+- **The opt-in "return to intended URL" now refuses a cross-origin target.** When
+  `legal-consent.routes.return_to_intended` is enabled, a cleared re-consent gate returns the subject
+  to `url.intended`. That value is derived from `redirect()->guest()`, which can fall back to the
+  `Referer` header, so a poisoned external (or protocol-relative) origin is now dropped for the
+  configured home route — the post-consent redirect can no longer be turned into a phishing hand-off.
+  The same-origin check also drops the shapes a browser resolves but `parse_url` does not: a
+  backslash authority (`/\host`) and a leading-control-character prefix.
+- **The re-consent form fails closed when a ticked document has no render-time hash.** A document
+  ticked while momentarily not outstanding (its fingerprint never captured) that becomes outstanding
+  by submit no longer skips the accept-time guard — it clears the ticks and asks for a review instead
+  of recording an acceptance of a version whose text was never rendered.
+
 ## [0.5.0] - 2026-07-21
 
 Two changes alter existing behaviour — both deliberate, both about the proof being right rather than

@@ -30,16 +30,26 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * document, so it does not depend on anything being published. The package gates on the attestation;
  * verifying the actual age remains the consuming app's job.
  */
-final readonly class RegistrationRules
+final class RegistrationRules
 {
+    /**
+     * Active-row sets memoized per locale for the lifetime of this instance. required() and messages()
+     * each resolve the same locales, so without this the documented "call both" pattern doubles the
+     * query work. Bound `scoped()` (see the provider), so the memo never survives a request — a publish
+     * in a later request is always seen.
+     *
+     * @var array<string, Collection<string, LegalDocument>>
+     */
+    private array $activeByLocale = [];
+
     /**
      * @param  array<string, array<string, mixed>>  $documents  the configured registration keys
      */
     public function __construct(
-        private array $documents,
-        private bool $ageGateEnabled = false,
-        private int $ageThreshold = 16,
-        private string $defaultLocale = 'de',
+        private readonly array $documents,
+        private readonly bool $ageGateEnabled = false,
+        private readonly int $ageThreshold = 16,
+        private readonly string $defaultLocale = 'de',
     ) {}
 
     /**
@@ -95,23 +105,32 @@ final readonly class RegistrationRules
     private function resolvedTypes(): array
     {
         $locale = app()->getLocale();
-        $active = $this->activeByKey($locale);
-        $fallback = $locale === $this->defaultLocale ? $active : $this->activeByKey($this->defaultLocale);
+        $chain = RegistrationLocaleChain::resolve($locale, $this->defaultLocale);
+
+        $byLocale = [];
+        foreach ($chain as $candidate) {
+            $byLocale[$candidate] = $this->activeByKey($candidate);
+        }
 
         $resolved = [];
 
         foreach (array_keys($this->documents) as $key) {
             $key = (string) $key;
-            $document = $active->get($key);
+            $document = $byLocale[$locale]->get($key);
 
             if (! $document instanceof LegalDocument) {
-                // Not published in this locale. A MANDATORY document is required regardless of
-                // language, so it falls back to the default-locale version — exactly what the
-                // recorder will freeze. An optional consent has nothing to fall back to.
-                $candidate = $fallback->get($key);
+                // Not published in the locale the subject saw. A MANDATORY document is required
+                // regardless of language, so walk the rest of the chain (fallback_locale, then
+                // default_locale) for the first mandatory version — exactly what the recorder freezes.
+                // An optional consent has nothing to fall back to.
+                foreach ($chain as $candidate) {
+                    $row = $byLocale[$candidate]->get($key);
 
-                if ($candidate instanceof LegalDocument && $candidate->type->isMandatory()) {
-                    $document = $candidate;
+                    if ($row instanceof LegalDocument && $row->type->isMandatory()) {
+                        $document = $row;
+
+                        break;
+                    }
                 }
             }
 
@@ -128,7 +147,7 @@ final readonly class RegistrationRules
      */
     private function activeByKey(string $locale): Collection
     {
-        return LegalDocument::query()
+        return $this->activeByLocale[$locale] ??= LegalDocument::query()
             ->select(['key', 'type', 'locale'])
             ->where('locale', $locale)
             ->where('is_active', true)

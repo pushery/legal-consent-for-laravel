@@ -9,6 +9,7 @@ use Livewire\Component;
 use Pushery\LegalConsent\Enums\DraftOrigin;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
+use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalDraft;
@@ -27,9 +28,8 @@ use Pushery\LegalConsent\Support\LegalDraftSet;
  */
 final class LegalTextManager extends Component
 {
+    use AnnouncesStatus;
     use AuthorizesLegalAdmin;
-
-    public string $status = '';
 
     public function releaseAll(string $key): void
     {
@@ -41,25 +41,25 @@ final class LegalTextManager extends Component
         } catch (LegalReleaseNotReady $e) {
             // A polite live-region message — never a fatal — so a screen reader hears WHY the
             // release did not happen (WCAG 4.1.3), and nothing was written.
-            $this->status = (string) __('legal-consent::ui.admin_status_release_blocked', [
+            $this->setStatus((string) __('legal-consent::ui.admin_status_release_blocked', [
                 'key' => $key,
                 'reasons' => implode('; ', array_map(
                     static fn (string $locale, string $reason): string => "{$locale} ({$reason})",
                     array_keys($e->blocking),
                     array_values($e->blocking),
                 )),
-            ]);
+            ]));
 
             return;
         }
 
         $first = $released->first();
         $affects = $first instanceof LegalDocument ? app(LegalDocumentReleaser::class)->affects($first) : 0;
-        $this->status = (string) __('legal-consent::ui.admin_status_released', [
+        $this->setStatus((string) __('legal-consent::ui.admin_status_released', [
             'key' => $key,
             'count' => count($released),
             'affects' => $affects,
-        ]);
+        ]));
     }
 
     public function render(): View

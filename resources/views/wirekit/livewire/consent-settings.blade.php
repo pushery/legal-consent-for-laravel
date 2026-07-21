@@ -19,9 +19,9 @@
              itself a role="status" region — nesting would double-announce). Focus is driven by
              x-effect, not x-init: x-init runs once and does not re-run on a Livewire morph. --}}
         <div role="status" aria-live="polite" tabindex="-1" wire:key="lc-settings-status"
-            x-effect="($wire.status ?? '') !== '' && $el.focus()">
+            x-effect="$wire.statusNonce > 0 && $el.focus()">
             @if (($status ?? '') !== '')
-                <x-wirekit::text>{{ $status }}</x-wirekit::text>
+                <div wire:key="lc-settings-status-{{ $statusNonce }}"><x-wirekit::text>{{ $status }}</x-wirekit::text></div>
             @endif
         </div>
 

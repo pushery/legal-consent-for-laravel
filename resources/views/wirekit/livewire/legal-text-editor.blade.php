@@ -21,13 +21,21 @@
              double-announces and conflicts on politeness. --}}
         <div role="status" aria-live="polite" wire:key="lc-editor-status">
             @if ($status !== '')
-                <x-wirekit::text>{{ $status }}</x-wirekit::text>
+                <div wire:key="lc-editor-status-{{ $statusNonce }}"><x-wirekit::text>{{ $status }}</x-wirekit::text></div>
             @endif
         </div>
 
-        @if ($stale)
-            <x-wirekit::alert variant="warning">{{ __('legal-consent::ui.admin_stale') }}</x-wirekit::alert>
-        @endif
+        {{-- WCAG 4.1.3: the stale-source warning stays always-present and only its inner text is
+             gated, so a staleness that flips true as the RESULT of a Livewire action is still
+             announced — inserting the whole alert together with its text would not be. Plain
+             x-wirekit::text, NOT x-wirekit::alert: the alert is itself a role="status" region, and
+             nesting one live region in another double-announces (same reason as the status region
+             above). Assertive, matching the plain stub, for an irreversible-publish blocker. --}}
+        <div role="alert" aria-live="assertive" wire:key="lc-editor-stale">
+            @if ($stale)
+                <x-wirekit::text>{{ __('legal-consent::ui.admin_stale') }}</x-wirekit::text>
+            @endif
+        </div>
 
         <div wire:ignore>
             {{-- The current draft body seeds the editor via :value (the component reads the `value`

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Livewire\Component;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentMethod;
+use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\ConsentPresenter;
 
@@ -20,16 +21,9 @@ use Pushery\LegalConsent\Support\ConsentPresenter;
  */
 final class ConsentSettings extends Component
 {
-    public string $locale = '';
+    use AnnouncesStatus;
 
-    /**
-     * A confirmation of the last action, for the view's live region. After a withdrawal the row's
-     * button vanishes on re-render, so a sighted user gets weak feedback and a screen-reader user
-     * gets nothing at all confirming the (irreversible, append-only) act (WCAG 4.1.3). Announcing
-     * it here is the confirmation, and the view moves focus to it so focus does not drop to <body>
-     * when the button it was on disappears (WCAG 2.4.3).
-     */
-    public string $status = '';
+    public string $locale = '';
 
     public function mount(?string $locale = null): void
     {
@@ -48,7 +42,7 @@ final class ConsentSettings extends Component
                 $this->locale,
             );
 
-            $this->status = (string) __('legal-consent::ui.withdrawn_confirmation');
+            $this->setStatus((string) __('legal-consent::ui.withdrawn_confirmation'));
         }
     }
 

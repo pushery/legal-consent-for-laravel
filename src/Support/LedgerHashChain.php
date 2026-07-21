@@ -106,8 +106,12 @@ final class LedgerHashChain
     }
 
     /**
-     * Deterministic serialization of the immutable proof fields (never id / created_at /
-     * prev_record_hash itself). Unit separator between fields; nulls collapse to ''.
+     * Deterministic, INJECTIVE serialization of the immutable proof fields (never id / created_at /
+     * prev_record_hash itself). Each field is emitted self-delimiting: `N` for null, else
+     * `S<byte-length>:<value>`. That distinguishes null from '' (and from a false/0 that string-casts
+     * to '') and length-prefixes every value, so a field containing the old `\x1f` separator can no
+     * longer shift boundaries — two distinct rows always produce distinct canonical strings, so a
+     * fabricated row can never be crafted to hash-collide onto a real one.
      */
     private function canonical(object $row): string
     {
@@ -122,9 +126,17 @@ final class LedgerHashChain
 
         foreach ($fields as $field) {
             $value = $row->{$field} ?? null;
-            $parts[] = is_scalar($value) ? (string) $value : '';
+
+            if ($value === null) {
+                $parts[] = 'N';
+
+                continue;
+            }
+
+            $string = is_scalar($value) ? (string) $value : '';
+            $parts[] = 'S'.strlen($string).':'.$string;
         }
 
-        return implode("\x1f", $parts);
+        return implode('', $parts);
     }
 }

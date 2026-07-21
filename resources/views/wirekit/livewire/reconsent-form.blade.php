@@ -15,9 +15,9 @@
          not drop to <body>. The text is a plain x-wirekit::text, NOT a nested alert/callout (those are
          themselves role="status" — nesting double-announces). Focus via x-effect, not x-init. --}}
     <div role="status" aria-live="polite" tabindex="-1" wire:key="lc-reconsent-status"
-        x-effect="($wire.status ?? '') !== '' && $el.focus()">
+        x-effect="$wire.statusNonce > 0 && $el.focus()">
         @if (($status ?? '') !== '')
-            <x-wirekit::text>{{ $status }}</x-wirekit::text>
+            <div wire:key="lc-reconsent-status-{{ $statusNonce }}"><x-wirekit::text>{{ $status }}</x-wirekit::text></div>
         @endif
     </div>
 

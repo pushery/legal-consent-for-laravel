@@ -10,7 +10,7 @@
          the confirmation instead and takes focus so it does not drop to <body>. Focus is driven by
          x-effect, not x-init: x-init runs once and does not re-run on a Livewire morph. --}}
     <p role="status" aria-live="polite" tabindex="-1" wire:key="lc-reconsent-status"
-        x-effect="($wire.status ?? '') !== '' && $el.focus()">{{ $status ?? '' }}</p>
+        x-effect="$wire.statusNonce > 0 && $el.focus()"><span wire:key="lc-reconsent-status-{{ $statusNonce }}">{{ $status ?? '' }}</span></p>
 
     @if ($pending->isEmpty())
         <p>{{ __('legal-consent::ui.all_current') }}</p>

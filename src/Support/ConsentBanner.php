@@ -193,10 +193,13 @@ final readonly class ConsentBanner
 
     /**
      * The active document set for a locale, taken from the publish-invalidated cache the package
-     * already maintains — so the banner's three global lookups cost ZERO queries on a warm cache
-     * instead of three on every authenticated render. The time filtering stays in memory: the
-     * announce/enforce windows move on a clock, so caching an already-filtered set would need a TTL
-     * short enough to be pointless.
+     * already maintains — so the banner's three global lookups cost ZERO database queries on a warm
+     * cache, on a NON-DB cache store (redis/memcached/file/array), instead of three uncached
+     * legal_documents reads on every authenticated render. On the framework-default `database` cache
+     * store each lookup is itself a cache-table SELECT, so the reads move to the cache table rather
+     * than disappearing — point `LEGAL_CONSENT_CACHE_STORE` at a non-DB store for the full saving. The
+     * time filtering stays in memory: the announce/enforce windows move on a clock, so caching an
+     * already-filtered set would need a TTL short enough to be pointless.
      *
      * @return Collection<int, LegalDocument>
      */

@@ -50,7 +50,8 @@ final readonly class RegistrationConsentRecorder
         // Resolution chain: what was seen, then the configured fallback, then the default. Each step
         // is tried in order and the FIRST hit wins, so the recorder can only ever freeze a version
         // that exists — and it records which locale it actually used (the ledger row carries it).
-        $chain = $this->localeChain($locale);
+        // The SAME chain the rules and the checklist walk, so the three resolve identically.
+        $chain = RegistrationLocaleChain::resolve($locale, $this->defaultLocale);
         $resolved = [];
 
         foreach ($chain as $candidate) {
@@ -106,9 +107,17 @@ final readonly class RegistrationConsentRecorder
                 continue; // an optional consent that was not ticked
             }
 
+            // OPT-IN accept-time guard: if the form rendered the `legal_{key}_hash` hidden field
+            // (the checklist item's render-time fingerprint), pass it so a version released between
+            // page load and submit is caught (DocumentChangedException) instead of silently frozen —
+            // the registration path's own TOCTOU, whose window is minutes. A missing field is null,
+            // which `accept()` treats as "no check requested", so a form that does not render it keeps
+            // the prior behaviour exactly.
+            $expectedHash = $input["legal_{$key}_hash"] ?? null;
+
             // Snapshot the version the recorder actually resolved (its own locale), which
             // may be the default-locale fallback rather than the requested locale.
-            $this->consent->accept($subject, (string) $key, $context, $document->locale);
+            $this->consent->accept($subject, (string) $key, $context, $document->locale, is_string($expectedHash) ? $expectedHash : null);
         }
     }
 
@@ -130,30 +139,6 @@ final readonly class RegistrationConsentRecorder
     private function wasGiven(mixed $value): bool
     {
         return filter_var($value, FILTER_VALIDATE_BOOLEAN);
-    }
-
-    /**
-     * The locales to try, in order: what the subject saw, then the configured fallback, then the
-     * default. Deduplicated and order-preserving, so the first hit is always the closest match to
-     * what was actually displayed.
-     *
-     * `fallback_locale` was configured but ignored by every registration path before this.
-     *
-     * @return list<string>
-     */
-    private function localeChain(string $seen): array
-    {
-        $fallback = config('legal-consent.fallback_locale');
-
-        $chain = [$seen];
-
-        if (is_string($fallback) && $fallback !== '') {
-            $chain[] = $fallback;
-        }
-
-        $chain[] = $this->defaultLocale;
-
-        return array_values(array_unique($chain));
     }
 
     /**

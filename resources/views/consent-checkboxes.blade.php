@@ -28,5 +28,13 @@
         <a id="legal_{{ $document['key'] }}_link" href="{{ $document['url'] }}" target="_blank" rel="noopener noreferrer">
             {{ $document['title'] }}
         </a>
+
+        @if (($document['hashField'] ?? '') !== '' && ($document['contentHash'] ?? '') !== '')
+            {{-- OPT-IN accept-time guard: carries the render-time fingerprint so a version released
+                 between page load and submit is caught (a 409) instead of silently frozen. Enable it
+                 by including 'contentHash' + 'hashField' from a checklist item's ->toArray(); omit
+                 them (the documented $documents shape) to keep the prior no-guard behaviour. --}}
+            <input type="hidden" name="{{ $document['hashField'] }}" value="{{ $document['contentHash'] }}">
+        @endif
     </div>
 @endforeach

@@ -59,6 +59,7 @@ return [
     // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
     'reconsent_recorded' => 'Bedankt — je toestemming is vastgelegd.',
     'reconsent_changed' => 'Dit document is gewijzigd sinds je deze pagina hebt geopend. Bekijk de huidige versie voordat je toestemming geeft.',
+    'reconsent_none_selected' => 'Vink elk item aan waarmee je akkoord gaat voordat je verdergaat.',
     'admin_body_label' => 'Tekst (opgeschoonde HTML)',
     'admin_preview_label' => 'Voorbeeld van de gepubliceerde tekst',
     'admin_edit' => 'bewerken',
