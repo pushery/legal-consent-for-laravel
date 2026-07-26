@@ -11,7 +11,7 @@ return [
     'consents_heading' => 'Einwilligungen',
     'withdraw' => 'Widerrufen',
     // Per-item accessible name for the withdraw control: with N consents, N buttons all
-    // labelled just 'withdraw' are indistinguishable in a screen reader's button list
+    // labeled just 'withdraw' are indistinguishable in a screen reader's button list
     // (WCAG 2.4.6). The grant was document-specific; the withdrawal must be too.
     'withdraw_for' => 'Widerrufen: :title',
     'review' => 'Jetzt ansehen',

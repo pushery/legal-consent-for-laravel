@@ -461,9 +461,21 @@ readonly class DefaultConsentManager implements ConsentManager
      * API) derives it identically — a guard whose two sides compute the value differently is not a
      * guard. A bare `content_hash` is still accepted for the body-only case, so an existing consumer
      * passing one keeps working.
+     *
+     * Takes the PublishedDocument too, because that is the only type the documented public read
+     * path hands out ({@see ConsentManager::published()}). Without it a consumer rendering its own
+     * page had exactly three options, all wrong: rebuild this hash by hand (the second
+     * implementation this docblock rules out), record `content_hash` alone (which does NOT cover
+     * `ui_wording` — a hash of a different text than the one shown), or reach past the DTO to the
+     * Eloquent model and leave the read path the reader calls the only one to use. One function,
+     * both types, so the two sides cannot drift.
      */
-    public static function acceptanceFingerprint(LegalDocument $document): string
+    public static function acceptanceFingerprint(LegalDocument|PublishedDocument $document): string
     {
-        return hash('sha256', $document->content_hash."\x1f".$document->ui_wording);
+        [$contentHash, $uiWording] = $document instanceof LegalDocument
+            ? [$document->content_hash, $document->ui_wording]
+            : [$document->contentHash, $document->uiWording];
+
+        return hash('sha256', $contentHash."\x1f".$uiWording);
     }
 }

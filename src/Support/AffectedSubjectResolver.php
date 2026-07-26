@@ -206,7 +206,7 @@ readonly class AffectedSubjectResolver
     }
 
     /**
-     * Reverse a stored subject_type back to a model class, honouring a configured morph
+     * Reverse a stored subject_type back to a model class, honoring a configured morph
      * map (Relation::enforceMorphMap) — where subject_type is the ALIAS, not the FQCN.
      *
      * @return class-string<Model>|null

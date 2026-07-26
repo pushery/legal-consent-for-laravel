@@ -42,7 +42,7 @@ re-consent form already has. It is **opt-in** and off by default:
   change throws `DocumentChangedException` instead of silently freezing a text the registrant never
   saw.
 - A form that does **not** render the field behaves exactly as before; no action is required to keep
-  the current behaviour.
+  the current behavior.
 
 ## 0.3.x → 0.4.0
 
@@ -188,7 +188,7 @@ php artisan legal-consent:verify-documents
 
 It re-derives every published row's hash and flags any row whose stored hash,
 notice mode, or wording locale disagrees with its content — so tampering or a
-pre-`0.4.0` mislabelled `ui_wording` snapshot is visible rather than silent.
+pre-`0.4.0` mislabeled `ui_wording` snapshot is visible rather than silent.
 
 ### 8. Extending the `legal_documents` table (maintainers)
 

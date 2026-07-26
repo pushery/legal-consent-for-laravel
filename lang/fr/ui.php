@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // UI strings for the publishable stubs (settings page + grace-period banner). The three
-// legal kinds stay separately labelled (contracts / acknowledgements / consents). Informal (tu).
+// legal kinds stay separately labeled (contracts / acknowledgements / consents). Informal (tu).
 return [
     'settings_heading' => 'Tes consentements',
     'contracts_heading' => 'Contrats',
@@ -11,7 +11,7 @@ return [
     'consents_heading' => 'Consentements',
     'withdraw' => 'Retirer',
     // Per-item accessible name for the withdraw control: with N consents, N buttons all
-    // labelled just 'withdraw' are indistinguishable in a screen reader's button list
+    // labeled just 'withdraw' are indistinguishable in a screen reader's button list
     // (WCAG 2.4.6). The grant was document-specific; the withdrawal must be too.
     'withdraw_for' => 'Retirer : :title',
     'review' => 'Consulter maintenant',

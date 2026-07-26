@@ -112,7 +112,7 @@ final readonly class RegistrationConsentRecorder
             // page load and submit is caught (DocumentChangedException) instead of silently frozen —
             // the registration path's own TOCTOU, whose window is minutes. A missing field is null,
             // which `accept()` treats as "no check requested", so a form that does not render it keeps
-            // the prior behaviour exactly.
+            // the prior behavior exactly.
             $expectedHash = $input["legal_{$key}_hash"] ?? null;
 
             // Snapshot the version the recorder actually resolved (its own locale), which

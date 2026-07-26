@@ -57,7 +57,7 @@ final readonly class RegistrationChecklistItem
      * RegistrationConsentRecorder passes it to `accept()` so a version released mid-form is caught
      * (a 409) instead of silently frozen. Named `{field}_hash`.
      *
-     * Rendering it is OPT-IN and adds no behaviour by itself: a form that omits it keeps the prior
+     * Rendering it is OPT-IN and adds no behavior by itself: a form that omits it keeps the prior
      * no-guard registration path (the recorder simply receives no expected hash). Empty for an
      * attestation, which has no document to guard.
      */

@@ -16,7 +16,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  *
  * Deliberately NEVER throws: a missing publication returns null so a consumer renders an "in
  * preparation" shell. A throwing read path would 500 the public /terms page on the day a locale
- * is not yet published, and would let a refusal be relabelled as a render failure by callers that
+ * is not yet published, and would let a refusal be relabeled as a render failure by callers that
  * catch broadly.
  *
  * Deliberately has NO fallback locale, unlike the recording path: the page must show the text of
@@ -34,6 +34,10 @@ final readonly class PublishedDocumentReader
                 'id', 'key', 'locale', 'type', 'title', 'version', 'major_version',
                 'content', 'content_hash', 'ui_wording', 'requires_reconsent', 'notice_mode',
                 'published_at', 'enforce_from',
+                // Selected so the returned DTO can carry it. Reads are already confined to the
+                // current tenant by the global scope on LegalDocument — this is what lets a
+                // multi-tenant caller CONFIRM which tenant's text it is holding.
+                TenantContext::COLUMN,
             ])
             ->where('key', $key)
             ->where('locale', $locale)

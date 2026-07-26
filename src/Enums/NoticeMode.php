@@ -14,7 +14,7 @@ namespace Pushery\LegalConsent\Enums;
  * error in both directions — it either hard-blocks an info-only change or ships a
  * disadvantageous one with no notice at all.
  *
- * - SilentEditorial  — a typo, a clarification, or a purely favourable change: no
+ * - SilentEditorial  — a typo, a clarification, or a purely favorable change: no
  *                      notice duty, the new version simply activates. (§ 308 Nr. 5 BGB
  *                      only bites on fingierte *nachteilige* declarations — EuGH
  *                      C-287/19.)

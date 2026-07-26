@@ -400,7 +400,7 @@ final readonly class LegalDocumentPublisher
     }
 
     /**
-     * A regime must be one of the known set. An unrecognised value (a typo like 'psd2_675') would
+     * A regime must be one of the known set. An unrecognized value (a typo like 'psd2_675') would
      * fail OPEN: it falls through to the freely-tunable mode default instead of its statutory
      * period, so a payment change could ship with a two-week window where § 675g demands two
      * months. Fail loud instead.
@@ -409,7 +409,7 @@ final readonly class LegalDocumentPublisher
     {
         if ($regime !== null && ! in_array($regime, self::REGIMES, true)) {
             throw new RuntimeException(
-                "Unknown regime '{$regime}' for '{$key}'. Use one of: ".implode(', ', self::REGIMES).'. An unrecognised regime would silently fall back to a tunable default instead of its statutory notice period.'
+                "Unknown regime '{$regime}' for '{$key}'. Use one of: ".implode(', ', self::REGIMES).'. An unrecognized regime would silently fall back to a tunable default instead of its statutory notice period.'
             );
         }
     }

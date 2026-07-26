@@ -38,7 +38,7 @@ suite locally and confirm `composer qa` is green before opening a pull request.
 ## Pull request expectations
 
 - Keep `composer qa` green.
-- Add tests for behaviour changes.
-- Update `README.md` and `CHANGELOG.md` (`## [Unreleased]`) when behaviour or
+- Add tests for behavior changes.
+- Update `README.md` and `CHANGELOG.md` (`## [Unreleased]`) when behavior or
   configuration changes.
 - Keep commits focused and the public API stable, or call out the break explicitly.
