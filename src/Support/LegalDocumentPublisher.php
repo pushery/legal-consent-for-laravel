@@ -234,7 +234,7 @@ final readonly class LegalDocumentPublisher
     private function assertNotDowngrade(string $key, string $locale, Document $rendered): void
     {
         $active = LegalDocument::query()
-            ->select(['major_version', 'minor_version', 'patch_version', 'version'])
+            ->select(['type', 'major_version', 'minor_version', 'patch_version', 'version'])
             ->where('key', $key)
             ->where('locale', $locale)
             ->where('is_active', true)
@@ -242,6 +242,19 @@ final readonly class LegalDocumentPublisher
 
         if (! $active instanceof LegalDocument) {
             return;
+        }
+
+        // A binding document may never be reclassified as informational. Before that class
+        // existed a type switch changed WHICH duty applied; it could not remove the duty
+        // altogether. Now it can: subjects have accepted v1 of the contract, the operator edits
+        // `legal_basis` while tidying the registry, publishes v2 — and the gate silently stops
+        // asking anyone, while the ledger still holds the old acceptances so nothing looks wrong.
+        // This is the same class of silent legal downgrade the version check below prevents, and
+        // it fails just as loudly. The reverse direction stays allowed: becoming stricter is safe.
+        if ($active->type->isConsentBearing() && ! $this->typeFor($key)->isConsentBearing()) {
+            throw new RuntimeException(
+                "Cannot publish '{$key}' ({$locale}) as informational: its active version {$active->version} is a {$active->type->value} that subjects have been asked to accept. An informational page binds nobody, so this would silently remove the gate while their recorded acceptances stay on file. Publish it under its existing legal basis, or retire the document and register the page under a new key."
+            );
         }
 
         // PHP compares equal-length lists element by element, so this is a (major, minor,
@@ -292,6 +305,17 @@ final readonly class LegalDocumentPublisher
      */
     private function assertModeAllowedForType(NoticeMode $mode, DocumentType $type, string $key): void
     {
+        // An informational page binds nobody, so every mode except the silent one describes an
+        // audience that does not exist: there is no acceptance to deem, none to re-request, and
+        // nobody "holds" the page to be notified about it — the notice sweeps resolve their
+        // recipients from ledger rows, and this type never writes one. Publishing it is simply
+        // making the current text live.
+        if (! $type->isConsentBearing() && $mode !== NoticeMode::SilentEditorial) {
+            throw new RuntimeException(
+                "'{$key}' is an informational page (Impressum, cookie policy) — it binds nobody, so it is published silently. Publish it with --editorial; there is no acceptance to deem or re-request, and no recipient to notify."
+            );
+        }
+
         // Zustimmungsfiktion (silence = consent) is lawful only for a contract/terms change
         // (§ 308 Nr. 5 BGB; BGH XI ZR 26/20). A privacy notice is acknowledged, and a real
         // consent can never be deemed (EDPB 05/2020 Rz. 79).
@@ -319,6 +343,13 @@ final readonly class LegalDocumentPublisher
      */
     private function assertMajorBumpMode(NoticeMode $mode, DocumentType $type, string $version, string $key, string $locale): void
     {
+        // A major bump means "material", and material is a statement about what the change asks
+        // of a subject. An informational page asks nothing at any version, so there is no mode to
+        // force here; assertModeAllowedForType has already pinned it to editorial.
+        if (! $type->isConsentBearing()) {
+            return;
+        }
+
         if ($type === DocumentType::PrivacyNotice) {
             if ($mode !== NoticeMode::InfoPush) {
                 throw new RuntimeException(

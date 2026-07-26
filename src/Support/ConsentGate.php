@@ -46,7 +46,13 @@ final class ConsentGate
         // used to run this on every authenticated request just to be told nothing is published.
         $enforceable = app(EnforceableDocumentCache::class)
             ->activeFor($locale)
-            ->filter(fn (LegalDocument $document): bool => ! $document->requires_explicit_optin
+            ->filter(fn (LegalDocument $document): bool => $document->type->isConsentBearing()
+                // Informational is checked FIRST and separately, because the opt-in flag cannot
+                // express it: an informational page has `requires_explicit_optin = false`, which
+                // is the same value a contract carries — so the next condition alone would let an
+                // Impressum block every authenticated request the moment it were published as an
+                // active re-consent. Nothing a subject never accepts may gate access.
+                && ! $document->requires_explicit_optin
                 && $document->noticeMode() === NoticeMode::ActiveReconsent // only an active re-consent gates
                 && $document->enforce_from instanceof CarbonImmutable
                 && $document->enforce_from->lessThanOrEqualTo($now))

@@ -95,7 +95,13 @@ readonly class DefaultConsentManager implements ConsentManager
         // (byte order) is explicit: the default SORT_REGULAR would compare numeric-looking keys
         // numerically, and the pre-cache v0.4 path ordered by the DB collation (locale/case-folding) —
         // both make the checkbox order depend on something outside the package. This pins it here.
-        $documents = $documents->sortKeys(SORT_STRING);
+        // An informational page (Impressum, cookie policy) is published through the same store but
+        // asks the reader for nothing, so it must never become a control. Filtered after the
+        // registry intersection and before the items are built, so it can neither render as a
+        // checkbox nor be counted as required.
+        $documents = $documents
+            ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing())
+            ->sortKeys(SORT_STRING);
 
         $checklist = [];
 
@@ -247,10 +253,16 @@ readonly class DefaultConsentManager implements ConsentManager
         $accepted = $this->gate->heldMajorByKey($subject);
 
         $documents = LegalDocument::query()
-            ->select(['key', 'major_version', 'requires_explicit_optin'])
+            ->select(['key', 'type', 'major_version', 'requires_explicit_optin'])
             ->where('locale', $locale)
             ->where('is_active', true)
-            ->get();
+            ->get()
+            // An informational page has no standing to report: nobody accepts it, so
+            // `accepted_major` would sit at 0 forever and `outstanding` — computed from
+            // `! requires_explicit_optin`, the same false a contract carries — would be
+            // permanently true. A "your agreements" screen built from this map would then show
+            // a row for the Impressum that can never be satisfied.
+            ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing());
 
         $status = [];
 

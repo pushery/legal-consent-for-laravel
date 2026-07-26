@@ -4,6 +4,63 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.7.0 → 0.8.0
+
+`0.8.0` adds a fourth document class and carries **one** breaking change, which only affects code
+that constructs a package class by hand. **No new migrations ship** — nothing in your schema
+changes, and the new class needs no column of its own.
+
+### Breaking: `LegalDocumentReleaser` lost an unused constructor argument
+
+It took a `TenantContext` it never used. If you resolve the class from the container — which is
+how the package itself and the documentation use it — nothing changes:
+
+```php
+app(LegalDocumentReleaser::class)->release(/* … */);
+```
+
+Only a hand-rolled construction needs the third argument dropped:
+
+```php
+// before
+new LegalDocumentReleaser($publisher, $resolver, $tenants);
+// after
+new LegalDocumentReleaser($publisher, $resolver);
+```
+
+### New: the `informational` legal basis
+
+For a page you must publish but which binds nobody — an Impressum (§ 5 DDG), a cookie policy, an
+accessibility statement. Nothing changes for existing documents; this is purely additive.
+
+```php
+// config/legal-consent.php
+'impressum' => [
+    'source' => 'markdown',
+    'legal_basis' => 'informational',
+],
+```
+
+```bash
+php artisan legal-consent:publish impressum de --editorial
+```
+
+Such a page never appears in the registration checklist, never writes a ledger row, never gates
+access and never sends a notice — and it is the only class that falls back to your
+`default_locale` when a translation is missing.
+
+**One guard is worth knowing about before you edit the registry:** a document whose active version
+is a contract, privacy notice or consent can no longer be republished as `informational`. That
+would silently remove the gate while the recorded acceptances stayed on file, so it is refused.
+Register the page under a new key instead.
+
+If you have a published `config/legal-consent.php`, run the new doctor after upgrading — a flat
+merge means keys added inside a block your file already declares never reach your runtime:
+
+```bash
+php artisan legal-consent:doctor
+```
+
 ## 0.5.0 → 0.6.0
 
 `0.6.0` is deep-audit hardening. It is a **minor** bump but carries one breaking change to the
