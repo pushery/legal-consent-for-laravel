@@ -91,7 +91,14 @@ final readonly class ConsentBanner
         $active = $this->activeFor($locale)->filter(
             // The stored column, not noticeMode(): a null notice_mode is NOT an info push (the
             // accessor would derive one from requires_reconsent), matching the previous SQL filter.
-            fn (LegalDocument $document): bool => $document->notice_mode === NoticeMode::InfoPush
+            //
+            // The type is checked too, for the same reason the gate checks it: an informational
+            // page can only be published silently, but this must not DEPEND on the publisher
+            // having been the only way into the row. A hand-edited or restored row marked
+            // info_push would otherwise put "please take notice" on the banner for an Impressum,
+            // which asks the reader for nothing.
+            fn (LegalDocument $document): bool => $document->type->isConsentBearing()
+                && $document->notice_mode === NoticeMode::InfoPush
                 && $this->announced($document, $now)
                 && $document->enforce_from instanceof CarbonImmutable
                 && $document->enforce_from->greaterThan($now)

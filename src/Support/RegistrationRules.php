@@ -134,7 +134,11 @@ final class RegistrationRules
                 }
             }
 
-            if ($document instanceof LegalDocument) {
+            // An informational page (Impressum, cookie policy) is published but binds nobody, so
+            // it never becomes a rule, a message or a control. Filtered HERE, at the single
+            // resolution both required() and messages() read, so the two cannot disagree about
+            // which documents the registration covers.
+            if ($document instanceof LegalDocument && $document->type->isConsentBearing()) {
                 $resolved[$key] = $document->type;
             }
         }

@@ -103,6 +103,14 @@ final readonly class RegistrationConsentRecorder
                 continue; // optional consent, or the key is entirely unpublished
             }
 
+            // An informational page binds nobody, so there is nothing to freeze: writing a row
+            // would claim the subject acknowledged an Impressum they were never shown a control
+            // for. It never reaches validation either (RegistrationRules skips it), so a tick
+            // cannot exist to honor.
+            if (! $document->type->isConsentBearing()) {
+                continue;
+            }
+
             if ($document->type->requiresExplicitOptin() && ! $this->wasGiven($input["legal_{$key}"] ?? null)) {
                 continue; // an optional consent that was not ticked
             }

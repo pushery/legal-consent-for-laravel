@@ -28,6 +28,13 @@ return [
     |                                    "ich willige ein".
     |   - consent          Art. 6(1)(a): a real consent — voluntary, NEVER required
     |                                    (Kopplungsverbot Art. 7(4)), withdrawable.
+    |   - informational                  a page you must PUBLISH but nobody agrees to:
+    |                                    Impressum (§ 5 DDG), cookie policy, accessibility
+    |                                    statement. It uses the same editor, review gate and
+    |                                    frozen publishing as the rest, and never appears at
+    |                                    registration, never gates access, never sends a
+    |                                    notice, and falls back to your default_locale when
+    |                                    a translation is missing.
     |
     | Whether a document needs an explicit opt-in FOLLOWS from its legal basis — it is
     | derived at publish time, never configured: only a real consent may be opt-in, and it
@@ -46,6 +53,12 @@ return [
         'newsletter' => [
             'source' => 'drafts',
             'legal_basis' => 'consent',
+        ],
+        // A published page that binds nobody. Registering it costs you nothing at
+        // sign-up — that is the whole point of the `informational` basis.
+        'impressum' => [
+            'source' => 'markdown',
+            'legal_basis' => 'informational',
         ],
     ],
 

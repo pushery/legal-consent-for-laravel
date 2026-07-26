@@ -41,7 +41,11 @@ php artisan migrate
 
 Every option in `config/legal-consent.php` is documented inline. The ones that usually matter first:
 
-- `documents` — the registry of keys the app uses (`terms`, `privacy`, …) and their legal basis.
+- `documents` — the registry of keys the app uses (`terms`, `privacy`, …) and their legal basis:
+  `contract`, `acknowledgement`, `consent`, or `informational`. The last one is for a page you
+  must publish but nobody agrees to — an Impressum, a cookie policy, an accessibility statement.
+  It uses the same editor and publishing as the rest and never touches registration, the gate or
+  notices, so do NOT build a separate renderer for those pages.
 - `routes.consent_name` — the route the enforcement middleware sends a blocked subject to.
 - `retention_after_end` + `schedule.prune` — retention is a statement until the sweep is switched on.
 

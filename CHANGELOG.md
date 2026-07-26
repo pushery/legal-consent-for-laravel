@@ -4,6 +4,47 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-26
+
+### Added
+
+- A fourth document class, `informational`, for a page you must **publish** but which binds
+  nobody: an Impressum (§ 5 DDG), a cookie policy, an accessibility statement. It uses the same
+  machinery as everything else — the draft editor, the review gate, the translation seam, the
+  sanitizing pipeline, the frozen published row — and carries none of the consent semantics: it
+  never appears in the registration checklist, never writes a ledger row, never gates access, and
+  never sends a notice. Publish it with `--editorial`; the other modes are refused, because they
+  each describe an audience that does not exist for a page nobody accepts.
+
+  It is also the one type with a locale fallback on the read path: a missing translation falls
+  back to your `default_locale`. Everything a subject agrees to keeps the strict behavior — a
+  contract published only in `de` still returns `null` under an `en` URL, because showing one
+  language's contract under another's is the substitution this package exists to prevent. An
+  Impressum has no such risk and a blank page fails the duty to be reachable.
+
+  Register it with `'legal_basis' => 'informational'`.
+
+### Changed
+
+- `LegalDocumentReleaser` no longer takes a `TenantContext` — it never used it. Resolve the class
+  from the container (`app(LegalDocumentReleaser::class)`) and nothing changes; only code that
+  constructs it by hand with three arguments needs the third one dropped.
+
+### Fixed
+
+- Reclassifying a **binding** document as `informational` is refused. A contract or privacy
+  notice that subjects have been asked to accept cannot be republished under a basis that binds
+  nobody: it would silently remove the gate while their recorded acceptances stayed on file, and
+  nothing would look wrong. Publish it under its existing basis, or register the page under a new
+  key. The reverse direction stays open — becoming stricter is always safe.
+- The notice banner ignores informational pages, so a row marked as an info push — by hand or by
+  a restored dump — cannot put "please take notice" in front of every visitor for a page that asks
+  them for nothing.
+- `statusFor()` no longer reports an informational page as permanently outstanding. It computes
+  that field from `! requires_explicit_optin`, which is the same value a contract carries, so a
+  page nobody accepts sat at `accepted_major = 0` forever — a row a "your agreements" screen would
+  render and no subject could ever satisfy.
+
 ## [0.7.0] - 2026-07-26
 
 ### Added

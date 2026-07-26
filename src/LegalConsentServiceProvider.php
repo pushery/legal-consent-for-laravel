@@ -77,7 +77,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $this->app->singleton(ConsentManager::class, fn (): DefaultConsentManager => new DefaultConsentManager(
             new ConsentGate,
             $this->defaultLocale(),
-            new PublishedDocumentReader,
+            new PublishedDocumentReader($this->defaultLocale()),
             // The registration checklist resolves against the SAME registry and age gate the rules
             // and the recorder use, so the displayed, validated and recorded sets cannot diverge.
             $this->documentsConfig(),
