@@ -30,7 +30,7 @@ use Pushery\LegalConsent\Models\LegalDraft;
  * the source stales nothing. Accepted caveat: that canonicalisation's `\s` is not Unicode-aware,
  * so a non-breaking space (U+00A0) survives and DOES move the hash — pasting from a word processor
  * can stale every translation with no visible diff. Package semantics, documented, not papered
- * over with a second normaliser (that would be two canonical forms, and the ledger hashes one).
+ * over with a second normalizer (that would be two canonical forms, and the ledger hashes one).
  */
 final readonly class LegalDraftSet
 {

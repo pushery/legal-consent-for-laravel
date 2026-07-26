@@ -15,7 +15,7 @@ use Pushery\LegalConsent\Support\ConsentContext;
 
 /**
  * Give any Eloquent model a consent ledger. Because the subject is polymorphic, this
- * works on a User, an Organisation, an ApiClient — anything with a key.
+ * works on a User, an Organization, an ApiClient — anything with a key.
  *
  * @mixin Model
  */

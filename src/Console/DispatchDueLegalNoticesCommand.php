@@ -197,7 +197,7 @@ final class DispatchDueLegalNoticesCommand extends Command
             // Carry the VERSION's tenant explicitly: this sweep crosses tenants and runs without
             // an authenticated user, so the ambient tenant would resolve to the shared '' bucket
             // and the proof would be invisible to the tenant it belongs to. An explicitly-set
-            // value is honoured (BelongsToTenant only stamps a null attribute).
+            // value is honored (BelongsToTenant only stamps a null attribute).
             'tenant_id' => $version->tenant_id,
             'document_id' => $version->getKey(),
             'document_key' => $version->key,

@@ -8,6 +8,8 @@ use Carbon\CarbonImmutable;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalDocument;
+use Pushery\LegalConsent\Support\DefaultConsentManager;
+use Pushery\LegalConsent\Support\TenantContext;
 
 /**
  * A PUBLISHED legal document, read verbatim from its frozen `legal_documents` row.
@@ -39,10 +41,26 @@ final readonly class PublishedDocument
         public NoticeMode $noticeMode,
         public ?CarbonImmutable $publishedAt = null,
         public ?CarbonImmutable $enforceFrom = null,
+        /**
+         * The tenant this row belongs to, or '' for the shared bucket (and for every
+         * single-tenant app, where tenancy is off).
+         *
+         * Reads are already confined to the current tenant by the global scope on
+         * LegalDocument, so this is not what makes the read safe — it is what lets a caller
+         * CONFIRM what it received. Without it, a multi-tenant consumer inspecting a returned
+         * document has no way to tell which tenant's text it is holding, and a returned
+         * document looks equally valid either way.
+         */
+        public string $tenantId = '',
     ) {}
 
     public static function fromRow(LegalDocument $row): self
     {
+        // Narrowed the same way TenantContext::current() narrows its resolver's return: the
+        // column is `mixed` to the type system, and anything that is not a scalar id belongs
+        // in the shared '' bucket rather than being coerced into a plausible-looking string.
+        $tenant = $row->getAttribute(TenantContext::COLUMN);
+
         return new self(
             id: $row->id,
             key: $row->key,
@@ -57,7 +75,25 @@ final readonly class PublishedDocument
             noticeMode: $row->noticeMode(),
             publishedAt: $row->published_at,
             enforceFrom: $row->enforce_from,
+            tenantId: is_string($tenant) || is_int($tenant) ? (string) $tenant : '',
         );
+    }
+
+    /**
+     * What a subject reading THIS page was shown, as the one value the accept-time guard
+     * compares against — the body hash folded with the acceptance sentence beside it.
+     *
+     * Delegates rather than recomputing. The rule it serves is that both sides of the guard run
+     * the same code: a consumer rendering its own page and the bundled form must arrive at the
+     * same value, and a second copy of `hash('sha256', …)` here would be exactly the drift the
+     * fingerprint exists to prevent (change the separator once and the two quietly disagree).
+     *
+     * Recording `contentHash` instead is the mistake this method exists to make unnecessary:
+     * that hash covers the sanitized BODY only, not the `uiWording` the subject actually read.
+     */
+    public function acceptanceFingerprint(): string
+    {
+        return DefaultConsentManager::acceptanceFingerprint($this);
     }
 
     /**

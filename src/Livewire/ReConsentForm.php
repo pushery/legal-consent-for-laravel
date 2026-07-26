@@ -158,7 +158,7 @@ final class ReConsentForm extends Component
         // Strip the leading control chars / whitespace a browser ignores before resolving a URL,
         // then reject the shapes parse_url does NOT read as an authority but a browser does: a
         // backslash (browsers treat `\` as `/`, so `/\evil` becomes `//evil`) and a protocol-relative
-        // `//host`. Do not trust the caller to have pre-sanitised the value — honour the contract here.
+        // `//host`. Do not trust the caller to have pre-sanitized the value — honor the contract here.
         $target = ltrim($target, " \t\n\r\0\x0B");
 
         if ($target === '' || str_contains($target, '\\') || str_starts_with($target, '//')) {

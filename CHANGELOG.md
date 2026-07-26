@@ -4,6 +4,63 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-26
+
+### Added
+
+- `legal-consent:doctor` reports how a **published** `config/legal-consent.php` differs from the
+  package's own, and changes nothing. Publishing freezes a copy, and `mergeConfigFrom()` is a flat
+  merge: a whole new top-level block reaches you, but a key added *inside* a block your published
+  file already declares never arrives — at runtime it is not undocumented, it is gone, with the
+  package default replaced by an older file that never heard of it. The reverse rots too, and a
+  stale entry naming a class that has since been removed fails when something resolves it, pointing
+  at your config rather than at the upgrade. The command names both. It exits non-zero only for
+  keys that never arrive, so it is usable as a CI check; your `documents` registry is left alone in
+  both directions, because curating it is your call.
+- `PublishedDocument::acceptanceFingerprint()` — the value the accept-time guard compares against,
+  now reachable from the documented read path. Previously it existed only for the Eloquent model,
+  so a consumer rendering its own legal page had to rebuild the hash by hand (a second
+  implementation, which is exactly what makes a guard stop being one), record `contentHash` alone
+  (it covers the sanitized body, **not** the acceptance sentence the subject read), or bypass the
+  DTO. `DefaultConsentManager::acceptanceFingerprint()` accepts both types now, and the DTO method
+  delegates to it, so there is still one implementation.
+- `PublishedDocument::$tenantId`, so a multi-tenant consumer can confirm which tenant's text it is
+  holding. Reads were already confined to the current tenant by the model's global scope; this is
+  the part that lets you check rather than trust.
+
+### Fixed
+
+- An **empty** acceptance sentence can no longer be published. The translation branch of
+  `resolveWording()` only checked whether the translator returned something other than the key,
+  which catches an absent translation but not `'terms' => ''` in published lang files. That matters
+  because `ui_wording` is frozen proof — it is copied verbatim into every consent row and folded
+  into the hash chain, and the immutability trigger refuses to change it afterwards — so an empty
+  sentence was permanent, and rendered as a required checkbox with no accessible name: a submit
+  blocker whose cause was invisible. Both branches now require a non-empty sentence and otherwise
+  fall through to `MissingAcceptanceWording`, as designed.
+
+### Changed
+
+- The full documentation moved to <https://docs.pushery.com/legal-consent-for-laravel/> and the
+  README is now a showcase that links to it. Every section it used to carry — installation, the
+  publish tags, recording consent, the four notice modes with a worked example each, content
+  sources, the admin screens, the UI levels, retention, and the complete configuration and
+  command reference — is on the portal, restructured rather than shortened. The README keeps what
+  introduces the package: what it does, how to install it, and where to read the rest.
+- README links to `art/header.png` and `UPGRADE.md` are absolute URLs on the repository now.
+  Both paths are `export-ignore`d from the Composer dist, so the previous relative links
+  resolved on GitHub but not from an installed package.
+- Shipped prose — docblocks, inline comments, the Blade stubs, the translation files and the repo
+  meta documents — is US English throughout, and a test now holds it there. Nothing behavioral
+  changed: the ARIA `aria-labelledby` attribute and the `analyse` command names are identifiers,
+  not prose, and are untouched.
+
+### Removed
+
+- The `docs/` directory is no longer part of the public SHIP allowlist. It was announced here but
+  never reached a release, and documentation is now published through the portal instead — a
+  second, public copy of the same pages would only drift from it.
+
 ## [0.6.0] - 2026-07-22
 
 Deep-audit hardening. **One breaking change:** the tamper-evidence chain serialization is now
@@ -20,7 +77,7 @@ repeated identical status message is announced instead of passing in silence.
   input — the `consent-checkboxes` stub does it automatically from an item's `->toArray()` — and a
   version published between page load and submit is caught (`DocumentChangedException`) instead of
   silently freezing a text the visitor never saw, the same guarantee the re-consent form gives. It is
-  opt-in: a form that does not render the field keeps the prior behaviour exactly.
+  opt-in: a form that does not render the field keeps the prior behavior exactly.
 
 ### Changed
 
@@ -88,7 +145,7 @@ repeated identical status message is announced instead of passing in silence.
 
 ## [0.5.0] - 2026-07-21
 
-Two changes alter existing behaviour — both deliberate, both about the proof being right rather than
+Two changes alter existing behavior — both deliberate, both about the proof being right rather than
 merely present. The ledger models are no longer mass-assignable (write through `forceCreate()` /
 `forceFill()` if you wrote rows directly), and registration now derives its rules, its checklist and
 its recorded row from the same resolution, so the consent section stays dormant until you publish.
@@ -116,7 +173,7 @@ its recorded row from the same resolution, so the consent section stays dormant 
   the active document has since been re-released to different content, acceptance is refused with a
   `DocumentChangedException` (the headless API returns `409 document_changed`) instead of freezing a
   version the subject never read. The bundled re-consent form captures the hash at render and
-  re-shows the current text on a mismatch; passing no hash keeps the prior behaviour.
+  re-shows the current text on a mismatch; passing no hash keeps the prior behavior.
 - **The tamper-evidence chain can be HMAC-keyed.** Set `legal-consent.tamper_evidence_key` (from
   `LEGAL_CONSENT_TAMPER_KEY`, held outside the database) and each ledger row is hashed with
   HMAC-SHA-256 instead of a bare SHA-256, so an actor with only table-write access — who does not
@@ -135,7 +192,7 @@ its recorded row from the same resolution, so the consent section stays dormant 
   `legal-consent.routes.return_to_intended` (off by default): the enforcement middleware now stashes
   the intercepted URL as the intended target, and once a subject clears every outstanding document in
   the re-consent form they are redirected back to it, falling back to `legal-consent.routes.home`. A
-  settings-page embed and a partially-completed gate never redirect, so existing behaviour is
+  settings-page embed and a partially-completed gate never redirect, so existing behavior is
   unchanged unless you opt in.
 
 ### Changed
@@ -230,7 +287,7 @@ its recorded row from the same resolution, so the consent section stays dormant 
   PostgreSQL and SQLite it now issues a sargable ROW-VALUE seek `(subject_type, subject_id) > (…)`
   backed by a new composite index `legal_consents (document_key, locale, subject_type, subject_id)`,
   making the sweep linear — previously every page rebuilt a temporary B-tree and re-scanned the full
-  range (quadratic, a term that survived the earlier move off `OFFSET`). On MySQL, whose optimiser
+  range (quadratic, a term that survived the earlier move off `OFFSET`). On MySQL, whose optimizer
   will not range-scan the index for a row-value comparison, the sweep keeps the OR-form seek, where
   the same index cuts the cost from minutes to seconds at scale (still super-linear there). Run the
   new migration.
@@ -340,7 +397,7 @@ its recorded row from the same resolution, so the consent section stays dormant 
   this package requires just focused `illuminate/*` components — so every call declared a
   dependency contract the package does not hold, and would fatal outside a full Laravel app. They
   now go through the `Illuminate\Contracts\Foundation\Application` methods, which
-  `illuminate/contracts` genuinely provides. Behaviour is identical.
+  `illuminate/contracts` genuinely provides. Behavior is identical.
 
   The worst offender was not in the service provider but in **`config/legal-consent.php`**, whose
   `sources.markdown.path` defaulted to `resource_path('legal')`. `mergeConfigFrom()` runs in
@@ -405,14 +462,14 @@ its recorded row from the same resolution, so the consent section stays dormant 
     `legal-consent:close-objection-windows` command records a deemed acceptance once the window
     closes with no objection.
   - **Active re-consent** (`--active`, the successor to `--material`) keeps the existing
-    hard-gated re-consent behaviour.
+    hard-gated re-consent behavior.
 - **Objection and free-termination recording** — `ConsentManager::object()` and `::terminate()`
   (with `ConsentObjected` / `ConsentTerminated` events and JSON + Livewire surfaces) so a
   subject's objection (§ 308 Nr. 5 / Art. 21) or free termination (§ 675g / § 327r) is provable.
 - **Durable-medium delivery proof** — an append-only `legal_notices` table recording that a
   change notice was delivered to a subject, in what form, in which locale, with its exact
   content (CJEU C-375/15). `legal-consent:prune` covers it on the same retention rule as the
-  consent ledger, so the proof honours storage limitation (Art. 5(1)(e)) without ever deleting
+  consent ledger, so the proof honors storage limitation (Art. 5(1)(e)) without ever deleting
   the notice behind a subject's current standing.
 - New public enum cases: `ConsentAction::Objected`, `::Terminated`, `::DeemedAccepted`, and
   `ConsentMethod::DeemedAcceptance`. They surface in the `action`/`method` columns, the JSON
@@ -444,7 +501,7 @@ its recorded row from the same resolution, so the consent section stays dormant 
 - `legal-consent:dispatch-notices` now routes a due change to the notification matching its notice
   mode. `legal-consent:publish` gains `--info`, `--deemed`, `--active`, `--regime`, `--change-class`,
   `--objection-at`, `--offers-termination`, and `--keeps-unmodified`; `--material` remains as the
-  alias of `--active`. All existing behaviour, config, and the `requires_reconsent` column are
+  alias of `--active`. All existing behavior, config, and the `requires_reconsent` column are
   preserved — the release is backward-compatible.
 
 ## [0.2.0] - 2026-07-13

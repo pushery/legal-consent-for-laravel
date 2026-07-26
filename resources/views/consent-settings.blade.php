@@ -2,7 +2,7 @@
     Publishable, framework-agnostic settings stub. The three legally distinct blocks are
     kept SEPARATE on purpose (the whole point of the package):
 
-      1. Verträge (contracts)          — read-only; you end them by cancelling the account,
+      1. Verträge (contracts)          — read-only; you end them by canceling the account,
                                          not by "withdrawing" (Art. 6(1)(b)).
       2. Zur Kenntnis genommen         — read-only acknowledgements (Art. 13).
       3. Einwilligungen (consents)     — each withdrawable in one click, as easily as it was

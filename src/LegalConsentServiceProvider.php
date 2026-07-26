@@ -16,6 +16,7 @@ use Override;
 use Pushery\LegalConsent\Console\CheckDriftCommand;
 use Pushery\LegalConsent\Console\CloseObjectionWindowsCommand;
 use Pushery\LegalConsent\Console\DispatchDueLegalNoticesCommand;
+use Pushery\LegalConsent\Console\DoctorCommand;
 use Pushery\LegalConsent\Console\FlushDocumentCacheCommand;
 use Pushery\LegalConsent\Console\PruneExpiredConsentRecordsCommand;
 use Pushery\LegalConsent\Console\PublishDocumentCommand;
@@ -216,6 +217,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 PruneExpiredConsentRecordsCommand::class,
                 VerifyDocumentsCommand::class,
                 VerifyLedgerCommand::class,
+                DoctorCommand::class,
             ]);
         }
     }
