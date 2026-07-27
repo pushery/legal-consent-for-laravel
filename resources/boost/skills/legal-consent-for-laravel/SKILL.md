@@ -103,7 +103,8 @@ Consent::accept($user, 'terms', ConsentContext::forMethod(ConsentMethod::Registr
 ```
 
 **Drop in the optional UI** (needs `livewire/livewire`; publish `legal-consent-wirekit` for the
-WireKit variants):
+WireKit variants, which need `pushery/wirekit` ≥ 2.17.1 — below that the admin editor loses
+everything typed into it):
 
 ```blade
 <livewire:legal-consent.reconsent-form />

@@ -4,6 +4,50 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.8.0 → 0.9.0
+
+`0.9.0` carries **one** thing you must act on, and only if your app publishes the WireKit view
+variants. **No new migrations ship**, no config key changes, and the PHP API is untouched.
+
+### Act on this: the WireKit views now need `pushery/wirekit` ≥ 2.17.1
+
+If you ran `vendor:publish --tag=legal-consent-wirekit`, upgrade WireKit before taking this
+release:
+
+```bash
+composer require "pushery/wirekit:^2.17.1"
+```
+
+The views were relying on component capabilities that arrived in 2.17.1. Below it, two things
+fail **without any error**:
+
+- the admin editor's `wire:model` lands on the component's wrapper instead of its textarea, so
+  **everything typed into the editor is lost when you save**;
+- the manager table cannot emit a row header, so every status cell loses its programmatic
+  association to the document it belongs to (WCAG 1.3.1).
+
+If you do **not** use the WireKit views — the plain stubs, your own markup, or no UI at all —
+nothing here applies. WireKit stays a dev-only dependency of this package; it is never installed
+into your app on its behalf.
+
+### If you already copied the WireKit stubs into your app
+
+`vendor:publish` writes the views into your project, so your copies do not change when you upgrade
+the package. Re-publish them to pick up the new editor binding, the declared toolbar, and the row
+header:
+
+```bash
+php artisan vendor:publish --tag=legal-consent-wirekit --force
+```
+
+`--force` overwrites. Diff first if you have edited the published copies — the package ships them
+as a starting point and expects you to.
+
+### Nothing else changes
+
+The admin editor's binding and toolbar, and the manager's row header, are internal to those views.
+No route, class, event, config key or database column moves in this release.
+
 ## 0.7.0 → 0.8.0
 
 `0.8.0` adds a fourth document class and carries **one** breaking change, which only affects code

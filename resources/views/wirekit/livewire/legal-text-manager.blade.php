@@ -23,10 +23,14 @@
         <x-wirekit::alert variant="neutral">{{ __('legal-consent::ui.admin_policy') }}</x-wirekit::alert>
 
         {{-- tableLabel names the always-focusable responsive scroll region (else it falls back to a
-             generic "Scrollable table"). NOTE: the document cell below is a plain table.td, not a
-             row header — WireKit's table.th hardcodes scope="col", so a per-row header is not
-             reachable through the component (upstream gap); the release buttons carry a per-document
-             accessible name instead, so a screen-reader user can still tell the rows apart. --}}
+             generic "Scrollable table"). The document cell below is a real row header
+             (header-scope="row", WireKit v2.17.1+) — WCAG 1.3.1: it is what associates every status
+             cell in the row with the document it describes, so a screen reader announces "terms" with
+             the cell instead of leaving a bare "not written" adrift in a grid.
+
+             The prop is `header-scope`, NOT `scope`: `scope` is WireKit's token-scope override, which
+             every component shares for scoped theming. Passing scope="row" there would silently
+             re-theme the cell and still emit scope="col". --}}
         <x-wirekit::table :tableLabel="__('legal-consent::ui.admin_heading')">
             <x-wirekit::table.head>
                 <x-wirekit::table.row>
@@ -40,7 +44,7 @@
             <x-wirekit::table.body>
                 @foreach ($keys as $key)
                     <x-wirekit::table.row wire:key="row-{{ $key }}">
-                        <x-wirekit::table.td>{{ $key }}</x-wirekit::table.td>
+                        <x-wirekit::table.th header-scope="row">{{ $key }}</x-wirekit::table.th>
                         @foreach ($locales as $locale)
                             @php($cell = $rows[$key][$locale])
                             <x-wirekit::table.td>
