@@ -12,7 +12,7 @@
         <p role="alert" aria-live="assertive" wire:key="legal-text-editor-stale">@if ($stale){{ __('legal-consent::ui.admin_stale') }}@endif</p>
 
         {{-- Plain-stub editor: a textarea bound straight to the property. The WireKit variant swaps
-             in <x-wirekit::editor> and binds via $wire.set (see the published stub). This stub ships
+             in <x-wirekit::editor> with the same wire:model (see the published stub). This stub ships
              no CSS — when you skin it, give text inputs font-size >= 16px (iOS zooms on focus below
              that) and interactive controls a >= 24px hit target (WCAG 2.5.8). --}}
         <label for="legal-text-body">{{ __('legal-consent::ui.admin_body_label') }}</label>

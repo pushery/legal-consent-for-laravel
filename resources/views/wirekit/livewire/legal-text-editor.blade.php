@@ -4,11 +4,9 @@
 
     Single root element. Needs `pushery/wirekit` + `@wirekitScripts` in the layout.
 
-    Editor binding (WireKit gap h): `wire:model` on <x-wirekit::editor> silently loses input under
-    Livewire 4.3.x — the attribute lands on the wrapper div, not the textarea, and Livewire's .self
-    guard rejects the bubbled input event. So the content is bound explicitly via
-    $wire.set('body', …, false), and the editor lives behind wire:ignore so Livewire never tears its
-    DOM down. Retire this the moment WireKit forwards wire:* to the editor's inner textarea.
+    The editor binds with a plain `wire:model` (WireKit v2.17.1+ routes it to the inner textarea).
+    It still lives behind `wire:ignore` — that is WireKit's documented integration for this
+    component, not a leftover of the old binding workaround.
 --}}
 <div>
     <x-wirekit::stack gap="lg" as="section" aria-labelledby="lc-editor-heading">
@@ -40,14 +38,31 @@
         <div wire:ignore>
             {{-- The current draft body seeds the editor via :value (the component reads the `value`
                  prop, never a slot — a slot here would silently render nothing on edit). Content
-                 flows back the other way through the input binding below: with wire:model unusable
-                 on the wrapper (WireKit gap h), every keystroke is pushed to the Livewire `body`
-                 property explicitly, without a network round-trip (the `false` third arg). --}}
-            <x-wirekit::editor
-                :value="$body"
-                x-data
-                x-on:input="$wire.set('body', $event.target.value, false)"
-            />
+                 flows back through a plain wire:model: WireKit routes it to the inner
+                 <textarea x-ref="input">, the element the editor writes to, and the editor
+                 dispatches a bubbling input event on every change. Deferred on purpose (no .live) —
+                 the bytes ride along with the save/translate/markReviewed action, so typing costs no
+                 round-trip.
+
+                 wire:ignore STAYS. It is not part of the retired binding workaround: it is the
+                 integration WireKit itself documents for this component. Livewire would otherwise
+                 morph the editor subtree, keeping the mounted ProseMirror node while Alpine builds a
+                 fresh component — two views on one node, content rendered twice, and every toolbar
+                 command throwing on a stale view.
+
+                 The toolbar is pinned explicitly, not inherited. Every command here produces markup
+                 the sanitizer keeps (LegalHtmlSanitizer::ALLOWED) — offer one it strips and an admin
+                 formats a clause that silently disappears the moment it is stored. Leaving the
+                 toolbar on WireKit's `basic` preset would put that set under WireKit's control: a
+                 future release widening the preset would hand this editor a command whose output
+                 cannot survive, without a line changing here. --}}
+            <x-wirekit::editor :value="$body" wire:model="body">
+                <x-slot:toolbar>
+                    {{-- No x-ref here: WireKit wraps a custom toolbar slot in its own
+                         <div x-ref="toolbar">, and a second one would win and orphan the wrapper. --}}
+                    <x-wirekit::editor.toolbar :commands="['bold', 'italic', 'strike', 'link', '|', 'bullet-list', 'ordered-list']" />
+                </x-slot:toolbar>
+            </x-wirekit::editor>
         </div>
 
         <x-wirekit::button.group>

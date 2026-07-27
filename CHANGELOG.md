@@ -4,6 +4,39 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-26
+
+### Changed
+
+- **The published WireKit views now require `pushery/wirekit` ≥ 2.17.1** (previously ≥ 2.13).
+  They were relying on capabilities that arrived in that release, and below it two things fail
+  without saying so: the admin editor's binding lands on the wrapper instead of the textarea, so
+  everything typed into it is lost on save, and the manager table cannot emit a row header, leaving
+  every status cell without a programmatic association to its document (WCAG 1.3.1). If your app
+  publishes `--tag=legal-consent-wirekit`, upgrade WireKit before taking this release.
+
+- The WireKit admin editor binds with a plain `wire:model` and declares its own toolbar, instead of
+  the imperative `$wire.set` binding and WireKit's `basic` preset it used while those paths were
+  unreachable upstream. The toolbar set is now this package's decision rather than whatever the
+  preset happens to offer — every command in it produces markup the sanitizer keeps, so an admin
+  can no longer format a clause that silently disappears on save.
+
+### Fixed
+
+- The WireKit manager table heads each row with the document it describes (`<th scope="row">`), so
+  a screen reader announces "terms" with the status cell instead of leaving a bare "not written"
+  adrift in a grid (WCAG 1.3.1). The plain stub always did this; the WireKit variant could not,
+  because the component could only emit `scope="col"`.
+
+### Documentation
+
+- How to get WireKit's own screen-reader strings — `(opens in new tab)`, an alert's `Notice:`
+  prefix, `Dismiss` — into a non-English locale. They are translatable but ship English-only, and
+  WireKit's reference list publishes to a path Laravel's JSON loader does not read, so the working
+  answer (your app's `lang/{locale}.json`) is now written down. This package deliberately does not
+  ship those keys: JSON string keys are app-global, so defining them here would retranslate every
+  other WireKit component in your app.
+
 ## [0.8.0] - 2026-07-26
 
 ### Added
