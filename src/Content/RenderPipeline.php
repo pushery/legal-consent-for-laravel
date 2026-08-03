@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Content;
 
 use League\CommonMark\CommonMarkConverter;
+use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Exceptions\InvalidDocumentVersion;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\MissingAcceptanceWording;
@@ -26,11 +27,17 @@ final readonly class RenderPipeline
 
     /**
      * @param  array<string, mixed>  $markdownConfig
+     * @param  array<string, mixed>  $documents  the `legal-consent.documents` registry, so the
+     *                                           pipeline can tell whether a key binds anyone.
+     *                                           An empty registry means every key defaults to
+     *                                           `contract`, which is the behavior every caller
+     *                                           had before this argument existed.
      */
     public function __construct(
         private LegalHtmlSanitizer $sanitizer = new LegalHtmlSanitizer,
         array $markdownConfig = ['html_input' => 'strip', 'allow_unsafe_links' => false, 'max_nesting_level' => 20],
         private int $maxBytes = self::MAX_BYTES,
+        private array $documents = [],
     ) {
         $this->converter = new CommonMarkConverter($markdownConfig);
     }
@@ -71,7 +78,7 @@ final readonly class RenderPipeline
             minorVersion: (int) ($parts[1] ?? 0),
             patchVersion: (int) ($parts[2] ?? 0),
             isMaterial: $raw->isMaterial ?? true,   // unknown → treat as material (safe default)
-            uiWording: $this->resolveWording($raw),
+            uiWording: $this->wordingFor($raw),
             announceAt: $raw->announceAt,
             enforceAt: $raw->enforceAt,
             sourceRef: $raw->sourceRef,
@@ -88,6 +95,52 @@ final readonly class RenderPipeline
     public function hashOf(string $html): string
     {
         return hash('sha256', $this->canonicalize($html));
+    }
+
+    /**
+     * The acceptance sentence for this document — or NULL when the document asks the reader
+     * for nothing at all.
+     *
+     * `informational` is the whole reason this method sits in front of resolveWording(). An
+     * Impressum (§ 5 DDG), a cookie policy or an accessibility statement is published and
+     * kept current, and binds nobody. It has no acceptance sentence, and there is no honest
+     * value to invent for one: every candidate is either an untruth or a placeholder — and
+     * ui_wording is proof. It is not in MUTABLE_AFTER_PUBLISH, the BEFORE UPDATE trigger
+     * refuses to change it, and it is copied verbatim into every ledger row and folded into
+     * the hash chain. Whatever lands here is permanent.
+     *
+     * Before this branch existed the chain ran source -> `wording.{key}` -> `wording.default`,
+     * and since no `informational` key is registered anywhere, an Impressum froze
+     * "Ich habe die Bedingungen gelesen und akzeptiere sie." — a statement nobody made, in the
+     * one column this package builds its evidentiary weight on.
+     *
+     * A wording SUPPLIED by the source is dropped here rather than carried, and that is
+     * deliberate: carrying it is exactly the defect. An operator who wrote `ui_wording` into
+     * an informational page's frontmatter has misunderstood the class, and honoring it would
+     * freeze the misunderstanding.
+     */
+    private function wordingFor(RawDocument $raw): ?string
+    {
+        return $this->typeFor($raw->type)->isConsentBearing()
+            ? $this->resolveWording($raw)
+            : null;
+    }
+
+    /**
+     * The document class the registry declares for this key.
+     *
+     * Defaults to `contract` for an unregistered key, matching LegalDocumentPublisher: the
+     * conservative direction, since a contract IS consent-bearing and therefore still demands
+     * a sentence. A default of `informational` would silently strip the acceptance sentence
+     * off every document a caller forgot to register — the failure pointing the other way, and
+     * the far more expensive one.
+     */
+    private function typeFor(string $key): DocumentType
+    {
+        $entry = $this->documents[$key] ?? null;
+        $basis = is_array($entry) ? ($entry['legal_basis'] ?? 'contract') : 'contract';
+
+        return DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
     }
 
     /**

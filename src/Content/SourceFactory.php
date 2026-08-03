@@ -52,7 +52,7 @@ final readonly class SourceFactory
 
         return match ($driver) {
             MarkdownFilesDriver::class => new MarkdownFilesDriver($this->stringConfig($config, 'path', $this->container->resourcePath('legal'))),
-            DraftDocumentSource::class => new DraftDocumentSource,
+            DraftDocumentSource::class => new DraftDocumentSource($this->documents),
             default => $this->makeCustom($driver),
         };
     }

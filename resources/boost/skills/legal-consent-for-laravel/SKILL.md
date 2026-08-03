@@ -45,7 +45,8 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   `contract`, `acknowledgement`, `consent`, or `informational`. The last one is for a page you
   must publish but nobody agrees to — an Impressum, a cookie policy, an accessibility statement.
   It uses the same editor and publishing as the rest and never touches registration, the gate or
-  notices, so do NOT build a separate renderer for those pages.
+  notices, so do NOT build a separate renderer for those pages. Its `ui_wording` is `null` — it
+  asks the reader for nothing — so guard the wording if your own view renders it.
 - `routes.consent_name` — the route the enforcement middleware sends a blocked subject to.
 - `retention_after_end` + `schedule.prune` — retention is a statement until the sweep is switched on.
 
@@ -110,6 +111,33 @@ everything typed into it):
 <livewire:legal-consent.reconsent-form />
 <livewire:legal-consent.consent-settings />
 ```
+
+The settings screen exposes three transitions — withdraw, object, terminate. **Every public
+method of an embedded Livewire component is reachable whether or not the template renders a
+button for it**, so if your product has no answer to two of them, switch them off at the embed
+rather than deleting buttons:
+
+```blade
+<livewire:legal-consent.consent-settings :allow-objection="false" :allow-termination="false" />
+```
+
+A transition that does not apply answers `404`, not `500` — a key nothing published, a key
+unpublished between the render and the click, or an objection against a consent (which is withdrawn,
+not objected to). The reason rides on the exception and reaches neither the page nor your log
+(Laravel never reports a `NotFoundHttpException`), so report `404`s yourself if you want to see
+them.
+
+If you call the manager or the facade directly instead of through the component, catch these
+yourself — all in `Pushery\LegalConsent\Exceptions`: `LegalDocumentNotFound`,
+`NotWithdrawableException`, `NotObjectableException`, `NotTerminableException`,
+`NotConsentBearingException`. They are refusals to record a row the ledger cannot take back, not
+failures to work around.
+
+The last one catches the case that is easiest to reach by accident: an `informational` document —
+an Impressum, a cookie policy — is published so it can be read and asks the reader for nothing, so
+`Consent::accept()` and `Consent::record()` refuse it. The JSON API answers `422` with an `error`
+of `not_consent_bearing`. Do not offer such a document as something to accept; render it, and let
+the gate ignore it.
 
 ## Examples
 

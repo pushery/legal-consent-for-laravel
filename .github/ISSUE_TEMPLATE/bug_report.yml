@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a defect in Legal Consent for Laravel.
+description: "Report a defect in Legal Consent for Laravel."
 labels: ["bug"]
 body:
   - type: markdown

@@ -28,7 +28,13 @@ final readonly class Document
         public int $minorVersion,
         public int $patchVersion,
         public bool $isMaterial,
-        public string $uiWording,
+        /**
+         * The acceptance sentence, or NULL for a document that asks the reader for nothing —
+         * an `informational` page (Impressum, cookie policy, accessibility statement). There
+         * is no honest sentence for one, and this column is frozen proof, so the absence is
+         * modelled rather than filled.
+         */
+        public ?string $uiWording,
         public ?CarbonImmutable $announceAt = null,
         public ?CarbonImmutable $enforceAt = null,
         public ?string $sourceRef = null,

@@ -4,6 +4,202 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.9.0 → 0.10.0
+
+**On PostgreSQL, MySQL or SQLite there is nothing to do beyond running the migration**, and
+everything else below is invisible to an application that installs this package into a normal
+Laravel project.
+
+⚠️ **On MariaDB, SQL Server or any other engine the migration now stops instead of running.** If
+that is you, read *The migration now REFUSES an engine it cannot protect* below **before** you run
+`php artisan migrate`.
+
+### Run the migration
+
+```bash
+php artisan migrate
+```
+
+It makes `legal_documents.ui_wording` nullable, so an `informational` document — a page that is
+published and binds nobody — can carry no acceptance sentence. It changes no existing row.
+
+⚠️ **On SQLite this migration rebuilds the table**, because SQLite cannot alter a column in
+place. That is handled: the migration re-installs the proof-column trigger afterwards, on both
+`up()` and `down()`. If you have written your OWN triggers on `legal_documents`, re-create them
+after upgrading — a rebuild keeps indexes and drops triggers, and nothing warns you.
+
+### ⚠️ The migration now REFUSES an engine it cannot protect — MariaDB, SQL Server, anything else
+
+This is the only change in this release that can stop `php artisan migrate`, and it affects
+installations that upgraded cleanly until now. Up to 0.9.0 a fourth engine migrated green and
+simply got **no proof trigger** on `legal_documents` — the immutability this package builds its
+evidentiary weight on, silently absent. It now stops instead:
+
+```
+legal_documents cannot be protected on the 'mariadb' driver: the proof-column trigger is
+written for PostgreSQL, MySQL and SQLite. Publishing legal texts without it would leave every
+frozen row editable, so this stops rather than continuing quietly.
+```
+
+**MariaDB is affected even though the trigger syntax would run there.** Laravel returns the
+driver name from your connection configuration verbatim, and it ships `mariadb` as its own
+driver — so a MariaDB connection is never seen as `mysql`. SQL Server (`sqlsrv`) and any custom
+driver hit the same refusal.
+
+The refusal is raised **before** anything is altered, so a refused `migrate` leaves your schema
+exactly as it was; there is no half-applied state to clean up. Your options:
+
+- move `legal_documents` to PostgreSQL, MySQL or SQLite — the three engines whose trigger this
+  package writes and tests against real servers;
+- or stay on `0.9.x` until MariaDB support ships, and know that your published rows are **not**
+  protected by a database-level trigger today. The application-layer guard still refuses an
+  edit through the model, but a direct `UPDATE` is not stopped.
+
+### An `informational` document published under 0.8.0 or 0.9.0 keeps its wrong sentence
+
+`informational` arrived in 0.8.0. Until this release, publishing one froze the default acceptance
+sentence into `ui_wording` — a page that binds nobody, carrying "Ich habe die Bedingungen gelesen
+und akzeptiere sie." The fix applies to new publishes only, and the migration deliberately
+backfills nothing: `ui_wording` is a proof column, immutable after publish by both the model and
+the database trigger, so nothing may rewrite it in place. Find affected rows:
+
+```sql
+select * from legal_documents where type = 'informational' and ui_wording is not null;
+```
+
+(`select *` rather than a column list on purpose: `key` is a reserved word on MySQL and needs
+backticks there, while PostgreSQL wants double quotes — and the row you are looking at is worth
+seeing whole anyway.)
+
+The remedy is to **publish a new version** of each such document under 0.10.0, which stores no
+sentence at all. The old version stays in the ledger, which is the point — the history is
+evidence, and rewriting it is what this package exists to prevent.
+
+### `ui_wording` can now be `null`, and code that renders it needs to say so
+
+Only an `informational` document has none. Every other class still fails loudly when no sentence
+resolves, so nothing that was working stops working — but the types changed:
+
+```diff
+-Document::$uiWording        // string
+-PublishedDocument::$uiWording  // string
++Document::$uiWording        // ?string
++PublishedDocument::$uiWording  // ?string
+```
+
+If your own view renders the wording of an arbitrary document, guard it:
+
+```blade
+@if ($document->uiWording !== null)
+    <p>{{ $document->uiWording }}</p>
+@endif
+```
+
+`DefaultConsentManager::acceptanceFingerprint()` now throws for an informational document rather
+than hashing an empty sentence. Nothing accepts such a page, so nothing needs to fingerprint one.
+
+### An objection and a termination now refuse the classes they cannot apply to
+
+`Consent::object()` reaches a contract and a privacy notice; `Consent::terminate()` reaches only
+a contract. The other combinations throw `NotObjectableException` / `NotTerminableException`
+instead of appending a ledger row that asserts a state which does not legally exist.
+
+If your app calls either on an arbitrary document key, check the type first — or let the
+exception surface, which is the honest outcome: the ledger is append-only, so a wrong row cannot
+be taken back.
+
+The bundled settings component can also switch the two endpoints off entirely, which is worth
+doing if your product has no answer to them. **Removing the buttons from a published view does
+not**: Livewire dispatches to any public method of an embedded component.
+
+```blade
+<livewire:legal-consent.consent-settings :allow-objection="false" :allow-termination="false" />
+```
+
+### An unknown `document_key` is now a `404`, not a `500`
+
+Three status codes changed, all in the same direction — from "this package broke" to "your
+request does not name something that exists here":
+
+| Request | before | now |
+|---|---|---|
+| JSON API, a key that is not published | `500` | `404` + `error: unknown_document` |
+| Livewire component, a key that is not published | `500` | `404` |
+| Livewire component, a transition the class cannot carry | `500` | `404` |
+
+**Act on this only if you assert on the old codes.** A client that treats `5xx` as retryable was
+retrying a typo against endpoints that append to a ledger; a monitoring rule that alerted on this
+package's `500`s was alerting on its consumers' mistakes. Both stop by themselves — nothing to
+change unless you have a test or an alert pinned to `500`.
+
+The JSON API error body is unchanged in shape and now covers this case too, so a client can tell
+the two refusals apart:
+
+```json
+{ "error": "unknown_document", "message": "No legal document is published under the key 'privacy'.", "document_key": "privacy" }
+```
+
+`404` also covers "not published **here**": a document whose only active version is in a locale you
+do not serve, and which `fallback_locale` does not reach, is not being served to that subject.
+
+The Livewire components stay deliberately quieter: the rendered `404` is the framework's plain page
+and carries nothing of the reason, which names the document key and its legal class — the template
+author's business and not the subject's.
+
+**Be aware of where that reason does NOT go.** It rides on the exception, and Laravel never reports
+a `NotFoundHttpException`, so it reaches neither your log nor your error page. If you want these
+visible, report `404`s yourself — a custom exception handler, or an APM configured to capture them.
+
+### `GET /legal/status` answers `{}` instead of `[]` when nothing is published
+
+The payload is a map keyed by document key. PHP cannot tell an empty map from an empty list, so the
+empty case used to serialize as a JSON **array** — which breaks a client that decodes it into a
+dictionary, on exactly the response that carries no other sign that anything is wrong. It is now
+always an object.
+
+**Act on this if** your client branches on the array form (`Array.isArray(res)`, a decoder with an
+array fallback). The populated shape is unchanged, so a client that only reads keys needs nothing.
+
+### The composer manifest now names six more `illuminate/*` components
+
+`illuminate/auth`, `illuminate/bus`, `illuminate/cache`, `illuminate/collections`,
+`illuminate/http` and `illuminate/routing` were being imported by shipped code without being
+declared. Every one of them is already present in any Laravel application, so `composer update`
+resolves them from what you have — nothing new is downloaded and no version is forced.
+
+It matters only if you deliberately installed this package **without** `laravel/framework`,
+against a hand-picked set of components. That never worked: the service provider imported
+classes the manifest did not require, so the container failed on boot. It resolves correctly now.
+
+### `LegalDraftSaved::dispatch()` and `LegalDraftReviewed::dispatch()` are gone
+
+Both event classes dropped the framework's `Dispatchable` trait. If you dispatch either event
+yourself — unusual, since this package dispatches them — replace the static call:
+
+```diff
+-LegalDraftSaved::dispatch($draft, $actor);
++event(new LegalDraftSaved($draft, $actor));
+```
+
+**Listening is unaffected.** The class names, the constructor signature and the public
+properties are unchanged, so every listener, subscriber and `Event::fake()` assertion keeps
+working untouched.
+
+### If you published the optional v1 backfill migration
+
+Re-publish it to pick up the corrected version:
+
+```bash
+php artisan vendor:publish --tag=legal-consent-backfill --force
+```
+
+It previously coerced two configuration values and a database id without checking them. On an
+application whose auth configuration holds something other than a class-name string, that wrote
+the literal `Array` into `subject_type`; and a non-numeric user id was folded onto `0`, attaching
+an imported acceptance to whichever user has that id. Rows it cannot read are now skipped instead.
+If you already ran the old version, check `legal_consents` for rows with `source = 'v1_backfill'`
+and a `subject_type` of `Array` or a `subject_id` of `0` before trusting the import.
+
 ## 0.8.0 → 0.9.0
 
 `0.9.0` carries **one** thing you must act on, and only if your app publishes the WireKit view

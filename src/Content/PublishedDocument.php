@@ -37,7 +37,13 @@ final readonly class PublishedDocument
         public int $majorVersion,
         public string $html,
         public string $contentHash,
-        public string $uiWording,
+        /**
+         * The acceptance sentence, or NULL for an `informational` page — one that is published
+         * and binds nobody (Impressum, cookie policy, accessibility statement). Such a page has
+         * no sentence to carry, and this value is frozen proof, so the absence is modelled
+         * rather than filled with a placeholder nobody said.
+         */
+        public ?string $uiWording,
         public NoticeMode $noticeMode,
         public ?CarbonImmutable $publishedAt = null,
         public ?CarbonImmutable $enforceFrom = null,

@@ -34,7 +34,7 @@ return [
     // The withdraw confirmation. Art. 7(3) sentence 3: withdrawal must be as easy as
     // giving consent — so this asks once, states the consequence, and never nags.
     'withdraw_confirm_title' => 'Retirer le consentement ?',
-    'withdraw_confirm_body' => "Votre consentement à « :title » sera retiré. Le retrait prend effet immédiatement et n'affecte pas la licéité du traitement antérieur.",
+    'withdraw_confirm_body' => "Ton consentement à « :title » sera retiré. Le retrait prend effet immédiatement et n'affecte pas la licéité du traitement antérieur.",
     'cancel' => 'Annuler',
 
     // Admin screens (LegalTextManager / LegalTextEditor).

@@ -109,6 +109,42 @@ enum DocumentType: string
     }
 
     /**
+     * Can a subject OBJECT to this document?
+     *
+     * An objection is one of exactly two things, and the contract's own docblock names both: a
+     * Widerspruch against a change deemed accepted by silence (§ 308 Nr. 5 lit. a BGB), or an
+     * Art. 21 objection to processing on legitimate interest. A contract can meet the first and a
+     * privacy notice the second, so both are objectable.
+     *
+     * A real consent is NOT. Art. 21 explicitly does not cover consent-based processing, and the
+     * instrument there is withdrawal (Art. 7(3)) — an "Objected" row against a consent reads to a
+     * later auditor like a withdrawal that never happened. Neither is an informational page: it
+     * binds nobody, so there is nothing to object to.
+     *
+     * Deliberately NOT narrowed to "the active version runs an objection window". That is a
+     * property of the VERSION, it changes over time, and an Art. 21 objection to a privacy notice
+     * has nothing to do with a notice window at all — a guard built on it would refuse a lawful
+     * objection whenever no change happened to be pending.
+     */
+    public function isObjectable(): bool
+    {
+        return $this === self::ContractTerms || $this === self::PrivacyNotice;
+    }
+
+    /**
+     * Can a subject TERMINATE against this document?
+     *
+     * The free right to terminate before a change takes effect exists against a CONTRACT
+     * (§ 675g Abs. 2 BGB, § 327r Abs. 3, P2B). A privacy notice is information, a consent is
+     * withdrawn, and an informational page binds nobody — none of the three is a thing that can
+     * end.
+     */
+    public function isTerminable(): bool
+    {
+        return $this === self::ContractTerms;
+    }
+
+    /**
      * The GDPR legal basis family, used to pick UI wording and validation rules.
      */
     public function legalBasis(): string

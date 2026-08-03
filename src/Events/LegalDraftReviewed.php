@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Events;
 
-use Illuminate\Foundation\Events\Dispatchable;
 use Pushery\LegalConsent\Models\LegalDraft;
 
 /**
@@ -18,8 +17,6 @@ use Pushery\LegalConsent\Models\LegalDraft;
  */
 final readonly class LegalDraftReviewed
 {
-    use Dispatchable;
-
     public function __construct(
         public LegalDraft $draft,
         public ?string $actor = null,
