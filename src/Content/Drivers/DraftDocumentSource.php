@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Content\Drivers;
 use Pushery\LegalConsent\Content\ContentFormat;
 use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Content\RawDocument;
+use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Exceptions\MissingAcceptanceWording;
 use Pushery\LegalConsent\Models\LegalDraft;
@@ -34,6 +35,14 @@ use Pushery\LegalConsent\Support\LegalDriftChecker;
  */
 final readonly class DraftDocumentSource implements LegalDocumentSource
 {
+    /**
+     * @param  array<string, mixed>  $documents  the `legal-consent.documents` registry, so this
+     *                                           source can tell whether a key binds anyone. An
+     *                                           empty registry defaults every key to `contract`,
+     *                                           which is the behavior it had before.
+     */
+    public function __construct(private array $documents = []) {}
+
     public function resolve(string $type, string $locale): RawDocument
     {
         $set = LegalDraftSet::for($type);
@@ -96,9 +105,19 @@ final readonly class DraftDocumentSource implements LegalDocumentSource
      * The acceptance sentence, resolved in the DOCUMENT's locale and passed explicitly rather than
      * left to the pipeline's ambient-locale lookup. It is vendor lang, not draft content, which
      * makes the one sentence a subject clicks "I accept" on structurally un-machine-translatable.
+     *
+     * NULL for a document that asks the reader for nothing — an `informational` page. There is no
+     * sentence for one, so resolving it would be work whose only possible outcomes are a value the
+     * pipeline discards or a spurious failure: an operator who removed the `wording.default`
+     * translation (because none of their documents needs it) could not publish an Impressum, and
+     * the error would name an acceptance sentence for a page that accepts nothing.
      */
-    private function wordingFor(string $type, string $locale): string
+    private function wordingFor(string $type, string $locale): ?string
     {
+        if (! $this->typeFor($type)->isConsentBearing()) {
+            return null;
+        }
+
         foreach (["legal-consent::wording.{$type}", 'legal-consent::wording.default'] as $key) {
             $translated = trans($key, [], $locale);
 
@@ -108,5 +127,20 @@ final readonly class DraftDocumentSource implements LegalDocumentSource
         }
 
         throw MissingAcceptanceWording::for($type, $locale);
+    }
+
+    /**
+     * The document class the registry declares for this key.
+     *
+     * Defaults to `contract` for an unregistered key, exactly as RenderPipeline and
+     * LegalDocumentPublisher do. The direction matters: defaulting to `informational` would strip
+     * the acceptance sentence off every document a caller forgot to register.
+     */
+    private function typeFor(string $key): DocumentType
+    {
+        $entry = $this->documents[$key] ?? null;
+        $basis = is_array($entry) ? ($entry['legal_basis'] ?? 'contract') : 'contract';
+
+        return DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
     }
 }

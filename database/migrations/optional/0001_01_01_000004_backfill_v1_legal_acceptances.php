@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -38,9 +40,26 @@ return new class extends Migration
 
         DB::disableQueryLog();
 
-        $userModel = (string) config('auth.providers.users.model', 'App\\Models\\User');
-        $subjectType = class_exists($userModel) ? (new $userModel)->getMorphClass() : $userModel;
-        $locale = (string) config('legal-consent.default_locale', 'de');
+        // Both values come out of config as mixed, and this migration runs against a
+        // stranger's application: a host app that has published its own auth config with a
+        // non-string model, or dropped `default_locale`, must not produce a ledger row whose
+        // subject_type or locale is the string "Array". Fall back instead of coercing.
+        $configuredModel = config('auth.providers.users.model');
+        $userModel = is_string($configuredModel) && $configuredModel !== ''
+            ? $configuredModel
+            : 'App\\Models\\User';
+
+        // is_a(..., allow_string: true) also answers class_exists() — and it answers the
+        // question that actually matters here, because getMorphClass() only exists on an
+        // Eloquent model. A class that exists but is not one now falls back to its own name
+        // rather than fataling mid-backfill.
+        $subjectType = is_a($userModel, Model::class, true)
+            ? (new $userModel)->getMorphClass()
+            : $userModel;
+
+        $configuredLocale = config('legal-consent.default_locale');
+        $locale = is_string($configuredLocale) && $configuredLocale !== '' ? $configuredLocale : 'de';
+
         $now = now();
 
         $columns = array_values(array_filter([
@@ -52,15 +71,32 @@ return new class extends Migration
         DB::table('users')
             ->select($columns)
             ->orderBy('id')
-            ->chunkById(1000, function ($users) use ($hasTerms, $hasPrivacy, $subjectType, $locale, $now): void {
+            ->chunkById(1000, /** @param Collection<int, stdClass> $users */ function (Collection $users) use ($hasTerms, $hasPrivacy, $subjectType, $locale, $now): void {
                 $rows = [];
 
                 foreach ($users as $user) {
+                    // A raw builder row is a stdClass, so every property is mixed. The id is
+                    // the one value that must not be guessed at: casting mixed would turn an
+                    // unexpected shape into user 0 and attach a stranger's acceptance to it.
+                    // Skip the row instead — a backfill that silently mislabels a subject is
+                    // worse than one that leaves a row behind for the operator to see.
+                    //
+                    // The digit check is the half that makes the sentence above true. Accepting
+                    // any string and casting it does not prevent the failure it describes: PHP
+                    // turns "abc" and "" into 0 just as quietly as it turns an array into 1, so
+                    // a non-numeric key would still be folded onto user 0. Only a value that
+                    // survives the round trip is allowed through.
+                    $id = $user->id;
+
+                    if (! is_int($id) && (! is_string($id) || ! ctype_digit($id))) {
+                        continue;
+                    }
+
                     if ($hasTerms && $user->terms_accepted_at !== null) {
-                        $rows[] = $this->row($subjectType, (int) $user->id, 'terms', 'contract_terms', $user->terms_accepted_at, $locale, $now);
+                        $rows[] = $this->row($subjectType, (int) $id, 'terms', 'contract_terms', $user->terms_accepted_at, $locale, $now);
                     }
                     if ($hasPrivacy && $user->privacy_accepted_at !== null) {
-                        $rows[] = $this->row($subjectType, (int) $user->id, 'privacy', 'privacy_notice', $user->privacy_accepted_at, $locale, $now);
+                        $rows[] = $this->row($subjectType, (int) $id, 'privacy', 'privacy_notice', $user->privacy_accepted_at, $locale, $now);
                     }
                 }
 

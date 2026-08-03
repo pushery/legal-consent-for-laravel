@@ -38,6 +38,9 @@ interface ConsentManager
      * Record a Widerspruch: the subject objected to a change (rebutting a deemed-consent
      * fiction, § 308 Nr. 5 lit. a BGB) or objected to legitimate-interest processing
      * (Art. 21). Fires ConsentObjected so the app can stop the processing where required.
+     *
+     * Throws NotObjectableException for a real consent (which is withdrawn, not objected to) and
+     * for an informational page (which binds nobody).
      */
     public function object(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
 
@@ -45,6 +48,9 @@ interface ConsentManager
      * Record that the subject exercised a free right to terminate before a change took
      * effect (§ 675g / § 327r Abs. 3 BGB / P2B). Fires ConsentTerminated so the app can end
      * the contract; the package only records the provable ledger entry.
+     *
+     * Throws NotTerminableException for anything that is not a contract — a privacy notice is
+     * information, a consent is withdrawn, and an informational page binds nobody.
      */
     public function terminate(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
 

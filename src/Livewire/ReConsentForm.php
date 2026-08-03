@@ -12,7 +12,9 @@ use Livewire\Component;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Exceptions\DocumentChangedException;
+use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
+use Pushery\LegalConsent\Livewire\Concerns\RefusesUnavailableTransitions;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
 
@@ -26,6 +28,7 @@ use Pushery\LegalConsent\Support\DefaultConsentManager;
 final class ReConsentForm extends Component
 {
     use AnnouncesStatus;
+    use RefusesUnavailableTransitions;
 
     /** @var array<string, bool> */
     public array $accept = [];
@@ -101,10 +104,24 @@ final class ReConsentForm extends Component
                     // render and this submit must be caught, not silently frozen (Art. 7(1)).
                     $manager->accept($subject, $document->key, ConsentContext::fromRequest(request(), $this->method), $this->locale, $this->hashes[$document->key]);
                     $recorded++;
-                } catch (DocumentChangedException) {
+                } catch (DocumentChangedException|LegalDocumentNotFound) {
                     // The subject would freeze text they never saw. Clear the stale ticks and ask them
                     // to review — the re-render re-shows the current version and re-captures its hash,
                     // so a conscious re-acceptance records the version actually read.
+                    //
+                    // LegalDocumentNotFound takes the SAME path, and not for symmetry: it means the
+                    // document stopped being published between the render and this click, which is
+                    // the same event as "it changed" from the subject's side. The window is not a
+                    // race measured in microseconds — `outstanding()` is served from the
+                    // enforceable-document cache (default TTL 60s) while `accept()` re-resolves
+                    // against the database, so an out-of-band unpublish leaves a minute in which
+                    // this button is the ordinary thing to click.
+                    //
+                    // Deliberately NOT the 404 the other transitions answer with. Those are single
+                    // actions; this loop may already have recorded rows into an append-only ledger
+                    // before it reaches the missing document, and aborting the response there would
+                    // leave the subject on an error page with no idea which of their ticks took
+                    // effect. Clearing and re-rendering shows them exactly what is still owed.
                     $this->accept = [];
                     $this->setStatus((string) __('legal-consent::ui.reconsent_changed'));
 
@@ -177,7 +194,7 @@ final class ReConsentForm extends Component
         $subject = $this->subject();
 
         if ($subject instanceof Model) {
-            app(ConsentManager::class)->object($subject, $key, ConsentContext::fromRequest(request(), $this->method), $this->locale);
+            $this->guardedTransition(fn () => app(ConsentManager::class)->object($subject, $key, ConsentContext::fromRequest(request(), $this->method), $this->locale));
         }
     }
 
@@ -186,7 +203,7 @@ final class ReConsentForm extends Component
         $subject = $this->subject();
 
         if ($subject instanceof Model) {
-            app(ConsentManager::class)->terminate($subject, $key, ConsentContext::fromRequest(request(), $this->method), $this->locale);
+            $this->guardedTransition(fn () => app(ConsentManager::class)->terminate($subject, $key, ConsentContext::fromRequest(request(), $this->method), $this->locale));
         }
     }
 

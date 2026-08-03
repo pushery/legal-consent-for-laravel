@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an idea or improvement for Legal Consent for Laravel.
+description: "Suggest an idea or improvement for Legal Consent for Laravel."
 labels: ["enhancement"]
 body:
   - type: textarea

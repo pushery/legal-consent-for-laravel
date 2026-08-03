@@ -4,6 +4,156 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-03
+
+### Fixed
+
+- **The package now declares every Laravel component its code imports.** It uses focused
+  `illuminate/*` components rather than the full framework, and four of them were missing from
+  the manifest: `illuminate/auth`, `illuminate/cache`, `illuminate/http` and
+  `illuminate/routing`. An install without `laravel/framework` therefore resolved a dependency
+  set the code could not run on and failed with a class-not-found the moment the service
+  provider booted. `illuminate/log` is named too — the `Log` facade is called on two shipped
+  paths and no other declared component pulls it in — and `illuminate/bus` and
+  `illuminate/collections` were reachable through other components but undeclared. Nothing
+  changes for an application that already has the full framework.
+
+- The migration that freezes published legal texts refuses to build its trigger from a column
+  name that is not a plain SQL identifier. The MySQL and SQLite variants have to list the
+  protected columns by name, and they read that list from the database's own catalog — safe in
+  practice, but "it cannot be hostile" was an assumption rather than something the code checked.
+  It now stops before a single character of an unexpected name reaches a statement.
+
+- The optional v1 backfill migration no longer coerces values it cannot trust. It read the
+  authenticatable model and the default locale out of configuration as strings without checking,
+  so an application whose auth configuration holds something else would have written the literal
+  `Array` into `subject_type` for every imported row; both now fall back. It also cast a raw
+  database id to an integer, and PHP turns a non-numeric value into `0` — which attaches a
+  stranger's acceptance to whichever user has that id. Only an integer, or a string of digits
+  that survives the round trip, is imported now; anything else leaves its row behind for the
+  operator to see. And `getMorphClass()` is no longer called on any class that merely exists,
+  which aborted the backfill on a non-Eloquent model before it wrote a single row — so that one
+  failure, unlike the two above it, left nothing behind to clean up.
+
+- **Accepting a page that binds nobody is refused instead of failing.** An `informational`
+  document carries no acceptance sentence, and the two entry points that append an acceptance —
+  `Consent::accept()` and `Consent::record()` — had no check for the class. `accept()` reached the
+  fingerprint helper, which now refuses such a document, and the untyped failure left the JSON API
+  as a `500`; `record()` reached the insert, where the ledger's wording snapshot is `NOT NULL`, and
+  the caller got a raw database integrity error. Both now throw `NotConsentBearingException` before
+  anything is written, and `POST /legal/consent` answers `422` with an `error` of
+  `not_consent_bearing` — the sibling of `not_withdrawable`, `not_objectable` and `not_terminable`.
+  The package's own default registry ships such a document, so this was reachable with a key no
+  consumer typed.
+
+- **An informational page no longer freezes an acceptance sentence it never asked for.**
+  `ui_wording` is the exact sentence a subject clicked: it cannot be changed after publish, it is
+  copied verbatim into every ledger row, and it is folded into the hash chain. An `informational`
+  document — an Impressum, a cookie policy, an accessibility statement — asks the reader for
+  nothing, but the render pipeline had no branch for it and fell through to the default sentence,
+  so publishing one froze "Ich habe die Bedingungen gelesen und akzeptiere sie." into a page that
+  binds nobody, permanently. Such a document now carries no sentence at all, and a wording
+  supplied by its source is dropped rather than stored.
+
+### Changed
+
+- `LegalDraftSaved` and `LegalDraftReviewed` no longer use the framework's `Dispatchable` trait.
+  Both are dispatched with `event(new …)` and the trait only added static `dispatch()` helpers,
+  which nothing called, while being the one imported symbol with no standalone component behind
+  it. If you dispatched either event with `LegalDraftSaved::dispatch(…)`, use
+  `event(new LegalDraftSaved(…))`.
+
+  To be precise about what this does and does not buy: the component manifest now matches what
+  the code imports, but a genuinely framework-free install is still out of reach — shipped code
+  calls fifteen global helpers that only the full framework defines. That is an open question
+  about what this package should promise, not an oversight, and it is tracked.
+
+- **`Consent::object()` and `Consent::terminate()` refuse the document classes they cannot apply
+  to**, the way `withdraw()` always has. An objection now reaches a contract (a Widerspruch under
+  § 308 Nr. 5 lit. a BGB) and a privacy notice (Art. 21) but not a consent — which is withdrawn,
+  not objected to — and a termination reaches only a contract. A refused call throws
+  `NotObjectableException` or `NotTerminableException`. This matters because the ledger is
+  append-only: a row asserting a state that does not legally exist cannot be corrected, and every
+  later reader takes it as proof.
+- `ui_wording` is nullable — **one new migration ships, so run `php artisan migrate`** — and
+  `Document::$uiWording` / `PublishedDocument::$uiWording` are `?string`. Only an `informational`
+  document has none; every other class still fails loudly when no sentence resolves. Code that
+  renders the wording of an arbitrary document needs a null check — see the upgrade notes.
+- **The migration that freezes published legal texts now REFUSES an engine it cannot protect —
+  and that includes MariaDB.** PostgreSQL, MySQL and SQLite each get a trigger; anything else used
+  to migrate successfully and leave `legal_documents` with no trigger on it and no signal anywhere
+  — the immutability this package builds its evidentiary weight on, silently absent. A migration
+  that stops is recoverable; a proof table that only looks frozen is not.
+
+  Name the engines, because "MySQL gets a trigger" does not cover the one that reads like it does:
+  Laravel returns the driver name from your connection configuration verbatim and ships `mariadb`
+  as its own driver, so a MariaDB connection is never seen as `mysql`. MariaDB, SQL Server
+  (`sqlsrv`) and any custom driver are refused. This reaches **existing** installations, not only
+  new ones — the migration added in this release re-installs the trigger, so an upgrade is where
+  a fourth engine finds out. The refusal is raised before anything is altered, so a refused
+  `migrate` leaves the schema untouched rather than half-applied. The upgrade notes give the
+  operator's options.
+- The JSON API answers a refused objection or termination with `422` and an `error` of
+  `not_objectable` / `not_terminable`, the way `POST /legal/withdraw` always has. Without it a
+  refusal reached the client as a `500` — an "our fault, retry" for a request that is simply not
+  a thing.
+- **A `document_key` that is not published is answered as the client error it is, on every
+  surface.** The JSON API returns `404` with an `error` of `unknown_document`; the Livewire
+  components abort with `404`. Both used to surface as a `500`, which tells a client "our fault,
+  retry" — on endpoints that append to a ledger — and files a consumer's typo as an outage of this
+  package in their monitoring. It is not only a typo that gets there: a document unpublished
+  between the render and the click reaches the same path from a legitimate button. If you check
+  for `500` on these endpoints today, check for `404` instead.
+- **The Livewire components answer a transition a document's class cannot carry with `404` too**,
+  rather than letting the manager's refusal surface as a `500`. The refusal itself is unchanged —
+  it is what keeps rows asserting legally impossible states out of an append-only ledger. What the
+  subject sees is a `404` with no detail: the sentence names the document key and its legal class,
+  which is the template author's problem and none of the subject's business. It rides on the
+  exception, and since Laravel never reports a `NotFoundHttpException` it reaches your log and your
+  error page just as little — report `404`s yourself if you want to see these. The JSON API keeps
+  `422` here, because a machine client can act on the difference between "no such document" and
+  "not that kind of document".
+- **The re-consent form no longer breaks when a document is unpublished mid-flight.** `submit()`
+  treats a document that has stopped being published exactly as it treats one that changed: it
+  clears the stale ticks and asks the subject to review what is actually current. It used to be a
+  `500` on the primary button of the re-consent gate — and because the enforcement middleware keeps
+  gating, a subject who hit it could neither clear the gate nor get past it. The window is wider
+  than it sounds: the outstanding list is served from a cache while the acceptance re-resolves
+  against the database.
+- **`GET /legal/status` answers `{}` instead of `[]` when nothing is published.** The payload is a
+  map keyed by document key, but PHP cannot tell an empty map from an empty list, so the empty case
+  serialized as a JSON array — and a client that decodes it into a dictionary failed on exactly the
+  response that carries no other sign of trouble. The populated shape is unchanged.
+- `DefaultConsentManager::acceptanceFingerprint()` refuses an informational document instead of
+  hashing an empty sentence. Nothing accepts such a page, so nothing needs to fingerprint one.
+
+### Added
+
+- **The settings component can switch off the transitions your product has no answer to.**
+  Livewire dispatches to any public method of an embedded component, so removing a button from a
+  published view never switched anything off — `<livewire:legal-consent.consent-settings
+  :allow-objection="false" :allow-termination="false" />` does. A disabled action returns `404`,
+  and both flags are locked server-side.
+- Headings for three conventional informational document keys — `imprint`, `cookies` and
+  `accessibility` — in all seven bundled locales. Rename or remove them freely; they are
+  conventional keys, not reserved ones.
+
+### Documentation
+
+- The French withdrawal-confirmation copy uses the informal register the other six locales use.
+  It was the one string in `lang/fr` that addressed the reader formally.
+
+- `README.md` no longer tells a reader to run the test suite. Neither the suite nor the PHPUnit
+  configuration is part of the published package, so that command had nothing to run from an
+  installed copy — the same defect fixed in `CONTRIBUTING.md` below, on the surface that was
+  missed. It now states the quality bar as a fact and points at the development repository.
+
+- `CONTRIBUTING.md` no longer prescribes commands that cannot run from the published package. Five
+  of the six it listed need a configuration file that is deliberately not shipped, so the third
+  step failed with "no error configuration file found" for anyone who followed it. It now states
+  the quality bar as a fact about how the package is maintained, and adds the local PHP
+  requirement — 8.4.1 for development, while the package itself installs on 8.4.0.
+
 ## [0.9.0] - 2026-07-26
 
 ### Changed

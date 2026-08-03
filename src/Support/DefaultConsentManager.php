@@ -18,9 +18,13 @@ use Pushery\LegalConsent\Events\ConsentTerminated;
 use Pushery\LegalConsent\Events\ConsentWithdrawn;
 use Pushery\LegalConsent\Exceptions\DocumentChangedException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
+use Pushery\LegalConsent\Exceptions\NotConsentBearingException;
+use Pushery\LegalConsent\Exceptions\NotObjectableException;
+use Pushery\LegalConsent\Exceptions\NotTerminableException;
 use Pushery\LegalConsent\Exceptions\NotWithdrawableException;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
+use RuntimeException;
 
 /**
  * The default headless consent core. Every record/withdraw appends exactly one
@@ -106,6 +110,17 @@ readonly class DefaultConsentManager implements ConsentManager
         $checklist = [];
 
         foreach ($documents as $document) {
+            // The filter above already removed every non-consent-bearing document, and only
+            // those may carry a null sentence — so reaching this line with one means a row that
+            // asks for an acceptance it cannot name. Dropping it silently would remove a
+            // REQUIRED checkbox from the form and let a registration complete without it, which
+            // is the one failure this screen must never have. Named, not skipped.
+            if ($document->ui_wording === null) {
+                throw new RuntimeException(
+                    "Document '{$document->key}' ({$document->locale}) is a {$document->type->value} but carries no acceptance sentence. A document that asks for an acceptance must be able to say what is being accepted; only an informational page may have none."
+                );
+            }
+
             $checklist[] = new RegistrationChecklistItem(
                 key: $document->key,
                 type: $document->type,
@@ -175,6 +190,16 @@ readonly class DefaultConsentManager implements ConsentManager
     {
         $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
 
+        // BEFORE the hash comparison below, and the order is the whole point. That comparison
+        // builds `[null, acceptanceFingerprint($document), …]`, and PHP evaluates an array literal
+        // eagerly — so the fingerprint is computed on every call, including one that passes no hash
+        // at all. acceptanceFingerprint() refuses an informational document, so a guard placed
+        // after it never runs: the caller gets that untyped RuntimeException instead, which the
+        // JSON API cannot tell from a bug and answers with a 500.
+        if (! $document->type->isConsentBearing()) {
+            throw NotConsentBearingException::for($documentKey, $document->type);
+        }
+
         // TOCTOU guard: if the subject was shown a hash (captured at render) and the active document
         // has since been re-released, refuse rather than freeze a version they never read
         // (Art. 7(1)). The caller re-shows the current text before recording consent.
@@ -207,12 +232,27 @@ readonly class DefaultConsentManager implements ConsentManager
     {
         $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
 
+        // Guarded exactly as withdraw() is, and for a stronger reason than symmetry. Every public
+        // method of the bundled Livewire component is a reachable endpoint whether or not the
+        // template renders a button for it, so an unguarded transition is one an authenticated
+        // subject can drive with nobody having offered it. What it would leave behind is a row in
+        // an APPEND-ONLY ledger asserting a state that does not legally exist — and a wrong row
+        // there is worse than a missing one, because it cannot be corrected and every later
+        // reader takes it as proof.
+        if (! $document->type->isObjectable()) {
+            throw NotObjectableException::for($documentKey, $document->type);
+        }
+
         return $this->append($subject, $document, ConsentAction::Objected, $context);
     }
 
     public function terminate(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
     {
         $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
+
+        if (! $document->type->isTerminable()) {
+            throw NotTerminableException::for($documentKey, $document->type);
+        }
 
         return $this->append($subject, $document, ConsentAction::Terminated, $context);
     }
@@ -313,6 +353,16 @@ readonly class DefaultConsentManager implements ConsentManager
 
     private function append(Model $subject, LegalDocument $document, ConsentAction $action, ConsentContext $context): LegalConsent
     {
+        // The choke point every write passes through, which is why the class check belongs here and
+        // not only on the callers. `record()` takes an arbitrary action from an arbitrary caller —
+        // `HasLegalConsents::recordConsent()` is a public trait method on the consumer's own model —
+        // and only Withdrawn/Declined were guarded above. Everything else fell through to the
+        // insert below, where `ui_wording_snapshot` is NOT NULL and an informational document has
+        // no sentence: the caller got a raw SQLSTATE integrity violation.
+        if (! $document->type->isConsentBearing()) {
+            throw NotConsentBearingException::for($document->key, $document->type);
+        }
+
         $token = $this->tokenFor($subject);
 
         $attributes = [
@@ -432,7 +482,7 @@ readonly class DefaultConsentManager implements ConsentManager
         }
 
         if (! $document instanceof LegalDocument) {
-            throw LegalDocumentNotFound::forSource($documentKey, $locale, 'legal_documents');
+            throw LegalDocumentNotFound::forSource($documentKey, $locale, LegalDocumentNotFound::PUBLISHED_LOOKUP);
         }
 
         return $document;
@@ -487,6 +537,16 @@ readonly class DefaultConsentManager implements ConsentManager
         [$contentHash, $uiWording] = $document instanceof LegalDocument
             ? [$document->content_hash, $document->ui_wording]
             : [$document->contentHash, $document->uiWording];
+
+        // A missing sentence means an `informational` page, and fingerprinting one is a
+        // category error rather than an edge case: nobody ever accepts it, so there is no
+        // acceptance to bind a hash to. Coercing the null to '' would answer anyway -- with a
+        // fingerprint for a consent that cannot exist, which a caller would then store.
+        if ($uiWording === null) {
+            throw new RuntimeException(
+                'Cannot build an acceptance fingerprint for an informational document: it carries no acceptance sentence because it asks the reader for nothing. Nothing accepts an informational page, so nothing needs to fingerprint one.'
+            );
+        }
 
         return hash('sha256', $contentHash."\x1f".$uiWording);
     }

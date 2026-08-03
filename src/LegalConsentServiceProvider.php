@@ -111,7 +111,15 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         $this->app->singleton(SourceFactory::class, fn (): SourceFactory => new SourceFactory($this->app, $this->documentsConfig(), $this->sourcesConfig()));
 
-        $this->app->singleton(RenderPipeline::class, fn (): RenderPipeline => new RenderPipeline(new LegalHtmlSanitizer, $this->markdownConfig()));
+        // The registry goes in so the pipeline can tell an `informational` page (which binds
+        // nobody, and therefore has no acceptance sentence) from a document that does ask
+        // something. Without it every key would default to `contract` and an Impressum would
+        // freeze the default acceptance sentence into a column nothing can ever change.
+        $this->app->singleton(RenderPipeline::class, fn (): RenderPipeline => new RenderPipeline(
+            new LegalHtmlSanitizer,
+            $this->markdownConfig(),
+            documents: $this->documentsConfig(),
+        ));
 
         $this->app->singleton(LegalSourceRenderer::class, fn (): LegalSourceRenderer => new LegalSourceRenderer(
             $this->app->make(SourceFactory::class),
@@ -242,12 +250,34 @@ final class LegalConsentServiceProvider extends ServiceProvider
             __DIR__.'/../config/legal-consent.php' => $this->app->configPath('legal-consent.php'),
         ], ['legal-consent', 'legal-consent-config']);
 
+        // publishes(), NOT publishesMigrations() — and that is a decision with a receipt.
+        //
+        // publishesMigrations() makes vendor:publish rewrite each filename's date prefix to a
+        // fresh timestamp. It was adopted here on 2026-07-31 and reverted the same day, because
+        // both halves of the argument for it were wrong:
+        //
+        //  - The premise was false. These files are named 0001_01_01_000001 upwards, which sorts
+        //    AFTER a fresh Laravel application's 0001_01_01_000000_create_users_table, not before
+        //    it. There was no interleaving to fix, and no shipped migration touches an app-owned
+        //    table anyway.
+        //  - The change actively broke the opt-in pair below. Rewriting only this set, while
+        //    those keep their literal names, moves 0001_01_01_000004_backfill in FRONT of the
+        //    rewritten create_legal_consents_table — so `migrate` aborts on the very table the
+        //    backfill writes into. Reproduced by sorting the published set both ways.
+        //
+        // A second reason to leave it alone, independent of the first: the publish command tests
+        // whether a file already exists under its ORIGINAL name and renames only afterwards, so a
+        // re-publish never recognizes the copy it wrote last time and lays down a duplicate of
+        // every migration under a fresh timestamp — and UPGRADE.md tells consumers to re-publish
+        // after an upgrade.
         $this->publishes([
             __DIR__.'/../database/migrations' => $this->app->databasePath('migrations'),
         ], ['legal-consent', 'legal-consent-migrations']);
 
         // Optional, opt-in migrations (not auto-loaded — they touch the host `users`
-        // table, so a consumer publishes them deliberately).
+        // table, so a consumer publishes them deliberately). Their 000003/000004 prefixes
+        // are chosen, not incidental: the backfill must run after 000002 creates
+        // legal_consents, and both must run before the later schema changes.
         $this->publishes([
             __DIR__.'/../database/migrations/optional/0001_01_01_000003_drop_legal_consent_cache_from_users_table.php' => $this->app->databasePath('migrations/0001_01_01_000003_drop_legal_consent_cache_from_users_table.php'),
         ], 'legal-consent-users-cache');

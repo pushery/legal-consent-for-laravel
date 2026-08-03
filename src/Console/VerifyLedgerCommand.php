@@ -130,9 +130,19 @@ final class VerifyLedgerCommand extends Command
             // unconditionally, which is simply false output whenever a key is configured.
             $keyed = is_string(config('legal-consent.tamper_evidence_key')) && config('legal-consent.tamper_evidence_key') !== '';
 
-            $this->line($keyed
-                ? 'Note: an intact chain proves no naive tampering and no re-chaining, not that the ledger is untampered. The hash is HMAC-keyed, so editing history requires the secret — but the head is unsigned and each row stores only the link to its predecessor, so a tail truncation and a replacement of a chain'."'".'s newest row remain undetectable here. Restrict INSERT on legal_consents to the application role, and notarize the head externally to close the rest.'
-                : 'Note: an intact chain proves no naive tampering, not that the ledger is untampered. The hash is unkeyed and the head unsigned, so an actor with table-write access can alter a row and re-chain its successors into a consistent chain, and a tail truncation leaves nothing to mismatch. Set legal-consent.tamper_evidence_key to close the re-chain path, and notarize the head externally for the rest.');
+            // if/else rather than a multi-line ternary, and the reason is measurable: under
+            // php-code-coverage 14 the first arm of a ternary whose arms sit on their own lines is
+            // reported UNCOVERED even when a test asserts the string it produces. Verified here —
+            // the keyed note is exercised by an artisan test that matches on its wording, and the
+            // line still counted as missed, which is what kept this file off 100%.
+            //
+            // Two statements instead of one arm each is the honest fix: it makes the attribution
+            // unambiguous rather than suppressing the number, and it reads no worse.
+            if ($keyed) {
+                $this->line('Note: an intact chain proves no naive tampering and no re-chaining, not that the ledger is untampered. The hash is HMAC-keyed, so editing history requires the secret — but the head is unsigned and each row stores only the link to its predecessor, so a tail truncation and a replacement of a chain'."'".'s newest row remain undetectable here. Restrict INSERT on legal_consents to the application role, and notarize the head externally to close the rest.');
+            } else {
+                $this->line('Note: an intact chain proves no naive tampering, not that the ledger is untampered. The hash is unkeyed and the head unsigned, so an actor with table-write access can alter a row and re-chain its successors into a consistent chain, and a tail truncation leaves nothing to mismatch. Set legal-consent.tamper_evidence_key to close the re-chain path, and notarize the head externally for the rest.');
+            }
 
             return self::SUCCESS;
         }

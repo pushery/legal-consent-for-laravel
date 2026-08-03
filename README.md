@@ -64,11 +64,16 @@ tested against real PostgreSQL and real MySQL, not just SQLite.
 - [Configuration reference](https://docs.pushery.com/legal-consent-for-laravel/reference/configuration)
   — every key, its default, and what it decides.
 
-## Testing
+## Quality bar
 
-```bash
-composer test
-```
+Every change is held to Laravel Pint, Larastan at `max`, Rector, and a test suite at 100% line
+and type coverage, plus mutation testing, a real-browser end-to-end suite, and cross-engine tests
+against real PostgreSQL and MySQL 8.4 — the engines it runs on in production. The full gate runs
+before every release.
+
+The suite is not part of the published package: `tests/` and the PHPUnit configuration stay in
+the development repository, so `composer test` has nothing to run from an installed copy. See
+[CONTRIBUTING.md](https://github.com/pushery/legal-consent-for-laravel/blob/main/CONTRIBUTING.md).
 
 ## Security
 

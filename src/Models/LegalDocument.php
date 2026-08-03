@@ -41,7 +41,7 @@ use Pushery\LegalConsent\Support\TenantContext;
  * @property string $content_format
  * @property string $content
  * @property string $content_hash
- * @property string $ui_wording
+ * @property string|null $ui_wording the acceptance sentence; NULL for an informational page, which asks the reader for nothing
  * @property string $source_driver
  * @property string|null $source_reference
  * @property bool $requires_reconsent
