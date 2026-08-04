@@ -4,6 +4,65 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.10.0 → 0.11.0
+
+**Nothing to do unless you publish the WireKit view variants.** No migrations ship, no config
+key changes, and the PHP API is untouched. If you use the plain stubs, your own markup, or no
+UI at all, you can skip this section entirely.
+
+### Act on this: the WireKit views now need `pushery/wirekit` ≥ 2.26.0
+
+If you ran `vendor:publish --tag=legal-consent-wirekit`, upgrade WireKit before taking this
+release:
+
+```bash
+composer require "pushery/wirekit:^2.26.0"
+```
+
+**What the floor buys, and why it is not cosmetic.** A handful of strings inside those views are
+WireKit's own, not this package's — the external-link hint on the full-text link, the sr-only
+prefix on the admin policy notice, the dismiss label. They run through `__()` with the English
+text as the key, and until 2.26.0 WireKit shipped no translation catalog. So on a German consent
+screen a screen reader announced `(opens in new tab)` and `Notice:` while every visible word
+around them was German.
+
+There is no visible symptom. Nothing on the page looks wrong, no exception is thrown, and the
+only person who encounters it is the one who cannot see the screen — at the moment they are
+deciding something legally binding. 2.26.0 ships `de` and registers it itself, so the correct
+announcement arrives with no publishing step and no configuration on your side.
+
+Below 2.17.1 the two older breakages from `0.9.0` still apply unchanged: the admin editor's
+`wire:model` lands on the wrapper instead of the textarea and **everything typed into it is lost
+on save**, and the manager table cannot emit a row header (WCAG 1.3.1).
+
+### If your app is not German or English, supply five strings yourself
+
+WireKit's catalog covers `en` and `de`. This package bundles seven locales, so in `es`, `fr`,
+`it`, `nl` and `pt` those WireKit strings are **still announced in English**. Put them in your
+app's `lang/{locale}.json`, which is the file Laravel's JSON loader reads:
+
+```json
+{
+    "(opens in new tab)": "(se abre en una pestaña nueva)",
+    "Notice": "Aviso",
+    "Dismiss": "Descartar"
+}
+```
+
+Do not translate the copy that `--tag=wirekit-lang` writes into `lang/vendor/wirekit/` — the
+loader does not read that directory, so edits there have no effect.
+
+**This package deliberately does not ship those for you.** They are JSON string keys, which are
+application-global: defining them here would silently retranslate every other WireKit component
+in your app, including ones this package never touches. That is not a choice a dependency should
+make on your behalf.
+
+### If you already copied the WireKit stubs into your app
+
+`vendor:publish` writes the views into your project, so your copies do not change when you
+upgrade the package. Nothing in this release changes those files — the improvement lives in
+WireKit itself, so upgrading WireKit is enough and re-publishing is not required.
+
 ## 0.9.0 → 0.10.0
 
 **On PostgreSQL, MySQL or SQLite there is nothing to do beyond running the migration**, and
