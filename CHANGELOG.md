@@ -4,6 +4,40 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-08-04
+
+Only the optional WireKit view variants are affected. If you publish the plain stubs, write
+your own markup, or use no UI at all, nothing in this release reaches you: no migrations, no
+config keys, no change to the PHP API.
+
+### Changed
+
+- **The WireKit view variants now announce WireKit's own screen-reader strings in German, and
+  the documented floor moves to `pushery/wirekit` ≥ 2.26.0.** Inside those views a few strings
+  belong to WireKit rather than to this package — the external-link hint on the full-text link,
+  the sr-only prefix on the admin policy notice, the dismiss label. They ran through `__()` with
+  the English text as the key, and WireKit shipped no catalog of its own, so a German consent
+  surface announced `(opens in new tab)` and `Notice:` to a screen reader while every visible
+  word around them was German. WireKit 2.26.0 ships and registers `de`, and it arrives with no
+  publishing step and no configuration.
+
+  Nothing renders differently to a sighted reader, which is exactly why this went unnoticed
+  across three releases: no visible text changes, no test that reads the page for meaning fails,
+  and the only person affected is the one who cannot see the screen — on the surface where a
+  person is deciding something legally binding. The package's test suite now asserts the German
+  announcement in the rendered markup, so it cannot regress silently.
+
+  **Two of this package's seven bundled locales are covered.** WireKit's catalog is `en` and
+  `de`; in `es`, `fr`, `it`, `nl` and `pt` those strings are still announced in English. That is
+  measured in the rendered stub rather than inferred, and it is not something this package can
+  fix for you: the keys are JSON *string* keys and therefore application-global, so shipping
+  translations for them here would silently retranslate every other WireKit component in your
+  app. [The UI documentation](https://docs.pushery.com/legal-consent-for-laravel/user-interface)
+  shows where to put them in your own `lang/{locale}.json`.
+
+  Below 2.17.1 two older breakages still apply and are unchanged: the admin editor loses
+  everything typed into it, and the manager table cannot emit a row header.
+
 ## [0.10.0] - 2026-08-03
 
 ### Fixed
