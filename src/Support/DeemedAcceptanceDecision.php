@@ -21,8 +21,21 @@ final class DeemedAcceptanceDecision
      * @param  LegalConsent|null  $latest  the subject's most recent action for this document+locale,
      *                                     read live (NOT from the sweep's ledger snapshot)
      */
-    public function shouldDeem(?LegalConsent $latest, LegalDocument $version): bool
+    public function shouldDeem(?LegalConsent $latest, LegalDocument $version, bool $noticeProved): bool
     {
+        // § 308 Nr. 5 lit. b BGB makes the special warning — that not objecting counts as agreement
+        // — a VALIDITY CONDITION of the fiction, not courtesy copy. Without it silence does not
+        // bind, so a DeemedAccepted row written here would be a consent record the package can
+        // refute from its own proof table. `$noticeProved` is that table's answer: a legal_notices
+        // row for this (subject, version) whose mandatory content actually rendered.
+        //
+        // This parameter is REQUIRED rather than defaulted to true on purpose. A default would let
+        // any future call site create consent out of silence by simply not passing it, which is the
+        // one mistake this check exists to prevent.
+        if (! $noticeProved) {
+            return false;
+        }
+
         // No recorded action at all: the affected-subject set already established that they hold an
         // older major, so silence binds.
         if (! $latest instanceof LegalConsent) {
@@ -41,6 +54,13 @@ final class DeemedAcceptanceDecision
             return true;
         }
 
-        return $latest->document_major_version < $version->major_version;
+        // Compare the VERSION, not the major. A deemed-consent change is lawful only for a minor,
+        // peripheral change (BGH XI ZR 26/20), and the publisher enforces that by refusing the mode
+        // on a major bump of a contract — so under a major comparison the subject's major always
+        // equalled the version's and silence bound nobody, which is the same assumption that made
+        // the notice sweep select nobody. Only the ACTIVE version is ever swept and the publisher
+        // refuses a downgrade, so a subject cannot hold anything newer: "not this version" is
+        // exactly "older than this version" here.
+        return $latest->document_version !== $version->version;
     }
 }

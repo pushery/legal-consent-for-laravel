@@ -51,7 +51,13 @@ use Pushery\LegalConsent\Support\TenantContext;
  * @property int|null $notice_period_days
  * @property bool $offers_termination
  * @property bool $keeps_unmodified_offered
- * @property string|null $change_summary
+ * @property string|null $change_summary SUPERSEDED by legal_change_sets / legal_change_items. Never
+ *                                       written and never read: it is varchar(255) and sits outside
+ *                                       MUTABLE_AFTER_PUBLISH, so it can only be set at INSERT and
+ *                                       never corrected — and a change description is usually a
+ *                                       structured list, not a sentence. Left in place rather than
+ *                                       dropped, because removing a column from this table costs a
+ *                                       proof-trigger reinstall on three engines for no gain.
  * @property bool $is_active
  * @property CarbonImmutable|null $published_at
  * @property CarbonImmutable|null $announce_from

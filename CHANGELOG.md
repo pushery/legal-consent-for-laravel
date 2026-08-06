@@ -4,6 +4,168 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-06
+
+**Change notices reached the wrong people, or nobody, and said too little when they arrived.** This
+release is mostly repair: three defects that each made a legally required notice fail silently, plus
+the feature they were blocking — a notice that can finally say what changed.
+
+**Read the upgrade guide before deploying.** The audience fix turns a path that reached nobody into
+one that reaches every party to a contract, and the first sweep after upgrading is the first time
+those notices actually leave the queue.
+
+### Added
+
+- **A notice can finally say WHAT changed.** Describe a pending change per document and locale, and
+  the notice carries it — a headline, an impact statement, and a typed list of entries:
+
+  ```php
+  use Pushery\LegalConsent\Facades\ChangeItems;
+
+  ChangeItems::for('terms', 'de')
+      ->headline('Wir haben zwei Auftragsverarbeiter aufgenommen.')
+      ->impact('Deine Kontodaten werden künftig auch in Irland verarbeitet.')
+      ->added('Cloudflare, Inc.', partyName: 'Cloudflare, Inc.', partyLocation: 'Irland (EU)', purpose: 'Auslieferung')
+      ->restricted('§ 7 Haftung', 'Haftung für einfache Fahrlässigkeit ausgeschlossen.')
+      ->save();
+  ```
+
+  Two fields rather than one, because they are two obligations: § 327r Abs. 2 Satz 2 Nr. 1 BGB wants
+  the characteristics of the change, and WP260 rev.01 Rz. 31 separately wants its likely impact.
+
+  The publish **freezes** that draft onto the version inside the same transaction — a transition of
+  the same row, not a copy, so the text on file and the text a subject saw cannot drift. Frozen
+  means frozen: a database trigger on PostgreSQL and MySQL refuses UPDATE and DELETE, and a model
+  hook covers SQLite.
+
+  The six entry types (`added`, `removed`, `modified`, `clarified`, `extended`, `restricted`) are
+  not a taxonomy of edits but the distinctions that decide what else the notice owes. `extended` is
+  the one a naive list misses: something optional becoming mandatory reads as a bonus and is a
+  narrowing. An adverse entry now makes the free-termination line mandatory whether or not the
+  operator set `offers_termination`, because § 675g Abs. 2 Satz 3 BGB ties that notice to the change
+  being disadvantageous rather than to a flag.
+
+  Third-party entries carry the facets EDPB Opinion 22/2024 Rz. 22 expects — who, where, contact,
+  purpose — named by legal function rather than as "sub-processor", so the same columns describe a
+  new payment provider or joint controller.
+
+  **The delta is rendered as mail LINES, never as a replacement view.** That is what puts it into
+  `legal_notices.notice_body` and its sha256 automatically: a delta the subject can read but the
+  proof row does not contain would leave the record understating what was communicated.
+
+  Nothing about this is required. A version with no description renders exactly the notice it
+  rendered before. `change_items.required` turns it into a release precondition once your process is
+  ready; it ships off, because a package that started refusing existing releases the day it shipped
+  a new field would be forcing a feature rather than offering one.
+
+  `legal-consent:changes {key} {locale} [--clear]` prints or discards a pending description.
+  `legal_documents.change_summary` is superseded and stays untouched — it is varchar(255), frozen
+  after INSERT, and could never have held a list.
+
+- **`legal-consent:dispatch-notices --dry-run`** reports the audience of every due version and
+  sends nothing, writes no proof row and stamps no watermark. The non-gating modes reached nobody
+  until this release, so the first real sweep afterwards is also the first time an operator's
+  info-only changes actually leave the queue — for a large installation that is a fan-out they have
+  never seen.
+- **`notifications.max_recipients_per_run`** holds back any version whose audience exceeds it —
+  **without stamping the watermark**, so nothing is lost and the same notice is still owed on the
+  next run. Release it with `--force`, or raise the limit. It ships as `null`, and that default is
+  deliberate: a limit that were on by default would withhold a legally required notice from every
+  installation that never asked for one, which is the failure this release removes and the more
+  expensive direction — under P2B Art. 3(3) a change implemented without notice is void, while an
+  oversized send is merely expensive.
+- **Every run now names the audience per version before it sends**, not only `--dry-run`. The size
+  of a send is the one number an operator cannot recover afterwards, and the aggregate line at the
+  end cannot say which version it belonged to.
+- **`legal-consent:renotify {key} {locale} {version?}`** clears a version's notice watermark so the
+  next sweep considers it again. It exists for the cohort the audience defect left behind: those
+  versions are stamped as notified, so nothing would ever revisit them. It clears the watermark and
+  nothing else, and reports a version that was never swept as such rather than as repaired.
+
+### Changed
+
+- **Deemed consent now requires a delivered notice, and refuses without one.**
+  `legal-consent:close-objection-windows` deemed acceptance from the ledger alone: nothing ensured
+  the § 308 Nr. 5 lit. b warning had ever been delivered, although that warning is a validity
+  condition of the fiction rather than courtesy copy. Silence that binds without it produces a
+  consent record the package can refute from its own proof table.
+
+  It now deems only subjects carrying a `legal_notices` row for that version whose
+  `mandatory_content_ok` is true, reads that proof once per batch rather than once per subject, and
+  **exits non-zero naming how many subjects it refused** — a silent skip here is indistinguishable
+  from "nobody was owed anything". A subject who objected, terminated, or already holds the version
+  is not counted as a deficiency; only one who would otherwise have been bound.
+
+  This was masked until this release, because the audience defect meant the fiction applied to
+  nobody at all. **It also makes `durable_medium.proof` a prerequisite of deemed consent**: with it
+  off no proof row is ever written, so the sweep refuses to close any window rather than deem an
+  entire population against no evidence, and `legal-consent:doctor` reports the contradiction.
+
+### Fixed
+
+- **An info-only or deemed-consent change reached nobody at all.** The affected-subject resolver
+  selected on a major-version bump, while the publisher refuses a non-gating mode on a major bump of
+  a contract — so such a change is necessarily a minor bump, and a minor bump never satisfies
+  "MAX(major) < this major". The two sets never intersected. The sweep reported success over an
+  empty audience, wrote no proof row, and stamped `notified_at` anyway, so no re-run recovered it.
+  The documented recipe for an info-only change was exactly this shape.
+
+  The audience is now mode-dependent: a gating change still addresses only the subjects its
+  middleware will block, and a non-gating change addresses **every current party**. A notice duty
+  under § 327r Abs. 2 BGB, § 675g Abs. 1 BGB, P2B Art. 3(2) or DSA Art. 14(2) attaches to being a
+  party, not to holding an outdated version — and under P2B Art. 3(3) a change implemented without
+  notice is void, so under-reaching was the expensive direction.
+
+  **This is a behavior change with a real fan-out.** See the upgrade guide before deploying.
+
+- **Silence bound nobody either.** `legal-consent:close-objection-windows` shares that audience, and
+  its decision carried the same assumption one layer down: it deemed acceptance only where the
+  subject's major was behind the version's, which for a lawful deemed-consent change is never true.
+  It now compares the version. Only the active version is ever swept and the publisher refuses a
+  downgrade, so "not this version" is exactly "older than this version" here.
+
+- **`mandatory_content_ok` could not be `false` for a re-consent notice, whatever the input.**
+  The flag is written immutably into the `legal_notices` proof row and is meant to record whether
+  the notice carried the line its notice mode legally requires. `ReconsentRequired` resolved that
+  line through a helper that falls back to hardcoded German for every mandatory key, so a locale
+  with no translation at all still certified as complete — a notice whose text resolved from
+  nothing was recorded as compliant. The check now asks the translator directly. The fallback
+  stays on the display path: a subject who receives the notice in the wrong language is better
+  served than one who receives an empty mail, and it is the proof row's job to tell the truth
+  about it.
+
+- **A deemed-consent notice that offers free termination and then omits the line certified as
+  complete.** For a payment contract § 675g Abs. 2 Satz 3 BGB puts the termination notice on the
+  same footing as the § 308 Nr. 5 lit. b silence warning, so dropping it is the same class of
+  defect. Checked only where it is owed — a version offering no termination right owes no line.
+
+- **Every change notice after the first one in a sweep went out in the first one's language,
+  while the proof row recorded the right one.** `legal-consent:dispatch-notices` notifies each
+  due version in that version's locale, and it pinned that locale through
+  `Notification::locale()`. On Laravel 13 the facade stores the locale on the channel manager,
+  which memoizes a notification sender the first time anything is sent — so the sender keeps the
+  locale of the first send for the rest of the process, and the queue path then overwrites each
+  notification's own locale with that frozen value. A sweep publishing German, Spanish, Italian
+  and Dutch versions therefore mailed German to all four audiences.
+
+  The damage is not the wrong email. `legal_notices` is append-only, its rows are rendered under
+  the version's locale directly, and they are the durable-medium evidence that a legally required
+  notice went out — so the row certified a Spanish notice that was never sent, and neither the
+  model nor the database trigger will let that row be corrected. The locale is now pinned on the
+  notification itself, which the sender does not overwrite. If your own code calls
+  `Notification::locale()` anywhere in the same process, it still freezes the sender for
+  everything that follows, including this sweep.
+
+- **The re-consent notice asked you to agree "in time" without ever saying by when.** The
+  `contract.consequence` line carried no `:deadline` placeholder in any of the seven bundled
+  locales, although the notification computes the date from `enforce_from` and has always passed
+  it in. § 308 Nr. 5 lit. a BGB requires an adequate period for an express declaration and
+  § 327r Abs. 2 Satz 2 Nr. 1 BGB the time of the change; a notice with no date states neither.
+  A version with no enforcement date has no date to name and now uses a separate
+  `contract.consequence_undated` line rather than rendering a gap. If you have published your own
+  `notifications.php`, add both keys — the shipped English wording is
+  `Please agree by :deadline …` and `Please agree in time …`.
+
 ## [0.11.0] - 2026-08-04
 
 Only the optional WireKit view variants are affected. If you publish the plain stubs, write

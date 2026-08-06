@@ -52,6 +52,7 @@ final readonly class LegalDocumentPublisher
         private SourceFactory $sources,
         private RenderPipeline $pipeline,
         private array $documents,
+        private ChangeItemsFreezer $changeItems = new ChangeItemsFreezer,
     ) {}
 
     /**
@@ -214,6 +215,12 @@ final readonly class LegalDocumentPublisher
             'enforce_from' => $enforce,
             'objection_deadline' => $objectionDeadline,
         ]);
+
+        // Freeze the operator's description of THIS change onto THIS version, before the row goes
+        // active. No new parameter: the freezer finds the draft by (key, locale, tenant), so the
+        // ten-argument signature stays as it is and no caller has to learn about the feature to
+        // keep working. Absence is not an error — see ChangeItemsFreezer.
+        $this->changeItems->freeze($document, $this->sources->for($key)->fingerprint($key, $locale));
 
         $document->activate();
 

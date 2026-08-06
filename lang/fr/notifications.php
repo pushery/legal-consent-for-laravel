@@ -13,7 +13,8 @@ return [
         'subject' => 'Important : conditions d\'utilisation mises à jour',
         'intro' => 'Nous avons mis à jour nos conditions d\'utilisation et te demandons de les accepter à nouveau.',
         'cta' => 'Consulter et accepter maintenant',
-        'consequence' => 'Merci d\'accepter à temps — sinon, l\'utilisation sera restreinte à partir de la date d\'entrée en vigueur.',
+        'consequence' => 'Merci d\'accepter avant le :deadline — sinon, l\'utilisation sera restreinte à partir de cette date.',
+        'consequence_undated' => 'Merci d\'accepter à temps — sinon, l\'utilisation sera restreinte à partir de la date d\'entrée en vigueur.',
     ],
     'informational' => [
         'contract' => [

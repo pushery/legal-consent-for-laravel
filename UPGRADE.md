@@ -4,6 +4,109 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.11.0 → 0.12.0
+
+### Act on this FIRST: your info-only and deemed-consent changes are about to reach people
+
+**Read this before you deploy, not after.** Until now, an info-only (`--info`) or deemed-consent
+(`--deemed`) change published as a minor or patch bump — the shape this package's own documentation
+told you to publish — selected **no subjects at all**. The sweep reported success, wrote no proof
+row, and stamped its watermark anyway. Nothing surfaced it.
+
+The audience is now mode-dependent: a gating change still goes only to the subjects its middleware
+will block, and a non-gating change goes to **every current party**, because that is who the notice
+duty attaches to.
+
+**For a large installation this is a fan-out you have never seen.** If a hundred thousand people
+hold your terms, the first sweep after this upgrade mails a hundred thousand people. Look at the
+number before it leaves the queue:
+
+```bash
+php artisan legal-consent:dispatch-notices --dry-run
+```
+
+It reports the audience of every due version, sends nothing, and stamps nothing. A normal run now
+names the same per-version count before it sends, so the number is never invisible after the fact.
+
+**What is NOT at risk:** changes that were already swept. Their `notified_at` is stamped and the
+sweep never revisits them, so nothing in your history goes out again on its own — reaching that
+cohort takes the explicit `legal-consent:renotify` below. The automatic case is narrower: a change
+that is due and not yet dispatched at the moment you upgrade.
+
+If you want a hard brake for that first run, set a ceiling before you deploy:
+
+```php
+// config/legal-consent.php
+'notifications' => [
+    'max_recipients_per_run' => 500,
+],
+```
+
+A version above it is **held back without being stamped** — nothing is lost, and the same notice is
+still owed on the next run. Release it with `--force` once you have looked, or raise the limit.
+
+**It ships as `null`, and that default is deliberate.** A limit that were on by default would
+withhold a legally required notice from every installation that never asked for one — the exact
+failure this release removes, and the expensive direction: under P2B Art. 3(3) a change implemented
+without notice is void, while an oversized send is merely expensive.
+
+### The cohort left behind, and how to reach it
+
+Repairing forward does not help versions that were already swept: their `notified_at` is stamped,
+so they are never considered again. If you published an info-only or deemed-consent change before
+this release, **its audience was never notified** — and under P2B Art. 3(2) a change implemented
+without notice is void (Art. 3(3)).
+
+```bash
+php artisan legal-consent:renotify terms de 1.1.0     # clears that version's watermark
+php artisan legal-consent:dispatch-notices --dry-run  # see the audience
+php artisan legal-consent:dispatch-notices            # send
+```
+
+Whether to renotify is your call: it is a decision about a legal event that has already happened,
+and only you know what else you sent. The package will not do it on your behalf.
+
+### Deemed consent now binds subjects it silently skipped
+
+`legal-consent:close-objection-windows` shares that audience, so the § 308 Nr. 5 lit. b fiction was
+also being recorded for nobody. It now binds every silent party — which is the correct behavior and
+a real change in what appears in your ledger. A version whose objection window is still open will
+produce `DeemedAccepted` rows on the first run after the upgrade.
+
+### If you published your own translations
+
+`notifications.php` gains one key: `contract.consequence_undated`, used when a version carries no
+enforcement date. `contract.consequence` now interpolates `:deadline`. See the changelog.
+
+### Run the migration
+
+```bash
+php artisan migrate
+```
+
+Two new tables, `legal_change_sets` and `legal_change_items`, hold the per-version description of
+what a change actually changed. They touch nothing that exists: no column is added to
+`legal_documents`, no row is rewritten, and a version with no description renders the same notice it
+rendered before. On PostgreSQL and MySQL the migration also installs the triggers that freeze a
+published description; on SQLite the model hook does that job alone.
+
+### Nothing else is required
+
+The description is opt-in. If you never author one, this release changes nothing about your notices
+beyond the fixes above. When you are ready, see
+[Saying what changed](https://docs.pushery.com/legal-consent-for-laravel/notice-modes/change-descriptions)
+— and note that `change_items.required` ships **off**: turning it on makes a description a
+precondition of releasing any change that owes a notice, which is a decision about your editorial
+process, not a default a package should make for you.
+
+### Deemed consent now needs `durable_medium.proof` on
+
+If you use `DeemedConsent` **and** have `durable_medium.proof` switched off,
+`legal-consent:close-objection-windows` now refuses to run rather than bind a population by silence
+against no evidence. § 308 Nr. 5 lit. b BGB makes the delivered warning a validity condition of the
+fiction, so a `DeemedAccepted` row without it is a consent record your own proof table contradicts.
+`legal-consent:doctor` reports the same contradiction, so you find it before a window closes.
+
 ## 0.10.0 → 0.11.0
 
 **Nothing to do unless you publish the WireKit view variants.** No migrations ship, no config

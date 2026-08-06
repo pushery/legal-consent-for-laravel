@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
+use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Models\LegalDocument;
+use Pushery\LegalConsent\Models\Scopes\TenantScope;
+use Throwable;
 
 /**
  * Report how a PUBLISHED config file differs from the package's own — without touching it.
@@ -41,8 +45,49 @@ final class DoctorCommand extends Command
      */
     private const array APP_OWNED = ['documents'];
 
+    /**
+     * Is any active version relying on deemed consent while the durable-medium proof is switched
+     * off? The two settings are individually valid and jointly contradictory, which is exactly the
+     * class of problem a doctor exists to name.
+     *
+     * Reads the DATABASE, not only the config, so it reports a real contradiction rather than a
+     * hypothetical one — an installation that never uses deemed consent is not misconfigured. A
+     * database that is not migrated yet cannot contradict anything, hence the swallowed failure.
+     */
+    private function deemedConsentWithoutProof(): bool
+    {
+        if ((bool) config('legal-consent.durable_medium.proof', true)) {
+            return false;
+        }
+
+        try {
+            return LegalDocument::query()
+                ->withoutGlobalScope(TenantScope::class)
+                ->where('is_active', true)
+                ->where('notice_mode', NoticeMode::DeemedConsent->value)
+                ->exists();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
     public function handle(): int
     {
+        $incoherent = $this->deemedConsentWithoutProof();
+
+        if ($incoherent) {
+            // A configuration that is internally contradictory rather than merely drifted: the
+            // package cannot lawfully bind anyone by silence without the proof it is told not to
+            // write, so close-objection-windows refuses to run. Better to read that here than to
+            // discover it from a ledger that stays empty.
+            $this->newLine();
+            $this->error('Deemed consent is configured, but `durable_medium.proof` is off.');
+            $this->line('  Silence binds only where the § 308 Nr. 5 lit. b warning was demonstrably delivered,');
+            $this->line('  and that proof is the legal_notices row this setting suppresses. While it stays off,');
+            $this->line('  `legal-consent:close-objection-windows` refuses to close any window.');
+            $this->newLine();
+        }
+
         // $this->laravel->configPath(), never the config_path() helper: that one lives in
         // laravel/framework's Foundation, which this package deliberately does not require. A
         // consumer on a lean illuminate/* install would get a fatal error instead of a report.
@@ -51,7 +96,7 @@ final class DoctorCommand extends Command
         if (! is_file($publishedPath)) {
             $this->info('No published config — the package config applies in full, so nothing can drift.');
 
-            return self::SUCCESS;
+            return $incoherent ? self::FAILURE : self::SUCCESS;
         }
 
         $published = $this->load($publishedPath);
@@ -63,7 +108,7 @@ final class DoctorCommand extends Command
         if ($lost === [] && $stale === []) {
             $this->info('Published config is in sync with the package.');
 
-            return self::SUCCESS;
+            return $incoherent ? self::FAILURE : self::SUCCESS;
         }
 
         if ($lost !== []) {
