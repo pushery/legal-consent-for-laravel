@@ -15,11 +15,13 @@ use Livewire\Livewire;
 use Override;
 use Pushery\LegalConsent\Console\CheckDriftCommand;
 use Pushery\LegalConsent\Console\CloseObjectionWindowsCommand;
+use Pushery\LegalConsent\Console\DescribeChangeCommand;
 use Pushery\LegalConsent\Console\DispatchDueLegalNoticesCommand;
 use Pushery\LegalConsent\Console\DoctorCommand;
 use Pushery\LegalConsent\Console\FlushDocumentCacheCommand;
 use Pushery\LegalConsent\Console\PruneExpiredConsentRecordsCommand;
 use Pushery\LegalConsent\Console\PublishDocumentCommand;
+use Pushery\LegalConsent\Console\RenotifyVersionCommand;
 use Pushery\LegalConsent\Console\VerifyDocumentsCommand;
 use Pushery\LegalConsent\Console\VerifyLedgerCommand;
 use Pushery\LegalConsent\Content\LegalHtmlSanitizer;
@@ -38,6 +40,8 @@ use Pushery\LegalConsent\Livewire\LegalTextEditor;
 use Pushery\LegalConsent\Livewire\LegalTextManager;
 use Pushery\LegalConsent\Livewire\ReConsentForm;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
+use Pushery\LegalConsent\Support\ChangeItemsAuthor;
+use Pushery\LegalConsent\Support\ChangeItemsFreezer;
 use Pushery\LegalConsent\Support\ConsentBanner;
 use Pushery\LegalConsent\Support\ConsentGate;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
@@ -130,6 +134,10 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->app->make(TenantContext::class),
         ));
 
+        $this->app->singleton(ChangeItemsAuthor::class, fn (): ChangeItemsAuthor => new ChangeItemsAuthor($this->app->make(TenantContext::class)));
+
+        $this->app->singleton(ChangeItemsFreezer::class, fn (): ChangeItemsFreezer => new ChangeItemsFreezer);
+
         $this->app->singleton(LegalDocumentPublisher::class, fn (): LegalDocumentPublisher => new LegalDocumentPublisher(
             $this->app->make(SourceFactory::class),
             $this->app->make(RenderPipeline::class),
@@ -221,6 +229,8 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 PublishDocumentCommand::class,
                 CheckDriftCommand::class,
                 DispatchDueLegalNoticesCommand::class,
+                RenotifyVersionCommand::class,
+                DescribeChangeCommand::class,
                 CloseObjectionWindowsCommand::class,
                 PruneExpiredConsentRecordsCommand::class,
                 VerifyDocumentsCommand::class,

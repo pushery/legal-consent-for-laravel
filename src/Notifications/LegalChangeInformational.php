@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 use Pushery\LegalConsent\Contracts\SendsNoticeMail;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Models\LegalDocument;
+use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
 
 /**
  * The INFO-ONLY change notification (NoticeMode::InfoPush): the subject is actively informed
@@ -25,6 +26,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
 final class LegalChangeInformational extends Notification implements SendsNoticeMail, ShouldQueue
 {
     use Queueable;
+    use RendersChangeItems;
 
     public function __construct(public readonly LegalDocument $document) {}
 
@@ -53,8 +55,13 @@ final class LegalChangeInformational extends Notification implements SendsNotice
 
         $mail = (new MailMessage)
             ->subject($this->line('subject', ['title' => $this->document->title]))
-            ->line($this->line('intro', ['title' => $this->document->title]))
-            ->action($this->line('cta'), $this->reviewUrl())
+            ->line($this->line('intro', ['title' => $this->document->title]));
+
+        // WHAT changed, before the call to action — a reader decides whether to click on the
+        // strength of the delta, not the other way round.
+        $this->addChangeItems($mail, $this->document);
+
+        $mail->action($this->line('cta'), $this->reviewUrl())
             ->line($this->line('effective', ['deadline' => $deadline]));
 
         // A privacy notice always carries the Art. 21 right to object; a contract carries a
@@ -100,8 +107,14 @@ final class LegalChangeInformational extends Notification implements SendsNotice
     }
 
     /**
-     * An info-only notice must state WHAT changed and WHEN it takes effect (the mandatory
-     * content of an actively-pushed change notice); the proof row certifies only that.
+     * An info-only notice must state WHEN the change takes effect, and must reach the subject as
+     * a readable statement rather than an untranslated token — that, and only that, is what the
+     * proof row certifies here.
+     *
+     * It deliberately does NOT claim to have checked that the notice says WHAT changed. Nothing
+     * in this class can: the intro line is a fixed sentence per (type, locale), so it names the
+     * document but never the change. Stating the substance of a change per version is a separate
+     * piece of work, and until it lands this must not certify it.
      */
     public function mandatoryContentPresent(): bool
     {

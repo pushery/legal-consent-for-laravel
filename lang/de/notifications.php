@@ -13,7 +13,8 @@ return [
         'subject' => 'Wichtig: aktualisierte Nutzungsbedingungen',
         'intro' => 'Wir haben unsere Nutzungsbedingungen aktualisiert und bitten dich um deine erneute Zustimmung.',
         'cta' => 'Jetzt ansehen und zustimmen',
-        'consequence' => 'Bitte stimme rechtzeitig zu — andernfalls ist die weitere Nutzung ab dem Stichtag eingeschränkt.',
+        'consequence' => 'Bitte stimme bis zum :deadline zu — andernfalls ist die weitere Nutzung ab diesem Tag eingeschränkt.',
+        'consequence_undated' => 'Bitte stimme rechtzeitig zu — andernfalls ist die weitere Nutzung ab dem Stichtag eingeschränkt.',
     ],
     'informational' => [
         'contract' => [

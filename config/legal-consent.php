@@ -134,6 +134,53 @@ return [
     */
     'notifications' => [
         'channels' => ['mail', 'database'],
+
+        /*
+        | A brake on the size of ONE version's send. When set, the dispatch sweep skips any version
+        | whose audience exceeds it — without stamping the watermark, so nothing is lost — and tells
+        | you to look before you send:
+        |
+        |     php artisan legal-consent:dispatch-notices --dry-run
+        |     php artisan legal-consent:dispatch-notices --force
+        |
+        | NULL by default, and that default is deliberate. A limit that ships on would withhold a
+        | legally required notice from every installation that never asked for one — which is the
+        | exact failure this package spent a release removing, and the expensive direction: under
+        | P2B Art. 3(3) a change implemented without notice is VOID, while an oversized send is
+        | merely expensive. Set it while you find your footing, then decide.
+        */
+        'max_recipients_per_run' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Change descriptions
+    |--------------------------------------------------------------------------
+    |
+    | What a version CHANGED, in your own words, per locale — the content every real change notice
+    | leads with. Author it before publishing and the notice carries it; author nothing and the
+    | notice is exactly what it was before.
+    |
+    |     use Pushery\LegalConsent\Facades\ChangeItems;
+    |
+    |     ChangeItems::for('terms', 'de')
+    |         ->headline('Wir haben zwei Auftragsverarbeiter aufgenommen.')
+    |         ->impact('Deine Kontodaten werden künftig auch in Irland verarbeitet.')
+    |         ->added('Cloudflare, Inc.', partyName: 'Cloudflare, Inc.', partyLocation: 'Irland (EU)', purpose: 'Auslieferung und DDoS-Schutz')
+    |         ->restricted('§ 7 Haftung', 'Haftung für einfache Fahrlässigkeit ausgeschlossen.')
+    |         ->save();
+    |
+    | The publish freezes that draft onto the version, in the same transaction, and it can never be
+    | edited afterwards — it is the record of what subjects were told.
+    |
+    | `required` turns the description into a release precondition: a change that owes a notice
+    | cannot be released until every locale has one. OFF by default, because a package that started
+    | refusing existing releases the day it shipped a new field would be forcing a feature rather
+    | than offering one. Turn it on once your process is ready for it.
+    |
+    */
+    'change_items' => [
+        'required' => false,
     ],
 
     /*

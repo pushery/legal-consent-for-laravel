@@ -13,7 +13,8 @@ return [
         'subject' => 'Important: updated terms of use',
         'intro' => 'We have updated our terms of use and need your renewed agreement.',
         'cta' => 'Review and agree now',
-        'consequence' => 'Please agree in time — otherwise continued use will be restricted from the effective date.',
+        'consequence' => 'Please agree by :deadline — otherwise continued use will be restricted from that date.',
+        'consequence_undated' => 'Please agree in time — otherwise continued use will be restricted from the effective date.',
     ],
     'informational' => [
         'contract' => [

@@ -13,7 +13,8 @@ return [
         'subject' => 'Importante: termos de utilização atualizados',
         'intro' => 'Atualizámos os nossos termos de utilização e pedimos-te que os aceites novamente.',
         'cta' => 'Rever e aceitar agora',
-        'consequence' => 'Aceita a tempo — caso contrário, a utilização ficará restrita a partir da data de entrada em vigor.',
+        'consequence' => 'Aceita até :deadline — caso contrário, a utilização ficará restrita a partir dessa data.',
+        'consequence_undated' => 'Aceita a tempo — caso contrário, a utilização ficará restrita a partir da data de entrada em vigor.',
     ],
     'informational' => [
         'contract' => [

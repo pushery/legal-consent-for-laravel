@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Console;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notification as BaseNotification;
 use Illuminate\Support\Facades\DB;
@@ -52,7 +53,9 @@ final class DispatchDueLegalNoticesCommand extends Command
     /** Subjects processed per batch — one send() call and one token lookup per ledger per chunk. */
     private const int CHUNK = 500;
 
-    protected $signature = 'legal-consent:dispatch-notices';
+    protected $signature = 'legal-consent:dispatch-notices
+        {--dry-run : Report the audience of every due version without sending, writing a proof row, or stamping the watermark}
+        {--force : Send even where the audience exceeds notifications.max_recipients_per_run}';
 
     protected $description = 'Notify subjects of a now-announced legal change with the notification matching its notice mode.';
 
@@ -63,24 +66,52 @@ final class DispatchDueLegalNoticesCommand extends Command
         $proofEnabled = (bool) config('legal-consent.durable_medium.proof', true);
         $medium = $this->medium();
 
-        $versions = LegalDocument::query()
-            ->withoutGlobalScope(TenantScope::class) // sweep every tenant's due versions
-            ->where('is_active', true)
-            ->whereIn('notice_mode', [
-                NoticeMode::ActiveReconsent->value,
-                NoticeMode::InfoPush->value,
-                NoticeMode::DeemedConsent->value,
-            ])
-            ->where('requires_explicit_optin', false) // mandatory docs only — never nag a voluntary consent (Art. 7(4))
-            ->whereNotNull('announce_from')
-            ->where('announce_from', '<=', CarbonImmutable::now())
-            ->whereNull('notified_at')
-            ->get();
+        if ($this->option('dry-run')) {
+            return $this->report($resolver);
+        }
+
+        $versions = $this->dueVersions();
 
         $notified = 0;
+        $held = 0;
 
         foreach ($versions as $version) {
+            // Count BEFORE sending, always — not only when a limit is configured. The size of a
+            // send is the one number an operator can never recover afterwards, and the aggregate
+            // line at the end cannot say which version it belonged to.
+            $audience = $resolver->countForVersion($version);
+
+            $this->line(sprintf(
+                '%s %s (%s): %d recipient(s).',
+                $version->key,
+                $version->version,
+                $version->locale,
+                $audience,
+            ));
+
+            if ($this->exceedsLimit($audience)) {
+                // Skip WITHOUT stamping. The version stays due, so nothing is lost and the next run
+                // — or the same run with --force — still owes exactly this notice. Stamping here
+                // would repeat the defect this brake exists because of.
+                $held++;
+                $this->warn('  held back: more than the configured notifications.max_recipients_per_run. Nothing was sent and the watermark is untouched.');
+
+                continue;
+            }
+
             $notification = $this->notificationFor($version);
+
+            // Pin the locale on the NOTIFICATION, never through Notification::locale(). The facade
+            // stores its locale on the ChannelManager, which memoizes a NotificationSender with
+            // `??=` — the sender therefore keeps whatever locale the FIRST send of the process set,
+            // and queueNotification() then overwrites every notification's own locale with that
+            // frozen value. This sweep notifies several versions, each in its own language, in one
+            // process: through the facade, every version after the first would render in the first
+            // one's language while renderProof() — which sets the locale on the application — went
+            // on certifying the right one. The proof row is append-only, so that mismatch would be
+            // an uncorrectable record of a text the subject never received.
+            $notification->locale($version->locale);
+
             $proof = $proofEnabled ? $this->renderProof($notification, $version, $medium) : null;
 
             // RESUMABLE + BATCHED: skip subjects already proofed for this version (a killed or
@@ -95,12 +126,11 @@ final class DispatchDueLegalNoticesCommand extends Command
                 ->each(function (LazyCollection $chunk) use ($version, $notification, $proof, $tenant, $tokens, &$notified): void {
                     $subjects = $chunk->collect();
 
-                    // One locale-pinned send() for the whole chunk — still one queued job per subject
-                    // (the win is the shared locale-pin plus the batched token lookup below). The
-                    // locale pin matters because the notice is QUEUED: without it the worker would
-                    // render it — and the proof row, rendered in the version's locale — in whatever
-                    // locale it happens to run under, certifying text the subject never received.
-                    Notification::locale($version->locale)->send($subjects, $notification);
+                    // One send() for the whole chunk — still one queued job per subject (the win is
+                    // the batched token lookup below). The locale is already pinned on the
+                    // notification itself, which matters because the notice is QUEUED: without a
+                    // pin the worker would render it in whatever locale it happens to run under.
+                    Notification::send($subjects, $notification);
 
                     if ($proof !== null) {
                         // Pin the version's tenant around the token lookup + proof writes: this sweep
@@ -128,6 +158,90 @@ final class DispatchDueLegalNoticesCommand extends Command
         $monitor->heartbeat('legal-consent:dispatch-notices', $notified);
 
         $this->info("Dispatched {$notified} notice(s) across {$versions->count()} version(s).");
+
+        if ($held > 0) {
+            // Non-zero, because a held notice is still owed. A scheduled run that reports success
+            // while a legally required notice sits undelivered is the shape of failure this whole
+            // release is about.
+            $this->error("{$held} version(s) held back by notifications.max_recipients_per_run. Review with --dry-run, then release with --force or raise the limit.");
+            $monitor->heartbeat('legal-consent:dispatch-notices.held', $held);
+
+            return self::FAILURE;
+        }
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Is this audience larger than the operator's configured brake?
+     *
+     * Unset (the default) means no brake at all — see the config comment. `--force` is the escape
+     * for the run where they have looked at the number and decided.
+     */
+    private function exceedsLimit(int $audience): bool
+    {
+        if ($this->option('force')) {
+            return false;
+        }
+
+        $limit = config('legal-consent.notifications.max_recipients_per_run');
+
+        return is_int($limit) && $limit >= 0 && $audience > $limit;
+    }
+
+    /**
+     * The versions this run owes a notice for.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    private function dueVersions(): Collection
+    {
+        return LegalDocument::query()
+            ->withoutGlobalScope(TenantScope::class) // sweep every tenant's due versions
+            ->where('is_active', true)
+            ->whereIn('notice_mode', [
+                NoticeMode::ActiveReconsent->value,
+                NoticeMode::InfoPush->value,
+                NoticeMode::DeemedConsent->value,
+            ])
+            ->where('requires_explicit_optin', false) // mandatory docs only — never nag a voluntary consent (Art. 7(4))
+            ->whereNotNull('announce_from')
+            ->where('announce_from', '<=', CarbonImmutable::now())
+            ->whereNull('notified_at')
+            ->get();
+    }
+
+    /**
+     * Report what a real run would send, and change nothing.
+     *
+     * The non-gating modes reached nobody until the audience became mode-dependent, so the first
+     * real sweep after that fix is also the first time an operator's info-only changes actually
+     * leave the queue — for a large installation that is a fan-out they have never seen. This is
+     * where they get to look at the number first.
+     */
+    private function report(AffectedSubjectResolver $resolver): int
+    {
+        $proofEnabled = (bool) config('legal-consent.durable_medium.proof', true);
+
+        foreach ($this->dueVersions() as $version) {
+            $total = $resolver->countForVersion($version);
+            // What a real run would actually send: the resume predicate skips subjects already
+            // proofed for this version, so reporting the raw total would overstate a resumed run.
+            $remaining = $resolver->forVersion($version, skipNotified: $proofEnabled)->count();
+
+            $this->line(sprintf(
+                '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, %d would be sent.',
+                $version->key,
+                $version->version,
+                $version->locale,
+                $version->tenant_id === '' ? '-' : $version->tenant_id,
+                $total,
+                max(0, $total - $remaining),
+                $remaining,
+            ));
+        }
+
+        $this->info('Dry run — nothing was sent, no proof was written, no watermark was stamped.');
 
         return self::SUCCESS;
     }

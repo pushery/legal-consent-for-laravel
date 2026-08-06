@@ -28,4 +28,25 @@ final class LegalDocumentFrozenException extends RuntimeException
             .' on a published version. Publish a new version instead (EDPB 05/2020 Rz. 108).'
         );
     }
+
+    /**
+     * A published change description is frozen for the same reason the document is: it is the
+     * record of what the subject was TOLD about the change, and a notice that has gone out cannot
+     * be given a different account of itself afterwards.
+     */
+    public static function forChangeSet(string $key, string $locale, string $version): self
+    {
+        return new self(
+            "the change description for '{$key}' {$version} ({$locale}) is published and frozen — it "
+            .'records what subjects were told. Describe a correction in the next version instead.'
+        );
+    }
+
+    public static function forChangeItem(int $changeSetId, int $position): self
+    {
+        return new self(
+            "change item #{$position} of published change set {$changeSetId} is frozen — it records "
+            .'what subjects were told. Describe a correction in the next version instead.'
+        );
+    }
 }

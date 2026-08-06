@@ -13,7 +13,8 @@ return [
         'subject' => 'Belangrijk: bijgewerkte gebruiksvoorwaarden',
         'intro' => 'We hebben onze gebruiksvoorwaarden bijgewerkt en vragen je om opnieuw akkoord te gaan.',
         'cta' => 'Nu bekijken en akkoord gaan',
-        'consequence' => 'Ga op tijd akkoord — anders wordt het verdere gebruik vanaf de ingangsdatum beperkt.',
+        'consequence' => 'Ga vóór :deadline akkoord — anders wordt het verdere gebruik vanaf die datum beperkt.',
+        'consequence_undated' => 'Ga op tijd akkoord — anders wordt het verdere gebruik vanaf de ingangsdatum beperkt.',
     ],
     'informational' => [
         'contract' => [

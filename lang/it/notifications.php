@@ -13,7 +13,8 @@ return [
         'subject' => 'Importante: condizioni d\'uso aggiornate',
         'intro' => 'Abbiamo aggiornato le nostre condizioni d\'uso e ti chiediamo di accettarle di nuovo.',
         'cta' => 'Consulta e accetta ora',
-        'consequence' => 'Accetta per tempo — altrimenti l\'utilizzo sarà limitato a partire dalla data di entrata in vigore.',
+        'consequence' => 'Accetta entro il :deadline — altrimenti l\'utilizzo sarà limitato a partire da quella data.',
+        'consequence_undated' => 'Accetta per tempo — altrimenti l\'utilizzo sarà limitato a partire dalla data di entrata in vigore.',
     ],
     'informational' => [
         'contract' => [

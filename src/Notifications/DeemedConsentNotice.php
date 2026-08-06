@@ -12,6 +12,7 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Route;
 use Pushery\LegalConsent\Contracts\SendsNoticeMail;
 use Pushery\LegalConsent\Models\LegalDocument;
+use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
 
 /**
  * The deemed-consent (Zustimmungsfiktion) notice: a minor/peripheral CONTRACT change where
@@ -25,6 +26,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
 final class DeemedConsentNotice extends Notification implements SendsNoticeMail, ShouldQueue
 {
     use Queueable;
+    use RendersChangeItems;
 
     public function __construct(public readonly LegalDocument $document) {}
 
@@ -57,9 +59,13 @@ final class DeemedConsentNotice extends Notification implements SendsNoticeMail,
             'effective' => $effective instanceof CarbonImmutable ? $effective->toDateString() : '',
         ];
 
-        return (new MailMessage)
+        $mail = (new MailMessage)
             ->subject($this->line('subject', $replace))
-            ->line($this->line('intro', $replace))
+            ->line($this->line('intro', $replace));
+
+        $this->addChangeItems($mail, $this->document);
+
+        return $mail
             ->line($this->line('warning', $replace)) // § 308 Nr. 5 lit. b — silence = consent by :deadline
             ->action($this->line('cta', $replace), $this->consentUrl())
             ->line($this->line('termination', $replace));
@@ -84,10 +90,28 @@ final class DeemedConsentNotice extends Notification implements SendsNoticeMail,
      * certify this notice once that line actually rendered — an app that publishes an empty or
      * missing `notifications.deemed.warning` override ships a void notice, and the proof row
      * must say so rather than certify content that is not there.
+     *
+     * The free-termination line is held to the same standard, and only where it is owed: for a
+     * payment contract § 675g Abs. 2 Satz 3 BGB puts the termination notice on exactly the same
+     * footing as the silence warning, so a version that offers termination and then drops the
+     * line is as deficient as one missing the warning. A version that offers none owes none, and
+     * asserting the line there would fail a notice that is complete.
      */
     public function mandatoryContentPresent(): bool
     {
-        return $this->line('warning', ['deadline' => '', 'effective' => '', 'title' => '']) !== ''
+        $blank = ['deadline' => '', 'effective' => '', 'title' => ''];
+
+        // An adverse entry makes the termination line owed whether or not the operator set the
+        // flag: § 675g Abs. 2 Satz 3 BGB ties the notice to the change being disadvantageous, not
+        // to a checkbox. Removing something, narrowing a right or widening a purpose is exactly
+        // that, and a fiction that binds silence to it without naming the way out is not valid.
+        $terminationOwed = $this->document->offers_termination || $this->hasAdverseChangeItem($this->document);
+
+        if ($terminationOwed && $this->line('termination', $blank) === '') {
+            return false;
+        }
+
+        return $this->line('warning', $blank) !== ''
             && $this->line('subject') !== '';
     }
 

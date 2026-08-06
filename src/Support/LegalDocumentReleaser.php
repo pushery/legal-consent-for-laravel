@@ -33,6 +33,7 @@ final readonly class LegalDocumentReleaser
     public function __construct(
         private LegalDocumentPublisher $publisher,
         private AffectedSubjectResolver $resolver,
+        private ChangeItemsAuthor $changeItems = new ChangeItemsAuthor(new TenantContext(false)),
     ) {}
 
     /**
@@ -80,6 +81,21 @@ final readonly class LegalDocumentReleaser
         // Pre-flight BEFORE the transaction: a release that cannot complete must not write a row
         // and roll it back, it must simply not start — and it must say which locales blocked it.
         $blocking = LegalDraftSet::for($key)->blockingLocales($locales);
+
+        // The change DESCRIPTION is checked in the same pre-flight as the text, and for the same
+        // reason: a release is one change across every locale, so a description present in German
+        // and missing in Italian would send an Italian subject a notice that names no change. §
+        // 327r Abs. 1 Nr. 3 BGB, Art. 12(1) GDPR and DSA Art. 14(1) all require the reader's own
+        // language, and it is cheaper to refuse before the transaction than to freeze a half-set.
+        //
+        // Two conditions, and the second is the one that keeps this honest. The mode must owe a
+        // notice at all — a silent editorial fix owes none. And the OPERATOR must have asked for
+        // the requirement (`change_items.required`), because a package that started refusing every
+        // existing release the day it shipped a new field would be forcing a feature, not offering
+        // one. Off by default; the notice simply carries no delta until someone turns it on.
+        if ($mode->requiresNotice() && (bool) config('legal-consent.change_items.required', false)) {
+            $blocking = [...$blocking, ...$this->changeItems->blockingLocales($key, array_values(array_diff($locales, array_keys($blocking))))];
+        }
 
         if ($blocking !== []) {
             throw LegalReleaseNotReady::for($key, $blocking);

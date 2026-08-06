@@ -16,10 +16,26 @@ use Pushery\LegalConsent\Models\LegalDocument;
 use stdClass;
 
 /**
- * Yields the subjects who must re-consent to a newly material version: those who once
- * accepted this document but only at an older major version. Streamed lazily in bounded
- * chunks and hydrated per subject_type in ONE query each (no N+1), so a large user base
- * never loads into memory at once (128 MB budget).
+ * Yields the subjects a version is owed to — and WHICH subjects those are depends on the notice
+ * mode, because "must re-consent" and "must be told" are two different populations.
+ *
+ * A GATING version (active re-consent) is owed to whoever the gate will actually stop: those who
+ * accepted this document only at an older major. That is the same set the middleware enforces
+ * against, so the notice and the block agree.
+ *
+ * A NON-GATING version (info-only, deemed consent) is owed to every current party, full stop.
+ * § 327r Abs. 2, § 675g Abs. 1, P2B Art. 3(2) and DSA Art. 14(2) attach the duty to being a party,
+ * not to holding an outdated version — and P2B Art. 3(3) makes a change implemented without it
+ * void, so under-reaching here is the expensive direction.
+ *
+ * Restricting both to the major-version predicate made the non-gating modes unreachable: the
+ * publisher refuses a non-gating mode on a major bump of a contract, so such a change is
+ * necessarily a minor bump, and a minor bump never satisfies "MAX(major) < this major". The sweep
+ * then reported success over an empty set and stamped its watermark, which is why nothing surfaced
+ * it.
+ *
+ * Streamed lazily in bounded chunks and hydrated per subject_type in ONE query each (no N+1), so a
+ * large user base never loads into memory at once (128 MB budget).
  *
  * Not final: a test overrides {@see keysetSeekDriver} to cover the MySQL OR-form seek branch on the
  * SQLite suite (the protected-seam pattern DefaultConsentManager uses for its retry test).
@@ -93,7 +109,13 @@ readonly class AffectedSubjectResolver
             ->whereNotNull('subject_id')
             ->whereIn('action', $accepting)
             ->groupBy('subject_type', 'subject_id')
-            ->havingRaw('MAX(document_major_version) < ?', [$version->major_version])
+            // The one mode-dependent condition. Everything else about this query — the keyset
+            // paging, the tenant scoping, the resume predicate, the ledger snapshot — is identical
+            // for both populations.
+            ->when(
+                $version->noticeMode()->gates(),
+                fn (QueryBuilder $query): QueryBuilder => $query->havingRaw('MAX(document_major_version) < ?', [$version->major_version])
+            )
             ->orderBy('subject_type')
             ->orderBy('subject_id')
             ->limit(self::CHUNK);
@@ -175,7 +197,10 @@ readonly class AffectedSubjectResolver
             ->whereNotNull('subject_id')
             ->whereIn('action', $accepting)
             ->groupBy('subject_type', 'subject_id')
-            ->havingRaw('MAX(document_major_version) < ?', [$version->major_version]);
+            ->when(
+                $version->noticeMode()->gates(),
+                fn (QueryBuilder $query): QueryBuilder => $query->havingRaw('MAX(document_major_version) < ?', [$version->major_version])
+            );
 
         return DB::query()->fromSub($grouped, 'affected')->count();
     }
