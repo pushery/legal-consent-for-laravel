@@ -14,11 +14,22 @@
     <p role="status" aria-live="polite" tabindex="-1" wire:key="lc-settings-status"
         x-effect="$wire.statusNonce > 0 && $el.focus()"><span wire:key="lc-settings-status-{{ $statusNonce }}">{{ $status ?? '' }}</span></p>
 
+    {{-- Each title links to the document when the host configured `legal-consent.document_url`,
+         and renders as plain text otherwise. Deciding to withdraw a consent without being able to
+         re-read what was consented to is the one thing this screen must not ask of anyone
+         (Art. 7(3): as easy to withdraw as to give). --}}
     <section aria-labelledby="lc-contracts">
         <h3 id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h3>
         <ul>
             @foreach ($contracts as $item)
-                <li>{{ $item['title'] }} (v{{ $item['version'] }})</li>
+                <li>
+                    @if (($item['url'] ?? null) !== null)
+                        <a href="{{ $item['url'] }}" target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
+                    @else
+                        {{ $item['title'] }}
+                    @endif
+                    (v{{ $item['version'] }})
+                </li>
             @endforeach
         </ul>
     </section>
@@ -27,7 +38,14 @@
         <h3 id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</h3>
         <ul>
             @foreach ($acknowledgements as $item)
-                <li>{{ $item['title'] }} (v{{ $item['version'] }})</li>
+                <li>
+                    @if (($item['url'] ?? null) !== null)
+                        <a href="{{ $item['url'] }}" target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
+                    @else
+                        {{ $item['title'] }}
+                    @endif
+                    (v{{ $item['version'] }})
+                </li>
             @endforeach
         </ul>
     </section>
@@ -37,7 +55,11 @@
         <ul>
             @foreach ($consents as $item)
                 <li>
-                    <span>{{ $item['title'] }}</span>
+                    @if (($item['url'] ?? null) !== null)
+                        <a href="{{ $item['url'] }}" target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
+                    @else
+                        <span>{{ $item['title'] }}</span>
+                    @endif
                     @if ($item['held'] && $item['withdrawable'])
                         <button type="button" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $item['title']]) }}" wire:click="withdraw(@js($item['key']))">
                             {{ __('legal-consent::ui.withdraw') }}

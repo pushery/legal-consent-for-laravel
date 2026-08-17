@@ -10,6 +10,10 @@
 --}}
 <div class="legal-consent-settings">
     <x-wirekit::stack gap="lg">
+        {{-- Each title links to the document when the host configured `legal-consent.document_url`,
+             and renders as plain text otherwise. Deciding to withdraw a consent without being able
+             to re-read what was consented to is the one thing this screen must not ask of anyone
+             (Art. 7(3): as easy to withdraw as to give). --}}
         <x-wirekit::heading :level="2">{{ __('legal-consent::ui.settings_heading') }}</x-wirekit::heading>
 
         {{-- WCAG 4.1.3 + 2.4.3: the withdrawal result is announced here — the region is ALWAYS in the
@@ -30,7 +34,12 @@
             <x-wirekit::stack gap="xs">
                 @foreach ($contracts as $item)
                     <x-wirekit::text>
-                        {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                        @if (($item['url'] ?? null) !== null)
+                            <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                        @else
+                            {{ $item['title'] }}
+                        @endif
+                        <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
                     </x-wirekit::text>
                 @endforeach
             </x-wirekit::stack>
@@ -41,7 +50,12 @@
             <x-wirekit::stack gap="xs">
                 @foreach ($acknowledgements as $item)
                     <x-wirekit::text>
-                        {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                        @if (($item['url'] ?? null) !== null)
+                            <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                        @else
+                            {{ $item['title'] }}
+                        @endif
+                        <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
                     </x-wirekit::text>
                 @endforeach
             </x-wirekit::stack>
@@ -52,7 +66,13 @@
             <x-wirekit::stack gap="xs">
                 @foreach ($consents as $item)
                     <x-wirekit::stack gap="sm" :wrap="true" class="legal-consent-settings__consent">
-                        <x-wirekit::text>{{ $item['title'] }}</x-wirekit::text>
+                        <x-wirekit::text>
+                            @if (($item['url'] ?? null) !== null)
+                                <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                            @else
+                                {{ $item['title'] }}
+                            @endif
+                        </x-wirekit::text>
 
                         @if ($item['held'] && $item['withdrawable'])
                             {{-- A withdrawal is irreversible: it appends a Withdrawn row to an

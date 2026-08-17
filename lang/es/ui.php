@@ -14,6 +14,10 @@ return [
     // labeled just 'withdraw' are indistinguishable in a screen reader's button list
     // (WCAG 2.4.6). The grant was document-specific; the withdrawal must be too.
     'withdraw_for' => 'Retirar: :title',
+    // Accessible name for the link to a document's full text. Every row that shows a document
+    // carries one, and with N rows a link labeled just 'read' is indistinguishable in a screen
+    // reader's link list (WCAG 2.4.4) — the title is what makes each one nameable.
+    'read_document' => 'Leer :title',
     'review' => 'Revisar ahora',
     // Accessible name for the banner region (it is a `complementary`/`region` landmark,
     // not a live region — a live region present at page load never announces anyway).

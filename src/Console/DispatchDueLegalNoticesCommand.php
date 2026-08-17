@@ -15,13 +15,13 @@ use Illuminate\Support\LazyCollection;
 use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
 use Pushery\LegalConsent\Contracts\SendsNoticeMail;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Events\NoticeDispatched;
+use Pushery\LegalConsent\Events\NoticeDispatching;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
-use Pushery\LegalConsent\Notifications\DeemedConsentNotice;
-use Pushery\LegalConsent\Notifications\LegalChangeInformational;
-use Pushery\LegalConsent\Notifications\ReconsentRequired;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
+use Pushery\LegalConsent\Support\NoticeMailConfig;
 use Pushery\LegalConsent\Support\SubjectToken;
 use Pushery\LegalConsent\Support\TenantContext;
 
@@ -99,6 +99,21 @@ final class DispatchDueLegalNoticesCommand extends Command
                 continue;
             }
 
+            // event($object), not the Dispatchable static: the static builds a NEW instance from
+            // its arguments, so the $cancel a listener sets would land on an object nobody reads.
+            $dispatching = new NoticeDispatching($version, $audience);
+            event($dispatching);
+
+            if ($dispatching->cancel) {
+                // Held back WITHOUT stamping, exactly like the size brake: the notice stays owed
+                // and the next sweep picks it up. A cancel that stamped would waive a legally
+                // required communication rather than defer it.
+                $held++;
+                $this->warn('  held back: a NoticeDispatching listener canceled this version. Nothing was sent and the watermark is untouched.');
+
+                continue;
+            }
+
             $notification = $this->notificationFor($version);
 
             // Pin the locale on the NOTIFICATION, never through Notification::locale(). The facade
@@ -111,6 +126,8 @@ final class DispatchDueLegalNoticesCommand extends Command
             // on certifying the right one. The proof row is append-only, so that mismatch would be
             // an uncorrectable record of a text the subject never received.
             $notification->locale($version->locale);
+
+            $before = $notified;
 
             $proof = $proofEnabled ? $this->renderProof($notification, $version, $medium) : null;
 
@@ -151,6 +168,11 @@ final class DispatchDueLegalNoticesCommand extends Command
                 });
 
             $version->forceFill(['notified_at' => CarbonImmutable::now()])->saveQuietly();
+
+            // The only signal that says a legally required communication went out, and how far it
+            // reached. A sweep that quietly reaches nobody is the defect this package has already
+            // paid for once; a metric on this event makes it visible without reading a log.
+            event(new NoticeDispatched($version, $notified - $before, $proof === null ? 0 : $notified - $before));
 
             gc_collect_cycles();
         }
@@ -248,11 +270,11 @@ final class DispatchDueLegalNoticesCommand extends Command
 
     private function notificationFor(LegalDocument $version): BaseNotification&SendsNoticeMail
     {
-        return match ($version->noticeMode()) {
-            NoticeMode::DeemedConsent => new DeemedConsentNotice($version),
-            NoticeMode::ActiveReconsent => new ReconsentRequired($version),
-            default => new LegalChangeInformational($version), // InfoPush
-        };
+        // Routed through the config seam rather than matched here, so a consumer's subclass is used
+        // by the sweep and by the PROOF rendering alike. Two different resolutions would be the
+        // worst possible split: the subject would receive one text and the append-only row would
+        // certify another.
+        return NoticeMailConfig::notificationFor($version->noticeMode(), $version);
     }
 
     /**

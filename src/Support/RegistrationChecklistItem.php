@@ -23,6 +23,10 @@ use Pushery\LegalConsent\Enums\DocumentType;
  * `Consent::published($key, $locale)` has NO fallback by design (a page shows the text of the locale
  * it claims, or nothing). Passing the app locale therefore yields `null` and the visitor gets a
  * required checkbox whose text they cannot open — a clickwrap that is not informed (Art. 7(1)).
+ *
+ * `$url` is that link, and the package now makes it: it comes from the host's `document_url`
+ * resolver applied to THIS item's document, so the locale is right by construction rather than by
+ * the consumer remembering the paragraph above.
  */
 final readonly class RegistrationChecklistItem
 {
@@ -37,6 +41,12 @@ final readonly class RegistrationChecklistItem
         // The render-time acceptance fingerprint of this document, for the OPT-IN accept-time guard
         // (see hashField()). Empty for an attestation, which has no version to freeze.
         public string $contentHash = '',
+        // Where this document is readable, from the host's `document_url` resolver — null when none
+        // is configured, and always null for an attestation, which is about the person and has no
+        // text. The shipped checkbox stubs have documented a `url` key since they were written; this
+        // is the field that finally fills it, so a form built from toArray() links the full text
+        // instead of rendering an empty href.
+        public ?string $url = null,
     ) {}
 
     /**
@@ -67,7 +77,7 @@ final readonly class RegistrationChecklistItem
     }
 
     /**
-     * @return array{key: string, type: string|null, title: string, wording: string, version: string, locale: string, required: bool, field: string, contentHash: string, hashField: string}
+     * @return array{key: string, type: string|null, title: string, wording: string, version: string, locale: string, required: bool, field: string, contentHash: string, hashField: string, url: string|null}
      */
     public function toArray(): array
     {
@@ -82,6 +92,7 @@ final readonly class RegistrationChecklistItem
             'field' => $this->field(),
             'contentHash' => $this->contentHash,
             'hashField' => $this->hashField(),
+            'url' => $this->url,
         ];
     }
 }

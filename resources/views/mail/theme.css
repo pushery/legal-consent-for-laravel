@@ -1,0 +1,54 @@
+/*
+    An optional theme for the change-notice mail — NOT the default.
+    Point `legal-consent.notice_mail.theme` at `legal-consent::mail.theme` to use it.
+
+    It is deliberately additive rather than a full replacement for Laravel's mail CSS: swapping
+    that out wholesale would restyle a notice nobody asked to restyle. What is here is the little
+    that a legal notice specifically wants — a plain, quiet, high-contrast body, no decorative
+    color, and a footer that reads as a footer.
+
+    A legal notice must not look like marketing. That is not taste: framing a mandatory
+    communication as promotional invites it through a suppression list, and the sender bears the
+    full burden of proving receipt (§ 130 BGB; BGH VII ZR 895/21 — sending is not even prima facie
+    evidence). So there is no hero image, no accent-colored banner and no call-to-action row here.
+*/
+
+.body {
+    background-color: #ffffff;
+}
+
+.inner-body {
+    background-color: #ffffff;
+    border-color: #e5e7eb;
+}
+
+.content-cell h1,
+.content-cell h2 {
+    color: #111827;
+    font-weight: 600;
+}
+
+.content-cell p,
+.content-cell li {
+    color: #1f2937;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.content-cell small {
+    color: #6b7280;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.button-primary {
+    background-color: #111827;
+    border-bottom-color: #111827;
+    border-left-color: #111827;
+    border-right-color: #111827;
+    border-top-color: #111827;
+}
+
+.footer {
+    color: #6b7280;
+}

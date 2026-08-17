@@ -4,6 +4,276 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-08-17
+
+### Added
+
+- **`notice_mail`: the change notices become something a developer can activate.** There were five
+  coarse switches and no seam at all for the declaring person, the template, the sender or the
+  subject. Everything below is new, and everything except the shell is **inert until configured** —
+  the notice body is hashed into an append-only proof row, so a seam that changed the mail unasked
+  would move bytes nobody can correct afterwards.
+
+  - **The package's own Markdown shell, and it is the one new default.** Until now a German § 126b
+    declaration went out inside Laravel's global notification template, greeted with "Hello!",
+    closed with "Regards," and explaining what to do "if you're having trouble clicking" — all
+    resolved from the **consuming** application's translations, so a notice in one language arrived
+    wrapped in another. `notice_mail.view => null` opts back out. It changes no byte of the proof
+    body, because `->markdown()` sets the template and never touches the mail's lines.
+  - **`identity`: who is declaring.** § 126b BGB wants "eine lesbare Erklärung, in der die Person
+    des Erklärenden genannt ist", and the package named nobody — the declarant was whatever
+    `config('app.name')` happened to be in a footer. Name yours and it is appended to the notice
+    **and therefore to the proof row**, which is the point: a declaration that lived only in the
+    template would be absent from the very row that exists to prove it. In a multi-tenant
+    application bind `ResolvesNoticeIdentity` instead of using the static block — one global
+    declarant names the wrong legal person in every tenant but one, and a wrong declarant is worse
+    than none.
+  - **`from`, `reply_to`, `subject_prefix`, `subject_effective_date`**, plus a package theme
+    publishable under the new `legal-consent-mail` tag. The two subject switches are off by
+    default because the subject is the first line of the hashed body.
+  - **`notification.{mode}`** swaps a mode's notification for your own subclass. The three shipped
+    notifications lost `final` and now extend a shared, non-final `ChangeNotification` with exactly
+    three members a subclass must supply. A configured value that is not a `ChangeNotification` is
+    ignored in favor of the shipped class instead of taking down a queued sweep with a `TypeError`
+    after some subjects were already notified and their proof rows written.
+  - **`shouldSend()` runs in the worker** — the only place a subject who agreed between the sweep
+    and delivery can still be spared. It asks whether they hold this version's major, not whether
+    the document is outstanding *now*: a re-consent notice is usually the advance announcement of a
+    change that is not yet in force, so the second question would suppress every scheduled notice.
+    Only the gating mode is skipped; an info-only or deemed-consent notice is owed regardless.
+  - **`NoticeDispatching` and `NoticeDispatched`.** The package had no observability on the notice
+    path at all: a sweep that mailed a hundred thousand people and one that mailed nobody looked
+    identical from outside. `NoticeDispatching` carries the audience size and a `$cancel` flag that
+    holds a version back **without stamping its watermark**, so the notice stays owed — it defers,
+    it never waives.
+
+- **MariaDB is supported again — measured on a real server, not waved through.** 0.10.0 made
+  `ProofColumnGuard` refuse every engine outside `pgsql`/`mysql`/`sqlite`, and MariaDB fell outside
+  it because Laravel carries `mariadb` as its own driver name: a MariaDB connection is never seen as
+  `mysql`. An audit recommended simply adding it to the allowlist, on the good argument that the
+  MySQL trigger SQL is literally valid MariaDB — but that argument was reached by reading, and
+  `ProofColumnGuard` is the guard the package's evidentiary weight rests on. A green run with no
+  MariaDB server is indistinguishable from a green run with a broken trigger.
+
+  So the measurement came first: a dedicated MariaDB suite re-runs the whole cross-engine set
+  against a real server (`MARIADB_TEST_*`, floor 11.4 LTS), the identity check now recognizes MariaDB
+  **positively** rather than only rejecting it as a MySQL impostor, and only then was the allowlist
+  opened.
+
+  **Opening the proof guard alone would not have been enough, and that is the finding the suite
+  paid for.** Three more trigger families branched on `mysql` only — the append-only triggers on
+  `legal_consents` and `legal_notices`, and the change-set freeze guard. A MariaDB installation
+  would have passed the guard and received **none** of them: migrations green, immutability silently
+  absent. Every one of those branches now names `mariadb`.
+
+- **`legal-consent:publish --all`: the first publish a fresh installation never had.** After
+  `migrate`, `legal_documents` is empty. `Consent::published()` returns `null` for every document,
+  and the read path deliberately does not fall back to your source files — so every legal page
+  built on it renders **empty**, with no error, no log and no warning. The install looked finished,
+  the configuration was correct, the Markdown was sitting there, and the pages were shells. Of
+  eleven commands, none could publish more than one key in one locale, and there was no seeder and
+  no install step.
+
+  `--all --editorial` freezes the whole configured matrix — every registered document in every
+  configured locale. It is **idempotent**: text that is already the active version is returned
+  untouched, so it belongs in a deploy script. That is where it matters most, because an
+  application that gets cloned starts every CI database and every fresh staging box in the empty
+  state, and the failure only shows when someone opens a legal page.
+
+  A registered document with no source is **reported and exits non-zero**, never skipped — silently
+  skipping it recreates the empty page the command exists to prevent. The run continues past it, so
+  a registry of ten publishes the nine that work and names the one that does not.
+
+- **`legal-consent:doctor` names the same gap at any time.** It now reports every registered
+  document with no published version, and says which command fixes it. Exit code **0**: this is the
+  state every fresh database is in, and a gate step that goes red there gets switched off — taking
+  the genuine lost-key findings with it. The exit-code contract is now written down: non-zero for a
+  lost key and for a contradictory configuration, zero for a stale key and an unpublished document.
+
+- **`:allow-objection` and `:allow-termination` on the re-consent form.** 0.10.0 gave the settings
+  screen these two flags because every public method of an embedded Livewire component is a
+  reachable endpoint — deleting a control from a published view switches nothing off. The
+  re-consent form carries the same public `object()` and `terminate()` and had no such switch, so a
+  product with no answer to objection or termination could disable them on one screen and not on
+  the other, and the documentation could only offer "then do not embed it, build your own form".
+
+  Both default to `true`, both are `#[Locked]` (a switch the browser can flip back is not a
+  switch), and a disabled action answers `404` rather than `403` — "you may not" confirms it
+  exists. This is a product decision, not a security boundary: the manager already refuses a
+  transition the document's class cannot carry, and that is unchanged.
+
+- **`ask_at_registration`: a document can bind without being asked at sign-up.** Every registered
+  document that asks something appears on the registration form, and there was no way to say
+  otherwise. A host that acknowledges a document later, in-app, had to filter the rules, the
+  messages and the checklist by hand — and hope the recorder agreed, which it did not: a mandatory
+  document is recorded regardless of what the form submitted, so the ledger got proof of an
+  acceptance nobody was asked for.
+
+  Set `'ask_at_registration' => false` on a registry entry and the rules, the checklist and the
+  recorder drop it **together**. Nothing else changes: a mandatory document still gates, so the
+  subject meets it at the re-consent screen instead. The flag moves *when* it is asked, never
+  *whether*.
+
+  **It is not the right tool for an Impressum or a cookie policy** — those want
+  `legal_basis => 'informational'`, which takes the page out of the gate and the notice sweeps as
+  well. Classifying a publication duty as an `acknowledgement` produces a record asserting a
+  consent that does not exist in law, and the flag would only hide half of that.
+
+- **`document_url`: one seam that tells every consent surface where the document is readable.** The
+  package stores and freezes legal texts but does not own the pages that render them, so until now
+  each surface showed a title as dead text and left the link to the host. That was not cosmetic —
+  it was the reason the shipped UI could not be adopted whole. Configure a resolver
+  `fn (LegalDocument $document): ?string` (or an invokable class-string, which survives
+  `config:cache`) and **all three** surfaces link the full text:
+
+  - **The registration checkboxes.** The shipped stubs have documented a `url` key since they were
+    written, and nothing ever filled it — a form built from `->toArray()` rendered an empty `href`.
+    `RegistrationChecklistItem` now carries `url`.
+  - **"Your consents".** `ConsentPresenter::settingsFor()` adds `url` per row. Deciding to withdraw
+    a consent without being able to re-read what was consented to is what Art. 7(3) does not want.
+  - **The re-consent gate**, where it weighs most: there the subject cannot continue until they
+    agree, and the view rendered the acceptance sentence as a plain label with nothing to open
+    (Art. 7(2), recital 42).
+
+  The URL is resolved from the **document**, so the link carries that item's locale rather than the
+  page's — the distinction the checklist docblock has always insisted on, now made by the package
+  instead of by every consumer. Left unset, everything renders exactly as before; a misconfigured
+  resolver yields no link rather than a broken one, because an empty `href` navigates to the current
+  page and reads as "the document is here".
+
+  It is a **top-level** config key. `mergeConfigFrom()` merges one level deep, so a key added inside
+  an already-published block is absent at runtime for every installation that published the file.
+
+### Changed
+
+- **The example `impressum` document key is now `imprint`.** It was the only German key in an
+  otherwise English catalog, and `lang/*/titles.php` had already headed that page `imprint` — so the
+  shipped config and the shipped translations disagreed with each other. A consumer whose directory
+  is called `imprint` had to write a permanent exemption into any check comparing their config
+  against the package default, with "it is called something else here" as the reason, and an
+  exemption whose reason is a naming collision reads like backlog forever. Two consumers had already
+  written that exemption, with two different and equally inaccurate explanations.
+
+  The registry is app-owned and the merge is flat, so an installation that published the config is
+  unaffected. See UPGRADE.md for the one group this touches.
+
+- **`league/commonmark` now requires `^2.9` instead of `^2.7`.** Six advisories — four of them
+  HIGH — are patched in 2.9.0, and several are squarely in this package's threat model: a
+  quadratic-time denial of service on crafted Markdown, and a `DisallowedRawHtml` bypass. The old
+  range named 2.7.0 as an acceptable floor while every one of those was open in it.
+
+  Stated plainly, because the honest version is less alarming than the change looks: **nobody was
+  exposed through a default install.** Composer refuses to load an advisory-affected version at
+  all (`audit.block-insecure`, on by default), so `^2.7` already resolved to 2.9.0 in practice —
+  verified by resolving the old range at its floor, which returned 2.9.0 and named the eight
+  advisories it had skipped. This closes the gap between what the package *declares* and what the
+  tooling *enforces*, for the consumer who turns that setting off or installs with an older
+  Composer. No API changes, and no action needed for anyone already on 2.9 or 2.10.
+
+- **Draft pull requests no longer start the CI gate.** A draft is unfinished work by definition,
+  and it still pushes; gating it spends one of the queue's two slots on a verdict nobody is
+  waiting for. The pull-request arm of the gate now excludes drafts. Ready pull requests gate
+  exactly as before, and so do pushes to the integration branches and manual runs. Marking a draft
+  ready for review arrives as a different event, so the gate returns on the next push to that
+  pull request.
+
+### Fixed
+
+- **An info-only change had no advance-notice check at all, and four `notice_periods` keys were
+  read by nothing.** The publish-time branch tested `$mode->gates()`, which is true for active
+  re-consent only — so an info-only change hit neither branch, while `NoticeMode`'s own
+  documentation assigns P2B, DSA and EECC to precisely that mode. A P2B change published with three
+  days' notice went through without a word, and Art. 3(3) of Reg. (EU) 2019/1150 makes a change
+  implemented on too short a standstill **void**: it looked shipped and was not in force.
+
+  Underneath it, `minLeadDays()` branched on `psd2_675g` alone. `dcd_termination_days`,
+  `p2b_standstill_days`, `eecc_min_days` and `privacy_advance_days` sat in the published config with
+  no reader, so an operator who raised the standstill because their contract demanded it changed
+  nothing — and nothing said so. The irony was measurable: the guard that refuses an *unknown*
+  regime justifies itself by saying it would "silently fall back to a tunable default instead of its
+  statutory notice period", which is what four **known** regimes were doing.
+
+  Every regime now resolves its own period, and mode and regime are combined with `max()` rather
+  than chosen between — a deemed-consent change under P2B owes both the § 308 Nr. 5 benchmark and
+  the Art. 3 standstill, and letting the regime win would have cut a 60-day window to 15. Statutory
+  floors (`psd2_675g` 60, `p2b` 15, `eecc` 30) may be lengthened and never shortened, by config or
+  by a per-document override; `gdpr` has no floor, because WP260's "well in advance" is guidance
+  rather than a number, so it stays tunable in both directions. An unregulated info-only change is
+  unaffected.
+
+  `dcd_termination_days` is deliberately **not** mapped: it is the § 327r Abs. 3 free-termination
+  window, which runs from the later of notice and modification. It is a figure the notice states,
+  not a period before it, and reading it as a lead time would assert a statutory rule that does not
+  exist.
+
+  Two guards come with it. Declaring a regime on a **silent editorial** change is now refused —
+  saying "this change is regulated" and "no notice is owed" at once left the regime's period applied
+  to nothing. And the regime→period map is total over the known regimes, held by a test, so a regime
+  added later cannot arrive without someone deciding where its period comes from; `null` is a valid
+  answer, but it has to be written down.
+
+- **`legal-consent:doctor` reported a value as lost that was reaching the runtime.** It walked into
+  a top-level **list** and compared it by index. A host that deliberately carries fewer locales than
+  the package default — `['en']` against `['de', 'en']` — was told that `locales.1  (package
+  default: en)` "NEVER reaches your runtime config", about a value sitting at index 0 and working
+  perfectly. For a list the index is order, not identity, and its length is the operator's decision.
+
+  Because the doctor is meant as a gate step, this was a permanently red lane with two exits and
+  both were wrong: adopt a locale you do not publish (which means publishing a second binding legal
+  text), or delete the step and lose the genuine findings with it.
+
+  Lists are now compared as **sets**, reported separately and never as a failure, naming the honest
+  fact instead — which member of the default you do not carry. Reordering or extending a list says
+  nothing at all. Associative blocks are unchanged: there a missing key really is a defect, and it
+  still exits non-zero.
+
+  There is deliberately no `--ignore` flag. An escape hatch over the failing class is how a check
+  gets hollowed out, and the case that needed one was a false positive — fixed rather than made
+  suppressible.
+
+- **On Livewire 4 the consent gate locked every signed-in subject out of the application.** The gate
+  has always allowlisted Livewire's own endpoints, because the bundled re-consent form is a Livewire
+  component: ticking the box POSTs to Livewire's update channel, and a gate that refuses that channel
+  refuses the one screen able to clear it. The allowlist matched the literal path `livewire/*` —
+  which is where Livewire 3 mounted its endpoints and where Livewire 4 never does. Livewire 4 derives
+  the prefix from `APP_KEY` (`/livewire-<8 hex>/`), so the pattern matched nothing: the form rendered,
+  the box ticked, and submitting came back `409 legal_consent_required`. Only `logout` still worked,
+  and signing back in returned to the same screen — the subject could neither consent nor leave.
+
+  The gate now **resolves** Livewire's endpoints from the installation instead of assuming their
+  path, and it covers the whole prefix rather than the update channel alone — the browser fetches
+  Livewire's JavaScript over a separate request to a sibling path, and redirecting that one leaves
+  the re-consent screen without the script that submits it. The literal `livewire/*` pattern stays
+  for hosts pinned to the older layout, a custom `Livewire::setUpdateRoute()` path is resolved on
+  top, and an installation without Livewire is untouched.
+
+  **If you allowlisted `livewire-*` (or your own hash) to work around this, you can drop it.** Do not
+  keep a hash: it is correct only for the `APP_KEY` it was read from, so it passes in development and
+  silently stops matching in production.
+
+  The reason this survived twelve green tests is worth stating: they all drove the form through
+  `Livewire::test()`, which calls the component directly and raises no HTTP request, so the
+  middleware never ran. The proof is now an HTTP request to the endpoint Livewire actually
+  registered, resolved rather than written out.
+
+- **A version tag could not be pushed at all.** The `pre-push` release gate required a green
+  serial mutation run on the tagged tree before any `vX.Y.Z` push. Mutation is no longer
+  mandatory anywhere — it runs nightly or on request, and a missing or stale score is
+  information rather than a refusal — so `.mutation-ok` is now written only by a run nobody
+  starts by hand. The result was not a slower release but an impossible one: the tag push could
+  be satisfied only by bypassing the hook.
+
+  The arm is **not** removed; a tag with no gate is worse than a tag with the wrong one. It now
+  gates on `.just-all-ok`, the receipt that still means something — `just all` proves the
+  statics, 100% line and type coverage, the cross-engine Postgres/MySql suites and the real
+  browser suite on the exact tagged tree. It is the same receipt `main` already gates on, so a
+  release that pushed `main` and then its tag needs no second run. The `main` arm is unchanged.
+
+  The guard was rewritten to drive the real hook in a throwaway repository rather than to match
+  its text, and it pins the new rule from both sides: a mutation receipt **alone** must never
+  open a tag push, or the retired dependency could come back with every other assertion staying
+  green.
+
 ## [0.12.0] - 2026-08-06
 
 **Change notices reached the wrong people, or nobody, and said too little when they arrived.** This

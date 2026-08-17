@@ -27,6 +27,16 @@
                         >
                         <span>{{ $document->ui_wording }}</span>
                     </label>
+
+                    {{-- The subject cannot leave this screen without agreeing, so they must be able
+                         to read what they are agreeing to (Art. 7(2), recital 42). The link appears
+                         only when the host configured `legal-consent.document_url`; without it the
+                         wording renders alone, exactly as before. --}}
+                    @if (isset($urls[$document->key]))
+                        <a href="{{ $urls[$document->key] }}" target="_blank" rel="noopener noreferrer">
+                            {{ __('legal-consent::ui.read_document', ['title' => $document->title]) }}
+                        </a>
+                    @endif
                 </div>
             @endforeach
 

@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
+use Pushery\LegalConsent\Support\DocumentMatrix;
 use Throwable;
 
 /**
@@ -30,12 +31,25 @@ use Throwable;
  * the operator's own values; `--force`-republishing does the same. Reporting is what a consumer
  * can act on — which is the whole gap, since nothing else in the package looks at config drift
  * (the other commands all check CONTENT drift).
+ *
+ * It also reports the other state nothing else names: a registered document with no published
+ * version. That one is not config drift at all — it is what a correct installation looks like
+ * before its first publish, and every page built on it renders empty in silence.
+ *
+ * EXIT CODES, because a gate step needs them to be a contract rather than a habit:
+ * non-zero for a LOST key (the runtime is not what the file says) and for a config that is
+ * internally contradictory. Zero for a stale key, an unpublished document, and a list the host
+ * deliberately keeps shorter — all real findings worth reading, none of which means the
+ * configuration is wrong. A step that goes red on a state the operator chose gets switched off,
+ * and then the genuine findings go with it. There is no `--ignore` for the same reason in
+ * reverse: an escape hatch over the failing class would hollow this out, and the case that
+ * needed one was a false positive, which is fixed rather than made suppressible.
  */
 final class DoctorCommand extends Command
 {
     protected $signature = 'legal-consent:doctor';
 
-    protected $description = 'Report keys a published config file loses or keeps stale, without changing it.';
+    protected $description = 'Report config keys a published file loses or keeps stale, and documents with no published version, without changing anything.';
 
     /**
      * Blocks that belong to the APP, not the package, so a difference is a choice rather than
@@ -71,9 +85,66 @@ final class DoctorCommand extends Command
         }
     }
 
+    /**
+     * Configured (document, locale) combinations with no active published row.
+     *
+     * A fresh installation has an EMPTY `legal_documents` table, and the read path deliberately
+     * does not fall back to the source — so every page built on `Consent::published()` renders
+     * empty, with no error and no log. The configuration is correct, the sources are there, and
+     * the legal pages are shells. Nothing in the package said so until this arm existed, and the
+     * install instructions never named a publish step.
+     *
+     * @return list<string>
+     */
+    private function unpublishedCombinations(): array
+    {
+        try {
+            $active = LegalDocument::query()
+                ->withoutGlobalScope(TenantScope::class)
+                ->where('is_active', true)
+                ->get(['key', 'locale'])
+                ->map(static fn (LegalDocument $row): string => "{$row->key}|{$row->locale}")
+                ->all();
+        } catch (Throwable) {
+            // Not migrated yet. A schema that does not exist cannot be missing publications, and a
+            // doctor that fatals on a fresh checkout helps nobody — this command is most useful
+            // exactly when an installation is half-finished.
+            return [];
+        }
+
+        $missing = [];
+
+        foreach (DocumentMatrix::keys() as $key) {
+            foreach (DocumentMatrix::locales() as $locale) {
+                if (! in_array("{$key}|{$locale}", $active, true)) {
+                    $missing[] = "{$key} ({$locale})";
+                }
+            }
+        }
+
+        return $missing;
+    }
+
     public function handle(): int
     {
         $incoherent = $this->deemedConsentWithoutProof();
+        $unpublished = $this->unpublishedCombinations();
+
+        if ($unpublished !== []) {
+            $this->newLine();
+            $this->warn('These documents are registered but have no published version:');
+            $this->line('  A page reading `Consent::published()` renders EMPTY for them — no error, no log.');
+            $this->line('  The read path does not fall back to the source on purpose, so nothing else says it.');
+            $this->newLine();
+
+            foreach ($unpublished as $combination) {
+                $this->line("  <fg=yellow>?</> {$combination}");
+            }
+
+            $this->newLine();
+            $this->line('  Publish the whole matrix idempotently: legal-consent:publish --all --editorial');
+            $this->newLine();
+        }
 
         if ($incoherent) {
             // A configuration that is internally contradictory rather than merely drifted: the
@@ -104,8 +175,9 @@ final class DoctorCommand extends Command
 
         $lost = $this->lostKeys($package, $published);
         $stale = $this->staleKeys($package, $published);
+        $narrowed = $this->narrowedLists($package, $published);
 
-        if ($lost === [] && $stale === []) {
+        if ($lost === [] && $stale === [] && $narrowed === []) {
             $this->info('Published config is in sync with the package.');
 
             return $incoherent ? self::FAILURE : self::SUCCESS;
@@ -135,6 +207,19 @@ final class DoctorCommand extends Command
             }
         }
 
+        if ($narrowed !== []) {
+            $this->newLine();
+            $this->warn('Your file carries fewer entries than the package default in these lists:');
+            $this->line('  A list is ONE value — its length is your decision, not drift. `locales` is which');
+            $this->line('  legal documents exist in your app, and adopting the default to silence a check');
+            $this->line('  would mean publishing a second binding text. Named here so you can confirm it.');
+            $this->newLine();
+
+            foreach ($narrowed as $block => $missing) {
+                $this->line("  <fg=yellow>?</> {$block}  <fg=gray>(not in your list: ".implode(', ', $missing).')</>');
+            }
+        }
+
         $this->newLine();
         $this->line('Nothing was changed. Copy the missing keys into the matching block of your published file;');
         $this->line('review the stale ones and delete what no longer applies.');
@@ -159,6 +244,85 @@ final class DoctorCommand extends Command
     {
         $lost = [];
 
+        foreach ($this->comparableBlocks($package, $published) as $block => [$value]) {
+            // A LIST is one value, and the index is order, not identity. Walking into it reported
+            // `locales.1` as a lost key whenever the host carried FEWER locales than the package —
+            // naming a value ("en") that was reaching the runtime perfectly well, at index 0.
+            // Sets are compared in narrowedLists() instead, and not as a defect.
+            if (array_is_list($value)) {
+                continue;
+            }
+
+            foreach ($this->flatten($value, $block) as $key => $default) {
+                if (! $this->has($published, $key)) {
+                    $lost[$key] = $default;
+                }
+            }
+        }
+
+        return $lost;
+    }
+
+    /**
+     * Top-level LISTS whose published copy is missing a member of the package default.
+     *
+     * Reported separately, and never as a failure. For an associative block a missing key is a
+     * defect — the runtime is not what the file says. For a list it is usually the decision
+     * itself: `locales` is which legal documents exist in this application, and an app that runs
+     * in one language carries one. Adopting the package's list to satisfy a check would mean
+     * publishing a second binding legal text, which is a worse outcome than the finding.
+     *
+     * The naming matters too. The old report said the package value "NEVER reaches your runtime
+     * config" about a value that did reach it; this one says which member of the default the host
+     * does not carry, and asks whether that is intended.
+     *
+     * @param  array<array-key, mixed>  $package
+     * @param  array<array-key, mixed>  $published
+     * @return array<string, list<string>>
+     */
+    private function narrowedLists(array $package, array $published): array
+    {
+        $narrowed = [];
+
+        foreach ($this->comparableBlocks($package, $published) as $block => [$value, $current]) {
+            if (! array_is_list($value) || ! array_is_list($current)) {
+                continue;
+            }
+
+            // Scalars only: array_diff compares string casts, and a list holding anything else is
+            // not a set of choices an operator made — it is a shape this report has nothing to say
+            // about.
+            $missing = array_values(array_map($this->describe(...), array_diff(
+                array_filter($value, is_scalar(...)),
+                array_filter($current, is_scalar(...)),
+            )));
+
+            if ($missing !== []) {
+                $narrowed[$block] = $missing;
+            }
+        }
+
+        return $narrowed;
+    }
+
+    /**
+     * The top-level blocks where a package/published comparison is meaningful at all.
+     *
+     * Four reasons to skip one, and each is a `continue` rather than a `break` on purpose: the
+     * app-owned `documents` registry is present in every consumer's file, so abandoning the walk
+     * at the first skip would stop the comparison before it started.
+     *
+     * Each entry is the package block and the published block side by side, so a caller cannot
+     * re-read one of them off the raw array and lose the guarantee that both are arrays.
+     *
+     * @param  array<array-key, mixed>  $package
+     * @param  array<array-key, mixed>  $published
+     * @return array<string, array{0: array<array-key, mixed>, 1: array<array-key, mixed>}>
+     */
+    private function comparableBlocks(array $package, array $published): array
+    {
+        $blocks = [];
+
         foreach ($package as $block => $value) {
             if (in_array($block, self::APP_OWNED, true)) {
                 continue;
@@ -172,14 +336,11 @@ final class DoctorCommand extends Command
             if (! is_array($published[$block])) {
                 continue;
             }
-            foreach ($this->flatten($value, (string) $block) as $key => $default) {
-                if (! $this->has($published, $key)) {
-                    $lost[$key] = $default;
-                }
-            }
+
+            $blocks[(string) $block] = [$value, $published[$block]];
         }
 
-        return $lost;
+        return $blocks;
     }
 
     /**

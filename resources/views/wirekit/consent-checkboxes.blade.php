@@ -6,9 +6,11 @@
     The legal invariants are in the markup, not in the styling — do not "simplify" them away:
     - never pre-checked: a pre-ticked box is not consent (CJEU C-673/17 Planet49),
     - a real consent is never `required`: coupling it to the service is prohibited (Art. 7(4)),
-    - the full text stays linked and retrievable before agreeing (§ 305 Abs. 2 BGB).
+    - the full text stays linked and retrievable before agreeing (§ 305 Abs. 2 BGB). Configure
+      `legal-consent.document_url` and every item carries its `url`; without it there is no link
+      to render, and the description reference is dropped with it rather than left dangling.
 
-    $documents: list{key, title, wording, url, required}.
+    $documents: list{key, title, wording, url, required} — `url` may be null.
 --}}
 <x-wirekit::stack gap="md" class="legal-consent-fields">
     @foreach ($documents as $document)
@@ -21,14 +23,16 @@
                 value="1"
                 :label="$document['wording']"
                 :required="$document['required']"
-                :aria-describedby="'legal_'.$document['key'].'_link'"
+                :aria-describedby="($document['url'] ?? null) !== null ? 'legal_'.$document['key'].'_link' : null"
             />
 
-            <x-wirekit::link
-                :id="'legal_'.$document['key'].'_link'"
-                :href="$document['url']"
-                external
-            >{{ $document['title'] }}</x-wirekit::link>
+            @if (($document['url'] ?? null) !== null)
+                <x-wirekit::link
+                    :id="'legal_'.$document['key'].'_link'"
+                    :href="$document['url']"
+                    external
+                >{{ $document['title'] }}</x-wirekit::link>
+            @endif
         </x-wirekit::stack>
     @endforeach
 </x-wirekit::stack>

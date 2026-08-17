@@ -5,14 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Notifications;
 
 use Carbon\CarbonImmutable;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\Route;
-use Pushery\LegalConsent\Contracts\SendsNoticeMail;
-use Pushery\LegalConsent\Models\LegalDocument;
-use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
 
 /**
  * The ACTIVE re-consent notification: a material CONTRACT change requires the subject to
@@ -27,29 +20,11 @@ use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
  * A notifiable preference would break that congruence — the subject would receive one language
  * while an append-only row certified another.
  */
-final class ReconsentRequired extends Notification implements SendsNoticeMail, ShouldQueue
+class ReconsentRequired extends ChangeNotification
 {
-    use Queueable;
-    use RendersChangeItems;
-
-    public function __construct(public readonly LegalDocument $document) {}
-
-    /**
-     * @return list<string>
-     */
-    public function via(object $notifiable): array
+    protected function translationGroup(): string
     {
-        $channels = config('legal-consent.notifications.channels', ['mail', 'database']);
-
-        if (is_array($channels)) {
-            $strings = array_values(array_filter($channels, is_string(...)));
-
-            if ($strings !== []) {
-                return $strings;
-            }
-        }
-
-        return ['mail', 'database'];
+        return 'contract';
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -65,9 +40,10 @@ final class ReconsentRequired extends Notification implements SendsNoticeMail, S
         // the form § 305 Abs. 2 BGB exists to prevent.
         $this->addChangeItems($mail, $this->document);
 
-        return $mail
-            ->action($this->line('cta'), $this->consentUrl())
+        $mail->action($this->line('cta'), $this->ctaUrl())
             ->line($this->line($this->consequenceKey(), ['deadline' => $deadline]));
+
+        return $this->envelope($mail);
     }
 
     /**
@@ -130,14 +106,9 @@ final class ReconsentRequired extends Notification implements SendsNoticeMail, S
      */
     private function line(string $key, array $replace = []): string
     {
-        $transKey = "legal-consent::notifications.contract.{$key}";
-        $translated = trans($transKey, $replace);
+        $translated = $this->translate($key, $replace);
 
-        if (is_string($translated) && $translated !== $transKey) {
-            return $translated;
-        }
-
-        return $this->fallback($key, $replace);
+        return $translated !== '' ? $translated : $this->fallback($key, $replace);
     }
 
     /**
@@ -164,18 +135,5 @@ final class ReconsentRequired extends Notification implements SendsNoticeMail, S
         }
 
         return strtr($line, $substitutions);
-    }
-
-    private function consentUrl(): string
-    {
-        $name = config('legal-consent.routes.consent_name');
-
-        if (is_string($name) && $name !== '' && Route::has($name)) {
-            return route($name);
-        }
-
-        $path = config('legal-consent.routes.consent_path', '/legal-consent');
-
-        return url(is_string($path) ? $path : '/legal-consent');
     }
 }

@@ -4,6 +4,92 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.12.0 → 0.13.0
+
+### Your change notices now render in the package's own template
+
+The one behavior change in this release that is on by default. Until now a change notice went out
+inside **Laravel's global notification template** — greeted with "Hello!", closed with "Regards,"
+and explaining what to do "if you're having trouble clicking", all resolved from **your**
+application's translations. A German § 126b declaration therefore arrived wrapped in English
+whenever your app's locale differed from the document's.
+
+Nothing you have to do. If you had branded that template and want it back:
+
+```php
+// config/legal-consent.php
+'notice_mail' => ['view' => null],
+```
+
+**Your proof rows are unaffected, and that is measured rather than assumed.**
+`legal_notices.notice_body` is assembled from the mail's own line collections; the shell sets the
+template and never touches them, so the body and its hash are byte-for-byte what they were. Only
+one thing ever adds to that body, and only once you ask for it — see below.
+
+### Name the declaring person (§ 126b BGB)
+
+Optional, and worth doing. The package claims the durable medium and named nobody:
+
+```php
+// config/legal-consent.php
+'notice_mail' => [
+    'identity' => [
+        'declarant' => 'Beispiel GmbH',
+        'postal_address' => 'Musterweg 1, 10115 Berlin',
+    ],
+],
+```
+
+That line is appended to the notice **and therefore to the proof row**, which is the point of
+putting it there rather than in the template. Notices written before you set it are untouched;
+notices written after carry it, so their hashes differ from earlier ones — which is correct, and
+worth knowing before you compare two rows and wonder.
+
+**Multi-tenant applications should not use this block.** Bind `ResolvesNoticeIdentity` instead: a
+single global declarant names the wrong legal person in every tenant but one, and a wrong declarant
+is worse than an absent one.
+
+### The three notifications are no longer `final`
+
+`ReconsentRequired`, `LegalChangeInformational` and `DeemedConsentNotice` now extend a shared
+`ChangeNotification`. If you were copying one to change its wording, subclass it instead and point
+`notice_mail.notification.{mode}` at yours. Nothing about the existing classes changed for a caller
+that does not.
+
+### An info-only change under a regulated regime can now be refused at publish
+
+If you publish `--info` with `--regime=p2b`, `--regime=eecc` or `--regime=gdpr`, the advance-notice
+period for that regime is now enforced — previously an info-only change had no such check at all.
+A P2B change with less than 15 days' standstill will now be **rejected** where it used to publish
+silently, which is the point: Art. 3(3) makes a change implemented that way void, so a publish that
+succeeded was the worse outcome.
+
+Declaring a regime on an `--editorial` change is refused too. An editorial change owes no notice, so
+its regime's period applied to nothing.
+
+### The example `impressum` key is now `imprint`
+
+Only the **example** in the shipped `config/legal-consent.php` changed. The registry is yours: if
+you published the config — which the install instructions tell you to do — nothing moved, because
+`documents` comes from your file.
+
+It matters for one group: anyone who never published the config and relied on the shipped example,
+whose text therefore lives at `resources/legal/impressum/`. Either rename that directory to
+`imprint`, or publish the config and keep your own key. Both are one step, and the second is the
+one to prefer anyway.
+
+The rename fixes an inconsistency inside the package rather than a preference: every other key in
+the catalog is English, `lang/*/titles.php` already headed this page `imprint`, and a consumer
+whose directory is called `imprint` — as the starter kit's is — had to write a permanent exemption
+into any check that compares their config against the package default, with "it is called something
+else here" as the reason. An exemption whose reason is a naming collision reads like backlog
+forever.
+
+### `legal-consent:doctor` no longer fails on a list you deliberately keep shorter
+
+If you pinned the doctor out of a CI step because it kept reporting `locales.1`, put it back. That
+finding was wrong — see the changelog. Nothing you configured needs to change.
+
 ## 0.11.0 → 0.12.0
 
 ### Act on this FIRST: your info-only and deemed-consent changes are about to reach people
@@ -208,14 +294,21 @@ driver name from your connection configuration verbatim, and it ships `mariadb` 
 driver — so a MariaDB connection is never seen as `mysql`. SQL Server (`sqlsrv`) and any custom
 driver hit the same refusal.
 
+> **MariaDB works again from 0.13.0.** It is supported properly rather than waved through: the
+> package runs its whole cross-engine suite against a real MariaDB server, so the trigger is
+> measured holding there rather than assumed to. If you are on 0.10.0–0.12.0 and stayed behind for
+> this, upgrade to 0.13.0 and run `migrate`.
+
 The refusal is raised **before** anything is altered, so a refused `migrate` leaves your schema
 exactly as it was; there is no half-applied state to clean up. Your options:
 
-- move `legal_documents` to PostgreSQL, MySQL or SQLite — the three engines whose trigger this
+- upgrade to **0.13.0**, which supports MariaDB (see the note above) — the shortest path if that
+  is your engine;
+- move `legal_documents` to PostgreSQL, MySQL or SQLite — the other engines whose trigger this
   package writes and tests against real servers;
-- or stay on `0.9.x` until MariaDB support ships, and know that your published rows are **not**
-  protected by a database-level trigger today. The application-layer guard still refuses an
-  edit through the model, but a direct `UPDATE` is not stopped.
+- or stay on `0.9.x`, and know that your published rows are **not** protected by a database-level
+  trigger today. The application-layer guard still refuses an edit through the model, but a direct
+  `UPDATE` is not stopped.
 
 ### An `informational` document published under 0.8.0 or 0.9.0 keeps its wrong sentence
 
@@ -437,14 +530,14 @@ accessibility statement. Nothing changes for existing documents; this is purely 
 
 ```php
 // config/legal-consent.php
-'impressum' => [
+'imprint' => [
     'source' => 'markdown',
     'legal_basis' => 'informational',
 ],
 ```
 
 ```bash
-php artisan legal-consent:publish impressum de --editorial
+php artisan legal-consent:publish imprint de --editorial
 ```
 
 Such a page never appears in the registration checklist, never writes a ledger row, never gates

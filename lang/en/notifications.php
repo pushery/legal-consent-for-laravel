@@ -9,6 +9,18 @@ declare(strict_types=1);
 //                    never a threat of restriction. A privacy notice is acknowledged, never
 //                    agreed to (EDPB 05/2020 § 122).
 return [
+    // Shared lines every change notice can use. `issuer` is the § 126b BGB naming of the
+    // declaring person and is the ONLY one of these that enters the notice body — and therefore
+    // the hash of the append-only proof row — and only once a declarant is configured. The rest
+    // is envelope: the reason the message arrived, the do-not-reply note, the secondary links.
+    'common' => [
+        'issuer' => 'Declared by: :declarant',
+        'why' => 'You are getting this because you hold an account with us and we are required to tell you about this change. It is not marketing, and there is nothing to unsubscribe from.',
+        'no_reply' => 'This address does not accept replies. Use the link above if you want to act.',
+        'more' => 'Legal notice',
+        'privacy' => 'Privacy policy',
+        'subject_effective' => ':subject (effective :date)',
+    ],
     'contract' => [
         'subject' => 'Important: updated terms of use',
         'intro' => 'We have updated our terms of use and need your renewed agreement.',

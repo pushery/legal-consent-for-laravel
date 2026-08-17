@@ -29,7 +29,7 @@
         "illuminate/notifications": "^13.0",
         "illuminate/routing": "^13.0",
         "illuminate/support": "^13.0",
-        "league/commonmark": "^2.7"
+        "league/commonmark": "^2.9"
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
@@ -68,17 +68,21 @@
     },
     "scripts": {
         "test": "pest",
-        "test:coverage": "pest --coverage --min=100",
+        "test:coverage": "@php -d pcov.directory=. vendor/bin/pest --coverage --min=100",
         "test:type-coverage": "pest --type-coverage --min=100",
         "test:browser": "pest tests/Browser tests/BrowserAdmin",
-        "test:database": "pest --testsuite=Postgres,MySql",
+        "test:database": [
+            "pest --testsuite=Postgres,MySql",
+            "@test:mariadb"
+        ],
+        "test:mariadb": "pest tests/MariaDb",
         "analyse": "phpstan analyse --memory-limit=1G",
         "format": "pint",
         "format:test": "pint --test",
         "rector": "rector process",
         "rector:test": "rector process --dry-run",
-        "mutate": "pest --mutate --everything --covered-only --min=67 --testsuite=Unit,Feature",
-        "mutate:detect": "pest --mutate --everything --covered-only --parallel --processes=4 --min=67 --testsuite=Unit,Feature",
+        "mutate": "@php -d pcov.directory=. vendor/bin/pest --mutate --everything --covered-only --min=67 --testsuite=Unit,Feature",
+        "mutate:detect": "@php -d pcov.directory=. vendor/bin/pest --mutate --everything --covered-only --parallel --processes=4 --min=67 --testsuite=Unit,Feature",
         "qa": [
             "@format:test",
             "@rector:test",
