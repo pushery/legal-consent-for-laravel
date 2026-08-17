@@ -31,6 +31,7 @@ use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
 use Pushery\LegalConsent\Contracts\LegalTextTranslator;
+use Pushery\LegalConsent\Contracts\ResolvesNoticeIdentity;
 use Pushery\LegalConsent\Events\LegalDocumentPublished;
 use Pushery\LegalConsent\Http\Middleware\EnsureLegalConsent;
 use Pushery\LegalConsent\Listeners\FlushEnforceableCacheOnPublish;
@@ -42,6 +43,7 @@ use Pushery\LegalConsent\Livewire\ReConsentForm;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\ChangeItemsAuthor;
 use Pushery\LegalConsent\Support\ChangeItemsFreezer;
+use Pushery\LegalConsent\Support\ConfigNoticeIdentity;
 use Pushery\LegalConsent\Support\ConsentBanner;
 use Pushery\LegalConsent\Support\ConsentGate;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
@@ -84,12 +86,19 @@ final class LegalConsentServiceProvider extends ServiceProvider
             new PublishedDocumentReader($this->defaultLocale()),
             // The registration checklist resolves against the SAME registry and age gate the rules
             // and the recorder use, so the displayed, validated and recorded sets cannot diverge.
-            $this->documentsConfig(),
+            // That registry is the REGISTRATION one: a document carrying
+            // `ask_at_registration => false` leaves all three together or none of them.
+            $this->registrationDocumentsConfig(),
             $this->boolConfig('legal-consent.age_gate.enabled', false),
             $this->intConfig('legal-consent.age_gate.threshold', 16),
         ));
 
         $this->app->bind(LegalConsentMonitor::class, NullMonitor::class);
+
+        // Who is DECLARING a change (§ 126b BGB). The shipped resolver reads the static config
+        // block; a multi-tenant application binds its own, because one global declarant names the
+        // wrong legal person in every tenant but one.
+        $this->app->bind(ResolvesNoticeIdentity::class, ConfigNoticeIdentity::class);
 
         // The package ships the SEAM and the human-review gate, never a provider: an app binds its
         // own implementation. Unbound, a Translate action fails loud rather than filing the
@@ -99,7 +108,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // scoped, not singleton: RegistrationRules memoizes its active-row lookups per request, so the
         // memo must be discarded between requests (a publish in a later request must be seen).
         $this->app->scoped(RegistrationRules::class, fn (): RegistrationRules => new RegistrationRules(
-            $this->documentsConfig(),
+            $this->registrationDocumentsConfig(),
             $this->boolConfig('legal-consent.age_gate.enabled', false),
             $this->intConfig('legal-consent.age_gate.threshold', 16),
             // Same default locale the recorder resolves against — the two must agree on the
@@ -109,7 +118,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         $this->app->singleton(RegistrationConsentRecorder::class, fn (): RegistrationConsentRecorder => new RegistrationConsentRecorder(
             $this->app->make(ConsentManager::class),
-            $this->documentsConfig(),
+            $this->registrationDocumentsConfig(),
             $this->defaultLocale(),
         ));
 
@@ -318,6 +327,14 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../lang' => $this->app->langPath('vendor/legal-consent'),
         ], ['legal-consent', 'legal-consent-lang']);
+
+        // The change-notice mail shell and its theme, separately publishable: a consumer who wants
+        // to brand the notice takes these two and nothing else. Both are inside resources/views,
+        // so the umbrella view tag already carries them — this tag exists so the mail can be taken
+        // over without copying the consent screens as well.
+        $this->publishes([
+            __DIR__.'/../resources/views/mail' => $this->app->resourcePath('views/vendor/legal-consent/mail'),
+        ], 'legal-consent-mail');
     }
 
     /**
@@ -343,6 +360,31 @@ final class LegalConsentServiceProvider extends ServiceProvider
         }
 
         return $normalized;
+    }
+
+    /**
+     * The subset of the registry the REGISTRATION form covers.
+     *
+     * A document may be published, rendered and enforceable without belonging on a sign-up form.
+     * Setting `ask_at_registration => false` removes it from all THREE sides at once — the rules,
+     * the checklist and the recorder — because they are only honest while they resolve the same
+     * set: a form that never showed a control must not validate one, and above all must not write
+     * a ledger row claiming an acceptance nobody was asked for.
+     *
+     * It does NOT make the document optional. A mandatory one still gates, so a subject meets it at
+     * the re-consent screen instead of at sign-up. This moves WHEN it is asked, not WHETHER.
+     *
+     * A publication duty that binds nobody — an Impressum (§ 5 DDG), a cookie policy — wants
+     * `legal_basis => 'informational'` instead, which takes it out of the gate as well.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function registrationDocumentsConfig(): array
+    {
+        return array_filter(
+            $this->documentsConfig(),
+            static fn (array $config): bool => ($config['ask_at_registration'] ?? true) !== false,
+        );
     }
 
     private function defaultLocale(): string

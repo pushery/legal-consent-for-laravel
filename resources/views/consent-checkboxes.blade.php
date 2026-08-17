@@ -6,9 +6,12 @@
       - Never pre-checked (Planet49 C-673/17): @checked is hard-coded false.
       - A real consent is NEVER `required` (Kopplungsverbot Art. 7(4)); the caller must
         pass required=false for consent-type documents.
-      - The full text is linked and actually retrievable (clickwrap, § 305 II BGB).
+      - The full text is linked and actually retrievable (clickwrap, § 305 II BGB). Configure
+        `legal-consent.document_url` and every item carries its `url`; without it there is no
+        link to render, and the description reference is dropped with it rather than left
+        dangling at an element that is not there.
 
-    $documents: list of ['key', 'title', 'wording', 'url', 'required'].
+    $documents: list of ['key', 'title', 'wording', 'url', 'required'] — `url` may be null.
 --}}
 @foreach ($documents as $document)
     <div class="legal-consent-field">
@@ -20,14 +23,16 @@
                 value="1"
                 @checked(false)
                 @if ($document['required']) required @endif
-                aria-describedby="legal_{{ $document['key'] }}_link"
+                @if (($document['url'] ?? null) !== null) aria-describedby="legal_{{ $document['key'] }}_link" @endif
             >
             <span>{{ $document['wording'] }}</span>
         </label>
 
-        <a id="legal_{{ $document['key'] }}_link" href="{{ $document['url'] }}" target="_blank" rel="noopener noreferrer">
-            {{ $document['title'] }}
-        </a>
+        @if (($document['url'] ?? null) !== null)
+            <a id="legal_{{ $document['key'] }}_link" href="{{ $document['url'] }}" target="_blank" rel="noopener noreferrer">
+                {{ $document['title'] }}
+            </a>
+        @endif
 
         @if (($document['hashField'] ?? '') !== '' && ($document['contentHash'] ?? '') !== '')
             {{-- OPT-IN accept-time guard: carries the render-time fingerprint so a version released

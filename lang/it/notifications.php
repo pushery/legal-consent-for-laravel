@@ -9,6 +9,18 @@ declare(strict_types=1);
 //                    never a threat of restriction. A privacy notice is acknowledged, never
 //                    agreed to (EDPB 05/2020 § 122).
 return [
+    // Shared lines every change notice can use. `issuer` is the § 126b BGB naming of the
+    // declaring person and is the ONLY one of these that enters the notice body — and therefore
+    // the hash of the append-only proof row — and only once a declarant is configured. The rest
+    // is envelope: the reason the message arrived, the do-not-reply note, the secondary links.
+    'common' => [
+        'issuer' => 'Dichiarato da: :declarant',
+        'why' => 'Ricevi questo messaggio perché hai un account con noi e siamo tenuti a informarti di questa modifica. Non è pubblicità e non c\'è nulla da disiscrivere.',
+        'no_reply' => 'Questo indirizzo non accetta risposte. Usa il link qui sopra se vuoi agire.',
+        'more' => 'Note legali',
+        'privacy' => 'Informativa sulla privacy',
+        'subject_effective' => ':subject (in vigore dal :date)',
+    ],
     'contract' => [
         'subject' => 'Importante: condizioni d\'uso aggiornate',
         'intro' => 'Abbiamo aggiornato le nostre condizioni d\'uso e ti chiediamo di accettarle di nuovo.',

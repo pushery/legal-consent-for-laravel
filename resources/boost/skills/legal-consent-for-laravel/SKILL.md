@@ -47,7 +47,19 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   It uses the same editor and publishing as the rest and never touches registration, the gate or
   notices, so do NOT build a separate renderer for those pages. Its `ui_wording` is `null` — it
   asks the reader for nothing — so guard the wording if your own view renders it.
+  Per document, `'ask_at_registration' => false` takes a document off the SIGN-UP form without
+  changing anything else — it still gates, so the subject meets it at the re-consent screen. Use
+  it for something acknowledged later in-app; use `informational` for a page that binds nobody.
+- `document_url` — `fn (LegalDocument $document): ?string`. **Set this.** Without it every consent
+  surface shows the document's title as dead text: the registration checkboxes, the re-consent
+  gate and "Your consents". Resolve from `$document->locale`, never the app locale — a mandatory
+  document may be published only in the default language, and a link built from the page's locale
+  points at nothing. Left null, nothing breaks; the titles simply are not links.
 - `routes.consent_name` — the route the enforcement middleware sends a blocked subject to.
+- `notice_mail` — the change-notice mail. `identity.declarant` names the declaring legal person
+  (§ 126b BGB) and is appended to the notice AND to its append-only proof row; leave it null and
+  the notice is byte-for-byte what it was. Multi-tenant apps bind `ResolvesNoticeIdentity` instead
+  — one global declarant names the wrong legal person in every tenant but one.
 - `retention_after_end` + `schedule.prune` — retention is a statement until the sweep is switched on.
 
 ### 3. Apply the package
@@ -63,8 +75,16 @@ append-only row:
 # locale is a positional argument, and exactly one notice-mode flag is required:
 php artisan legal-consent:publish terms de --active      # re-consent required
 php artisan legal-consent:publish terms de --editorial   # silent, no notice
+php artisan legal-consent:publish --all --editorial      # the whole matrix, idempotent
 php artisan legal-consent:check-drift                    # source changed since it was published?
 ```
+
+**A fresh install has published nothing, and nothing says so.** `legal_documents` is empty after
+`migrate`, `Consent::published()` returns `null` for every document, and the read path does not
+fall back to the source — so every legal page renders empty with no error and no log. Run
+`legal-consent:publish --all --editorial` once (it belongs in the deploy script: re-running it
+changes nothing), or ask `legal-consent:doctor`, which names every registered document with no
+published version.
 
 The mode is the legal classification of the change, so it is never guessed: `--active` (the subject
 must accept again), `--deemed` (silence counts, contract terms only), `--info` (announced, takes
@@ -113,13 +133,14 @@ English on a German consent surface):
 <livewire:legal-consent.consent-settings />
 ```
 
-The settings screen exposes three transitions — withdraw, object, terminate. **Every public
-method of an embedded Livewire component is reachable whether or not the template renders a
-button for it**, so if your product has no answer to two of them, switch them off at the embed
-rather than deleting buttons:
+Both screens expose `object` and `terminate` besides their own action. **Every public method of an
+embedded Livewire component is reachable whether or not the template renders a button for it**, so
+if your product has no answer to those two, switch them off at the embed rather than deleting
+buttons:
 
 ```blade
 <livewire:legal-consent.consent-settings :allow-objection="false" :allow-termination="false" />
+<livewire:legal-consent.reconsent-form :allow-objection="false" :allow-termination="false" />
 ```
 
 A transition that does not apply answers `404`, not `500` — a key nothing published, a key
@@ -146,7 +167,9 @@ A minimal, complete adoption: publish the config, author `resources/legal/terms/
 `version: 1.0.0`, run `legal-consent:publish terms de --active`, put `legal.consent` on the
 authenticated route group, render `Consent::published('terms', 'de')?->html` on the public page, and
 embed `<livewire:legal-consent.reconsent-form />` on the consent route. Schedule
-`legal-consent:dispatch-notices` so a change with a grace period actually reaches subjects.
+`legal-consent:dispatch-notices` so a change with a grace period actually reaches subjects, and put
+`legal-consent:publish --all --editorial` in the deploy script so a fresh database is never left
+with empty legal pages.
 
 ## Anti-Patterns
 
@@ -160,4 +183,10 @@ embed `<livewire:legal-consent.reconsent-form />` on the consent route. Schedule
   new version instead.
 - **Do not publish `legal-consent-users-cache` or `legal-consent-backfill` casually.** One drops a
   column from your `users` table, the other backfills history — both are deliberate, separate steps.
+- **Do not allowlist Livewire's endpoint path in `middleware.allowlist_paths`.** The gate resolves
+  it from the installation already. Livewire 4 derives the prefix from `APP_KEY`, so writing your
+  own `/livewire-<hash>/*` is green in development and silently wrong in production.
+- **Do not leave `document_url` unset if your app has legal pages.** Every consent surface then
+  shows a title the subject cannot open — including the re-consent gate, where they cannot continue
+  until they agree.
 - Do not document package internals here; keep integration guidance in the application.

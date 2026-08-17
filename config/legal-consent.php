@@ -40,6 +40,20 @@ return [
     | derived at publish time, never configured: only a real consent may be opt-in, and it
     | always must be. Set the basis correctly and the rest follows.
     |
+    | EVERY registered document except an `informational` one appears on the registration
+    | form. That is the default because a document that asks something has to be asked
+    | before an account exists. Two ways out, and they are not interchangeable:
+    |
+    |   - The page binds NOBODY — an Impressum, a cookie policy, an accessibility
+    |     statement. Use `legal_basis => 'informational'`. It leaves the form, the gate and
+    |     the notice sweeps together, which is right: a record saying someone "accepted the
+    |     Impressum" asserts a consent that does not exist in law.
+    |   - The document DOES bind, but not at sign-up — you acknowledge it later, in-app.
+    |     Add `'ask_at_registration' => false`. It leaves the rules, the checklist and the
+    |     recorder together, and nothing else changes: a mandatory document still gates, so
+    |     the subject meets it at the re-consent screen instead. This moves WHEN it is
+    |     asked, never WHETHER.
+    |
     */
     'documents' => [
         'terms' => [
@@ -55,8 +69,10 @@ return [
             'legal_basis' => 'consent',
         ],
         // A published page that binds nobody. Registering it costs you nothing at
-        // sign-up — that is the whole point of the `informational` basis.
-        'impressum' => [
+        // sign-up — that is the whole point of the `informational` basis. The key is
+        // `imprint` because the rest of this catalog is English and `lang/*/titles.php`
+        // already headed it that way; every key here is an EXAMPLE you rename freely.
+        'imprint' => [
             'source' => 'markdown',
             'legal_basis' => 'informational',
         ],
@@ -209,6 +225,97 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Change-notice mail
+    |--------------------------------------------------------------------------
+    |
+    | The seams on the three change notices. TOP-LEVEL and not inside `notifications`,
+    | because `mergeConfigFrom()` merges one level deep: a key added inside a block your
+    | published file already declares is ABSENT at runtime, not merely undocumented.
+    |
+    | Every seam is inert by default except `view`. That matters more here than elsewhere:
+    | the notice body is hashed into an append-only proof row, so a seam that changed the
+    | mail without being asked for would move the bytes of a document nobody can correct
+    | afterwards.
+    |
+    | `view` — the package's own Markdown shell, and the one default that is NOT inert.
+    | Before it, a German § 126b declaration went out inside Laravel's global template with
+    | "Hello!", "Regards," and "If you're having trouble clicking", resolved from YOUR
+    | application's translations. Set it to null to go back to that template. It must stay a
+    | MARKDOWN view: `->view()` empties the mail's lines, and the proof body would collapse
+    | to the subject while still reporting its mandatory content as present.
+    |
+    | `identity` — § 126b BGB wants "eine lesbare Erklärung, in der die Person des
+    | Erklärenden genannt ist". Name yours and it is appended to the notice AND therefore to
+    | the proof row. Left null, nothing is added and your notices are byte-for-byte what they
+    | were. In a MULTI-TENANT application do not use this block: bind your own
+    | `ResolvesNoticeIdentity` instead — one global declarant names the wrong legal person in
+    | every tenant but one, which is worse than naming none.
+    |
+    | `notification` — swap a mode's notification class for your own subclass. A value that
+    | is not a notification able to render a mail is ignored in favor of the shipped class,
+    | rather than killing a queued sweep halfway through with subjects already notified.
+    |
+    */
+    'notice_mail' => [
+        'view' => 'legal-consent::mail.notice',
+        // A plain name resolves against Laravel's own themes; a `::`-namespaced one is a view.
+        // The package ships `legal-consent::mail.theme` — publish `legal-consent-mail` and
+        // point this at it to take the styling over.
+        'theme' => null,
+        'from' => ['address' => null, 'name' => null],
+        'reply_to' => null,
+        'subject_prefix' => null,
+        'subject_effective_date' => false,
+
+        'identity' => [
+            'declarant' => null,
+            'postal_address' => null,
+            'imprint_url' => null,
+            'privacy_url' => null,
+            'reply_to' => null,
+        ],
+
+        'notification' => [
+            'active_reconsent' => null,
+            'deemed_consent' => null,
+            'info_push' => null,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Where a document is readable
+    |--------------------------------------------------------------------------
+    |
+    | This package stores and freezes legal texts; it does not own the pages that
+    | display them. Set a resolver `fn (LegalDocument $document): ?string` and every
+    | surface that shows a document — the registration checkboxes, the re-consent
+    | gate, and "Your consents" — links its title to the full text:
+    |
+    |   'document_url' => fn ($document) => route('legal', [$document->key, $document->locale]),
+    |
+    | Returning null (or leaving this null) renders the title as plain text, which is
+    | what every release before 0.13 did. Nothing breaks; the link is simply absent.
+    |
+    | It is worth setting. A subject asked to agree, or to withdraw, has to be able to
+    | read what they are deciding about: Art. 7(1) and (2) GDPR want consent to be
+    | informed and the request intelligible, § 305 Abs. 2 BGB wants the terms
+    | retrievable before agreeing, and the re-consent gate is the sharpest case,
+    | because there the subject cannot continue until they agree.
+    |
+    | A closure blocks `config:cache`; pass an invokable class-string
+    | (`DocumentUrl::class` with `__invoke(LegalDocument): ?string`) to stay cacheable
+    | in production. A misconfigured value yields no link rather than a broken one.
+    |
+    | This is a TOP-LEVEL key on purpose. `mergeConfigFrom()` merges one level deep, so
+    | a key added inside an already-published block is absent at runtime for every
+    | installation that published this file — not merely undocumented.
+    |
+    */
+    'document_url' => null,
+
+    /*
+    |--------------------------------------------------------------------------
     | Enforcement middleware
     |--------------------------------------------------------------------------
     */
@@ -279,10 +386,32 @@ return [
     |--------------------------------------------------------------------------
     |
     | Advance-notice periods are per-regime, never one global value — a single number
-    | is legally wrong for several regimes. At publish, a SCHEDULED active-re-consent or
-    | deemed-consent change must give at least the minimum lead for its regime (payment
-    | contracts have the hard 2-month rule); the info-only periods are documented defaults
-    | for the notice content. Override per document via a `min_lead_days` key in `documents`.
+    | is legally wrong for several regimes. At publish, a SCHEDULED change that owes a notice
+    | must give at least the minimum lead for its mode AND its regime; the two are combined,
+    | not chosen between, because a deemed-consent change under P2B owes both the § 308 Nr. 5
+    | benchmark and the Art. 3 standstill. Override per document via `min_lead_days` in
+    | `documents` — which may shorten a period only where the law fixes no floor.
+    |
+    | Which key a change reads:
+    |
+    |   mode   active re-consent  -> active_reconsent_min_days
+    |          deemed consent     -> deemed_consent_min_days
+    |          info-only          -> nothing; its regime is the only source
+    |          silent editorial   -> nothing; it owes no notice, and declaring a regime on
+    |                                one is refused rather than silently ignored
+    |
+    |   regime psd2_675g -> psd2_min_days      (FLOOR 60 — § 675g Abs. 1 / Art. 54 PSD2)
+    |          p2b       -> p2b_standstill_days (FLOOR 15 — Reg. 2019/1150 Art. 3(2))
+    |          eecc      -> eecc_min_days       (FLOOR 30 — Dir. 2018/1972 Art. 105(4))
+    |          gdpr      -> privacy_advance_days (no floor: WP260 says "well in advance",
+    |                                             which is guidance, not a number)
+    |          bgb_agb   -> nothing; § 308 Nr. 5's "angemessene Frist" IS the mode benchmark
+    |          dcd_327r  -> nothing; § 327r Abs. 2 fixes no number (see below)
+    |
+    | `dcd_termination_days` is NOT a lead time and is not read as one. It is the 30-day
+    | free-termination window of § 327r Abs. 3, which runs from the LATER of notice and
+    | modification — the figure your notice has to state, not a period before it. Reading it
+    | as an advance period would assert a statutory rule that does not exist.
     |
     */
     'notice_periods' => [

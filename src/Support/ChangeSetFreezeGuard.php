@@ -59,7 +59,10 @@ final class ChangeSetFreezeGuard
 
         match (DB::connection()->getDriverName()) {
             'pgsql' => self::installPostgres('legal_change_sets', self::SET_TRIGGER_UPDATE, self::SET_TRIGGER_DELETE),
-            'mysql' => self::installMysql('legal_change_sets', self::SET_TRIGGER_UPDATE, self::SET_TRIGGER_DELETE),
+            // `mariadb` is Laravel's own driver name and never arrives as `mysql`, so it needs
+            // naming here too: without it a MariaDB installation silently got NO freeze trigger,
+            // which is the failure direction this guard exists to prevent.
+            'mysql', 'mariadb' => self::installMysql('legal_change_sets', self::SET_TRIGGER_UPDATE, self::SET_TRIGGER_DELETE),
             default => null, // SQLite and anything else are covered by the model hook alone
         };
     }
@@ -70,7 +73,7 @@ final class ChangeSetFreezeGuard
 
         match (DB::connection()->getDriverName()) {
             'pgsql' => self::installPostgres('legal_change_items', self::ITEM_TRIGGER_UPDATE, self::ITEM_TRIGGER_DELETE),
-            'mysql' => self::installMysql('legal_change_items', self::ITEM_TRIGGER_UPDATE, self::ITEM_TRIGGER_DELETE),
+            'mysql', 'mariadb' => self::installMysql('legal_change_items', self::ITEM_TRIGGER_UPDATE, self::ITEM_TRIGGER_DELETE),
             default => null,
         };
     }
@@ -165,7 +168,7 @@ final class ChangeSetFreezeGuard
             DB::unprepared("DROP FUNCTION IF EXISTS {$function}()");
         }
 
-        if ($driver === 'mysql') {
+        if ($driver === 'mysql' || $driver === 'mariadb') {
             DB::unprepared("DROP TRIGGER IF EXISTS {$updateTrigger}");
             DB::unprepared("DROP TRIGGER IF EXISTS {$deleteTrigger}");
         }

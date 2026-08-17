@@ -7,6 +7,8 @@ namespace Pushery\LegalConsent\Console;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Models\LegalDocument;
+use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Throwable;
 
@@ -14,12 +16,24 @@ use Throwable;
  * Freeze the current source text of a legal document into a new active, versioned row.
  * The publisher MUST classify the change's notice mode — exactly one of --editorial,
  * --info, --deemed, or --active (--material is the legacy alias of --active).
+ *
+ * `--all` runs the whole configured matrix — every registered document in every configured
+ * locale. It exists because a fresh installation has an EMPTY `legal_documents` table, and the
+ * read path deliberately does not fall back to the source: every page built on
+ * `Consent::published()` renders empty, with no error, no log and no warning. The configuration is
+ * correct, the sources are there, and the legal pages are shells — the one silent state this
+ * package otherwise refuses to have. It matters most where the installation is CLONED (a starter
+ * kit, a CI database, a fresh staging box), because then every copy begins there.
+ *
+ * It is safe in a deploy path, which is the point of running it there: publishing text that is
+ * already the active version returns that version untouched, so a second run changes nothing.
  */
 final class PublishDocumentCommand extends Command
 {
     protected $signature = 'legal-consent:publish
-        {key : The document key (e.g. terms)}
+        {key? : The document key (e.g. terms) — omit it and pass --all for the whole registry}
         {locale? : The locale (defaults to the configured default_locale)}
+        {--all : Publish every configured document in every configured locale, idempotently}
         {--material : Legacy alias of --active: a material change that forces re-consent}
         {--editorial : Editorial change — no notice, silent activation}
         {--info : Info-only change — actively announced, no action required, takes effect regardless}
@@ -47,21 +61,21 @@ final class PublishDocumentCommand extends Command
 
         $key = $this->argument('key');
         $key = is_string($key) ? $key : '';
-        $locale = $this->resolveLocale();
+        $all = (bool) $this->option('all');
 
+        if ($all === ($key !== '')) {
+            $this->error('Pass either a document key or --all, not both and not neither. --all publishes every configured document in every configured locale.');
+
+            return self::FAILURE;
+        }
+
+        return $all ? $this->publishAll($publisher, $mode) : $this->publishOne($publisher, $mode, $key, $this->resolveLocale());
+    }
+
+    private function publishOne(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale): int
+    {
         try {
-            $document = $publisher->publishWithMode(
-                $key,
-                $locale,
-                $mode,
-                changeClass: $this->stringOption('change-class'),
-                regime: $this->stringOption('regime'),
-                announceAt: $this->dateOption('announce-at'),
-                enforceAt: $this->dateOption('enforce-at'),
-                objectionDeadline: $this->dateOption('objection-at'),
-                offersTermination: (bool) $this->option('offers-termination'),
-                keepsUnmodified: (bool) $this->option('keeps-unmodified'),
-            );
+            $document = $this->publish($publisher, $mode, $key, $locale);
         } catch (Throwable $e) {
             $this->error($e->getMessage());
 
@@ -76,6 +90,68 @@ final class PublishDocumentCommand extends Command
         $this->info("Published {$key} ({$locale}) v{$document->version} — major {$document->major_version}, {$document->noticeMode()->value}, enforced from {$enforceFrom}.");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * The whole configured matrix, one combination at a time.
+     *
+     * A failure does not stop the run: a registry of ten documents with one missing translation
+     * should publish the other nine and then say which one is missing, rather than leaving the
+     * operator to run it repeatedly and discover the gaps one at a time. It is still a FAILURE
+     * exit, because a registered document with no text is a configuration error — silently
+     * skipping it recreates the empty page this command exists to prevent.
+     */
+    private function publishAll(LegalDocumentPublisher $publisher, NoticeMode $mode): int
+    {
+        $published = 0;
+        $unchanged = 0;
+        $failures = [];
+
+        foreach (DocumentMatrix::keys() as $key) {
+            foreach (DocumentMatrix::locales() as $locale) {
+                try {
+                    $document = $this->publish($publisher, $mode, $key, $locale);
+                } catch (Throwable $e) {
+                    $failures[] = "{$key} ({$locale}): {$e->getMessage()}";
+
+                    continue;
+                }
+
+                if ($document->wasRecentlyCreated) {
+                    $published++;
+                    $this->info("Published {$key} ({$locale}) v{$document->version} — {$document->noticeMode()->value}.");
+                } else {
+                    $unchanged++;
+                }
+            }
+        }
+
+        // Name the unchanged count rather than printing a line per combination. On the second run
+        // — the normal case in a deploy — every combination is unchanged, and a wall of "nothing
+        // happened" lines trains people to stop reading the ones that matter.
+        $this->line("{$published} published, {$unchanged} already current, ".count($failures).' failed.');
+
+        foreach ($failures as $failure) {
+            $this->error($failure);
+        }
+
+        return $failures === [] ? self::SUCCESS : self::FAILURE;
+    }
+
+    private function publish(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale): LegalDocument
+    {
+        return $publisher->publishWithMode(
+            $key,
+            $locale,
+            $mode,
+            changeClass: $this->stringOption('change-class'),
+            regime: $this->stringOption('regime'),
+            announceAt: $this->dateOption('announce-at'),
+            enforceAt: $this->dateOption('enforce-at'),
+            objectionDeadline: $this->dateOption('objection-at'),
+            offersTermination: (bool) $this->option('offers-termination'),
+            keepsUnmodified: (bool) $this->option('keeps-unmodified'),
+        );
     }
 
     /**

@@ -15,11 +15,14 @@ use Pushery\LegalConsent\Models\LegalDocument;
  */
 final readonly class ConsentPresenter
 {
-    public function __construct(private ConsentGate $gate) {}
+    public function __construct(private ConsentGate $gate, private DocumentUrlResolver $urls) {}
 
     /**
      * The subject's standing across every active document in a locale, split into the three
      * legally distinct blocks. `held` is withdrawal-aware (the latest action, not a max).
+     *
+     * Each entry additionally carries `url` — where the document is readable, from the host's
+     * configured resolver, or null when none is configured.
      *
      * @return array{contracts: list<array<string, mixed>>, acknowledgements: list<array<string, mixed>>, consents: list<array<string, mixed>>}
      */
@@ -34,8 +37,11 @@ final readonly class ConsentPresenter
         // its withdrawal/objection-aware semantics — it is the same fold hasCurrent() used.
         $held = $this->gate->heldMajorByKey($subject);
 
+        // `locale` is selected even though it equals the argument: it is a document COLUMN, and the
+        // host's URL resolver receives the model. A resolver that builds a per-locale route would
+        // otherwise read null off a column that was simply never fetched.
         $documents = LegalDocument::query()
-            ->select(['key', 'title', 'version', 'major_version', 'type'])
+            ->select(['key', 'title', 'version', 'major_version', 'type', 'locale'])
             ->where('locale', $locale)
             ->where('is_active', true)
             ->orderBy('key')
@@ -48,6 +54,10 @@ final readonly class ConsentPresenter
                 'version' => $document->version,
                 'held' => ($held[$document->key] ?? 0) >= $document->major_version,
                 'withdrawable' => $document->type->isWithdrawable(),
+                // Null unless the host configured `document_url`. A settings screen on which the
+                // document being withdrawn cannot be read is silent exactly where Art. 7(3) assumes
+                // the subject knows what they are deciding about.
+                'url' => $this->urls->for($document),
             ];
 
             $group = match ($document->type->legalBasis()) {

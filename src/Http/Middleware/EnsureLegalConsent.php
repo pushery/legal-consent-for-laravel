@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Livewire\LivewireManager;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,7 +18,8 @@ use Symfony\Component\HttpFoundation\Response;
  * get a 409 `legal_consent_required` (with the document keys); browser requests are
  * redirected to the consent route. The consent route, `logout` and Livewire's own endpoints are
  * always allowlisted, so there is no redirect loop, the subject can always leave, and the bundled
- * Livewire re-consent form can actually submit (its POST goes to `livewire/update`).
+ * Livewire re-consent form can actually submit (its POST goes to Livewire's update channel, whose
+ * path is resolved from the installation rather than assumed).
  */
 final readonly class EnsureLegalConsent
 {
@@ -86,11 +88,17 @@ final readonly class EnsureLegalConsent
     /**
      * Livewire's own endpoints are ALWAYS allowed, exactly like `logout` and the consent route.
      *
-     * The documented wiring puts this middleware on the `web` group, which contains `livewire/update`
-     * — and a Livewire request expects JSON, so the gate answered the framework's own update channel
-     * with 409. That deadlocks the one screen that can clear the gate: the bundled re-consent form is
-     * a Livewire component, so ticking and submitting it POSTs to `livewire/update` and is refused.
-     * The subject could never consent, and never leave.
+     * The documented wiring puts this middleware on the `web` group, which contains Livewire's update
+     * channel — and a Livewire request expects JSON, so the gate answered it with 409. That deadlocks
+     * the one screen that can clear the gate: the bundled re-consent form is a Livewire component, so
+     * ticking and submitting it POSTs to that channel and is refused. The subject could never
+     * consent, and never leave.
+     *
+     * The endpoints are RESOLVED, not written out. Livewire 3 mounted them under a fixed `livewire/`
+     * prefix; Livewire 4 derives the prefix from APP_KEY (`/livewire-<8 hex>/`) so that a scanner
+     * cannot find it by name. A hard-coded pattern therefore matches nothing on Livewire 4 — and
+     * writing an installation's own hash into the allowlist is worse than the bug, because it is
+     * green in development and dead in production, where APP_KEY differs.
      *
      * Consequence to be honest about: a gated subject can still reach OTHER Livewire components.
      * That is Livewire's own security model, not a hole opened here — a component must authorize
@@ -99,7 +107,36 @@ final readonly class EnsureLegalConsent
      */
     private function isLivewireEndpoint(Request $request): bool
     {
-        return $request->is('livewire/*');
+        return $request->is('livewire/*') || (class_exists(LivewireManager::class) && $this->matchesResolvedLivewireEndpoint($request));
+    }
+
+    /**
+     * The prefix covers the whole family in one pattern — update, the JavaScript asset and its source
+     * map, uploads, previews, per-component CSS and JS. Allowlisting only the update channel is not
+     * enough: the browser fetches the script over a separate request, and a redirected script leaves
+     * the re-consent screen without the JavaScript that submits it.
+     *
+     * The update URI is resolved on top because a host may have moved that one endpoint with
+     * `Livewire::setUpdateRoute()`, which the prefix does not follow.
+     */
+    private function matchesResolvedLivewireEndpoint(Request $request): bool
+    {
+        $manager = app(LivewireManager::class);
+
+        // Neither accessor declares a return type, so both are `mixed` to a static analyzer. The
+        // filter is the narrowing — a non-string simply contributes no pattern, which is the same
+        // outcome as an installation without Livewire.
+        $endpoints = array_filter([$manager->getUriPrefix(), $manager->getUpdateUri()], is_string(...));
+
+        foreach ($endpoints as $endpoint) {
+            $path = mb_trim($endpoint, '/');
+
+            if ($path !== '' && ($request->is($path) || $request->is($path.'/*'))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function matchesAllowlistedPath(Request $request): bool

@@ -52,6 +52,7 @@ readonly class DefaultConsentManager implements ConsentManager
         private array $documents = [],
         private bool $ageGateEnabled = false,
         private int $ageThreshold = 16,
+        private DocumentUrlResolver $urls = new DocumentUrlResolver,
     ) {}
 
     public function published(string $documentKey, ?string $locale = null): ?PublishedDocument
@@ -134,6 +135,10 @@ readonly class DefaultConsentManager implements ConsentManager
                 // The render-time fingerprint, so a form that renders hashField() activates the
                 // accept-time guard for the version actually shown (opt-in — see the recorder).
                 contentHash: self::acceptanceFingerprint($document),
+                // Resolved from the DOCUMENT, so the link carries this item's locale rather than the
+                // page's — the distinction the class docblock has always insisted on, now made by
+                // the package instead of left to every consumer.
+                url: $this->urls->for($document),
             );
         }
 

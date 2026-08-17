@@ -98,7 +98,7 @@ return new class extends Migration
                 SQL);
         }
 
-        if ($driver === 'mysql') {
+        if ($driver === 'mysql' || $driver === 'mariadb') {
             DB::unprepared(<<<'SQL_WRAP'
             CREATE TRIGGER legal_consents_no_update
                 BEFORE UPDATE ON legal_consents
@@ -118,7 +118,7 @@ return new class extends Migration
             DB::unprepared('DROP FUNCTION IF EXISTS legal_consents_block_update();');
         }
 
-        if ($driver === 'mysql') {
+        if ($driver === 'mysql' || $driver === 'mariadb') {
             DB::unprepared('DROP TRIGGER IF EXISTS legal_consents_no_update;');
         }
     }

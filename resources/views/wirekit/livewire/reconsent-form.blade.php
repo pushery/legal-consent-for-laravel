@@ -29,13 +29,24 @@
         <form wire:submit="submit">
             <x-wirekit::stack gap="md">
                 @foreach ($pending as $document)
-                    <x-wirekit::checkbox
-                        :name="'legal_'.$document->key"
-                        :id="'legal_'.$document->key"
-                        wire:model="accept.{{ $document->key }}"
-                        value="1"
-                        :label="$document->ui_wording"
-                    />
+                    <x-wirekit::stack gap="xs">
+                        <x-wirekit::checkbox
+                            :name="'legal_'.$document->key"
+                            :id="'legal_'.$document->key"
+                            wire:model="accept.{{ $document->key }}"
+                            value="1"
+                            :label="$document->ui_wording"
+                        />
+
+                        {{-- The subject cannot leave this screen without agreeing, so they must be
+                             able to read what they are agreeing to (Art. 7(2), recital 42). Rendered
+                             only when the host configured `legal-consent.document_url`. --}}
+                        @if (isset($urls[$document->key]))
+                            <x-wirekit::link :href="$urls[$document->key]" external>
+                                {{ __('legal-consent::ui.read_document', ['title' => $document->title]) }}
+                            </x-wirekit::link>
+                        @endif
+                    </x-wirekit::stack>
                 @endforeach
 
                 <x-wirekit::button type="submit" intent="primary" loading-target="submit">

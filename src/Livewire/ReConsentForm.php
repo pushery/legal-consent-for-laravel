@@ -17,6 +17,7 @@ use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\RefusesUnavailableTransitions;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
+use Pushery\LegalConsent\Support\DocumentUrlResolver;
 
 /**
  * Opt-in reactive re-consent form: lists the documents the subject still owes and records the
@@ -24,6 +25,22 @@ use Pushery\LegalConsent\Support\DefaultConsentManager;
  * <livewire:legal-consent.reconsent-form />. Only registers when livewire/livewire is
  * installed; the plain checkbox stub covers the headless case. Requires an authenticated
  * Eloquent subject (auth()->user()).
+ *
+ * ⚠️ EVERY PUBLIC METHOD HERE IS A REACHABLE ENDPOINT ONCE THE COMPONENT IS EMBEDDED —
+ * Livewire dispatches to it whether or not your template renders a control for it, so deleting a
+ * button from a published view switches nothing off. Besides `submit()` this exposes `object()`
+ * and `terminate()`, exactly like the settings screen, and `$allowObjection` /
+ * `$allowTermination` decide whether those endpoints exist at all:
+ *
+ * ```blade
+ * <livewire:legal-consent.reconsent-form :allow-objection="false" :allow-termination="false" />
+ * ```
+ *
+ * On by default, because the package's own contract offers all three. Turn one off when your
+ * product has no answer to it. Both are `#[Locked]`: a switch the browser could flip back is not
+ * a switch. This is not a security boundary being added — the manager already refuses a
+ * transition the document's class cannot carry — it is the product decision the settings
+ * component offered and this one did not.
  */
 final class ReConsentForm extends Component
 {
@@ -68,10 +85,28 @@ final class ReConsentForm extends Component
     #[Locked]
     public ConsentMethod $method = ConsentMethod::ReConsentGate;
 
-    public function mount(?string $locale = null, ConsentMethod $method = ConsentMethod::ReConsentGate): void
-    {
+    /**
+     * Whether the objection endpoint exists on this instance. Locked, because a value the client
+     * can send back is not a permission — Livewire hydrates public properties from the payload
+     * unless told otherwise, so an unlocked flag would be a suggestion, not a switch.
+     */
+    #[Locked]
+    public bool $allowObjection = true;
+
+    /** Whether the termination endpoint exists on this instance. Locked, for the reason above. */
+    #[Locked]
+    public bool $allowTermination = true;
+
+    public function mount(
+        ?string $locale = null,
+        ConsentMethod $method = ConsentMethod::ReConsentGate,
+        bool $allowObjection = true,
+        bool $allowTermination = true,
+    ): void {
         $this->locale = $locale ?? app()->getLocale();
         $this->method = $method;
+        $this->allowObjection = $allowObjection;
+        $this->allowTermination = $allowTermination;
     }
 
     public function submit(): void
@@ -191,6 +226,10 @@ final class ReConsentForm extends Component
 
     public function object(string $key): void
     {
+        // 404, not 403: a disabled action is one this instance does not have, and saying "you may
+        // not" would confirm it exists. Same reasoning, and the same two flags, as ConsentSettings.
+        abort_unless($this->allowObjection, 404);
+
         $subject = $this->subject();
 
         if ($subject instanceof Model) {
@@ -200,6 +239,8 @@ final class ReConsentForm extends Component
 
     public function terminate(string $key): void
     {
+        abort_unless($this->allowTermination, 404);
+
         $subject = $this->subject();
 
         if ($subject instanceof Model) {
@@ -226,7 +267,14 @@ final class ReConsentForm extends Component
             $this->hashes[$document->key] = DefaultConsentManager::acceptanceFingerprint($document);
         }
 
-        return view('legal-consent::livewire.reconsent-form', ['pending' => $pending]);
+        // The gate is the sharpest of the three surfaces that show a document: the subject cannot
+        // continue until they agree, and until 0.13 the view rendered the acceptance sentence as
+        // plain label text with no way to open the text behind it. A forced agreement without access
+        // to the wording is what Art. 7(2) and recital 42 are about.
+        return view('legal-consent::livewire.reconsent-form', [
+            'pending' => $pending,
+            'urls' => app(DocumentUrlResolver::class)->keyedBy($pending),
+        ]);
     }
 
     private function subject(): ?Model

@@ -53,7 +53,12 @@ final class ProofColumnGuard
 
         match ($driver) {
             'pgsql' => self::installPostgres(),
-            'mysql' => self::installMysql(),
+            // MariaDB takes the MySQL body verbatim, and that is measured rather than assumed:
+            // tests/MariaDb/ runs the whole cross-engine suite against a real server and proves
+            // the trigger refuses a raw UPDATE there. It is a SEPARATE arm rather than a shared
+            // `'mysql', 'mariadb' =>` case so that the day the two dialects diverge, the split
+            // already exists and nobody has to notice the shared arm first.
+            'mysql', 'mariadb' => self::installMysql(),
             'sqlite' => self::installSqlite(),
         };
     }
@@ -84,15 +89,15 @@ final class ProofColumnGuard
      * would be a line no test can reach — coverable only by exclusion — which is the second-best
      * answer to a question that has a better one.
      *
-     * @return 'mysql'|'pgsql'|'sqlite' the driver name, already proven to be one this guard can protect
+     * @return 'mysql'|'mariadb'|'pgsql'|'sqlite' the driver name, already proven to be one this guard can protect
      */
     public static function assertSupportedEngine(): string
     {
         $driver = DB::connection()->getDriverName();
 
-        if (! in_array($driver, ['pgsql', 'mysql', 'sqlite'], true)) {
+        if (! in_array($driver, ['pgsql', 'mysql', 'mariadb', 'sqlite'], true)) {
             throw new RuntimeException(
-                "legal_documents cannot be protected on the '{$driver}' driver: the proof-column trigger is written for PostgreSQL, MySQL and SQLite. Publishing legal texts without it would leave every frozen row editable, so this stops rather than continuing quietly."
+                "legal_documents cannot be protected on the '{$driver}' driver: the proof-column trigger is written for PostgreSQL, MySQL, MariaDB and SQLite. Publishing legal texts without it would leave every frozen row editable, so this stops rather than continuing quietly."
             );
         }
 
@@ -109,7 +114,7 @@ final class ProofColumnGuard
             return;
         }
 
-        if ($driver === 'mysql' || $driver === 'sqlite') {
+        if (in_array($driver, ['mysql', 'mariadb', 'sqlite'], true)) {
             DB::unprepared('DROP TRIGGER IF EXISTS '.self::TRIGGER.';');
         }
     }

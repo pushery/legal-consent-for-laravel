@@ -5,15 +5,8 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Notifications;
 
 use Carbon\CarbonImmutable;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\Route;
-use Pushery\LegalConsent\Contracts\SendsNoticeMail;
 use Pushery\LegalConsent\Enums\DocumentType;
-use Pushery\LegalConsent\Models\LegalDocument;
-use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
 
 /**
  * The INFO-ONLY change notification (NoticeMode::InfoPush): the subject is actively informed
@@ -23,29 +16,11 @@ use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
  * frames a privacy notice as consent (EDPB 05/2020 Rz. 122): a notice is acknowledged, and
  * where a right exists it states the objection (Art. 21) or free-termination right instead.
  */
-final class LegalChangeInformational extends Notification implements SendsNoticeMail, ShouldQueue
+class LegalChangeInformational extends ChangeNotification
 {
-    use Queueable;
-    use RendersChangeItems;
-
-    public function __construct(public readonly LegalDocument $document) {}
-
-    /**
-     * @return list<string>
-     */
-    public function via(object $notifiable): array
+    protected function translationGroup(): string
     {
-        $channels = config('legal-consent.notifications.channels', ['mail', 'database']);
-
-        if (is_array($channels)) {
-            $strings = array_values(array_filter($channels, is_string(...)));
-
-            if ($strings !== []) {
-                return $strings;
-            }
-        }
-
-        return ['mail', 'database'];
+        return "informational.{$this->basis()}";
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -61,7 +36,7 @@ final class LegalChangeInformational extends Notification implements SendsNotice
         // strength of the delta, not the other way round.
         $this->addChangeItems($mail, $this->document);
 
-        $mail->action($this->line('cta'), $this->reviewUrl())
+        $mail->action($this->line('cta'), $this->ctaUrl())
             ->line($this->line('effective', ['deadline' => $deadline]));
 
         // A privacy notice always carries the Art. 21 right to object; a contract carries a
@@ -71,7 +46,7 @@ final class LegalChangeInformational extends Notification implements SendsNotice
             $mail->line($this->line('objection', ['deadline' => $deadline]));
         }
 
-        return $mail;
+        return $this->envelope($mail);
     }
 
     /**
@@ -131,22 +106,6 @@ final class LegalChangeInformational extends Notification implements SendsNotice
      */
     private function line(string $key, array $replace = []): string
     {
-        $transKey = "legal-consent::notifications.informational.{$this->basis()}.{$key}";
-        $translated = trans($transKey, $replace);
-
-        return is_string($translated) && $translated !== $transKey ? $translated : '';
-    }
-
-    private function reviewUrl(): string
-    {
-        $name = config('legal-consent.routes.consent_name');
-
-        if (is_string($name) && $name !== '' && Route::has($name)) {
-            return route($name);
-        }
-
-        $path = config('legal-consent.routes.consent_path', '/legal-consent');
-
-        return url(is_string($path) ? $path : '/legal-consent');
+        return $this->translate($key, $replace);
     }
 }

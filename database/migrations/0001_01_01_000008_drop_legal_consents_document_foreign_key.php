@@ -53,6 +53,6 @@ return new class extends Migration
 
     private function supportsForeignKeyDrop(): bool
     {
-        return in_array(DB::connection()->getDriverName(), ['pgsql', 'mysql'], true);
+        return in_array(DB::connection()->getDriverName(), ['pgsql', 'mysql', 'mariadb'], true);
     }
 };

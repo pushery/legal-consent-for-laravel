@@ -46,6 +46,47 @@ final readonly class LegalDocumentPublisher
     public const array REGIMES = ['bgb_agb', 'psd2_675g', 'dcd_327r', 'gdpr', 'p2b', 'eecc'];
 
     /**
+     * Which `notice_periods` key each regime resolves its advance-notice period from, or null when
+     * the regime sets no separate period of its own.
+     *
+     * TOTAL over {@see REGIMES} on purpose, and held that way by a test. The original defect was
+     * that four period keys sat in a published config file with no reader at all: an operator who
+     * raised `p2b_standstill_days` because their contract demanded it changed nothing, and nothing
+     * said so. A partial map would let the next regime arrive the same way, so a regime with no
+     * period has to say `null` here rather than simply be absent.
+     *
+     * The two nulls are decisions, not gaps:
+     *  - `bgb_agb` — § 308 Nr. 5's "angemessene Frist" IS the mode benchmark below; a second
+     *    number would be the same rule written twice.
+     *  - `dcd_327r` — § 327r Abs. 2 requires notice "within a reasonable period before" and fixes
+     *    no number. `dcd_termination_days` is NOT that number: it is the 30-day free-termination
+     *    window of § 327r Abs. 3, which runs from the LATER of notice and modification, so reading
+     *    it as a lead time would assert a statutory advance period that does not exist.
+     */
+    private const array REGIME_PERIOD_KEYS = [
+        'bgb_agb' => null,
+        'psd2_675g' => 'psd2_min_days',
+        'dcd_327r' => null,
+        'gdpr' => 'privacy_advance_days',
+        'p2b' => 'p2b_standstill_days',
+        'eecc' => 'eecc_min_days',
+    ];
+
+    /**
+     * Regimes whose advance-notice period is fixed BY LAW. Config and a per-document override may
+     * lengthen one, never shorten it — the same rule PSD2 already had, applied to the two other
+     * regimes that quantify their own minimum.
+     *
+     * `gdpr` is deliberately absent: WP260's "well in advance" is guidance, not a number, so its
+     * default is a sane one and an operator may tune it down.
+     */
+    private const array STATUTORY_FLOORS = [
+        'psd2_675g' => self::PSD2_STATUTORY_MIN_LEAD_DAYS, // § 675g Abs. 1 BGB / Art. 54 PSD2 — two months
+        'p2b' => 15,                                       // Reg. (EU) 2019/1150 Art. 3(2) — at least 15 days
+        'eecc' => 30,                                      // Dir. (EU) 2018/1972 Art. 105(4) — not less than one month
+    ];
+
+    /**
      * @param  array<string, array<string, mixed>>  $documents
      */
     public function __construct(
@@ -93,6 +134,7 @@ final readonly class LegalDocumentPublisher
     ): LegalDocument {
         $this->assertLocaleSupported($locale);
         $this->assertRegimeKnown($regime, $key);
+        $this->assertRegimeCoherentWithMode($regime, $mode, $key);
 
         $rendered = $this->pipeline->process($this->sources->for($key)->resolve($key, $locale));
         $type = $this->typeFor($key);
@@ -173,15 +215,24 @@ final readonly class LegalDocumentPublisher
             if ($announce->addDays($minDays)->greaterThan($deadline)) {
                 throw LeadTimeTooShortException::for($key, $minDays, $announce, $deadline);
             }
-        } elseif ($mode->gates() && $enforce->greaterThan($now)) {
-            // A gating (active re-consent) change SCHEDULED for a future enforcement date must
-            // give the minimum advance period for its regime between its (effective)
-            // announcement and enforcement. Defaulting the announce date to now before comparing
-            // closes the bypass where enforceAt is set but announceAt is omitted. An immediate
-            // publish (enforcement now-or-past — e.g. an initial version) has no grace window.
+        } elseif ($mode->requiresNotice() && $enforce->greaterThan($now)) {
+            // A change SCHEDULED for a future enforcement date must give the minimum advance
+            // period for its mode and regime between its (effective) announcement and enforcement.
+            // Defaulting the announce date to now before comparing closes the bypass where
+            // enforceAt is set but announceAt is omitted. An immediate publish (enforcement
+            // now-or-past — e.g. an initial version) has no grace window.
+            //
+            // The condition used to be `$mode->gates()`, which is true for ACTIVE RE-CONSENT ONLY.
+            // An info-only change therefore hit neither branch and got no advance check at all —
+            // while NoticeMode's own docblock assigns P2B, DSA and EECC to exactly that mode. A
+            // P2B change with three days' notice went through without a word, and Art. 3(3) makes
+            // a change implemented that way VOID. `requiresNotice()` is the honest predicate: a
+            // silent editorial change owes no notice and therefore no period, and everything else
+            // does. A mode with no benchmark and a regime with no floor still resolves to 0, so
+            // nothing that passed before now fails for a reason nobody declared.
             $minDays = $this->minLeadDays($mode, $regime, $key);
 
-            if ($announce->addDays($minDays)->greaterThan($enforce)) {
+            if ($minDays > 0 && $announce->addDays($minDays)->greaterThan($enforce)) {
                 throw LeadTimeTooShortException::for($key, $minDays, $announce, $enforce);
             }
         }
@@ -389,21 +440,25 @@ final readonly class LegalDocumentPublisher
         $periods = config('legal-consent.notice_periods');
         $periods = is_array($periods) ? $periods : [];
 
-        $lookup = match (true) {
-            $regime === 'psd2_675g' => 'psd2_min_days',
-            $mode === NoticeMode::DeemedConsent => 'deemed_consent_min_days',
-            default => 'active_reconsent_min_days',
+        // The two minima are combined with max(), not chosen between. A deemed-consent change
+        // under P2B owes BOTH the § 308 Nr. 5 benchmark and the Art. 3 standstill, and letting the
+        // regime replace the mode would have cut a 60-day deemed window to 15 — a regression
+        // dressed as a feature. An info-only change has no mode benchmark at all, which is why it
+        // had no check whatsoever until its regime supplied one.
+        $modeMinimum = match ($mode) {
+            NoticeMode::DeemedConsent => $this->period($periods, 'deemed_consent_min_days'),
+            NoticeMode::ActiveReconsent => $this->period($periods, 'active_reconsent_min_days'),
+            default => 0,
         };
 
-        $value = $periods[$lookup] ?? self::MATERIAL_MIN_LEAD_DAYS;
-        $resolved = is_int($value) ? $value : self::MATERIAL_MIN_LEAD_DAYS;
+        $regimeKey = $regime === null ? null : (self::REGIME_PERIOD_KEYS[$regime] ?? null);
+        $regimeMinimum = $regimeKey === null ? 0 : $this->period($periods, $regimeKey);
 
-        // Clamp the CONFIG too, not just the override: `psd2_min_days` sits in the same published
-        // array as the freely-tunable periods, so lowering it looks like an ordinary knob — but
-        // § 675g Abs. 1 BGB / Art. 54 PSD2 fix two months. No input path may undercut it.
-        if ($regime === 'psd2_675g') {
-            $resolved = max($resolved, self::PSD2_STATUTORY_MIN_LEAD_DAYS);
-        }
+        // Clamp the CONFIG too, not just the override: a statutory period sits in the same
+        // published array as the freely-tunable ones, so lowering it looks like an ordinary knob.
+        // No input path may undercut a floor the law fixes.
+        $floor = $regime === null ? 0 : (self::STATUTORY_FLOORS[$regime] ?? 0);
+        $resolved = max($modeMinimum, $regimeMinimum, $floor);
 
         $override = $this->documents[$key]['min_lead_days'] ?? null;
 
@@ -411,8 +466,22 @@ final readonly class LegalDocumentPublisher
             return $resolved;
         }
 
-        // The payment-services period is statutory: an override may only lengthen it.
-        return $regime === 'psd2_675g' ? max($override, $resolved) : $override;
+        // A statutory period may only be lengthened by an override. A regime without a legal floor
+        // — and a change with no regime at all — may be tuned down, which is the point of the knob.
+        return $floor > 0 ? max($override, $resolved) : $override;
+    }
+
+    /**
+     * One `notice_periods` value, falling back to the material default when the published config
+     * dropped or corrupted the key.
+     *
+     * @param  array<array-key, mixed>  $periods
+     */
+    private function period(array $periods, string $key): int
+    {
+        $value = $periods[$key] ?? self::MATERIAL_MIN_LEAD_DAYS;
+
+        return is_int($value) ? $value : self::MATERIAL_MIN_LEAD_DAYS;
     }
 
     /**
@@ -448,6 +517,29 @@ final readonly class LegalDocumentPublisher
         if ($regime !== null && ! in_array($regime, self::REGIMES, true)) {
             throw new RuntimeException(
                 "Unknown regime '{$regime}' for '{$key}'. Use one of: ".implode(', ', self::REGIMES).'. An unrecognized regime would silently fall back to a tunable default instead of its statutory notice period.'
+            );
+        }
+    }
+
+    /**
+     * A regime declared on a change that owes no notice.
+     *
+     * Naming a statutory regime says "this change is regulated"; publishing it as a silent
+     * editorial change says "no notice is owed". Both cannot be true, and the combination is not
+     * merely odd — the regime's advance period is then never applied to anything, which is exactly
+     * the shape of the defect this whole area was reported for: a setting that reads as in force
+     * and is inert.
+     *
+     * Deliberately narrow. Whether, say, a P2B change may be published as deemed consent rather
+     * than info-push is a legal judgement per case, and a guard that decided it here would be
+     * asserting law the package has no business asserting. This one needs no judgement: the mode
+     * says there is nothing to announce.
+     */
+    private function assertRegimeCoherentWithMode(?string $regime, NoticeMode $mode, string $key): void
+    {
+        if ($regime !== null && ! $mode->requiresNotice()) {
+            throw new RuntimeException(
+                "Regime '{$regime}' was declared on a silent editorial change to '{$key}'. An editorial change owes no notice, so the regime's advance-notice period would never be applied — publish it without a regime, or classify the change as the one it is (--info, --deemed or --active)."
             );
         }
     }

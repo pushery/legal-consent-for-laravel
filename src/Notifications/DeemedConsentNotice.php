@@ -5,14 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Notifications;
 
 use Carbon\CarbonImmutable;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\Route;
-use Pushery\LegalConsent\Contracts\SendsNoticeMail;
-use Pushery\LegalConsent\Models\LegalDocument;
-use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
 
 /**
  * The deemed-consent (Zustimmungsfiktion) notice: a minor/peripheral CONTRACT change where
@@ -23,29 +16,11 @@ use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
  * date. Deemed consent is lawful only for a contract (BGH XI ZR 26/20); a privacy notice and
  * a real consent never bind on silence, so this notice is contract-only.
  */
-final class DeemedConsentNotice extends Notification implements SendsNoticeMail, ShouldQueue
+class DeemedConsentNotice extends ChangeNotification
 {
-    use Queueable;
-    use RendersChangeItems;
-
-    public function __construct(public readonly LegalDocument $document) {}
-
-    /**
-     * @return list<string>
-     */
-    public function via(object $notifiable): array
+    protected function translationGroup(): string
     {
-        $channels = config('legal-consent.notifications.channels', ['mail', 'database']);
-
-        if (is_array($channels)) {
-            $strings = array_values(array_filter($channels, is_string(...)));
-
-            if ($strings !== []) {
-                return $strings;
-            }
-        }
-
-        return ['mail', 'database'];
+        return 'deemed';
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -65,10 +40,11 @@ final class DeemedConsentNotice extends Notification implements SendsNoticeMail,
 
         $this->addChangeItems($mail, $this->document);
 
-        return $mail
-            ->line($this->line('warning', $replace)) // § 308 Nr. 5 lit. b — silence = consent by :deadline
-            ->action($this->line('cta', $replace), $this->consentUrl())
+        $mail->line($this->line('warning', $replace)) // § 308 Nr. 5 lit. b — silence = consent by :deadline
+            ->action($this->line('cta', $replace), $this->ctaUrl())
             ->line($this->line('termination', $replace));
+
+        return $this->envelope($mail);
     }
 
     /**
@@ -123,22 +99,6 @@ final class DeemedConsentNotice extends Notification implements SendsNoticeMail,
      */
     private function line(string $key, array $replace = []): string
     {
-        $transKey = "legal-consent::notifications.deemed.{$key}";
-        $translated = trans($transKey, $replace);
-
-        return is_string($translated) && $translated !== $transKey ? $translated : '';
-    }
-
-    private function consentUrl(): string
-    {
-        $name = config('legal-consent.routes.consent_name');
-
-        if (is_string($name) && $name !== '' && Route::has($name)) {
-            return route($name);
-        }
-
-        $path = config('legal-consent.routes.consent_path', '/legal-consent');
-
-        return url(is_string($path) ? $path : '/legal-consent');
+        return $this->translate($key, $replace);
     }
 }
