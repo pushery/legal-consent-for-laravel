@@ -288,11 +288,14 @@ return [
     |--------------------------------------------------------------------------
     |
     | This package stores and freezes legal texts; it does not own the pages that
-    | display them. Set a resolver `fn (LegalDocument $document): ?string` and every
-    | surface that shows a document — the registration checkboxes, the re-consent
-    | gate, and "Your consents" — links its title to the full text:
+    | display them. Set a resolver and every surface that shows a document — the
+    | registration checkboxes, the re-consent gate, and "Your consents" — links its
+    | title to the full text. Configure an INVOKABLE CLASS-STRING:
     |
-    |   'document_url' => fn ($document) => route('legal', [$document->key, $document->locale]),
+    |   'document_url' => App\\Legal\\DocumentUrl::class,
+    |
+    | with `__invoke(LegalDocument $document): ?string` returning the URL. It is
+    | resolved from the container, so it may take constructor dependencies.
     |
     | Returning null (or leaving this null) renders the title as plain text, which is
     | what every release before 0.13 did. Nothing breaks; the link is simply absent.
@@ -303,9 +306,11 @@ return [
     | retrievable before agreeing, and the re-consent gate is the sharpest case,
     | because there the subject cannot continue until they agree.
     |
-    | A closure blocks `config:cache`; pass an invokable class-string
-    | (`DocumentUrl::class` with `__invoke(LegalDocument): ?string`) to stay cacheable
-    | in production. A misconfigured value yields no link rather than a broken one.
+    | A closure — `fn ($document) => route('legal', [$document->key, $document->locale])`
+    | — also works and is fine while iterating locally. Do NOT ship one: it makes
+    | `php artisan config:cache` fail in the deploy, and nothing before that point
+    | reproduces it. `legal-consent:doctor` reports a closure here for that reason.
+    | A misconfigured value yields no link rather than a broken one.
     |
     | This is a TOP-LEVEL key on purpose. `mergeConfigFrom()` merges one level deep, so
     | a key added inside an already-published block is absent at runtime for every
@@ -330,15 +335,20 @@ return [
     |--------------------------------------------------------------------------
     |
     | Which authenticated subjects the enforcement middleware gates. Null gates every
-    | authenticated `Model` (the default). Set a predicate `fn (Model $subject): bool`
-    | — return false to let a subject through — so the gate can be ordered AFTER your own
-    | verification / onboarding / suspension gates instead of overtaking them (e.g. do not
-    | ask an unverified user for legally-binding consent before they confirm their address):
+    | authenticated `Model` (the default). Set a predicate — return false to let a subject
+    | through — so the gate can be ordered AFTER your own verification / onboarding /
+    | suspension gates instead of overtaking them (e.g. do not ask an unverified user for
+    | legally-binding consent before they confirm their address). Configure an INVOKABLE
+    | CLASS-STRING:
     |
-    |   'subject_filter' => fn ($subject) => ! $subject instanceof MustVerifyEmail || $subject->hasVerifiedEmail(),
+    |   'subject_filter' => App\\Legal\\SubjectFilter::class,
     |
-    | A closure blocks `config:cache`; pass an invokable class-string
-    | (`SubjectFilter::class` with `__invoke(Model): bool`) to stay cacheable in production.
+    | with `__invoke(Model $subject): bool`. It is resolved from the container.
+    |
+    | A closure — `fn ($subject) => ! $subject instanceof MustVerifyEmail || $subject->hasVerifiedEmail()`
+    | — also works and is fine while iterating locally. Do NOT ship one: it makes
+    | `php artisan config:cache` fail in the deploy, and nothing before that point
+    | reproduces it. `legal-consent:doctor` reports a closure here for that reason.
     | A misconfigured predicate fails SAFE — the subject stays gated.
     */
     'gate' => [

@@ -4,6 +4,43 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.13.0 → 0.14.0
+
+### ⚠️ MariaDB is no longer supported
+
+**0.13.0 supported MariaDB. This release withdraws that, and the withdrawal is the breaking change
+in it.** If you installed 0.13.0 on MariaDB, read this section before upgrading.
+
+The support should not have shipped. This package proves itself against the engines it targets —
+SQLite, PostgreSQL and MySQL 8.4 LTS, the set Laravel Cloud runs — by re-running its whole
+database suite against real servers. MariaDB was never in that set. It entered 0.13.0 as the
+repair of a side effect rather than as a decision: 0.10.0's proof-column guard named the drivers
+it could protect, MariaDB was not among them because Laravel carries `mariadb` as its own driver
+name, and the fix chosen was to support the engine instead of to keep refusing it.
+
+**What changes.** `ProofColumnGuard::assertSupportedEngine()` refuses the `mariadb` driver again,
+so a fresh install stops at the proof-column migration with a named exception instead of
+completing. The engine-specific trigger arms — the proof columns, the append-only triggers on
+`legal_consents` and `legal_notices`, and the change-set freeze guard — no longer write MariaDB
+bodies.
+
+**If you are running 0.13.0 on MariaDB**, your database already carries those triggers and nothing
+in this release removes them. Your options:
+
+- **move `legal_documents` and the ledger to PostgreSQL, MySQL 8.4 or SQLite** — the engines whose
+  trigger this package writes and tests against real servers. This is the supported path;
+- **stay on 0.13.0**, and understand that the engine has no proving lane behind it: nothing
+  re-measures those triggers on MariaDB, so a future defect there would not be caught;
+- do **not** expect a rollback to work cleanly. `ProofColumnGuard::drop()` and the migrations'
+  drop paths still name `mariadb` on purpose, so the triggers 0.13.0 installed can be taken off —
+  but the install paths are gone, and re-running the migrations forward will refuse.
+
+**What stays, and is the half worth keeping.** MariaDB is still recognized explicitly — as an
+*impostor* on the MySQL lane. It reports e.g. `11.4.4-MariaDB`, which clears an 8.4 version floor
+numerically, so both the test harness and the CI-lane pin assert engine identity from the server's
+own banner rather than trusting the number. Pointing this package's MySQL suite at a MariaDB
+server is a hard failure, not a silent pass.
+
 ## 0.12.0 → 0.13.0
 
 ### Your change notices now render in the package's own template
@@ -294,16 +331,12 @@ driver name from your connection configuration verbatim, and it ships `mariadb` 
 driver — so a MariaDB connection is never seen as `mysql`. SQL Server (`sqlsrv`) and any custom
 driver hit the same refusal.
 
-> **MariaDB works again from 0.13.0.** It is supported properly rather than waved through: the
-> package runs its whole cross-engine suite against a real MariaDB server, so the trigger is
-> measured holding there rather than assumed to. If you are on 0.10.0–0.12.0 and stayed behind for
-> this, upgrade to 0.13.0 and run `migrate`.
+> **MariaDB was briefly supported in 0.13.0, and is refused again from 0.14.0.** Do not upgrade
+> to 0.13.0 for this reason. See the 0.13.0 → 0.14.0 section at the top of this guide.
 
 The refusal is raised **before** anything is altered, so a refused `migrate` leaves your schema
 exactly as it was; there is no half-applied state to clean up. Your options:
 
-- upgrade to **0.13.0**, which supports MariaDB (see the note above) — the shortest path if that
-  is your engine;
 - move `legal_documents` to PostgreSQL, MySQL or SQLite — the other engines whose trigger this
   package writes and tests against real servers;
 - or stay on `0.9.x`, and know that your published rows are **not** protected by a database-level

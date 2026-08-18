@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Console;
 
+use Closure;
 use Illuminate\Console\Command;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -86,6 +87,37 @@ final class DoctorCommand extends Command
     }
 
     /**
+     * Config keys holding a Closure, which `php artisan config:cache` cannot serialize.
+     *
+     * Two keys accept one — `gate.subject_filter` and `document_url` — and both document the
+     * closure form FIRST and the caching consequence a couple of lines later. A reader copies the
+     * example, not the footnote, so the shape that breaks is the shape that gets used.
+     *
+     * The failure is distributed in the worst possible way. Locally nothing caches, so it runs. The
+     * package's own suite passes closures on purpose, so it runs. The first time anyone sees it is
+     * `config:cache` in a deploy — after the merge, after a green gate, at the point where turning
+     * back is expensive. Naming it here costs one line of output and moves the discovery to the
+     * machine where the closure was written.
+     *
+     * Reported, never failed on: a closure is entirely valid until someone caches, and plenty of
+     * installations never do.
+     *
+     * @return list<string>
+     */
+    private function uncacheableKeys(): array
+    {
+        $found = [];
+
+        foreach (['gate.subject_filter', 'document_url'] as $key) {
+            if (config("legal-consent.{$key}") instanceof Closure) {
+                $found[] = $key;
+            }
+        }
+
+        return $found;
+    }
+
+    /**
      * Configured (document, locale) combinations with no active published row.
      *
      * A fresh installation has an EMPTY `legal_documents` table, and the read path deliberately
@@ -129,6 +161,24 @@ final class DoctorCommand extends Command
     {
         $incoherent = $this->deemedConsentWithoutProof();
         $unpublished = $this->unpublishedCombinations();
+        $uncacheable = $this->uncacheableKeys();
+
+        if ($uncacheable !== []) {
+            $this->newLine();
+            $this->warn('These config values are closures, so `php artisan config:cache` will fail:');
+            $this->line('  It aborts the whole cache with a LogicException naming the key — in a deploy,');
+            $this->line('  after everything else has already passed. Nothing local reproduces it.');
+            $this->newLine();
+
+            foreach ($uncacheable as $key) {
+                $this->line("  <fg=yellow>?</> legal-consent.{$key}");
+            }
+
+            $this->newLine();
+            $this->line('  Move the body into an invokable class and configure its class-string instead.');
+            $this->line('  Both keys resolve one from the container, so the behavior is unchanged.');
+            $this->newLine();
+        }
 
         if ($unpublished !== []) {
             $this->newLine();

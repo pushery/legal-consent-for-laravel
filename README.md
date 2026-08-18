@@ -28,9 +28,8 @@ a user was shown**, its version and hash, and the server-side context — not ju
 composer require pushery/legal-consent-for-laravel
 ```
 
-PHP 8.4+ · Laravel 13 · SQLite, PostgreSQL, MySQL 8.4 LTS, and MariaDB 11.4 LTS — every
-database-touching path is tested against a real PostgreSQL, a real MySQL and a real MariaDB, not
-just SQLite.
+PHP 8.4+ · Laravel 13 · SQLite, PostgreSQL, and MySQL 8.4 LTS — every database-touching path is
+tested against a real PostgreSQL and a real MySQL, not just SQLite.
 
 ## What it does
 
@@ -69,7 +68,7 @@ just SQLite.
 
 Every change is held to Laravel Pint, Larastan at `max`, Rector, and a test suite at 100% line
 and type coverage, plus mutation testing, a real-browser end-to-end suite, and cross-engine tests
-against a real PostgreSQL, MySQL 8.4 and MariaDB 11.4 — the engines it runs on in production. The full gate runs
+against a real PostgreSQL and MySQL 8.4 — the engines it runs on in production. The full gate runs
 before every release.
 
 The suite is not part of the published package: the tests and their PHPUnit configuration stay in
