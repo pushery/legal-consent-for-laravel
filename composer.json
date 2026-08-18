@@ -71,11 +71,7 @@
         "test:coverage": "@php -d pcov.directory=. vendor/bin/pest --coverage --min=100",
         "test:type-coverage": "pest --type-coverage --min=100",
         "test:browser": "pest tests/Browser tests/BrowserAdmin",
-        "test:database": [
-            "pest --testsuite=Postgres,MySql",
-            "@test:mariadb"
-        ],
-        "test:mariadb": "pest tests/MariaDb",
+        "test:database": "pest --testsuite=Postgres,MySql",
         "analyse": "phpstan analyse --memory-limit=1G",
         "format": "pint",
         "format:test": "pint --test",

@@ -4,6 +4,76 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-08-18
+
+**MariaDB was supported for one release and is refused again.** That withdrawal is the breaking
+change here — read `UPGRADE.md` before upgrading if you installed 0.13.0 on it. Everything else is
+a report that fires before a deploy does.
+
+### Added
+
+- **`legal-consent:doctor` now reports a config value that `php artisan config:cache` cannot
+  serialize.** Two keys accept a closure — `gate.subject_filter` and `document_url` — and a closure
+  in either one makes `config:cache` abort the whole cache with a `LogicException`.
+
+  The failure was distributed in the worst possible way: locally nothing caches, so it runs; the
+  package's own suite passes closures on purpose, so it runs; the first sight of it is a deploy,
+  after the merge and after a green pipeline. Measured on a real installation, where the deploy
+  stopped on `legal-consent.gate.subject_filter`.
+
+  `doctor` now names the offending keys and points at the invokable class-string form, which both
+  keys resolve from the container. It is a report, never a failure — a closure is entirely valid
+  until someone caches.
+
+- **Both config blocks now lead with the cacheable form.** The class-string is the copyable
+  example and the closure is the footnote, which is the way round they should always have been:
+  a reader copies the example, not the warning under it.
+
+### Removed
+
+- **⚠️ MariaDB is no longer supported.** 0.13.0 added it; this withdraws it, and that is a breaking
+  change for anyone who installed 0.13.0 on that engine — see `UPGRADE.md` before upgrading.
+
+  It should not have shipped. This package proves itself against the engines it targets — SQLite,
+  PostgreSQL and MySQL 8.4 LTS — by re-running its whole database suite against real servers, and
+  MariaDB was never in that set. It entered as the repair of a side effect rather than as a
+  decision: 0.10.0's proof-column guard named the drivers it could protect, MariaDB fell outside
+  because Laravel carries `mariadb` as its own driver name, and the route taken was to support the
+  engine instead of to keep refusing it.
+
+  `ProofColumnGuard::assertSupportedEngine()` refuses the driver again, so a fresh install stops at
+  the proof-column migration with a named exception. The engine-specific install arms are gone —
+  proof columns, the append-only triggers on `legal_consents` and `legal_notices`, and the
+  change-set freeze guard. The dedicated MariaDB test suite and its `composer test:mariadb` script
+  are gone with them.
+
+  **The DROP paths still name `mariadb`, deliberately.** 0.13.0 did install those triggers, and a
+  database carrying them has to be able to shed them; a `DROP TRIGGER IF EXISTS` that matches
+  nothing costs nothing elsewhere.
+
+  **MariaDB is still named where it matters — as MySQL's impostor.** It reports e.g.
+  `11.4.4-MariaDB`, which clears an 8.4 floor numerically, so the harness and the CI-lane pin keep
+  asserting engine identity from the server's own banner. Pointing the MySQL suite at a MariaDB
+  server stays a hard failure rather than a silent pass.
+
+### Added
+
+- **`AffectedSubjectResolver::chunkSize()`** — the audience page size is now a protected seam
+  instead of a private constant, alongside the `keysetSeekDriver()` seam already there. Production
+  behavior is unchanged: it still returns 500.
+
+  It exists so the paging can be proven where it actually runs. The resolver picks its keyset-seek
+  shape per engine — PostgreSQL and SQLite take the sargable ROW-VALUE tuple, every other driver
+  the portable OR/tie-break form — but the page boundary was only ever crossed on SQLite, once with
+  the driver name forced through the other seam. That proves the SQL shape and nothing about the
+  engine it was written for: whether a seek agrees with its sort is a question only a real server
+  answers, because both sides read the same collation. The PostgreSQL, MySQL and MariaDB suites now
+  each cross the boundary on the real server, in both the gating (`GROUP BY … HAVING`) and the
+  info-only query shape, over a fixture whose ids deliberately run against the sort order.
+
+  Reaching that boundary at the production value costs 501 rows per case on three servers, which is
+  why those tests did not exist. With the seam it costs six.
+
 ## [0.13.0] - 2026-08-17
 
 ### Added

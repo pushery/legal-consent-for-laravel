@@ -50,11 +50,16 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   Per document, `'ask_at_registration' => false` takes a document off the SIGN-UP form without
   changing anything else — it still gates, so the subject meets it at the re-consent screen. Use
   it for something acknowledged later in-app; use `informational` for a page that binds nobody.
-- `document_url` — `fn (LegalDocument $document): ?string`. **Set this.** Without it every consent
-  surface shows the document's title as dead text: the registration checkboxes, the re-consent
-  gate and "Your consents". Resolve from `$document->locale`, never the app locale — a mandatory
-  document may be published only in the default language, and a link built from the page's locale
-  points at nothing. Left null, nothing breaks; the titles simply are not links.
+- `document_url` — an invokable class-string with `__invoke(LegalDocument $document): ?string`.
+  **Set this.** Without it every consent surface shows the document's title as dead text: the
+  registration checkboxes, the re-consent gate and "Your consents". Resolve from
+  `$document->locale`, never the app locale — a mandatory document may be published only in the
+  default language, and a link built from the page's locale points at nothing. Left null, nothing
+  breaks; the titles simply are not links.
+
+  A closure works too, but do not deploy one: `php artisan config:cache` cannot serialize it and
+  aborts the whole cache. Nothing before the deploy reproduces that, so use the class-string. The
+  same applies to `gate.subject_filter`, and `legal-consent:doctor` reports either one.
 - `routes.consent_name` — the route the enforcement middleware sends a blocked subject to.
 - `notice_mail` — the change-notice mail. `identity.declarant` names the declaring legal person
   (§ 126b BGB) and is appended to the notice AND to its append-only proof row; leave it null and
@@ -189,4 +194,7 @@ with empty legal pages.
 - **Do not leave `document_url` unset if your app has legal pages.** Every consent surface then
   shows a title the subject cannot open — including the re-consent gate, where they cannot continue
   until they agree.
+- **Do not ship a closure in `document_url` or `gate.subject_filter`.** Both accept one, and both
+  break `php artisan config:cache` — a failure that first appears in the deploy, because nothing
+  local caches. Use an invokable class-string; `legal-consent:doctor` names the offenders.
 - Do not document package internals here; keep integration guidance in the application.

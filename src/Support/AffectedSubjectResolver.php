@@ -69,6 +69,22 @@ readonly class AffectedSubjectResolver
     }
 
     /**
+     * How many subjects {@see forVersion} loads per page. A protected seam for the same reason
+     * {@see keysetSeekDriver} is one: the paging is only exercised by CROSSING this boundary, and at
+     * the production value that costs 501 rows per test. The three real-engine suites are exactly
+     * where the seek shapes have to be proven — an engine decides whether the seek agrees with the
+     * sort — and paying that fixture three times for a boundary a test can reach with six rows is
+     * what kept them from being written at all.
+     *
+     * Read ONCE per call and reused for the limit, the loop condition and the hydration batch. A
+     * value that changed between them would page past subjects it never yielded.
+     */
+    protected function chunkSize(): int
+    {
+        return self::CHUNK;
+    }
+
+    /**
      * @param  int|null  $maxConsentId  Only consider ledger rows up to this id — a snapshot of the
      *                                  ledger taken before the caller starts writing. The stream
      *                                  keyset-pages over a `HAVING MAX(major) < …` set, so a caller
@@ -84,6 +100,7 @@ readonly class AffectedSubjectResolver
     public function forVersion(LegalDocument $version, ?int $maxConsentId = null, bool $skipNotified = false): LazyCollection
     {
         $accepting = array_map(static fn (ConsentAction $action): string => $action->value, ConsentAction::accepting());
+        $size = $this->chunkSize();
 
         $page = fn (): QueryBuilder => DB::table('legal_consents')
             ->select('subject_type', 'subject_id')
@@ -118,7 +135,7 @@ readonly class AffectedSubjectResolver
             )
             ->orderBy('subject_type')
             ->orderBy('subject_id')
-            ->limit(self::CHUNK);
+            ->limit($size);
 
         // KEYSET paging on (subject_type, subject_id), NOT lazy()/chunk(): those page with
         // LIMIT/OFFSET, and OFFSET on a GROUP BY … HAVING query re-runs the whole aggregation every
@@ -130,7 +147,7 @@ readonly class AffectedSubjectResolver
         // filtering groups — each group is one (subject_type, subject_id) pair.
         $driver = $this->keysetSeekDriver();
 
-        return LazyCollection::make(function () use ($page, $driver): Generator {
+        return LazyCollection::make(function () use ($page, $driver, $size): Generator {
             $lastType = null;
             $lastId = null;
 
@@ -164,9 +181,9 @@ readonly class AffectedSubjectResolver
                 $last = $rows->last();
                 $lastType = $last instanceof stdClass ? $last->subject_type : null;
                 $lastId = $last instanceof stdClass ? $last->subject_id : null;
-            } while ($rows->count() === self::CHUNK);
+            } while ($rows->count() === $size);
         })
-            ->chunk(self::CHUNK)
+            ->chunk($size)
             ->flatMap(fn (LazyCollection $chunk): Collection => $this->hydrate($chunk));
     }
 

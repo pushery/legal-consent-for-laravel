@@ -104,7 +104,7 @@ return new class extends Migration
                 SQL);
         }
 
-        if ($driver === 'mysql' || $driver === 'mariadb') {
+        if ($driver === 'mysql') {
             DB::unprepared(<<<'SQL_WRAP'
             CREATE TRIGGER legal_notices_no_update
                 BEFORE UPDATE ON legal_notices
@@ -124,6 +124,8 @@ return new class extends Migration
             DB::unprepared('DROP FUNCTION IF EXISTS legal_notices_block_update();');
         }
 
+        // `mariadb` on the DROP side only — the engine is refused on install (ProofColumnGuard),
+        // but 0.13.0 installed this trigger there and such a database must still be able to shed it.
         if ($driver === 'mysql' || $driver === 'mariadb') {
             DB::unprepared('DROP TRIGGER IF EXISTS legal_notices_no_update;');
         }
