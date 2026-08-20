@@ -9,10 +9,12 @@ return [
     'contracts_heading' => 'Contratos',
     'acknowledgements_heading' => 'Documentos leídos',
     'consents_heading' => 'Consentimientos',
+    'grant' => 'Dar',
     'withdraw' => 'Retirar',
     // Per-item accessible name for the withdraw control: with N consents, N buttons all
     // labeled just 'withdraw' are indistinguishable in a screen reader's button list
     // (WCAG 2.4.6). The grant was document-specific; the withdrawal must be too.
+    'grant_for' => 'Dar: :title',
     'withdraw_for' => 'Retirar: :title',
     // Accessible name for the link to a document's full text. Every row that shows a document
     // carries one, and with N rows a link labeled just 'read' is indistinguishable in a screen
@@ -58,6 +60,7 @@ return [
     'admin_translate' => 'Traducir desde :locale',
     'admin_mark_reviewed' => 'Marcar como revisado',
     'admin_preview' => 'Vista previa',
+    'granted_confirmation' => 'Consentimiento otorgado. Puedes retirarlo cuando quieras.',
     'withdrawn_confirmation' => 'Consentimiento retirado. Surte efecto de inmediato.',
 
     // Re-consent submit confirmation + plain admin-stub labels (announced / localized).

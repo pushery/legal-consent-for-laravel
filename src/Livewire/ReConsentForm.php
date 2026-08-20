@@ -196,7 +196,13 @@ final class ReConsentForm extends Component
 
     private function shouldReturnToIntended(): bool
     {
-        return $this->method === ConsentMethod::ReConsentGate
+        // BOTH gate surfaces, not just the re-consent one. A first-use interstitial interrupts a
+        // navigation exactly the way the re-consent gate does — the subject was going somewhere and
+        // was stopped on the way. Leaving it out would silently drop the intended destination for
+        // every OAuth application, which is the defect this seam was built to fix in the first
+        // place. A settings toggle is deliberately not on this list: nobody was on their way
+        // anywhere when they opened their own settings page.
+        return in_array($this->method, [ConsentMethod::ReConsentGate, ConsentMethod::FirstUseGate], true)
             && config('legal-consent.routes.return_to_intended', false) === true;
     }
 

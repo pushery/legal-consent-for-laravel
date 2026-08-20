@@ -8,8 +8,11 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
+use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentMethod;
+use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
+use Pushery\LegalConsent\Exceptions\NotGrantableException;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\RefusesUnavailableTransitions;
 use Pushery\LegalConsent\Support\ConsentContext;
@@ -24,7 +27,7 @@ use Pushery\LegalConsent\Support\ConsentPresenter;
  * ⚠️ EVERY PUBLIC METHOD HERE IS A REACHABLE ENDPOINT ONCE THE COMPONENT IS EMBEDDED —
  * Livewire dispatches to it whether or not your template renders a control for it. Removing a
  * button from a published view therefore switches nothing off. Three transitions are exposed:
- * `withdraw()`, `object()` and `terminate()`.
+ * `withdraw()`, `object()`, `terminate()` and — only when you switch it on — `grant()`.
  *
  * Two protections, and they answer different questions:
  *
@@ -41,7 +44,15 @@ use Pushery\LegalConsent\Support\ConsentPresenter;
  * <livewire:legal-consent.consent-settings :allow-objection="false" :allow-termination="false" />
  * ```
  *
- * Both are `#[Locked]`: a switch the browser could flip back is not a switch.
+ * `$allowGrant` is the odd one out and it defaults to FALSE, unlike the other two. Granting is
+ * the only direction here that WRITES an assertion that the subject agreed; the rest remove or
+ * contest one. A proof row saying "they agreed", created from an endpoint the consumer never
+ * rendered a control for, is the wrong default for a package whose entire product is proof — so
+ * this one is asked for rather than assumed. Turn it on and the screen becomes symmetric: a
+ * voluntary consent can be given again after it was withdrawn, which is the point of Art. 7(3)
+ * being about *ease*, not about a one-way door.
+ *
+ * All three are `#[Locked]`: a switch the browser could flip back is not a switch.
  */
 final class ConsentSettings extends Component
 {
@@ -62,11 +73,67 @@ final class ConsentSettings extends Component
     #[Locked]
     public bool $allowTermination = true;
 
-    public function mount(?string $locale = null, bool $allowObjection = true, bool $allowTermination = true): void
-    {
+    /** Whether the grant endpoint exists on this instance. Off by default — see the class docblock. */
+    #[Locked]
+    public bool $allowGrant = false;
+
+    public function mount(
+        ?string $locale = null,
+        bool $allowObjection = true,
+        bool $allowTermination = true,
+        bool $allowGrant = false,
+    ): void {
         $this->locale = $locale ?? app()->getLocale();
         $this->allowObjection = $allowObjection;
         $this->allowTermination = $allowTermination;
+        $this->allowGrant = $allowGrant;
+    }
+
+    /**
+     * Give a voluntary consent that is not currently held.
+     *
+     * The counterpart the screen was missing: withdrawal was reachable, granting was not, so a
+     * subject who withdrew — or who never ticked the box at registration — had no way back. In an
+     * application that has no registration form at all, there was no way to give one in the first
+     * place.
+     *
+     * It refuses anything that is not a voluntary consent, and that refusal is the point rather
+     * than a safety net: a contract or an acknowledgement is accepted where its full text is
+     * presented, because the acceptance must be informed (Art. 7(1)), and a toggle beside a title
+     * is not a presentation of a contract.
+     */
+    public function grant(string $key): void
+    {
+        abort_unless($this->allowGrant, 404);
+
+        $subject = $this->subject();
+
+        if (! $subject instanceof Model) {
+            return;
+        }
+
+        $this->guardedTransition(function () use ($subject, $key): void {
+            $document = app(ConsentManager::class)->published($key, $this->locale);
+
+            // No published version is the same client error the manager raises for the other three
+            // transitions, so it takes the same route and answers 404 rather than 500.
+            if (! $document instanceof PublishedDocument) {
+                throw LegalDocumentNotFound::forSource($key, $this->locale, LegalDocumentNotFound::PUBLISHED_LOOKUP);
+            }
+
+            if (! $document->type->requiresExplicitOptin()) {
+                throw NotGrantableException::for($key, $document->type);
+            }
+
+            app(ConsentManager::class)->accept(
+                $subject,
+                $key,
+                ConsentContext::fromRequest(request(), ConsentMethod::SettingsToggle),
+                $this->locale,
+            );
+        });
+
+        $this->setStatus((string) __('legal-consent::ui.granted_confirmation'));
     }
 
     public function withdraw(string $key): void

@@ -9,10 +9,12 @@ return [
     'contracts_heading' => 'Contracten',
     'acknowledgements_heading' => 'Kennisgenomen',
     'consents_heading' => 'Toestemmingen',
+    'grant' => 'Geven',
     'withdraw' => 'Intrekken',
     // Per-item accessible name for the withdraw control: with N consents, N buttons all
     // labeled just 'withdraw' are indistinguishable in a screen reader's button list
     // (WCAG 2.4.6). The grant was document-specific; the withdrawal must be too.
+    'grant_for' => 'Geven: :title',
     'withdraw_for' => 'Intrekken: :title',
     // Accessible name for the link to a document's full text. Every row that shows a document
     // carries one, and with N rows a link labeled just 'read' is indistinguishable in a screen
@@ -58,6 +60,7 @@ return [
     'admin_translate' => 'Vertalen vanuit :locale',
     'admin_mark_reviewed' => 'Als gecontroleerd markeren',
     'admin_preview' => 'Voorbeeld',
+    'granted_confirmation' => 'Toestemming gegeven. Je kunt die op elk moment intrekken.',
     'withdrawn_confirmation' => 'Toestemming ingetrokken. Het gaat direct in.',
 
     // Re-consent submit confirmation + plain admin-stub labels (announced / localized).

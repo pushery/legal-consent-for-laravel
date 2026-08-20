@@ -21,10 +21,16 @@ final class LegalReleaseNotReady extends RuntimeException
         public readonly string $key,
         public readonly array $blocking,
     ) {
+        // No array_values() on the second argument: with MORE THAN ONE array, array_map ignores
+        // every key and walks the arrays positionally, so wrapping it changes nothing. Keeping the
+        // call made an equivalent mutant — one no test can ever kill, because removing it is
+        // indistinguishable from leaving it. Deleting the dead call removes the mutant instead of
+        // fighting it. Verified across associative, reordered, numeric-string-keyed, empty and
+        // single-entry arrays: identical in all five.
         $detail = implode('; ', array_map(
             static fn (string $locale, string $reason): string => "{$locale}: {$reason}",
             array_keys($blocking),
-            array_values($blocking),
+            $blocking,
         ));
 
         parent::__construct(

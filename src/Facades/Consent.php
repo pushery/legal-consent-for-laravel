@@ -14,6 +14,7 @@ use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\RegistrationChecklistItem;
+use Pushery\LegalConsent\Testing\ConsentFake;
 
 /**
  * @method static LegalConsent record(Model $subject, string $documentKey, ConsentAction $action, ConsentContext $context, ?string $locale = null)
@@ -32,6 +33,24 @@ use Pushery\LegalConsent\Support\RegistrationChecklistItem;
  */
 final class Consent extends Facade
 {
+    /**
+     * Swap the manager for an in-memory {@see ConsentFake} — for a CONSUMING application's tests.
+     *
+     * Nothing it does touches a database, so an app can test its own consent screens, gates and
+     * register form without migrating this package's tables into its test schema. Its read
+     * defaults describe a fully-consented subject, so a test about something else is never
+     * blocked by a gate it did not mention; declare what you care about with `owes()`,
+     * `publishes()` or `checklistIs()`.
+     */
+    public static function fake(): ConsentFake
+    {
+        $fake = new ConsentFake;
+
+        self::swap($fake);
+
+        return $fake;
+    }
+
     protected static function getFacadeAccessor(): string
     {
         return ConsentManager::class;

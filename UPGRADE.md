@@ -4,6 +4,40 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.14.0 → 0.15.0
+
+**Nothing to do.** This section exists because the composer manifest changed visibly, and a
+dependency change is worth a sentence even when it asks nothing of you.
+
+### The manifest now requires `laravel/framework`
+
+It used to name twelve `illuminate/*` split packages. `laravel/framework` `replace`s every one of
+them at the same version, so **the resolved dependency graph is identical** and no lock file moves.
+
+The old manifest promised an install without the framework and did not keep it: shipped code calls
+fifteen helpers that only `Illuminate\Foundation\helpers.php` defines — `config()`, `app()`,
+`trans()`, `view()`, `request()` and ten more — at 185 call sites, and no split package provides a
+single one of them. Such an install resolved cleanly and then fatalled at the first of those calls.
+Nobody saw it because `orchestra/testbench` pulls the whole framework into the vendor tree.
+
+If your application is a Laravel application, you already have the framework and nothing changes.
+
+### If you sign people in without a registration form
+
+New in this release: `ConsentMethod::FirstUseGate`, for the interstitial after authentication and
+before first use. Two things are worth doing together:
+
+```php
+// 1. capture the first acceptance where it actually happens
+<livewire:legal-consent.re-consent-form :method="ConsentMethod::FirstUseGate" />
+
+// 2. turn off the Registered listener — it assumes a form validated the tick
+'registration' => ['listen_to_registered_event' => false],
+```
+
+Leaving the listener on without a registration form writes an acceptance row for every mandatory
+document on the first provider callback, without a human having done anything.
+
 ## 0.13.0 → 0.14.0
 
 ### ⚠️ MariaDB is no longer supported
