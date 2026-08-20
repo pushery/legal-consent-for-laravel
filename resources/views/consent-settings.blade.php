@@ -8,7 +8,8 @@
       3. Einwilligungen (consents)     — each withdrawable in one click, as easily as it was
                                          given (Art. 7(3)).
 
-    $contracts / $acknowledgements / $consents: lists of ['key','title','version'].
+    $contracts / $acknowledgements / $consents: lists of ['key','title','version','outstanding'].
+    `outstanding` is true when a NEW MAJOR is waiting — the one state that asks the reader to act.
 --}}
 <section class="legal-consent-settings">
     <h2>{{ __('legal-consent::ui.settings_heading') }}</h2>
@@ -17,7 +18,7 @@
         <h3 id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h3>
         <ul>
             @foreach ($contracts as $contract)
-                <li>{{ $contract['title'] }} (v{{ $contract['version'] }})</li>
+                <li>{{ $contract['title'] }} (v{{ $contract['version'] }}) @if (($contract['outstanding'] ?? false)) <strong>{{ __('legal-consent::ui.action_required') }}</strong> @endif</li>
             @endforeach
         </ul>
     </section>
@@ -26,7 +27,7 @@
         <h3 id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</h3>
         <ul>
             @foreach ($acknowledgements as $acknowledgement)
-                <li>{{ $acknowledgement['title'] }} (v{{ $acknowledgement['version'] }})</li>
+                <li>{{ $acknowledgement['title'] }} (v{{ $acknowledgement['version'] }}) @if (($acknowledgement['outstanding'] ?? false)) <strong>{{ __('legal-consent::ui.action_required') }}</strong> @endif</li>
             @endforeach
         </ul>
     </section>

@@ -31,6 +31,9 @@ return [
     'objection_closed' => 'Objection period closed',
     'submit' => 'Accept and continue',
     'all_current' => 'Everything is up to date — nothing to do.',
+    // The one state a settings screen must not blur: a new major version is waiting, so
+    // this is the invitation to do voluntarily what the gate will otherwise compel.
+    'action_required' => 'Action required',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}Effective today|{1}:count day left|[2,*]:count days left',

@@ -4,6 +4,94 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-08-20
+
+**The settings screen now distinguishes "you never accepted this" from "a new version is waiting
+for you"** — the two positions that looked identical on the one screen where the subject could
+still act voluntarily, before the gate compels them. Around that: the registration listener says
+when it records a consent no form ever validated, the tamper-evidence chain refuses a value it
+cannot hash instead of folding it onto the empty string, and the README badge row follows the
+fleet canon.
+
+Nothing here changes an existing hash or an existing consent row. One behavior changes for code
+that hands the chain an Eloquent model instead of a database row — see `UPGRADE.md`.
+
+### Added
+
+- **The settings screen now says which rows are asking for something.** A row the subject has not
+  accepted looked identical whether nothing was pending or a new major version was waiting for
+  them — and only the second one ends at a gate that compels. The screen where it could have been
+  done voluntarily was the one that did not say so.
+
+  Each row of `ConsentPresenter::settingsFor()` carries `outstanding`, computed exactly as
+  `Consent::statusFor()` computes it, so the screen and the status map cannot disagree. A
+  voluntary consent is never outstanding however long it goes ungiven — demanding one would be
+  Art. 7(4). All four shipped views render it as *Action required*, translated in every locale.
+
+  Additive: a new key breaks no consumer that does not read it.
+
+- **The registration listener now says when it records a consent no form ever validated.** Way B
+  fires on the standard `Registered` event. A contract or an acknowledgement is accepted there
+  unconditionally — correct while a form ran, because `RegistrationRules` made the box required and
+  validation already happened. Sign people in through an external provider and no form runs, so the
+  row whose entire purpose is to prove a human acted gets written without one having.
+
+  Recording a mandatory document whose `legal_<key>` field is **absent from the request** now logs a
+  warning naming the keys, the subject type and the method, plus what to do instead.
+
+  That is an observation about the request rather than a guess about your application: the input
+  either carried the field or it did not. Asking the router whether a registration form exists
+  cannot be made reliable, because an application may name that route anything.
+
+  It warns and still records. Refusing would break every application whose form names the fields
+  differently — that is a decision about your data, so the package reports and leaves it to you.
+
+### Documentation
+
+- **The README badge row follows the fleet canon: identity first, all of it read from Packagist,
+  then what the gate enforces.** The license badge already resolved from Packagist rather than
+  being hardcoded — the drift that started the fleet-wide review — but the row was single-line and
+  carried no test, coverage or type-coverage badge at all, and the license sat in the middle of the
+  quality badges instead of closing the identity row.
+
+  Added: Pest 5, coverage 100%, type coverage 100%, and *tested on PostgreSQL + MySQL*. No Livewire
+  badge — it is a `require-dev` dependency here, and badging it would tell a reader that installing
+  this package pulls Livewire into their application.
+
+  **No mutation badge, deliberately.** A static badge may state exactly what the gate enforces and
+  no more; the enforced floor is `--min=67` over Unit and Feature only. Next to two 100% badges that
+  reads worse than the package is, and raising the floor is real work with a real proof behind it
+  rather than a number edited into a README.
+
+  `ReadmeBadgeClaimTest` now holds the one thing that can silently stop being true: a percentage on
+  the page against the `--min=` the composer script enforces.
+
+### Fixed
+
+- **The tamper-evidence chain no longer folds a value it cannot hash onto the empty string.**
+  `LedgerHashChain` serializes each proof field as `N` for null, else `S<byte-length>:<value>`, and
+  the class promised that two distinct rows always produce distinct canonical strings. That held
+  only for values with a lossless string form. An array, an object and a bool `false` all cast to
+  `''` — which is itself a legitimate value of `source` — so four different rows shared one hash.
+
+  The point where this becomes concrete is an **Eloquent model**. `hashRow()` accepts any object,
+  and `LegalConsent` casts `document_type`, `action`, `method` and `accepted_at` to enums and a
+  date object. Hashing a model therefore left four of the eighteen proof fields empty — including
+  which document, which act and when — producing a link the verifier, reading the same row raw,
+  can never reproduce. `legal-consent:verify-ledger` would later report tampering on rows nobody
+  touched.
+
+  Such a value is now refused with `UnhashableProofFieldException` naming the field and the type.
+  Encoding it distinctly was the other option and is the worse half: it keeps the mistake silent
+  and still hashes the model differently from the row.
+
+  **No existing hash changes, and that is the acceptance criterion rather than a hope.** Null,
+  string, int and float encode byte-for-byte as they always did, pinned against hashes measured
+  before the change. Both shipped call sites pass raw database rows, so nothing shipped was ever
+  affected — what was missing is the guard for the obvious override, since `latestChainedRow()`
+  is `protected` and an application returning a model from it would break every chain in its own
+  system, silently.
+
 ## [0.15.0] - 2026-08-20
 
 **An application that signs people in through an external provider can now record consent

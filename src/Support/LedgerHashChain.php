@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
+
 /**
  * Optional append-only tamper-evidence for the consent ledger (config `tamper_evidence`).
  *
@@ -68,6 +70,8 @@ final class LedgerHashChain
     /**
      * The `prev_record_hash` a NEW row should carry: the hash of the previous row for the
      * same subject, or genesis when the subject has no prior chained row.
+     *
+     * @throws UnhashableProofFieldException when the previous row is not a raw database row
      */
     public function linkFor(?object $previousRow): string
     {
@@ -77,6 +81,13 @@ final class LedgerHashChain
     /**
      * The chain hash of a stored row = SHA-256 over its canonical immutable content folded
      * with its own stored `prev_record_hash`.
+     *
+     * Pass the row as the database driver returned it. An Eloquent model is an object too, but its
+     * casts turn four proof columns into enums and a date object, and those cannot be hashed — see
+     * `canonical()`.
+     *
+     * @throws UnhashableProofFieldException when a proof field holds a value with no lossless
+     *                                       string form (bool, array, object)
      */
     public function hashRow(object $row): string
     {
@@ -106,12 +117,24 @@ final class LedgerHashChain
     }
 
     /**
-     * Deterministic, INJECTIVE serialization of the immutable proof fields (never id / created_at /
+     * Deterministic serialization of the immutable proof fields (never id / created_at /
      * prev_record_hash itself). Each field is emitted self-delimiting: `N` for null, else
-     * `S<byte-length>:<value>`. That distinguishes null from '' (and from a false/0 that string-casts
-     * to '') and length-prefixes every value, so a field containing the old `\x1f` separator can no
-     * longer shift boundaries — two distinct rows always produce distinct canonical strings, so a
-     * fabricated row can never be crafted to hash-collide onto a real one.
+     * `S<byte-length>:<value>`. That distinguishes null from '' and length-prefixes every value, so
+     * a field containing the old `\x1f` separator can no longer shift boundaries.
+     *
+     * WHAT THE INJECTIVITY CLAIM COVERS — it is narrower than "two distinct rows differ", and saying
+     * so is the point. The form is injective over the STRING VALUES of the fields: two rows whose
+     * fields string-cast differently always produce different canonical strings, so a fabricated row
+     * cannot be crafted to hash-collide onto a real one.
+     *
+     * It deliberately does NOT distinguish values that string-cast identically, because that is what
+     * makes the hash stable across drivers: a column returned as `2` by one PDO driver and `'2'` by
+     * another has to agree, or every consumer's chain would depend on their driver. The cost of that
+     * choice is that a value with no lossless string form cannot be admitted at all — `false`, an
+     * array and an object all cast to `''`, which is itself a legitimate value, so admitting them
+     * would put four different rows on one hash. They are REFUSED (UnhashableProofFieldException)
+     * rather than folded, which keeps the claim above true and changes no existing row's hash:
+     * null, string, int and float encode exactly as they always did.
      */
     private function canonical(object $row): string
     {
@@ -133,7 +156,11 @@ final class LedgerHashChain
                 continue;
             }
 
-            $string = is_scalar($value) ? (string) $value : '';
+            if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
+                throw UnhashableProofFieldException::for($field, $value);
+            }
+
+            $string = (string) $value;
             $parts[] = 'S'.strlen($string).':'.$string;
         }
 

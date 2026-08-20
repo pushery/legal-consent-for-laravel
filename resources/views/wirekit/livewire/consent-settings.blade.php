@@ -39,7 +39,7 @@
                         @else
                             {{ $item['title'] }}
                         @endif
-                        <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                        <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                     </x-wirekit::text>
                 @endforeach
             </x-wirekit::stack>
@@ -55,7 +55,7 @@
                         @else
                             {{ $item['title'] }}
                         @endif
-                        <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                        <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                     </x-wirekit::text>
                 @endforeach
             </x-wirekit::stack>

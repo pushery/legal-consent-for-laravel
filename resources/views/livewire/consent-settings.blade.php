@@ -28,7 +28,7 @@
                     @else
                         {{ $item['title'] }}
                     @endif
-                    (v{{ $item['version'] }})
+                    (v{{ $item['version'] }}) @if (($item['outstanding'] ?? false)) <strong class="legal-consent-action-required">{{ __('legal-consent::ui.action_required') }}</strong> @endif
                 </li>
             @endforeach
         </ul>
@@ -44,7 +44,7 @@
                     @else
                         {{ $item['title'] }}
                     @endif
-                    (v{{ $item['version'] }})
+                    (v{{ $item['version'] }}) @if (($item['outstanding'] ?? false)) <strong class="legal-consent-action-required">{{ __('legal-consent::ui.action_required') }}</strong> @endif
                 </li>
             @endforeach
         </ul>

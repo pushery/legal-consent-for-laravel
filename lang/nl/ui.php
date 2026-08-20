@@ -31,6 +31,9 @@ return [
     'objection_closed' => 'Bezwaartermijn verstreken',
     'submit' => 'Accepteren en doorgaan',
     'all_current' => 'Alles is up-to-date — niets te doen.',
+    // The one state a settings screen must not blur: a new major version is waiting, so
+    // this is the invitation to do voluntarily what the gate will otherwise compel.
+    'action_required' => 'Actie vereist',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}Vandaag van kracht|{1}Nog :count dag|[2,*]Nog :count dagen',

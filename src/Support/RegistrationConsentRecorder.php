@@ -60,6 +60,10 @@ final readonly class RegistrationConsentRecorder
 
         $active = $resolved[$locale] ?? $this->activeByKey($locale);
 
+        // Mandatory keys recorded WITHOUT the form field that would have carried the subject's tick.
+        // Collected across the loop so one warning names all of them rather than one line per key.
+        $unevidenced = [];
+
         foreach (array_keys($this->documents) as $key) {
             $document = $active->get($key);
 
@@ -123,9 +127,36 @@ final readonly class RegistrationConsentRecorder
             // the prior behavior exactly.
             $expectedHash = $input["legal_{$key}_hash"] ?? null;
 
+            // A mandatory document is accepted unconditionally, because RegistrationRules made its
+            // box `required` and validation already ran. That reasoning holds only while a FORM ran
+            // — and Way B fires on the standard `Registered` event, which an external identity
+            // provider raises with no form at all. Then nothing validated anything, and the row whose
+            // whole purpose is to prove a human acted gets written without one having.
+            //
+            // The absence of `legal_{key}` in the input is not an inference about the application —
+            // it is this request, observed. (Asking the ROUTE table whether a registration form
+            // exists cannot be made reliable: an application may name that route anything.) It is
+            // reported rather than refused, because refusing is a behavior change on the path every
+            // current consumer uses; see the config comment on `listen_to_registered_event`.
+            if ($document->type->isMandatory() && ! array_key_exists("legal_{$key}", $input)) {
+                $unevidenced[] = (string) $key;
+            }
+
             // Snapshot the version the recorder actually resolved (its own locale), which
             // may be the default-locale fallback rather than the requested locale.
             $this->consent->accept($subject, (string) $key, $context, $document->locale, is_string($expectedHash) ? $expectedHash : null);
+        }
+
+        if ($unevidenced !== []) {
+            Log::warning('legal-consent: recorded a mandatory consent with no registration-form field present', [
+                'document_keys' => $unevidenced,
+                'subject_type' => $subject->getMorphClass(),
+                'method' => $context->method->value,
+                'hint' => 'Way B fires on Registered, which a sign-in through an external provider '
+                    .'raises with no form. Record the first acceptance at an interstitial with '
+                    .'ConsentMethod::FirstUseGate instead, or turn off '
+                    .'legal-consent.registration.listen_to_registered_event.',
+            ]);
         }
     }
 

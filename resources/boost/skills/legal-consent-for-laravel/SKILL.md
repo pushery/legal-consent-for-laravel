@@ -178,6 +178,11 @@ English on a German consent surface):
 <livewire:legal-consent.consent-settings />
 ```
 
+Each settings row carries `outstanding` — true when the subject holds an **older major** than the
+one that is live, which is the state the gate will otherwise compel. It is computed exactly as
+`Consent::statusFor()` computes it, and a voluntary consent is never outstanding (Art. 7(4)). The
+shipped views render it as **Action required**; if you render your own, read that key.
+
 Both screens expose `object` and `terminate` besides their own action. **Every public method of an
 embedded Livewire component is reachable whether or not the template renders a button for it**, so
 if your product has no answer to those two, switch them off at the embed rather than deleting
