@@ -120,6 +120,20 @@ final readonly class LegalDocumentPublisher
     /**
      * Freeze a new version under an explicit notice mode plus its change-class metadata.
      */
+    /**
+     * Resolve and render what a publish WOULD freeze, writing nothing.
+     *
+     * It lives here rather than in the command because the source factory does: a caller that
+     * resolved its own factory would read a different source than the publish it is previewing,
+     * and a dry run whose answer comes from somewhere else than the real run is worse than none.
+     * Every exception the real path raises on resolution raises here too, unchanged — that is
+     * what makes "it would fail" a finding a dry run can report.
+     */
+    public function preview(string $key, string $locale): Document
+    {
+        return $this->pipeline->process($this->sources->for($key)->resolve($key, $locale));
+    }
+
     public function publishWithMode(
         string $key,
         string $locale,

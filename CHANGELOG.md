@@ -4,6 +4,196 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-08-20
+
+**An application that signs people in through an external provider can now record consent
+truthfully.** Until this release the method enum had no case for the place a first acceptance
+actually happens without a registration form, so the ledger had to assert either a form that does
+not exist or a re-consent that never happened. Around that: the settings screen can finally give a
+consent back, not only take it away; the bulk publish gained the gap-filler a deploy line should
+use; and your own tests get a real double.
+
+Nothing here is breaking. The manifest now names `laravel/framework` instead of twelve
+`illuminate/*` splits, which resolves to the identical dependency graph — see below.
+
+### Added
+
+- **`ConsentMethod::FirstUseGate` — the capture point for an application with no registration
+  form.** Sign-in through an external provider leaves nowhere to put a checkbox, so the first
+  acceptance happens in an interstitial shown after authentication and before first use. The enum
+  had no case for it.
+
+  That was not a gap but a **false statement**, in the one artifact whose entire purpose is to be
+  true. The two available answers were `registration_checkbox`, which asserts a form that does not
+  exist, and `re_consent_gate`, which asserts an acceptance *after a document changed* that never
+  happened. Under an Art. 15 request the second one renders as a re-consent nobody was ever asked
+  for — and the ledger is append-only by design, so it cannot be corrected afterwards.
+
+  **It names the moment, not the mechanism.** OAuth, SSO, an invitation link and a magic link all
+  capture at the same point, so one case covers all of them; a case called `oauth_consent` would
+  have needed a sibling on the next sign-in route, and every sibling is permanent once it is in a
+  stored column.
+
+  `ReConsentForm` already accepted a `method` at mount, so no new seam was needed — pass
+  `ConsentMethod::FirstUseGate` and the ledger records the truth.
+
+- **The first-use gate honors `routes.return_to_intended`, exactly like the re-consent gate.** Both
+  interrupt a navigation: the subject was going somewhere and was stopped on the way. Restricting
+  the return to one of them would have silently dropped the intended destination for every
+  application without a registration form. A settings embed is deliberately excluded and does not
+  redirect at all — nobody was on their way anywhere when they opened their own settings page.
+
+- **`ConsentSettings` can now GIVE a voluntary consent, not only take one back.** The screen offered
+  withdrawal, objection and termination — and no way to grant. A subject who withdrew, or who never
+  ticked the box at registration, had no way back; an application with no registration form had no
+  way to give one at all. A withdrawal screen with no counterpart is a screen without its subject.
+
+  ```blade
+  <livewire:legal-consent.consent-settings :allow-grant="true" />
+  ```
+
+  **It is off by default, unlike `allowObjection` and `allowTermination`, and that asymmetry is the
+  decision.** Granting is the only direction here that WRITES an assertion that the subject agreed;
+  the other three remove or contest one. Every public method of an embedded Livewire component is a
+  reachable endpoint whether or not the template renders a control — so switching this on by default
+  would have added an endpoint that creates a proof row saying "they agreed" to every existing
+  installation, without anyone asking. For a package whose entire product is proof, that is asked
+  for rather than assumed.
+
+  **It refuses anything that is not a voluntary consent**, and the refusal is the point rather than
+  a safety net. A contract or an acknowledgement is accepted where its full text is presented — a
+  registration form, the re-consent gate, a first-use interstitial — because the acceptance has to
+  be informed (Art. 7(1)), and a toggle beside a title is not a presentation of a contract. The new
+  `NotGrantableException` carries that reason and answers 404 like its siblings.
+
+  Both shipped views render the control opposite the withdraw button, on the same row and mutually
+  exclusive with it. The WireKit variant deliberately does **not** put it behind a confirmation
+  dialog: giving is reversible in one click on that very screen, so a confirmation there would put
+  friction on the harmless direction and none on the irreversible one.
+
+- **`legal-consent:publish --all --only-missing` — the gap-filler for a deploy script.** It
+  publishes only the combinations that have no active version and never reads the source of one
+  that does, so it cannot classify a change at all.
+
+  `--all` is idempotent for *unchanged* sources, and that is what made it safe to put in a deploy
+  line. Once a source has drifted the second run is no longer a no-op — it is a publication, and it
+  carries whatever mode stands on that line. In practice that is `--editorial`, because the first
+  run legitimately is editorial. So an edited legal text would be filed as the one classification
+  that notifies nobody, chosen by a script rather than by a person.
+
+  Measured, because the hazard is narrower than it first looks: editing the text *without* bumping
+  its version is already refused (`already exists with different content — bump the version before
+  publishing`). It is the author who edits and bumps — which is what an author does when changing a
+  legal text — who reaches the silent path. Both halves have a test.
+
+  Two behaviors follow from the same idea. A source with **no text yet** is named and skipped, and
+  the run stays green — under the bare `--all` it is still a failure. A gap-filler runs from a
+  deploy, where an unwritten legal text is the normal state of an installation whose editors have
+  not written it, not something anyone at that console can fix. It is *named*, never silent: a count
+  alone would let a document sit unpublished for months behind a green deploy. An unexpected source
+  error stays a failure in both modes — "no text yet" is a state, a broken driver is a defect.
+
+- **`legal-consent:publish --dry-run`** on a single document and on `--all`. It resolves every
+  source and reports what a run would do, writing nothing: which combination would be published as
+  a first version, which would replace an active version because the source has drifted, which has
+  no text, and which cannot be read at all. Resolving rather than counting is the point — a version
+  that only counted combinations would report the same number for a drifted document and an
+  unchanged one, and a missing Markdown file would surface during the deploy that needed it instead
+  of in a command someone ran on purpose.
+
+  The resolution runs through `LegalDocumentPublisher::preview()`, so a dry run reads exactly the
+  source the real publish would. A caller resolving its own source factory could answer from
+  somewhere else, and a dry run whose answer comes from elsewhere is worse than none.
+
+- **`Consent::fake()` — an in-memory test double for your application's tests.** Nothing it does
+  touches a database, so you can test your consent screens, your gate and your register form
+  without migrating this package's tables into your test schema.
+
+  It exists because this package's own suite could never notice the gap. Every test in here runs
+  against a real schema, so the eleven-method `ConsentManager` interface is always satisfied by the
+  real manager — while a consuming app had to either migrate the tables or hand-roll a stub of all
+  eleven methods, and a hand-rolled stub silently rots the next time a method is added here.
+
+  ```php
+  $fake = Consent::fake();
+
+  $this->post('/register', [...]);
+
+  $fake->assertAccepted($user, 'terms');
+  ```
+
+  **The read defaults describe a fully-consented subject** — nothing outstanding, `hasCurrent()`
+  true, empty status and history, nothing published. That direction is deliberate: a test about a
+  checkout or a profile update must not start failing because a consent gate it never mentioned
+  decided the subject owes a document. Declare what you care about with `owes()`, `publishes()`,
+  `checklistIs()`, `statusIs()` or `historyIs()`.
+
+  **Writes are recorded, never performed.** `record()`, `accept()`, `withdraw()`, `object()` and
+  `terminate()` return an *unsaved* `LegalConsent` carrying the attributes they were called with, so
+  calling code that reads the returned model keeps working while `$model->exists` stays `false` —
+  the honest answer, since nothing was written. Code that persists or reloads it fails loudly rather
+  than asserting against a row that never existed.
+
+  Assertions: `assertRecorded()`, `assertNotRecorded()`, `assertAccepted()`, `assertWithdrawn()`,
+  `assertNothingRecorded()`, `assertRecordedCount()`, and `recorded()` for anything else. A failure
+  names what *was* recorded instead of leaving you to go and look.
+
+  `assertAccepted()` matches `granted`, `acknowledged` **and** `re_accepted`, because which of the
+  three the real manager writes depends on the document's type and on history — neither of which a
+  consuming test has any reason to know. It deliberately does **not** match `deemed_accepted`:
+  silence counting as acceptance is the § 308 Nr. 5 legal fiction, not an act of the subject, and
+  "the user accepted" must never be satisfied by the user having said nothing.
+
+### Changed
+
+- **The `registration.listen_to_registered_event` default now says what it depends on.** No
+  behavior changed; the shipped config block and the documentation now name the assumption that
+  makes it safe.
+
+  It is on by default, and that is correct **because a registration form validated the tick before
+  the event fired**. The recorder checks the submitted field for a *consent* document and skips the
+  key when it is absent — but for a *contract* or an *acknowledgement* it does not. Those are
+  mandatory, `RegistrationRules` makes them required, and re-checking would be a second truth about
+  the same thing, so the recorder accepts them unconditionally and relies on the form.
+
+  Sign people in through an external provider and there is no form. The callback carries no such
+  fields, nothing validated the tick, and nothing notices: the first callback writes an acceptance
+  row for every mandatory document **without a human having done anything** — in the one table
+  whose entire purpose is to prove that a human did.
+
+  A default whose safety depends on the sign-in route should say so. Now it does, in both places a
+  reader would look.
+
+- **The composer manifest now requires `laravel/framework` instead of twelve `illuminate/*`
+  split packages.** Nothing about how you install or use the package changes — every Laravel
+  application already has the framework — but the manifest now states what was true all along.
+
+  The old manifest promised a framework-free install and did not keep it. Shipped code calls
+  fifteen helpers that only `Illuminate\Foundation\helpers.php` defines — `config()`, `app()`,
+  `trans()`, `__()`, `view()`, `request()`, `route()`, `auth()`, `event()`, `url()`, `now()`,
+  `response()`, `session()`, `abort_unless()` and `redirect()` — across 185 call sites (measured 2026-08-19), and no
+  split package provides a single one of them. An install without the framework resolved fine and
+  then fatalled at the first of those calls. Nobody saw it because `orchestra/testbench` pulls the
+  whole framework into the vendor tree, so locally and in CI every helper exists.
+
+  Rewriting all 185 sites was the alternative, and it was rejected: it replaces the idiomatic
+  Laravel form with injected `Repository`/`Translator`/`Dispatcher` instances, and for `view()`,
+  `response()`, `redirect()`, `route()`, `url()`, `session()`, `auth()` and `request()` there is
+  no replacement that does not declare the corresponding component anyway. This package is for
+  Laravel applications by construction — Eloquent models, migrations, HTTP routes, middleware,
+  Blade views, Livewire components — so the manifest was made to match the code.
+
+  `laravel/framework` `replace`s every `illuminate/*` split at the same version, so the resolved
+  dependency graph is identical and no lock file moves.
+
+### Removed
+
+- **`LeanDependencyContractTest` and `DeclaredDependencyContractTest` are gone**, replaced by
+  `FrameworkDependencyContractTest`. Both existed to hold a promise the package no longer makes.
+  The replacement keeps the half that still earns its place: every `Illuminate\…` class shipped
+  code imports must resolve to a file inside `laravel/framework`, so a class arriving from some
+  other vendor — which would resolve locally and fatal on a consumer's install — is still caught.
+
 ## [0.14.0] - 2026-08-18
 
 **MariaDB was supported for one release and is refused again.** That withdrawal is the breaking
@@ -28,6 +218,22 @@ a report that fires before a deploy does.
 - **Both config blocks now lead with the cacheable form.** The class-string is the copyable
   example and the closure is the footnote, which is the way round they should always have been:
   a reader copies the example, not the warning under it.
+
+- **`AffectedSubjectResolver::chunkSize()`** — the audience page size is now a protected seam
+  instead of a private constant, alongside the `keysetSeekDriver()` seam already there. Production
+  behavior is unchanged: it still returns 500.
+
+  It exists so the paging can be proven where it actually runs. The resolver picks its keyset-seek
+  shape per engine — PostgreSQL and SQLite take the sargable ROW-VALUE tuple, every other driver
+  the portable OR/tie-break form — but the page boundary was only ever crossed on SQLite, once with
+  the driver name forced through the other seam. That proves the SQL shape and nothing about the
+  engine it was written for: whether a seek agrees with its sort is a question only a real server
+  answers, because both sides read the same collation. The PostgreSQL, MySQL and MariaDB suites now
+  each cross the boundary on the real server, in both the gating (`GROUP BY … HAVING`) and the
+  info-only query shape, over a fixture whose ids deliberately run against the sort order.
+
+  Reaching that boundary at the production value costs 501 rows per case on three servers, which is
+  why those tests did not exist. With the seam it costs six.
 
 ### Removed
 
@@ -55,24 +261,6 @@ a report that fires before a deploy does.
   `11.4.4-MariaDB`, which clears an 8.4 floor numerically, so the harness and the CI-lane pin keep
   asserting engine identity from the server's own banner. Pointing the MySQL suite at a MariaDB
   server stays a hard failure rather than a silent pass.
-
-### Added
-
-- **`AffectedSubjectResolver::chunkSize()`** — the audience page size is now a protected seam
-  instead of a private constant, alongside the `keysetSeekDriver()` seam already there. Production
-  behavior is unchanged: it still returns 500.
-
-  It exists so the paging can be proven where it actually runs. The resolver picks its keyset-seek
-  shape per engine — PostgreSQL and SQLite take the sargable ROW-VALUE tuple, every other driver
-  the portable OR/tie-break form — but the page boundary was only ever crossed on SQLite, once with
-  the driver name forced through the other seam. That proves the SQL shape and nothing about the
-  engine it was written for: whether a seek agrees with its sort is a question only a real server
-  answers, because both sides read the same collation. The PostgreSQL, MySQL and MariaDB suites now
-  each cross the boundary on the real server, in both the gating (`GROUP BY … HAVING`) and the
-  info-only query shape, over a fixture whose ids deliberately run against the sort order.
-
-  Reaching that boundary at the production value costs 501 rows per case on three servers, which is
-  why those tests did not exist. With the seam it costs six.
 
 ## [0.13.0] - 2026-08-17
 

@@ -17,6 +17,23 @@ enum ConsentMethod: string
     /** The re-consent gate shown after a material change took effect. */
     case ReConsentGate = 're_consent_gate';
 
+    /**
+     * An interstitial shown AFTER authentication and BEFORE first use — the only place a first
+     * acceptance can happen when there is no registration form to put a checkbox on.
+     *
+     * It names the MOMENT, not the mechanism, and that is the whole design: OAuth, SSO, an
+     * invitation link and a magic link all land here, so the enum does not need a new case per
+     * sign-in route. A case called `oauth_consent` would have needed a sibling on the next one.
+     *
+     * It exists because the alternatives were not gaps but FALSE STATEMENTS, in the one artifact
+     * whose entire purpose is to be true. An OAuth application had two choices: RegistrationCheckbox,
+     * which asserts a form that does not exist, or — worse — ReConsentGate, which asserts an
+     * acceptance AFTER A DOCUMENT CHANGED that never happened. Under an Art. 15 request the second
+     * one reads as a history of a re-consent nobody was ever asked for, and the ledger is
+     * append-only on purpose, so it cannot be corrected afterwards.
+     */
+    case FirstUseGate = 'first_use_gate';
+
     /** A toggle on the account's legal settings page. */
     case SettingsToggle = 'settings_toggle';
 

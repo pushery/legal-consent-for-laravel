@@ -81,15 +81,48 @@ append-only row:
 php artisan legal-consent:publish terms de --active      # re-consent required
 php artisan legal-consent:publish terms de --editorial   # silent, no notice
 php artisan legal-consent:publish --all --editorial      # the whole matrix, idempotent
+php artisan legal-consent:publish --all --only-missing --editorial   # gap-fill only — use THIS in a deploy script
+php artisan legal-consent:publish --all --dry-run --editorial        # what would a run do? writes nothing
 php artisan legal-consent:check-drift                    # source changed since it was published?
 ```
 
 **A fresh install has published nothing, and nothing says so.** `legal_documents` is empty after
 `migrate`, `Consent::published()` returns `null` for every document, and the read path does not
 fall back to the source — so every legal page renders empty with no error and no log. Run
-`legal-consent:publish --all --editorial` once (it belongs in the deploy script: re-running it
-changes nothing), or ask `legal-consent:doctor`, which names every registered document with no
-published version.
+`legal-consent:publish --all --editorial` once, or ask `legal-consent:doctor`, which names every
+registered document with no published version.
+
+**In the deploy script, use `--all --only-missing --editorial`, not the bare `--all`.** Re-running
+`--all` changes nothing only while the sources are unchanged. Once a text is edited and its version
+bumped, the next deploy publishes it as `editorial` — the one notice mode that tells nobody, chosen
+by a script instead of a person. `--only-missing` never reads a combination that already has an
+active version, so it cannot classify a change. It also treats a source with no text yet as a named
+skip rather than a failure, which is what a draft-backed document looks like before an editor has
+written it.
+
+## Testing your own app against it
+
+`Consent::fake()` swaps the manager for an in-memory double — no database, no migrations of this
+package's tables into your test schema.
+
+```php
+$fake = Consent::fake();
+
+$this->post('/register', [...]);
+
+$fake->assertAccepted($user, 'terms');
+```
+
+Reads default to a fully-consented subject (nothing outstanding, `hasCurrent()` true, nothing
+published), so a test about something else is never blocked by a gate it did not mention. Declare
+what you care about with `owes($user, 'terms')`, `publishes($document)`, `checklistIs(...)`,
+`statusIs([...])` or `historyIs([...])`.
+
+Writes are recorded, not performed: the returned `LegalConsent` carries the attributes but
+`exists` stays false. Assertions: `assertRecorded`, `assertNotRecorded`, `assertAccepted`,
+`assertWithdrawn`, `assertNothingRecorded`, `assertRecordedCount`, plus `recorded()` for anything
+else. `assertAccepted` matches `granted`, `acknowledged` and `re_accepted` — never
+`deemed_accepted`, because silence is not an act of the subject.
 
 The mode is the legal classification of the change, so it is never guessed: `--active` (the subject
 must accept again), `--deemed` (silence counts, contract terms only), `--info` (announced, takes
@@ -126,6 +159,13 @@ released mid-session cannot be frozen against them:
 
 ```php
 Consent::accept($user, 'terms', ConsentContext::forMethod(ConsentMethod::RegistrationCheckbox), $locale, $shownHash);
+```
+
+**No registration form (OAuth, SSO, invitations)?** Capture the first acceptance in an interstitial
+shown after authentication and before first use, and use `ConsentMethod::FirstUseGate` for it:
+
+```php
+<livewire:legal-consent.re-consent-form :method="ConsentMethod::FirstUseGate" />
 ```
 
 **Drop in the optional UI** (needs `livewire/livewire`; publish `legal-consent-wirekit` for the

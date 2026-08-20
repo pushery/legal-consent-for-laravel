@@ -103,6 +103,15 @@
                                     </x-wirekit::button>
                                 </x-wirekit::alert-dialog.actions>
                             </x-wirekit::alert-dialog>
+                        {{-- The counterpart, and only where the embedding screen asked for it.
+                             Deliberately NOT behind an alert-dialog: giving a voluntary consent is
+                             reversible in one click on this very screen, so a confirmation would
+                             put friction on the harmless direction and none on the irreversible
+                             one — the exact opposite of what Art. 7(3) is about. --}}
+                        @elseif (! $item['held'] && $this->allowGrant)
+                            <x-wirekit::button surface="outline" wire:click="grant(@js($item['key']))" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
+                                {{ __('legal-consent::ui.grant') }}
+                            </x-wirekit::button>
                         @endif
                     </x-wirekit::stack>
                 @endforeach

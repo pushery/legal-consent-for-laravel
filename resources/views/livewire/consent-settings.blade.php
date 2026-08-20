@@ -64,6 +64,14 @@
                         <button type="button" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $item['title']]) }}" wire:click="withdraw(@js($item['key']))">
                             {{ __('legal-consent::ui.withdraw') }}
                         </button>
+                    {{-- The counterpart, and only where the embedding screen asked for it. A
+                         per-item label again, for the same reason the withdraw button has one:
+                         a screen reader's button list of five identical "Give" entries names
+                         nothing. --}}
+                    @elseif (! $item['held'] && $this->allowGrant)
+                        <button type="button" aria-label="{{ __('legal-consent::ui.grant_for', ['title' => $item['title']]) }}" wire:click="grant(@js($item['key']))">
+                            {{ __('legal-consent::ui.grant') }}
+                        </button>
                     @endif
                 </li>
             @endforeach

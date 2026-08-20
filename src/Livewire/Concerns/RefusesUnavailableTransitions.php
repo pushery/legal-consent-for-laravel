@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Livewire\Concerns;
 
 use Closure;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
+use Pushery\LegalConsent\Exceptions\NotGrantableException;
 use Pushery\LegalConsent\Exceptions\NotObjectableException;
 use Pushery\LegalConsent\Exceptions\NotTerminableException;
 use Pushery\LegalConsent\Exceptions\NotWithdrawableException;
@@ -81,7 +82,7 @@ trait RefusesUnavailableTransitions
             }
 
             throw new NotFoundHttpException($e->getMessage(), $e);
-        } catch (NotObjectableException|NotTerminableException|NotWithdrawableException $e) {
+        } catch (NotGrantableException|NotObjectableException|NotTerminableException|NotWithdrawableException $e) {
             throw new NotFoundHttpException($e->getMessage(), $e);
         }
     }

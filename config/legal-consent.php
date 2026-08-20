@@ -359,6 +359,26 @@ return [
     |--------------------------------------------------------------------------
     | Registration integration
     |--------------------------------------------------------------------------
+    |
+    | ⚠️ THIS DEFAULT IS SAFE ONLY BECAUSE A REGISTRATION FORM VALIDATED THE TICK.
+    |
+    | For a CONSENT document the recorder checks the submitted field itself and
+    | skips the key when it is absent. For a CONTRACT or an ACKNOWLEDGEMENT it
+    | does not: those are mandatory, RegistrationRules makes them required, and
+    | re-checking here would be a second truth about the same thing. So the
+    | recorder accepts them unconditionally and relies on the form.
+    |
+    | Sign people in through an external provider — OAuth, SSO, an invitation
+    | link — and there is no form. The callback carries no such fields, so
+    | nothing validated the tick and nothing here notices. With this switch on,
+    | the first callback writes an acceptance row for every mandatory document
+    | WITHOUT A HUMAN HAVING DONE ANYTHING — in the one table whose entire
+    | purpose is to prove that a human did.
+    |
+    | If your application has no registration form, turn this OFF and capture
+    | the first acceptance where it actually happens: an interstitial after
+    | authentication and before first use, recorded under
+    | ConsentMethod::FirstUseGate.
     */
     'registration' => [
         'listen_to_registered_event' => true,
