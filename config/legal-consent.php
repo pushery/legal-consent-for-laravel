@@ -370,10 +370,16 @@ return [
     |
     | Sign people in through an external provider — OAuth, SSO, an invitation
     | link — and there is no form. The callback carries no such fields, so
-    | nothing validated the tick and nothing here notices. With this switch on,
-    | the first callback writes an acceptance row for every mandatory document
-    | WITHOUT A HUMAN HAVING DONE ANYTHING — in the one table whose entire
-    | purpose is to prove that a human did.
+    | nothing validated the tick. With this switch on, the first callback writes
+    | an acceptance row for every mandatory document WITHOUT A HUMAN HAVING DONE
+    | ANYTHING — in the one table whose entire purpose is to prove that a human
+    | did.
+    |
+    | The recorder now SAYS so: recording a mandatory document whose
+    | `legal_<key>` field is absent from the request logs a warning naming the
+    | keys. It still records them — refusing would break every application whose
+    | form names the fields differently — so treat that warning as the signal
+    | that this switch is wrong for your sign-in route, not as a failed write.
     |
     | If your application has no registration form, turn this OFF and capture
     | the first acceptance where it actually happens: an interstitial after

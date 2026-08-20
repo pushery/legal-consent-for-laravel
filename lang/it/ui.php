@@ -31,6 +31,9 @@ return [
     'objection_closed' => 'Termine di opposizione scaduto',
     'submit' => 'Accetta e continua',
     'all_current' => 'Tutto è aggiornato — niente da fare.',
+    // The one state a settings screen must not blur: a new major version is waiting, so
+    // this is the invitation to do voluntarily what the gate will otherwise compel.
+    'action_required' => 'Azione necessaria',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}In vigore da oggi|{1}Ancora :count giorno|[2,*]Ancora :count giorni',

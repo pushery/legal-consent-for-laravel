@@ -31,6 +31,9 @@ return [
     'objection_closed' => 'Plazo de oposición cerrado',
     'submit' => 'Aceptar y continuar',
     'all_current' => 'Todo está al día — no hay nada que hacer.',
+    // The one state a settings screen must not blur: a new major version is waiting, so
+    // this is the invitation to do voluntarily what the gate will otherwise compel.
+    'action_required' => 'Acción necesaria',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}En vigor hoy|{1}Queda :count día|[2,*]Quedan :count días',

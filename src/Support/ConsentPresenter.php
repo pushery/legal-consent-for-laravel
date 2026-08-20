@@ -41,7 +41,7 @@ final readonly class ConsentPresenter
         // host's URL resolver receives the model. A resolver that builds a per-locale route would
         // otherwise read null off a column that was simply never fetched.
         $documents = LegalDocument::query()
-            ->select(['key', 'title', 'version', 'major_version', 'type', 'locale'])
+            ->select(['key', 'title', 'version', 'major_version', 'type', 'locale', 'requires_explicit_optin'])
             ->where('locale', $locale)
             ->where('is_active', true)
             ->orderBy('key')
@@ -53,6 +53,16 @@ final readonly class ConsentPresenter
                 'title' => $document->title,
                 'version' => $document->version,
                 'held' => ($held[$document->key] ?? 0) >= $document->major_version,
+                // `held === false` covers two different positions, and only one of them asks the
+                // subject for anything: never accepted at all, versus a NEW MAJOR waiting. The
+                // second one ends at the gate — the screen where it could have been done
+                // voluntarily is the one that has to say so, or the package only ever compels
+                // where it could have invited.
+                //
+                // Computed exactly as statusFor() does, including the opt-in exclusion: a
+                // voluntary consent is never outstanding, because demanding one is Art. 7(4).
+                'outstanding' => ! $document->requires_explicit_optin
+                    && ($held[$document->key] ?? 0) < $document->major_version,
                 'withdrawable' => $document->type->isWithdrawable(),
                 // Null unless the host configured `document_url`. A settings screen on which the
                 // document being withdrawn cannot be read is silent exactly where Art. 7(3) assumes

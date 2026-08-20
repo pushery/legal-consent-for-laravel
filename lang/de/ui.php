@@ -31,6 +31,9 @@ return [
     'objection_closed' => 'Widerspruchsfrist abgelaufen',
     'submit' => 'Zustimmen und fortfahren',
     'all_current' => 'Alles aktuell — nichts zu tun.',
+    // The one state a settings screen must not blur: a new major version is waiting, so
+    // this is the invitation to do voluntarily what the gate will otherwise compel.
+    'action_required' => 'Aktion erforderlich',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}Ab heute wirksam|{1}Noch :count Tag|[2,*]Noch :count Tage',

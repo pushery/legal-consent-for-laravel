@@ -9,7 +9,7 @@
     ein"), and only a real consent is withdrawable (Art. 7(3)). Collapsing them would blur exactly
     the distinction this package exists to keep.
 
-    $contracts / $acknowledgements / $consents: list{key, title, version, held, withdrawable}.
+    $contracts / $acknowledgements / $consents: list{key, title, version, held, outstanding, withdrawable}.
 --}}
 <x-wirekit::stack gap="lg" class="legal-consent-settings">
     <x-wirekit::heading :level="2">{{ __('legal-consent::ui.settings_heading') }}</x-wirekit::heading>
@@ -19,7 +19,7 @@
         <x-wirekit::stack gap="xs">
             @foreach ($contracts as $item)
                 <x-wirekit::text>
-                    {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                    {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                 </x-wirekit::text>
             @endforeach
         </x-wirekit::stack>
@@ -30,7 +30,7 @@
         <x-wirekit::stack gap="xs">
             @foreach ($acknowledgements as $item)
                 <x-wirekit::text>
-                    {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                    {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                 </x-wirekit::text>
             @endforeach
         </x-wirekit::stack>

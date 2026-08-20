@@ -4,6 +4,50 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.15.0 → 0.16.0
+
+**Almost nothing to do.** Everything in this release is additive except one refusal, and that one
+only fires on code that was already producing an unverifiable chain.
+
+### The tamper-evidence chain now refuses a row it cannot hash
+
+`LedgerHashChain::hashRow()` accepts any object, and it used to fold anything without a string form
+— an array, an object, a bool `false` — onto the same `S0:` an actual empty string produces. Four
+different rows therefore shared one hash, and the class docblock promised the opposite.
+
+Such a value now raises `UnhashableProofFieldException`, naming the field and the type.
+
+**You are affected only if you hand it something that is not a database row.** Both shipped call
+sites pass raw `DB::table(...)` rows, so the package's own paths are unchanged, and **no existing
+hash moves**: null, string, int and float encode byte-for-byte as before.
+
+The realistic case is an override. `DefaultConsentManager::latestChainedRow()` is `protected`, and
+returning an Eloquent model from it is the obvious rewrite — but `LegalConsent` casts
+`document_type`, `action`, `method` and `accepted_at` to enums and a date object, so four of the
+eighteen proof fields hashed as empty, including which document, which act and when. That wrote a
+link `legal-consent:verify-ledger` could never reproduce, and the command later reported tampering
+on rows nobody had touched.
+
+If you have such an override, return the row as the driver gave it to you:
+
+```php
+protected function latestChainedRow(string $token): ?object
+{
+    return DB::table('legal_consents')->where('subject_token', $token)->latest('id')->first();
+}
+```
+
+If you ran with a model-returning override before this release, the rows written that way already
+carry unverifiable links. The ledger is append-only, so they cannot be corrected — run
+`legal-consent:verify-ledger` to see which subjects are affected and record the cause alongside
+your retention notes.
+
+### A new log warning, and nothing to change
+
+Recording a mandatory document whose `legal_<key>` field is absent from the request now logs a
+warning. It still records. If you see it, the `Registered` listener is running on a sign-in route
+that has no registration form — the section above on `FirstUseGate` is the fix.
+
 ## 0.14.0 → 0.15.0
 
 **Nothing to do.** This section exists because the composer manifest changed visibly, and a
