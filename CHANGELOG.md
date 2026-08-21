@@ -4,6 +4,49 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1] - 2026-08-21
+
+**Two fixes, both in places where nothing went red.** A consumer who declines this package's tables
+with `ignoreMigrations()` was still getting three scheduled commands a night against relations that
+do not exist; and the two publishable settings stubs never rendered the document link the presenter
+has carried since 0.13.0, so a screen built from a stub left the title as plain text.
+
+Nothing here is breaking, and no configuration changes.
+
+### Fixed
+
+- **The two publishable settings stubs now link the document, like the component views already
+  did.** `ConsentPresenter::settingsFor()` has carried a `url` key since 0.13.0, and both Livewire
+  views render it — but the stubs a consumer publishes and styles did not, and their header
+  comments documented a data contract short of the key, so nobody reading them would have looked
+  for it.
+
+  Where the host configured `legal-consent.document_url` the title is now a link in both stubs;
+  where it is not, it stays plain text with no empty `href`. A settings screen on which the
+  document being withdrawn cannot be read is silent exactly where Art. 7(3) assumes the subject
+  knows what they are deciding about.
+
+  Both stub headers now state all seven keys, that `outstanding` is always false for a consent
+  (demanding a voluntary one would be Art. 7(4)) — and, in the framework-agnostic stub, that its
+  withdraw form's `withdraw_url` is **not** supplied by the package and must be pointed at your own
+  route. As shipped that button submitted to `#`.
+
+- **A consumer that declines the package's tables no longer gets three failing scheduled commands a
+  night.** `ignoreMigrations()` and the three `schedule.*` config flags answered different
+  questions and nothing connected them: the config flags say whether you WANT a sweep, while
+  `$runsMigrations` says whether it CAN run here at all. The flag was read in exactly one place —
+  where the migrations are loaded — so `dispatch-notices`, `close-objection-windows` and `prune`
+  were registered regardless, then ran every night against relations that do not exist. With
+  schedule monitoring that is one tracker entry per run, indefinitely.
+
+  For this package it is worse than noise: `dispatch-notices` sends overdue re-consent notices, and
+  their absence is legally relevant. A sweep that is permanently red is where a real failure stops
+  being visible.
+
+  The registration is now gated on `self::$runsMigrations`, read at boot rather than inside the
+  closure, so nothing is registered that could only fail later. No database access is added at boot,
+  and an installation that keeps the tables is unaffected.
+
 ## [0.16.0] - 2026-08-20
 
 **The settings screen now distinguishes "you never accepted this" from "a new version is waiting

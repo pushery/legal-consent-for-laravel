@@ -199,36 +199,46 @@ final class LegalConsentServiceProvider extends ServiceProvider
             Event::listen(Registered::class, RecordConsentOnRegistration::class);
         }
 
-        $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
-            if ((bool) config('legal-consent.schedule.dispatch_notices', true)) {
-                $schedule->command('legal-consent:dispatch-notices')
-                    ->hourly()
-                    // Cap the overlap lock at 2h, not the 24h default: a hung hourly run should
-                    // self-clear well before the next legally time-boxed sweep, so a stuck lock
-                    // cannot silence the sweep — and its heartbeat — for a whole day.
-                    ->withoutOverlapping(120)
-                    ->onOneServer();
-            }
+        // A scheduled command that touches this package's tables cannot run for a consumer who
+        // declined them with ignoreMigrations(). The config flag beside each registration below
+        // answers whether the consumer WANTS that sweep; this one answers whether it CAN run here
+        // at all, and nothing connected the two — so a consumer that declined the tables still got
+        // three commands a night against relations that do not exist.
+        //
+        // Read at boot, outside the closure: a registration that only fails later is still a
+        // registration, and with schedule monitoring it is one tracker entry per run, forever.
+        if (self::$runsMigrations) {
+            $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
+                if ((bool) config('legal-consent.schedule.dispatch_notices', true)) {
+                    $schedule->command('legal-consent:dispatch-notices')
+                        ->hourly()
+                        // Cap the overlap lock at 2h, not the 24h default: a hung hourly run should
+                        // self-clear well before the next legally time-boxed sweep, so a stuck lock
+                        // cannot silence the sweep — and its heartbeat — for a whole day.
+                        ->withoutOverlapping(120)
+                        ->onOneServer();
+                }
 
-            if ((bool) config('legal-consent.schedule.close_objection_windows', true)) {
-                $schedule->command('legal-consent:close-objection-windows')
-                    ->hourly()
-                    // See dispatch-notices above: a 2h overlap cap, not the 24h default.
-                    ->withoutOverlapping(120)
-                    ->onOneServer();
-            }
+                if ((bool) config('legal-consent.schedule.close_objection_windows', true)) {
+                    $schedule->command('legal-consent:close-objection-windows')
+                        ->hourly()
+                        // See dispatch-notices above: a 2h overlap cap, not the 24h default.
+                        ->withoutOverlapping(120)
+                        ->onOneServer();
+                }
 
-            // Opt-IN, unlike its two siblings: this sweep DELETES. An app upgrading into this
-            // version must not silently start erasing records it has been accumulating — that
-            // decision belongs to the consumer, once, deliberately. Daily is enough for a
-            // period measured in years, and it keeps the nightly window small.
-            if ((bool) config('legal-consent.schedule.prune', false)) {
-                $schedule->command('legal-consent:prune')
-                    ->daily()
-                    ->withoutOverlapping()
-                    ->onOneServer();
-            }
-        });
+                // Opt-IN, unlike its two siblings: this sweep DELETES. An app upgrading into this
+                // version must not silently start erasing records it has been accumulating — that
+                // decision belongs to the consumer, once, deliberately. Daily is enough for a
+                // period measured in years, and it keeps the nightly window small.
+                if ((bool) config('legal-consent.schedule.prune', false)) {
+                    $schedule->command('legal-consent:prune')
+                        ->daily()
+                        ->withoutOverlapping()
+                        ->onOneServer();
+                }
+            });
+        }
 
         if ($this->app->runningInConsole()) {
             $this->registerPublishing();

@@ -9,7 +9,12 @@
     ein"), and only a real consent is withdrawable (Art. 7(3)). Collapsing them would blur exactly
     the distinction this package exists to keep.
 
-    $contracts / $acknowledgements / $consents: list{key, title, version, held, outstanding, withdrawable}.
+    $contracts / $acknowledgements / $consents:
+        list{key, title, version, held, outstanding, withdrawable, url}.
+
+    `url` is null unless the host configured `legal-consent.document_url`. Where it is set the
+    title becomes a link: a settings screen on which the document being withdrawn cannot be read
+    is silent exactly where Art. 7(3) assumes the subject knows what they are deciding about.
 --}}
 <x-wirekit::stack gap="lg" class="legal-consent-settings">
     <x-wirekit::heading :level="2">{{ __('legal-consent::ui.settings_heading') }}</x-wirekit::heading>
@@ -19,7 +24,12 @@
         <x-wirekit::stack gap="xs">
             @foreach ($contracts as $item)
                 <x-wirekit::text>
-                    {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                    @if (($item['url'] ?? null) !== null)
+                        <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                    @else
+                        {{ $item['title'] }}
+                    @endif
+                    <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                 </x-wirekit::text>
             @endforeach
         </x-wirekit::stack>
@@ -30,7 +40,12 @@
         <x-wirekit::stack gap="xs">
             @foreach ($acknowledgements as $item)
                 <x-wirekit::text>
-                    {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                    @if (($item['url'] ?? null) !== null)
+                        <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                    @else
+                        {{ $item['title'] }}
+                    @endif
+                    <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                 </x-wirekit::text>
             @endforeach
         </x-wirekit::stack>
@@ -41,7 +56,13 @@
         <x-wirekit::stack gap="xs">
             @foreach ($consents as $item)
                 <x-wirekit::stack gap="sm" :wrap="true" class="legal-consent-settings__consent">
-                    <x-wirekit::text>{{ $item['title'] }}</x-wirekit::text>
+                    <x-wirekit::text>
+                        @if (($item['url'] ?? null) !== null)
+                            <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                        @else
+                            {{ $item['title'] }}
+                        @endif
+                    </x-wirekit::text>
 
                     @if ($item['held'] && $item['withdrawable'])
                         {{-- A withdrawal is irreversible: it appends a Withdrawn row to an
