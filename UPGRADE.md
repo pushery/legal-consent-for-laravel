@@ -4,6 +4,31 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.16.0 → 0.16.1
+
+**Nothing to do.** Both changes are fixes, and neither asks anything of you.
+
+### If you use `ignoreMigrations()`
+
+The three scheduled commands — `dispatch-notices`, `close-objection-windows` and `prune` — are no
+longer registered when you decline the package's tables. Until now they were, and ran nightly against
+relations that do not exist: a non-zero exit each time, and with schedule monitoring one entry in
+your error tracker per run.
+
+If you had turned the `schedule.*` flags off to silence that, you can turn them back on. Nothing
+registers while the tables are declined, and the decision is made at boot with no database access.
+
+### If you published a settings stub
+
+`resources/views/consent-settings.blade.php` and its WireKit variant now render the document title as
+a link when `legal-consent.document_url` is configured, and as plain text when it is not. **A stub you
+published earlier is your file and does not change** — copy the `@if (($item['url'] ?? null) !== null)`
+block from the shipped version if you want the link.
+
+The stub headers also now list all seven keys the presenter delivers. The framework-agnostic one
+additionally states what it never did: its withdraw form's `withdraw_url` is **not** supplied by the
+package. As shipped that button submits to `#`. Point it at your own route.
+
 ## 0.15.0 → 0.16.0
 
 **Almost nothing to do.** Everything in this release is additive except one refusal, and that one
