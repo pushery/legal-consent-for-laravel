@@ -4,6 +4,88 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.16.1 → 0.17.0
+
+### If your app has WireKit installed, your consent screens will look different
+
+`legal-consent.ui.variant` is new and defaults to `auto`: with `pushery/wirekit` ≥ 2.26.0 installed,
+the package now serves its **WireKit-native** views instead of the plain stubs. Previously that only
+happened if you had run `vendor:publish --tag=legal-consent-wirekit`.
+
+This is the fix for a silent defect — an unstyled view renders, so an application using WireKit
+everywhere else was serving bare HTML on `/settings/consents` and on the re-consent gate with
+nothing going red — but it is still a visible change on a screen you may have styled around.
+
+**To keep exactly what you have**, pin the plain set:
+
+```php
+// config/legal-consent.php
+'ui' => [
+    'variant' => 'plain',
+],
+```
+
+Nothing changes for an application without WireKit, and nothing changes for one that had already
+published the WireKit tag: a published view is still checked before either set.
+
+### If you implement `ConsentManager` yourself
+
+The interface gains two methods — `requestConfirmation()` and `confirm()` — so a custom
+implementation will not satisfy it until they are added. `ConsentFake` and the shipped manager
+already have them.
+
+`statusFor()`'s array shape also gains a `pending_confirmation` key. Reading code is unaffected;
+a custom implementation should fill it, and a static analyzer will say so.
+
+Nothing else changes: the two new `ConsentAction` cases and the new `ConsentMethod` case are
+additive, no migration ships, and no existing row means anything different than it did.
+
+### If you sign people in through an external provider
+
+`registration.without_form_fields` is new. **Nothing changes unless you set it**: the default
+`warn` is exactly what 0.16.0 already did. Set it to `refuse` and an unevidenced mandatory consent
+raises `UnevidencedConsentException` instead of being recorded with a log line.
+
+```php
+'registration' => ['without_form_fields' => 'refuse'],
+```
+
+Do that only if your registration form uses the field names the package generates — the check can
+look for nothing else, so an application with its own naming would start failing registrations
+that are perfectly correct.
+
+### If you published the framework-agnostic settings stub
+
+Its withdraw button used to post to `#` — `withdraw_url` had no producer in the package, so the
+fallback always won. The shipped stub now renders the form only when that key is filled, and fills
+it from a new opt-in route:
+
+```php
+// config/legal-consent.php
+'routes' => [
+    'web' => true,   // POST /legal/consent/withdraw, behind ['web', 'auth']
+],
+```
+
+**A stub you published earlier is your file and does not change.** If its button still posts to
+`#`, either turn the route on and copy the `@if (($consent['withdraw_url'] ?? null) !== null)`
+wrapper from the shipped version, or point the action at your own route.
+
+The same applies to the **WireKit** settings stub, where the defect was sharper: it withdrew with
+`wire:click`, which on a page with no Livewire component behind it does nothing whatsoever. If you
+published that one, take the form and the `form="lc-withdraw-form-…"` confirm button from the
+shipped version.
+
+### If you published `config/legal-consent.php`
+
+`ui` is a **new top-level block**, so `mergeConfigFrom()` delivers it in full and you need not do
+anything. Add it to your published file only if you want to pin the variant.
+
+`routes.web`, `routes.web_prefix` and `routes.web_middleware` are different: they sit **inside** a
+block your published file already declares, and the merge is flat — so your `routes` block wins
+wholesale and those three never reach runtime. The route simply stays off, which is the default
+anyway. Add them by hand if you want it. `legal-consent:doctor` lists exactly this case.
+
 ## 0.16.0 → 0.16.1
 
 **Nothing to do.** Both changes are fixes, and neither asks anything of you.

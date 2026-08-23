@@ -12,13 +12,16 @@ use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentAction;
+use Pushery\LegalConsent\Events\ConsentConfirmationRequested;
 use Pushery\LegalConsent\Events\ConsentObjected;
 use Pushery\LegalConsent\Events\ConsentRecorded;
 use Pushery\LegalConsent\Events\ConsentTerminated;
 use Pushery\LegalConsent\Events\ConsentWithdrawn;
 use Pushery\LegalConsent\Exceptions\DocumentChangedException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
+use Pushery\LegalConsent\Exceptions\NotConfirmableException;
 use Pushery\LegalConsent\Exceptions\NotConsentBearingException;
+use Pushery\LegalConsent\Exceptions\NotGrantableException;
 use Pushery\LegalConsent\Exceptions\NotObjectableException;
 use Pushery\LegalConsent\Exceptions\NotTerminableException;
 use Pushery\LegalConsent\Exceptions\NotWithdrawableException;
@@ -53,6 +56,16 @@ readonly class DefaultConsentManager implements ConsentManager
         private bool $ageGateEnabled = false,
         private int $ageThreshold = 16,
         private DocumentUrlResolver $urls = new DocumentUrlResolver,
+        /**
+         * How long a double-opt-in request stays confirmable — a relative-time string Carbon can
+         * parse ('7 days'), or null for no limit.
+         *
+         * Null is the default because a limit that nobody chose would start refusing confirmations
+         * an application was already accepting. Where it is set it is the ledger-side half of what
+         * a signed URL expiry does in the link: an application that does not sign its confirmation
+         * links has no other check at all.
+         */
+        private ?string $confirmWithin = null,
     ) {}
 
     public function published(string $documentKey, ?string $locale = null): ?PublishedDocument
@@ -262,6 +275,69 @@ readonly class DefaultConsentManager implements ConsentManager
         return $this->append($subject, $document, ConsentAction::Terminated, $context);
     }
 
+    public function requestConfirmation(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
+    {
+        $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
+
+        // Only a voluntary consent has a double opt-in to run. A contract or a privacy notice is
+        // mandatory and is accepted where its full text is presented — a confirmation link cannot
+        // present anything, so a two-step flow there would prove less than the one-step one it
+        // replaced. The same refusal `grant()` makes, for the same reason.
+        if (! $document->type->requiresExplicitOptin()) {
+            throw NotGrantableException::for($documentKey, $document->type);
+        }
+
+        return $this->append($subject, $document, ConsentAction::OptInRequested, $context);
+    }
+
+    public function confirm(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
+    {
+        $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
+
+        if (! $document->type->requiresExplicitOptin()) {
+            throw NotGrantableException::for($documentKey, $document->type);
+        }
+
+        // Cross-locale, like every other holding question: consent attaches to a document's
+        // identity, not to the language it was read in. The LATEST row is what decides — a request
+        // that was already confirmed, or withdrawn since, is not pending any more, and a fold over
+        // history would happily confirm it twice.
+        $pending = $this->gate->latestActionFor($subject, $documentKey);
+
+        if (! $pending instanceof LegalConsent || $pending->action !== ConsentAction::OptInRequested) {
+            throw NotConfirmableException::noPendingRequest($documentKey);
+        }
+
+        if ($this->confirmWindowClosed($pending)) {
+            throw NotConfirmableException::windowClosed($documentKey, (string) $this->confirmWithin);
+        }
+
+        // A new MAJOR between the two halves means the subject would be confirming a text they
+        // never read (Art. 7(1)). Major, not any change: that is the line the gate already draws
+        // everywhere else — an editorial fix never forces a fresh acceptance, a material change
+        // always does — and drawing a second, stricter line here would make the two disagree.
+        if ($pending->document_major_version !== $document->major_version) {
+            throw NotConfirmableException::superseded($documentKey, $pending->document_major_version, $document->major_version);
+        }
+
+        return $this->append($subject, $document, ConsentAction::Confirmed, $context);
+    }
+
+    /**
+     * Whether a pending request has aged out of the configured confirmation window.
+     *
+     * Unconfigured means no window, and therefore never closed — a limit nobody chose must not
+     * start refusing confirmations an application was already accepting.
+     */
+    private function confirmWindowClosed(LegalConsent $pending): bool
+    {
+        if ($this->confirmWithin === null || trim($this->confirmWithin) === '') {
+            return false;
+        }
+
+        return $pending->accepted_at->add($this->confirmWithin)->isBefore(CarbonImmutable::now());
+    }
+
     public function outstanding(Model $subject, ?string $locale = null): Collection
     {
         return $this->gate->outstandingFor($subject, $locale ?? $this->defaultLocale);
@@ -295,7 +371,9 @@ readonly class DefaultConsentManager implements ConsentManager
     public function statusFor(Model $subject, ?string $locale = null): array
     {
         $locale ??= $this->defaultLocale;
-        $accepted = $this->gate->heldMajorByKey($subject);
+        $standing = $this->gate->standingFor($subject);
+        $accepted = $standing['held'];
+        $pending = $standing['pending'];
 
         $documents = LegalDocument::query()
             ->select(['key', 'type', 'major_version', 'requires_explicit_optin'])
@@ -320,6 +398,11 @@ readonly class DefaultConsentManager implements ConsentManager
                 'current_major' => $document->major_version,
                 'requires_explicit_optin' => $document->requires_explicit_optin,
                 'outstanding' => ! $document->requires_explicit_optin && $acceptedMajor < $document->major_version,
+                // The double opt-in's middle state, and the only one `accepted_major` cannot
+                // express: entered but not yet confirmed reads as never entered, so a screen built
+                // from this map would invite the subject to enter themselves a second time and a
+                // report would count them as having declined.
+                'pending_confirmation' => in_array($document->key, $pending, true),
             ];
         }
 
@@ -399,6 +482,13 @@ readonly class DefaultConsentManager implements ConsentManager
             ConsentAction::Withdrawn => new ConsentWithdrawn($consent),
             ConsentAction::Objected => new ConsentObjected($consent),
             ConsentAction::Terminated => new ConsentTerminated($consent),
+            // Named rather than left to the default, and that is the whole point of it: the
+            // default is ConsentRecorded, which is what a consuming application provisions on. An
+            // unconfirmed opt-in request must not reach that listener — it is a declaration nobody
+            // has yet tied to the address it names. The row would say "requested" while every
+            // listener heard "granted", which is the silent shape of the exact defect the two-row
+            // design exists to prevent.
+            ConsentAction::OptInRequested => new ConsentConfirmationRequested($consent),
             default => new ConsentRecorded($consent),
         });
 

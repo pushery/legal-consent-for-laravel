@@ -22,6 +22,8 @@ use Pushery\LegalConsent\Testing\ConsentFake;
  * @method static LegalConsent withdraw(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null)
  * @method static LegalConsent object(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null)
  * @method static LegalConsent terminate(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null)
+ * @method static LegalConsent requestConfirmation(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null)
+ * @method static LegalConsent confirm(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null)
  * @method static Collection<int, LegalDocument> outstanding(Model $subject, ?string $locale = null)
  * @method static bool hasCurrent(Model $subject, string $documentKey, ?string $locale = null)
  * @method static array<string, array<string, mixed>> statusFor(Model $subject, ?string $locale = null)

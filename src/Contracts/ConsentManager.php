@@ -55,6 +55,31 @@ interface ConsentManager
     public function terminate(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
 
     /**
+     * Record the FIRST half of a double opt-in: the subject entered themselves, and nobody has yet
+     * shown that whoever did so controls the address.
+     *
+     * The row does NOT make the consent held — that is the point of it. For advertising e-mail the
+     * confirmed double opt-in is the German benchmark (§ 7 Abs. 2 UWG with Art. 7 DSGVO) and the
+     * burden of proof lies with the controller (Art. 7(1)), so an unconfirmed entry must not read
+     * as a consent anywhere: not in `statusFor()`, not in the gate, not in an Art. 15 export.
+     *
+     * Throws NotGrantableException for anything that is not a voluntary consent: a contract is
+     * agreed where its full text is presented, and a confirmation link presents nothing.
+     */
+    public function requestConfirmation(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
+
+    /**
+     * Record the SECOND half: the subject followed the confirmation link, so the declaration and
+     * the address belong to the same person. THIS is the row that makes the consent held.
+     *
+     * Requires a pending request as the subject's latest row for the document. Throws
+     * NotConfirmableException when there is none, when the configured confirmation window has
+     * closed, or when a new MAJOR version was published in between — confirming that one would
+     * freeze a text the subject never read.
+     */
+    public function confirm(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
+
+    /**
      * The mandatory documents this subject still owes acceptance for.
      *
      * @return Collection<int, LegalDocument>
@@ -69,7 +94,7 @@ interface ConsentManager
     /**
      * A per-document status map for the subject.
      *
-     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool}>
+     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool}>
      */
     public function statusFor(Model $subject, ?string $locale = null): array;
 

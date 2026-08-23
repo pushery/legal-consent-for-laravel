@@ -29,10 +29,18 @@
             @endif
         </div>
 
+        {{-- The all-empty case gets ONE sentence instead of three headings over nothing. It is not
+             the edge case it looks like: the groups are built from the `legal_documents` table,
+             which is empty until `legal-consent:publish` runs — so this is what every consumer sees
+             between `composer require` and their first publish. --}}
+        @if (count($contracts) === 0 && count($acknowledgements) === 0 && count($consents) === 0)
+            <x-wirekit::text intent="muted">{{ __('legal-consent::ui.nothing_published') }}</x-wirekit::text>
+        @else
+
         <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-contracts">
             <x-wirekit::heading :level="3" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</x-wirekit::heading>
             <x-wirekit::stack gap="xs">
-                @foreach ($contracts as $item)
+                @forelse ($contracts as $item)
                     <x-wirekit::text>
                         @if (($item['url'] ?? null) !== null)
                             <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
@@ -41,14 +49,16 @@
                         @endif
                         <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                     </x-wirekit::text>
-                @endforeach
+                @empty
+                    <x-wirekit::text intent="muted">{{ __('legal-consent::ui.contracts_empty') }}</x-wirekit::text>
+                @endforelse
             </x-wirekit::stack>
         </x-wirekit::stack>
 
         <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-acknowledgements">
             <x-wirekit::heading :level="3" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</x-wirekit::heading>
             <x-wirekit::stack gap="xs">
-                @foreach ($acknowledgements as $item)
+                @forelse ($acknowledgements as $item)
                     <x-wirekit::text>
                         @if (($item['url'] ?? null) !== null)
                             <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
@@ -57,14 +67,16 @@
                         @endif
                         <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                     </x-wirekit::text>
-                @endforeach
+                @empty
+                    <x-wirekit::text intent="muted">{{ __('legal-consent::ui.acknowledgements_empty') }}</x-wirekit::text>
+                @endforelse
             </x-wirekit::stack>
         </x-wirekit::stack>
 
         <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-consents">
             <x-wirekit::heading :level="3" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</x-wirekit::heading>
             <x-wirekit::stack gap="xs">
-                @foreach ($consents as $item)
+                @forelse ($consents as $item)
                     <x-wirekit::stack gap="sm" :wrap="true" class="legal-consent-settings__consent">
                         <x-wirekit::text>
                             @if (($item['url'] ?? null) !== null)
@@ -103,6 +115,12 @@
                                     </x-wirekit::button>
                                 </x-wirekit::alert-dialog.actions>
                             </x-wirekit::alert-dialog>
+                        {{-- The double opt-in's middle state, and it takes the place of the Give
+                             button rather than sitting beside it: giving again would write a
+                             second request, which supersedes the first and stops the confirmation
+                             link already in the subject's inbox from working. --}}
+                        @elseif ($item['pending_confirmation'] ?? false)
+                            <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.confirmation_pending') }}</x-wirekit::badge>
                         {{-- The counterpart, and only where the embedding screen asked for it.
                              Deliberately NOT behind an alert-dialog: giving a voluntary consent is
                              reversible in one click on this very screen, so a confirmation would
@@ -114,8 +132,11 @@
                             </x-wirekit::button>
                         @endif
                     </x-wirekit::stack>
-                @endforeach
+                @empty
+                    <x-wirekit::text intent="muted">{{ __('legal-consent::ui.consents_empty') }}</x-wirekit::text>
+                @endforelse
             </x-wirekit::stack>
         </x-wirekit::stack>
+        @endif
     </x-wirekit::stack>
 </div>

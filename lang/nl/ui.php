@@ -9,6 +9,22 @@ return [
     'contracts_heading' => 'Contracten',
     'acknowledgements_heading' => 'Kennisgenomen',
     'consents_heading' => 'Toestemmingen',
+
+    // Empty states. A group with no entries used to render its heading over nothing, and that is
+    // not the rare case it looks like: statusFor() reads the `legal_documents` table, which a
+    // freshly installed package has NOTHING in until `legal-consent:publish` runs — so an empty
+    // screen is the SHIPPING state every consumer meets first, and three bare headings read as
+    // broken rather than as "nothing yet". `nothing_published` covers all three being empty at
+    // once, where one sentence says more than three.
+    'nothing_published' => 'Hier is nog niets — er zijn geen juridische teksten gepubliceerd.',
+    'contracts_empty' => 'Geen contracten.',
+    'acknowledgements_empty' => 'Niets kennisgenomen.',
+    'consents_empty' => 'Geen toestemmingen.',
+    // The double opt-in's middle state. It needs saying because it is the one position the screen
+    // cannot show any other way: entered but not yet confirmed looks exactly like never entered,
+    // so without this the subject is invited to enter themselves again — and the second request
+    // supersedes the first, which stops the confirmation link already in their inbox from working.
+    'confirmation_pending' => 'Bevestiging open — kijk in je inbox.',
     'grant' => 'Geven',
     'withdraw' => 'Intrekken',
     // Per-item accessible name for the withdraw control: with N consents, N buttons all

@@ -4,6 +4,150 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-08-23
+
+**A minor bump that carries one breaking change**, which SemVer `0.y.z` allows and `UPGRADE.md` has
+said from its first line: `ConsentManager` gains `requestConfirmation()` and `confirm()`, so a
+custom implementation of the interface no longer satisfies it. Nothing else removes or renames
+anything — but `ui.variant` defaults to `auto`, so an application with WireKit installed will *look*
+different without having changed a line. Both are written up in `UPGRADE.md`.
+
+### Added
+
+- **Double opt-in is provable from the ledger alone.** `ConsentAction` gains `optin_requested` and
+  `confirmed`, `ConsentMethod` gains `double_opt_in`, and the manager gains
+  `requestConfirmation()` and `confirm()`. Until now both halves could only be written as
+  `granted`, so two rows with different timestamps were all that was left and whoever had to prove
+  which one was the confirmation could only assert that the second one was — on the question that
+  gets asked most often, because for advertising e-mail the confirmed double opt-in is the German
+  benchmark (§ 7 Abs. 2 UWG with Art. 7 DSGVO) and the burden of proof is the controller's.
+
+  **The unconfirmed row is not a consent**, and that is the decision the whole design turns on. It
+  does not raise `accepted_major`, `hasCurrent()` stays false, and nothing about it can gate — a
+  voluntary consent may never gate at all (Art. 7(4)). The alternative —
+  a consent that lapses if unconfirmed — would have the ledger assert, for the whole unconfirmed
+  window, a consent that never existed. `statusFor()` gains `pending_confirmation` for that middle
+  state, which is otherwise invisible: entered but unconfirmed folds to the same zero as never
+  entered, so a screen would invite the subject to enter themselves a second time and supersede
+  the link already in their inbox. All four bundled settings views show it instead.
+
+  A request neither grants nor ends anything, so the gate's fold treats it as **neutral**, the way
+  it already treats an objection: re-declaring an interest in something already held must not
+  silently drop it.
+
+  `ConsentConfirmationRequested` is a separate event on purpose — `ConsentRecorded` is what a
+  consuming application provisions on, and letting the request fall through to it would be the
+  silent version of the whole problem. Sending the mail stays the application's job; this is the
+  seam.
+
+  A confirmation is refused with `NotConfirmableException` when there is no pending request (a
+  second click on the same link included), when `double_opt_in.confirm_within` has elapsed, or
+  when a new **major** was published in between. The `reason` is a field rather than a phrase in
+  the message, because those three need different copy.
+
+- **`registration.without_form_fields` — the no-form warning can now be a refusal.** Since 0.16.0
+  the recorder logs when it writes a mandatory consent from a request that carries no
+  `legal_<key>` field, which is what an external-provider sign-in looks like: `Registered` fires,
+  no form ran, and a row asserting that a human acted is written anyway — into a table nothing can
+  correct afterwards.
+
+  `refuse` raises `UnevidencedConsentException` and records **nothing**. The recorder now resolves
+  every document before its first write, so a registration keeps all of its consents or none; a
+  partial ledger is the one outcome an append-only table cannot recover from.
+
+  The default stays `warn`, and that asymmetry is the decision rather than caution: the check can
+  only look for the field name `RegistrationRules` generates, so an application with its own
+  registration form, naming its fields differently, is correct and carries no `legal_terms` — under
+  a refusing default it would get failed registrations on the one path every current consumer uses.
+  An unrecognized value means `warn`, and `legal-consent:doctor` reports it, because a fallback
+  that is silent leaves someone who typo'd `refuse` believing they are refusing.
+
+- **A withdrawal route the settings stub can actually post to.** `routes.web` (off by default)
+  registers one session-backed endpoint, `POST {web_prefix}/consent/withdraw`, behind `['web',
+  'auth']`. It withdraws and redirects **back** with a flashed `legal-consent.status`.
+
+  The stub shipped a withdraw button whose action was `$consent['withdraw_url'] ?? '#'`, and
+  `withdraw_url` had **no producer anywhere in the package** — one occurrence in the whole tree,
+  that line. So the fallback always won: the button looked like a working control and did nothing,
+  under a comment promising Art. 7(3). The stub cannot call a Livewire action (framework-agnostic
+  is the point of it), and the JSON API is off by default, has neither session nor CSRF, and
+  answers `204` rather than redirecting.
+
+  `ConsentPresenter` now fills `withdraw_url` — only for a withdrawable consent the subject
+  actually holds, and only while the route is registered. With it off the stub renders **no**
+  withdraw form rather than a dead one. Pointing the key at your own route still works.
+
+  The route is **always allowlisted** by `EnsureLegalConsent`, like `logout`: a subject held at
+  the re-consent gate can still withdraw a voluntary consent, because reaching that right only
+  after accepting something new is the coupling Art. 7(4) prohibits.
+
+- **`legal-consent.ui.variant` — the package now picks its own view set.** Every screen ships
+  twice, plain and WireKit-native, and until now the WireKit set was reachable ONLY by publishing
+  `--tag=legal-consent-wirekit`. Nothing said so: an unstyled view renders, so no test goes red, no
+  exception is raised and nothing is logged. A WireKit application therefore served raw HTML on its
+  consent screens — the re-consent gate among them, the one screen a subject cannot get past — and
+  the only way to notice was to look.
+
+  The default `auto` serves the WireKit set when `pushery/wirekit` is installed at
+  **≥ 2.26.0**, and the plain set otherwise. `plain` and `wirekit` pin the choice. A view published
+  into `resources/views/vendor/legal-consent` still wins over both.
+
+  The version floor is part of the automatic choice rather than an afterthought: a Blade component
+  tag compiles unconditionally, so serving views that name a component the installed WireKit does
+  not have would replace a silent styling problem with a hard exception — on the gate, at the
+  moment a legal change lands. Below the floor the plain set stays, and `legal-consent:doctor`
+  now reports that state, along with an unrecognized `variant` value.
+
+- **The consent settings screen has an empty state.** All three views rendered their three
+  headings unconditionally, so a group with no entries was a heading over nothing. That is not the
+  edge case it looks like: `ConsentPresenter` reads the `legal_documents` table rather than the
+  Markdown sources, and a freshly installed package has nothing there until `legal-consent:publish`
+  runs — so an all-empty screen is the SHIPPING state, what every consumer meets between
+  `composer require` and their first publish.
+
+  A group with no entries now names itself (`contracts_empty`, `acknowledgements_empty`,
+  `consents_empty`) and keeps its heading, because the separation of the three legal kinds is the
+  point of the screen. When all three are empty the headings give way to one sentence
+  (`nothing_published`), since three sentences over nothing say less than one. All four keys ship
+  in every one of the seven locales.
+
+### Fixed
+
+- **A failed registration no longer leaves half a ledger behind.** Separating resolution from
+  writing (so `refuse` above can be honest) closed a second partial-write path as a side effect:
+  `accept()` used to run inside the resolution loop, so a registry whose first key resolved and
+  whose second did not left the first key's proof row behind and then failed the registration. The
+  application saw an exception, the subject saw an error, and a row stayed in the append-only
+  ledger for an account that was never created.
+
+- **The WireKit settings stub withdrew through `wire:click`, on a page with no Livewire component
+  behind it.** It is the twin of the *framework-agnostic* stub, not of the Livewire view, and the
+  directive had been copied from the latter. On an ordinary page it is inert: the confirmation
+  dialog opens, the button is pressed, and nothing at all happens — no error, no log entry, no
+  failing test. It now posts a real form, submitted from inside the alert-dialog by the button's
+  `form` attribute, so the irreversible action keeps its confirmation.
+
+- **The registration checkbox stubs now take the input name from the checklist item instead of
+  building it themselves.** `RegistrationChecklistItem::field()` exists so a consumer does not have
+  to guess the convention: a document control is `legal_{key}`, and an ATTESTATION — today the
+  Art. 8 age gate, which is about the person and has no document — is named by its key alone. Both
+  shipped views built `legal_{key}` in the template, so with the age gate on the form rendered a
+  required `legal_age_confirmed` while `RegistrationRules` demanded `age_confirmed`. The visitor
+  could tick the box and never complete the registration, and the error pointed at a field that
+  was not on the page.
+
+  Both views now read `field` from the item. A hand-built `$documents` list in the documented
+  minimal shape still works unchanged — that shape lists documents only, and a document *is*
+  `legal_{key}`.
+
+- **The WireKit checkbox variant renders the accept-time guard field, like the plain stub already
+  did.** Publishing the themed variant silently dropped the opt-in `{field}_hash` input, so a
+  consumer who themed the form got the path without the guard: a version released between page
+  load and submit was frozen unseen instead of raising a 409.
+
+  Both halves are now bound to `RegistrationRules::required()` in both directions — no rule without
+  a control, no control without a rule.
+
 ## [0.16.1] - 2026-08-21
 
 **Two fixes, both in places where nothing went red.** A consumer who declines this package's tables

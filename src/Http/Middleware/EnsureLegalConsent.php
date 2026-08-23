@@ -16,10 +16,12 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Blocks an authenticated subject with outstanding mandatory re-consent. JSON requests
  * get a 409 `legal_consent_required` (with the document keys); browser requests are
- * redirected to the consent route. The consent route, `logout` and Livewire's own endpoints are
- * always allowlisted, so there is no redirect loop, the subject can always leave, and the bundled
- * Livewire re-consent form can actually submit (its POST goes to Livewire's update channel, whose
- * path is resolved from the installation rather than assumed).
+ * redirected to the consent route. The consent route, `logout`, the bundled withdrawal route and
+ * Livewire's own endpoints are always allowlisted, so there is no redirect loop, the subject can
+ * always leave, they can always withdraw a voluntary consent (Art. 7(3)) without first accepting
+ * something new (Art. 7(4)), and the bundled Livewire re-consent form can actually submit (its
+ * POST goes to Livewire's update channel, whose path is resolved from the installation rather than
+ * assumed).
  */
 final readonly class EnsureLegalConsent
 {
@@ -60,7 +62,13 @@ final readonly class EnsureLegalConsent
 
     private function isAllowlisted(Request $request): bool
     {
-        $names = ['logout'];
+        // `legal-consent.web.withdraw` is always allowed, for the same reason `logout` is: it is a
+        // way OUT, and the gate must never be the thing standing in it. Withdrawing a voluntary
+        // consent is a right the subject holds unconditionally (Art. 7(3)); making it reachable
+        // only after accepting a new mandatory version would condition one on the other, which is
+        // the coupling Art. 7(4) prohibits. The name is inert when `routes.web` is off — nothing
+        // matches a route that was never registered.
+        $names = ['logout', 'legal-consent.web.withdraw'];
 
         $consentName = config('legal-consent.routes.consent_name');
 

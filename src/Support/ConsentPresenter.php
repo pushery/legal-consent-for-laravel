@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Route;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
@@ -35,7 +36,22 @@ final readonly class ConsentPresenter
         // the "My consents" screen cost 1 + 2N queries and N identical folds. This mirrors the
         // manager's statusFor(): one fold, one document query, the comparison in PHP. `held` keeps
         // its withdrawal/objection-aware semantics — it is the same fold hasCurrent() used.
-        $held = $this->gate->heldMajorByKey($subject);
+        $standing = $this->gate->standingFor($subject);
+        $held = $standing['held'];
+
+        // Resolved ONCE, outside the loop: the bundled withdrawal route takes the document key as
+        // a form field, so every entry that has one has the same URL. `Route::has()` rather than a
+        // config read, because the route only exists if the package's route file registered it —
+        // and a consumer may have loaded the config without the routes.
+        $withdrawUrl = Route::has('legal-consent.web.withdraw')
+            ? route('legal-consent.web.withdraw')
+            : null;
+
+        // The double opt-in's middle state, which `held` cannot express: entered but not yet
+        // confirmed looks exactly like never entered. Without this the screen would invite the
+        // subject to enter themselves a second time, and the second request would supersede the
+        // first — so the confirmation link already in their inbox would stop working.
+        $pendingConfirmation = $standing['pending'];
 
         // `locale` is selected even though it equals the argument: it is a document COLUMN, and the
         // host's URL resolver receives the model. A resolver that builds a per-locale route would
@@ -48,6 +64,14 @@ final readonly class ConsentPresenter
             ->get();
 
         foreach ($documents as $document) {
+            // Computed before the array rather than as a multi-line ternary inside it: a ternary
+            // whose arms sit on their own lines leaves one of them unexecutable to line coverage
+            // when the condition short-circuits earlier, which reads as an untested branch and is
+            // really a formatting artifact.
+            $offersWithdrawal = $withdrawUrl !== null
+                && $document->type->isWithdrawable()
+                && ($held[$document->key] ?? 0) >= $document->major_version;
+
             $entry = [
                 'key' => $document->key,
                 'title' => $document->title,
@@ -68,6 +92,16 @@ final readonly class ConsentPresenter
                 // document being withdrawn cannot be read is silent exactly where Art. 7(3) assumes
                 // the subject knows what they are deciding about.
                 'url' => $this->urls->for($document),
+                // Where a plain HTML form posts to withdraw THIS entry — the bundled session route
+                // when `routes.web` is on, and null otherwise. Null on every entry that is not a
+                // withdrawable consent the subject actually holds, because a control offering to
+                // withdraw something nobody holds is a button whose only outcome is an error.
+                //
+                // The stub shipped a form whose action fell back to `#` for want of this key, so it
+                // looked like a working control and did nothing. A key that is null when there is
+                // no route lets the stub render no form at all, which is the honest state.
+                'pending_confirmation' => in_array($document->key, $pendingConfirmation, true),
+                'withdraw_url' => $offersWithdrawal ? $withdrawUrl : null,
             ];
 
             $group = match ($document->type->legalBasis()) {

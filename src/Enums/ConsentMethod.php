@@ -47,6 +47,16 @@ enum ConsentMethod: string
      * objection, so silence is deemed acceptance (§ 308 Nr. 5 BGB Zustimmungsfiktion). */
     case DeemedAcceptance = 'deemed_acceptance';
 
+    /**
+     * The subject followed the confirmation link in a double opt-in e-mail.
+     *
+     * A channel of its own, not a variant of the form the request came from: the two halves of a
+     * double opt-in are collected in different places, and what makes the second one worth
+     * anything is exactly that it arrived through the address being confirmed. A confirmation
+     * filed under the method of the form that started it would erase the only fact it proves.
+     */
+    case DoubleOptIn = 'double_opt_in';
+
     /** Backfilled from a legacy source — weaker proof (no captured wording). */
     case Import = 'import';
 }
