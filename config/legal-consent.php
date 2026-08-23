@@ -201,6 +201,41 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | UI variant
+    |--------------------------------------------------------------------------
+    |
+    | Which of the two bundled view sets the package renders. Every screen ships twice: a
+    | framework-agnostic one built from bare `<h2>`, `<ul>` and `<li>`, and a WireKit-native one
+    | built from real `<x-wirekit::*>` components.
+    |
+    | `auto` (the default) serves the WireKit set when `pushery/wirekit` is installed AND at least
+    | the version this package's views are tested against; otherwise the plain set. Before this
+    | key existed the WireKit set was reachable ONLY by publishing `--tag=legal-consent-wirekit`,
+    | and nothing said so: an unstyled view RENDERS, so no test goes red, no exception is raised
+    | and nothing is logged. A WireKit application therefore served raw HTML on its consent
+    | screens — including the re-consent gate, the one screen a subject cannot get past — and the
+    | only way to notice was to look.
+    |
+    | The version floor is the reason `auto` checks more than presence. A Blade component tag
+    | compiles unconditionally, so switching a consumer onto views that name a component their
+    | installed WireKit does not have would turn a silent styling bug into a hard exception —
+    | and on the gate, at the moment a legal change lands. The package only ever auto-serves
+    | views it has proven against; below the floor it stays plain and `legal-consent:doctor`
+    | says why.
+    |
+    | `plain` and `wirekit` pin the choice regardless of what is installed. Pin `wirekit` to run
+    | the themed set against a WireKit below the floor — deliberately, having read the above.
+    |
+    | A view you publish into `resources/views/vendor/legal-consent` still wins over both: your
+    | copy is checked first, exactly as before.
+    |
+    */
+    'ui' => [
+        'variant' => 'auto',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Routes
     |--------------------------------------------------------------------------
     |
@@ -212,6 +247,20 @@ return [
     | falling back to `home`. Off by default so an existing embed keeps its in-place
     | "all current" confirmation; a settings-page embed never redirects regardless.
     |
+    | `web` registers ONE session-backed route, `POST {web_prefix}/consent/withdraw`, which is
+    | what the framework-agnostic settings stub's withdraw button posts to. Turn it on and the
+    | presenter starts filling each withdrawable entry's `withdraw_url`; leave it off and the
+    | stub renders no withdraw form at all rather than one that goes nowhere.
+    |
+    | It is separate from `api` because the two answer different callers. The API sits behind the
+    | `api` group — no session, no CSRF — and replies 204, which is right for a client and useless
+    | for a form: the subject would land on a blank page. This one sits behind `web` + `auth` and
+    | redirects back with a flashed confirmation.
+    |
+    | Withdrawal only. Objecting and terminating stay on the API and the Livewire component; no
+    | bundled plain view offers them, and a public session-backed surface is not widened for a
+    | case nothing asks for.
+    |
     */
     'routes' => [
         'consent_name' => 'legal.consent',
@@ -221,6 +270,9 @@ return [
         'api' => false,
         'api_prefix' => 'legal',
         'api_middleware' => ['api', 'auth'],
+        'web' => false,
+        'web_prefix' => 'legal',
+        'web_middleware' => ['web', 'auth'],
     ],
 
     /*
@@ -357,6 +409,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Double opt-in
+    |--------------------------------------------------------------------------
+    |
+    | The two halves of a double opt-in are two ledger rows: `Consent::requestConfirmation()`
+    | writes an `optin_requested` row, `Consent::confirm()` writes a `confirmed` one. Only the
+    | second makes the consent held — the first is a declaration nobody has yet tied to the address
+    | it names, which for advertising e-mail is precisely NOT a valid consent (§ 7 Abs. 2 UWG with
+    | Art. 7 DSGVO, and the burden of proof is the controller's under Art. 7(1)).
+    |
+    | `confirm_within` is how long a request stays confirmable — a relative-time string Carbon can
+    | parse ('7 days', '48 hours'), or null for no limit. Null is the default because a limit
+    | nobody chose would start refusing confirmations an application was already accepting.
+    |
+    | Set it and you get the ledger-side half of what a signed URL's expiry does inside the link.
+    | An application that signs its confirmation links has that check twice, which is harmless; one
+    | that does not has it exactly once, which is the case this key is for.
+    |
+    | A confirmation is refused for two further reasons regardless of this setting: there is no
+    | pending request (already confirmed, withdrawn, or never made), or a new MAJOR version was
+    | published in between — confirming that one would freeze a text the subject never read.
+    |
+    */
+    'double_opt_in' => [
+        'confirm_within' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Registration integration
     |--------------------------------------------------------------------------
     |
@@ -385,9 +465,26 @@ return [
     | the first acceptance where it actually happens: an interstitial after
     | authentication and before first use, recorded under
     | ConsentMethod::FirstUseGate.
+    |
+    | `without_form_fields` decides what that warning IS. `warn` (the default) logs and records;
+    | `refuse` raises UnevidencedConsentException and records NOTHING — the recorder resolves every
+    | document before its first write, so a registration keeps all of its consents or none.
+    |
+    | The default is `warn` and not `refuse`, and that is a deliberate asymmetry rather than
+    | timidity. The check can only look for the field name `RegistrationRules` generates. An
+    | application with its OWN registration form, naming its fields differently, validates the tick
+    | perfectly well and still carries no `legal_terms` on the request — under `refuse` it would get
+    | a failed registration the day it updated, on the one path every current consumer uses. A
+    | warning to such an application is noise; a refusal is an outage.
+    |
+    | Turn it on where the flag was written for: a sign-in through an external provider, where there
+    | is genuinely no form and no tick, so the alternative to refusing is a proof row asserting
+    | something that did not happen. An unrecognized value means `warn` — a typo must never be the
+    | thing that starts failing registrations — and `legal-consent:doctor` names it.
     */
     'registration' => [
         'listen_to_registered_event' => true,
+        'without_form_fields' => 'warn',
     ],
 
     /*

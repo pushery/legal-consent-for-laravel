@@ -7,9 +7,12 @@ namespace Pushery\LegalConsent\Console;
 use Closure;
 use Illuminate\Console\Command;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\DocumentMatrix;
+use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
+use Pushery\WireKit\WireKitServiceProvider;
 use Throwable;
 
 /**
@@ -157,11 +160,132 @@ final class DoctorCommand extends Command
         return $missing;
     }
 
+    /**
+     * What is worth saying about which view set is being served, or null when there is nothing.
+     *
+     * Thin on purpose: it reads the environment and hands the three facts to a pure describer. The
+     * environment here cannot be varied — this package's own suite always has one WireKit
+     * installed, so the below-the-floor answer is unreachable through this method and would ship
+     * as prose nobody ever ran. The describer below is where that answer is exercised.
+     *
+     * @return array{0: string, 1: list<string>}|null the headline and its explanation
+     */
+    private function uiVariantFinding(): ?array
+    {
+        return self::describeVariant(
+            config('legal-consent.ui.variant', 'auto'),
+            class_exists(WireKitServiceProvider::class),
+            LegalConsentServiceProvider::usesWireKitViews(),
+        );
+    }
+
+    /**
+     * The finding for a given variant setting and a given WireKit situation — no environment, no
+     * config, so every combination is reachable.
+     *
+     * Only the two states a consumer cannot see for themselves are reported. An unstyled view
+     * RENDERS — no exception, no log line, no red test — so "WireKit is installed and you are
+     * getting the plain views anyway" is exactly the kind of fact that otherwise has to be noticed
+     * by eye, on a screen nobody looks at twice.
+     *
+     * A deliberate `plain` with WireKit installed is NOT reported: that is a decision, and a doctor
+     * that argues with decisions gets ignored on the finding that matters.
+     *
+     * @param  bool  $servesWireKit  what the variant resolved to, which for `auto` also carries the
+     *                               version floor
+     * @return array{0: string, 1: list<string>}|null
+     */
+    public static function describeVariant(mixed $variant, bool $wireKitInstalled, bool $servesWireKit): ?array
+    {
+        $known = ['auto', 'plain', 'wirekit'];
+
+        if (! is_string($variant) || ! in_array($variant, $known, true)) {
+            return [
+                'legal-consent.ui.variant is not one of '.implode(', ', $known).'.',
+                [
+                    '  It is being treated as `auto`. A typo must not quietly decide which view set',
+                    '  you serve — least of all by meaning `plain`, which is the state this key exists',
+                    '  to make visible.',
+                ],
+            ];
+        }
+
+        if ($variant !== 'auto' || ! $wireKitInstalled || $servesWireKit) {
+            return null;
+        }
+
+        return [
+            'WireKit is installed, but the PLAIN consent views are being served.',
+            [
+                '  `auto` only serves the WireKit views from pushery/wirekit '
+                    .LegalConsentServiceProvider::WIREKIT_MINIMUM.' upwards, because a Blade component',
+                '  tag compiles unconditionally: serving views that name a component your WireKit does',
+                '  not have would turn unstyled markup into a hard exception — on the re-consent gate,',
+                '  at the moment a legal change lands.',
+                '',
+                '  Upgrade pushery/wirekit, or set legal-consent.ui.variant to `wirekit` to serve them',
+                '  anyway, having read the line above.',
+            ],
+        ];
+    }
+
+    /**
+     * A `registration.without_form_fields` value the recorder does not recognize.
+     *
+     * It falls back to `warn`, which is the safe direction — a typo must never be the thing that
+     * starts failing registrations — and that is exactly why it has to be said out loud. An
+     * operator who wrote `refuse` with a typo believes they are refusing, and the one state they
+     * were guarding against goes on being recorded, in an append-only table.
+     */
+    private function unknownRegistrationMode(): ?string
+    {
+        // The literal, for the same reason the provider uses one: ConfigDefaultDriftTest reads
+        // inline defaults out of the SOURCE and cannot evaluate a class constant, so a constant
+        // here would drop out of that comparison without a word. The constants below are the
+        // vocabulary, which is a different job.
+        $value = config('legal-consent.registration.without_form_fields', 'warn');
+
+        $known = [
+            RegistrationConsentRecorder::WITHOUT_FORM_FIELDS_WARN,
+            RegistrationConsentRecorder::WITHOUT_FORM_FIELDS_REFUSE,
+        ];
+
+        if (is_string($value) && in_array($value, $known, true)) {
+            return null;
+        }
+
+        return is_scalar($value) ? (string) $value : get_debug_type($value);
+    }
+
     public function handle(): int
     {
+        $variantFinding = $this->uiVariantFinding();
+        $unknownMode = $this->unknownRegistrationMode();
         $incoherent = $this->deemedConsentWithoutProof();
         $unpublished = $this->unpublishedCombinations();
         $uncacheable = $this->uncacheableKeys();
+
+        if ($variantFinding !== null) {
+            [$headline, $explanation] = $variantFinding;
+
+            $this->newLine();
+            $this->warn($headline);
+
+            foreach ($explanation as $line) {
+                $this->line($line);
+            }
+
+            $this->newLine();
+        }
+
+        if ($unknownMode !== null) {
+            $this->newLine();
+            $this->warn("legal-consent.registration.without_form_fields is '{$unknownMode}', which is not 'warn' or 'refuse'.");
+            $this->line('  It falls back to `warn`, so registrations keep working — and that is why this is');
+            $this->line('  worth saying: if you meant `refuse`, the one state you were guarding against is');
+            $this->line('  still being recorded, into a table nothing can correct afterwards.');
+            $this->newLine();
+        }
 
         if ($uncacheable !== []) {
             $this->newLine();

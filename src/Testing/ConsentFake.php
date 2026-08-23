@@ -50,7 +50,7 @@ final class ConsentFake implements ConsentManager
     /** @var list<RegistrationChecklistItem> */
     private array $checklist = [];
 
-    /** @var array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool}> */
+    /** @var array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool}> */
     private array $status = [];
 
     /** @var list<array<string, mixed>> */
@@ -87,7 +87,7 @@ final class ConsentFake implements ConsentManager
     }
 
     /**
-     * @param  array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool}>  $status
+     * @param  array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool}>  $status
      */
     public function statusIs(array $status): self
     {
@@ -146,7 +146,12 @@ final class ConsentFake implements ConsentManager
         // DEEMED_ACCEPTED is deliberately NOT one of them: silence counting as acceptance is the
         // legal fiction of § 308 Nr. 5, not an act of the subject, and a test asserting "the user
         // accepted" must not be satisfied by the user having said nothing.
-        $accepting = [ConsentAction::Granted, ConsentAction::Acknowledged, ConsentAction::ReAccepted];
+        //
+        // CONFIRMED is one of them: the second half of a double opt-in is the act that makes the
+        // consent held, and it is the row an Art. 7(1) demand is answered with. OPT_IN_REQUESTED is
+        // not, for the same reason DEEMED_ACCEPTED is not — it is a declaration awaiting proof that
+        // the person who made it controls the address.
+        $accepting = [ConsentAction::Granted, ConsentAction::Acknowledged, ConsentAction::ReAccepted, ConsentAction::Confirmed];
         $matches = array_merge(...array_map(
             fn (ConsentAction $action): array => $this->recorded($subject, $documentKey, $action),
             $accepting,
@@ -200,6 +205,20 @@ final class ConsentFake implements ConsentManager
         return $this->capture($subject, $documentKey, ConsentAction::Terminated, $context, $locale);
     }
 
+    public function requestConfirmation(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
+    {
+        return $this->capture($subject, $documentKey, ConsentAction::OptInRequested, $context, $locale);
+    }
+
+    public function confirm(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
+    {
+        // The real manager refuses a confirmation with no pending request. The fake does NOT, and
+        // that is deliberate: it captures calls so a consuming application can assert its own flow,
+        // and re-implementing the refusal here would be a second copy of a rule that then drifts
+        // from the one that matters. Assert the pair with recorded()/assertRecorded().
+        return $this->capture($subject, $documentKey, ConsentAction::Confirmed, $context, $locale);
+    }
+
     // ---------------------------------------------------------------- reads
 
     /**
@@ -227,7 +246,7 @@ final class ConsentFake implements ConsentManager
     }
 
     /**
-     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool}>
+     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool}>
      */
     public function statusFor(Model $subject, ?string $locale = null): array
     {

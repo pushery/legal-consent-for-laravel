@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent;
 
+use Composer\InstalledVersions;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
@@ -47,6 +48,7 @@ use Pushery\LegalConsent\Support\ConfigNoticeIdentity;
 use Pushery\LegalConsent\Support\ConsentBanner;
 use Pushery\LegalConsent\Support\ConsentGate;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
+use Pushery\LegalConsent\Support\DocumentUrlResolver;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
@@ -57,9 +59,24 @@ use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
 use Pushery\LegalConsent\Support\RegistrationRules;
 use Pushery\LegalConsent\Support\TenantContext;
 use Pushery\LegalConsent\Support\UnavailableTranslator;
+use Pushery\WireKit\WireKitServiceProvider;
 
 final class LegalConsentServiceProvider extends ServiceProvider
 {
+    /**
+     * The lowest `pushery/wirekit` this package's WireKit views are built and tested against —
+     * the same constraint `composer.json` pins for the dev dependency, held in lockstep by
+     * `WireKitVariantTest`.
+     *
+     * It is a FLOOR for the automatic choice, not a requirement of the package: below it the
+     * plain views are served instead. A Blade component tag compiles unconditionally, so serving
+     * views that name a component the installed WireKit does not have turns a silent styling
+     * problem into a hard exception — on the re-consent gate, at the moment a legal change lands.
+     * That has happened once already (a banner rendered `<x-wirekit::countdown>`, which existed
+     * only on WireKit's develop branch), which is why presence alone is not the test.
+     */
+    public const string WIREKIT_MINIMUM = '2.26.0';
+
     /**
      * Whether the bundled migrations are registered automatically. Disable with
      * self::ignoreMigrations() to publish and manage them in the host app instead.
@@ -91,6 +108,8 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->registrationDocumentsConfig(),
             $this->boolConfig('legal-consent.age_gate.enabled', false),
             $this->intConfig('legal-consent.age_gate.threshold', 16),
+            new DocumentUrlResolver,
+            $this->nullableStringConfig('legal-consent.double_opt_in.confirm_within'),
         ));
 
         $this->app->bind(LegalConsentMonitor::class, NullMonitor::class);
@@ -120,6 +139,13 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->app->make(ConsentManager::class),
             $this->registrationDocumentsConfig(),
             $this->defaultLocale(),
+            // The literal, not RegistrationConsentRecorder::WITHOUT_FORM_FIELDS_WARN.
+            // ConfigDefaultDriftTest reads these inline defaults out of the SOURCE and compares
+            // them to the shipped config file, so an application whose published config predates a
+            // key cannot end up behaving differently from a fresh one — and a class constant is
+            // not something that reader can evaluate. It would drop out of the comparison
+            // silently, which is the failure that guard exists to prevent.
+            $this->stringConfig('legal-consent.registration.without_form_fields', 'warn'),
         ));
 
         $this->app->singleton(SourceFactory::class, fn (): SourceFactory => new SourceFactory($this->app, $this->documentsConfig(), $this->sourcesConfig()));
@@ -176,7 +202,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
     {
         $this->app->make(Router::class)->aliasMiddleware('legal.consent', EnsureLegalConsent::class);
 
-        $this->loadViewsFrom(__DIR__.'/../resources/views', 'legal-consent');
+        $this->loadViewsFrom(self::viewPaths(), 'legal-consent');
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'legal-consent');
         $this->loadRoutesFrom(__DIR__.'/../routes/legal-consent.php');
 
@@ -257,6 +283,92 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 DoctorCommand::class,
             ]);
         }
+    }
+
+    /**
+     * The view paths this package registers under the `legal-consent` namespace, in lookup order.
+     *
+     * A single path for the plain set; two for the WireKit set, the WireKit directory FIRST. The
+     * finder returns the first hint that has the file, so the WireKit variant wins for the seven
+     * screens it covers and everything else (the mail shell, its theme) falls through to the
+     * plain directory — which is why this is a path list rather than a swap.
+     *
+     * A view the consumer published into `resources/views/vendor/legal-consent` is still checked
+     * BEFORE either of these: `loadViewsFrom()` registers the host's vendor path first, so
+     * publishing keeps overriding both sets exactly as it did.
+     *
+     * @return string|list<string>
+     */
+    public static function viewPaths(): string|array
+    {
+        $views = __DIR__.'/../resources/views';
+
+        return self::usesWireKitViews() ? [$views.'/wirekit', $views] : $views;
+    }
+
+    /**
+     * Whether the WireKit-native view set is the one to serve.
+     *
+     * `plain` and `wirekit` pin the answer. `auto` — the default, and anything unrecognized, which
+     * `legal-consent:doctor` reports separately rather than letting a typo decide silently — asks
+     * whether a WireKit at or above {@see WIREKIT_MINIMUM} is installed.
+     */
+    public static function usesWireKitViews(): bool
+    {
+        $variant = config('legal-consent.ui.variant', 'auto');
+
+        return match ($variant) {
+            'wirekit' => true,
+            'plain' => false,
+            default => self::wireKitMeetsMinimum(),
+        };
+    }
+
+    /**
+     * Whether the installed `pushery/wirekit` is present and new enough to render the bundled
+     * WireKit views.
+     *
+     * The class check comes first because it is the only one that works when the package was
+     * placed on the autoloader by something other than Composer. A version Composer cannot state
+     * as a release — a branch checkout, reported as `dev-…` — counts as satisfied: somebody who
+     * develops against a branch has chosen it, and refusing them the themed views on a string
+     * comparison that has no meaning would be arbitrary.
+     */
+    public static function wireKitMeetsMinimum(): bool
+    {
+        return class_exists(WireKitServiceProvider::class)
+            && self::wireKitVersionSatisfies(self::installedWireKitVersion());
+    }
+
+    /**
+     * Whether a version STRING clears the floor — the decision, separated from where the string
+     * came from.
+     *
+     * Separated because the environment cannot be varied: this package's own suite always has one
+     * WireKit installed, so a check that only ever asks Composer can never exercise the answer it
+     * gives for an older one. That is the branch that matters, since getting it wrong hands a
+     * consumer a hard exception on the re-consent gate.
+     *
+     * A version Composer cannot state as a release — a branch checkout, reported as `dev-…`, or no
+     * answer at all — counts as satisfied: somebody developing against a branch has chosen it, and
+     * refusing them the themed views on a string comparison with no meaning would be arbitrary.
+     */
+    public static function wireKitVersionSatisfies(?string $version): bool
+    {
+        return ! is_string($version)
+            || str_starts_with($version, 'dev-')
+            || version_compare(ltrim($version, 'vV'), self::WIREKIT_MINIMUM, '>=');
+    }
+
+    /**
+     * What Composer says is installed, or null when it cannot say — including the case where the
+     * class was put on the autoloader by something other than Composer.
+     */
+    private static function installedWireKitVersion(): ?string
+    {
+        return class_exists(InstalledVersions::class) && InstalledVersions::isInstalled('pushery/wirekit')
+            ? InstalledVersions::getPrettyVersion('pushery/wirekit')
+            : null;
     }
 
     /**
@@ -459,6 +571,17 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $value = config($key, $default);
 
         return is_int($value) ? $value : $default;
+    }
+
+    /**
+     * A config value that is meaningfully ABSENT rather than defaulted — an unset confirmation
+     * window means "no window", which is not the same statement as any string.
+     */
+    private function nullableStringConfig(string $key): ?string
+    {
+        $value = config($key);
+
+        return is_string($value) && trim($value) !== '' ? $value : null;
     }
 
     private function stringConfig(string $key, string $default): string

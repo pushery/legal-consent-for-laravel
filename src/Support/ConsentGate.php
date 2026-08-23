@@ -75,21 +75,45 @@ final class ConsentGate
      * Consent attaches to a document's identity, not the language it was read in: accepting the
      * terms in `en` satisfies the `de` gate for the same document (a locale switch is a display
      * preference, not a fresh contractual encounter), and the recorded locale is provenance in
-     * the ledger. Computed as a fold over the subject's rows in legal-action order rather than a
-     * monotonic MAX, so it is withdrawal- and objection-aware:
-     *
-     *  - an accepting action (granted / acknowledged / re-accepted / parental / deemed-accepted)
-     *    sets the held major to that row's major;
-     *  - an ENDING action (withdrawn / declined / terminated) drops the holding to 0 — a monotonic
-     *    max cannot see this, which is why a withdrawn opt-in wrongly reported as still held
-     *    (Art. 7(3));
-     *  - an OBJECTED action rebuts a *deemed change* (§ 308 Nr. 5 lit. a BGB), not the contract, so
-     *    it keeps whatever state existed immediately before it — never a global max, which would
-     *    resurrect an earlier withdrawal.
+     * the ledger. See {@see standingFor()} for how the fold works.
      *
      * @return array<string, int>
      */
     public function heldMajorByKey(Model $subject): array
+    {
+        return $this->standingFor($subject)['held'];
+    }
+
+    /**
+     * Both projections of the subject's ledger, from ONE read of it.
+     *
+     * They are one method because they are one query. The settings screen wants both, and asking
+     * twice would read the same rows twice for a page whose whole query budget is guarded — the
+     * fold above exists precisely because this screen used to cost 1 + 2N queries. There is
+     * deliberately no `pendingConfirmationKeys()` sibling: one existed for an afternoon, nothing
+     * ever called it, and a public method no caller reaches is surface without a contract.
+     *
+     * `pending` is the middle state of a double opt-in, which the held-major fold cannot express:
+     * entered but not yet confirmed folds to exactly the same zero as never entered. It is the
+     * LATEST row that decides, not "has one anywhere" — a request since confirmed, withdrawn or
+     * superseded is not pending, and a subject who entered themselves twice has one, not two.
+     *
+     * The held-major fold is withdrawal- and objection-aware rather than a monotonic MAX:
+     *
+     *  - an ACCEPTING action (granted / acknowledged / re-accepted / parental / deemed-accepted /
+     *    confirmed) sets the held major to that row's major;
+     *  - an ENDING action (withdrawn / declined / terminated) drops the holding to 0 — a monotonic
+     *    max cannot see this, which is why a withdrawn opt-in wrongly reported as still held
+     *    (Art. 7(3));
+     *  - a NEUTRAL action keeps whatever state existed immediately before it — never a global max,
+     *    which would resurrect an earlier withdrawal. Two actions are neutral, for the same reason
+     *    rather than out of resemblance: an OBJECTION rebuts a *deemed change* (§ 308 Nr. 5 lit. a
+     *    BGB) and not the agreement, and an OPT-IN REQUEST is the unconfirmed first half of a
+     *    double opt-in. Neither grants anything and neither takes anything away.
+     *
+     * @return array{held: array<string, int>, pending: list<string>}
+     */
+    public function standingFor(Model $subject): array
     {
         $tenant = app(TenantContext::class);
 
@@ -104,6 +128,7 @@ final class ConsentGate
             ->get();
 
         $held = [];
+        $latest = [];
 
         foreach ($rows as $row) {
             $key = $row->document_key;
@@ -113,9 +138,11 @@ final class ConsentGate
                 $action = ConsentAction::from($actionValue);
                 $major = is_numeric($row->document_major_version) ? (int) $row->document_major_version : 0;
 
+                $latest[$key] = $action;
+
                 if ($action->isAccepting()) {
                     $held[$key] = $major;
-                } elseif ($action === ConsentAction::Objected) {
+                } elseif ($action->isNeutral()) {
                     $held[$key] ??= 0; // keep the prior state; only anchor the key if it is the first row
                 } else {
                     $held[$key] = 0; // withdrawn / declined / terminated end the holding
@@ -123,7 +150,13 @@ final class ConsentGate
             }
         }
 
-        return $held;
+        return [
+            'held' => $held,
+            'pending' => array_keys(array_filter(
+                $latest,
+                static fn (ConsentAction $action): bool => $action === ConsentAction::OptInRequested,
+            )),
+        ];
     }
 
     /**

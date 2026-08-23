@@ -14,6 +14,14 @@
     <p role="status" aria-live="polite" tabindex="-1" wire:key="lc-settings-status"
         x-effect="$wire.statusNonce > 0 && $el.focus()"><span wire:key="lc-settings-status-{{ $statusNonce }}">{{ $status ?? '' }}</span></p>
 
+    {{-- The all-empty case gets ONE sentence instead of three headings over nothing. It is not the
+         edge case it looks like: the groups are built from the `legal_documents` table, which is
+         empty until `legal-consent:publish` runs — so this is what every consumer sees between
+         `composer require` and their first publish, and three bare headings read as broken. --}}
+    @if (count($contracts) === 0 && count($acknowledgements) === 0 && count($consents) === 0)
+        <p class="legal-consent-empty">{{ __('legal-consent::ui.nothing_published') }}</p>
+    @else
+
     {{-- Each title links to the document when the host configured `legal-consent.document_url`,
          and renders as plain text otherwise. Deciding to withdraw a consent without being able to
          re-read what was consented to is the one thing this screen must not ask of anyone
@@ -21,7 +29,7 @@
     <section aria-labelledby="lc-contracts">
         <h3 id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h3>
         <ul>
-            @foreach ($contracts as $item)
+            @forelse ($contracts as $item)
                 <li>
                     @if (($item['url'] ?? null) !== null)
                         <a href="{{ $item['url'] }}" target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
@@ -30,14 +38,16 @@
                     @endif
                     (v{{ $item['version'] }}) @if (($item['outstanding'] ?? false)) <strong class="legal-consent-action-required">{{ __('legal-consent::ui.action_required') }}</strong> @endif
                 </li>
-            @endforeach
+            @empty
+                <li class="legal-consent-empty">{{ __('legal-consent::ui.contracts_empty') }}</li>
+            @endforelse
         </ul>
     </section>
 
     <section aria-labelledby="lc-acknowledgements">
         <h3 id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</h3>
         <ul>
-            @foreach ($acknowledgements as $item)
+            @forelse ($acknowledgements as $item)
                 <li>
                     @if (($item['url'] ?? null) !== null)
                         <a href="{{ $item['url'] }}" target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
@@ -46,14 +56,16 @@
                     @endif
                     (v{{ $item['version'] }}) @if (($item['outstanding'] ?? false)) <strong class="legal-consent-action-required">{{ __('legal-consent::ui.action_required') }}</strong> @endif
                 </li>
-            @endforeach
+            @empty
+                <li class="legal-consent-empty">{{ __('legal-consent::ui.acknowledgements_empty') }}</li>
+            @endforelse
         </ul>
     </section>
 
     <section aria-labelledby="lc-consents">
         <h3 id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</h3>
         <ul>
-            @foreach ($consents as $item)
+            @forelse ($consents as $item)
                 <li>
                     @if (($item['url'] ?? null) !== null)
                         <a href="{{ $item['url'] }}" target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
@@ -64,6 +76,12 @@
                         <button type="button" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $item['title']]) }}" wire:click="withdraw(@js($item['key']))">
                             {{ __('legal-consent::ui.withdraw') }}
                         </button>
+                    {{-- The double opt-in's middle state, and it takes the place of the Give
+                         button rather than sitting beside it. Offering to give again would write a
+                         second request, which supersedes the first — and stops the confirmation
+                         link already in the subject's inbox from working. --}}
+                    @elseif ($item['pending_confirmation'] ?? false)
+                        <span class="legal-consent-pending">{{ __('legal-consent::ui.confirmation_pending') }}</span>
                     {{-- The counterpart, and only where the embedding screen asked for it. A
                          per-item label again, for the same reason the withdraw button has one:
                          a screen reader's button list of five identical "Give" entries names
@@ -74,7 +92,10 @@
                         </button>
                     @endif
                 </li>
-            @endforeach
+            @empty
+                <li class="legal-consent-empty">{{ __('legal-consent::ui.consents_empty') }}</li>
+            @endforelse
         </ul>
     </section>
+    @endif
 </div>

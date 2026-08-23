@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\DocumentType;
+use Pushery\LegalConsent\Exceptions\UnevidencedConsentException;
 use Pushery\LegalConsent\Exceptions\UnrecordableConsentException;
 use Pushery\LegalConsent\Models\LegalDocument;
 
@@ -26,13 +27,26 @@ use Pushery\LegalConsent\Models\LegalDocument;
  */
 final readonly class RegistrationConsentRecorder
 {
+    /** Record the row and log a warning — the default, and the only value that breaks nobody. */
+    public const string WITHOUT_FORM_FIELDS_WARN = 'warn';
+
+    /** Refuse the whole registration instead of recording an unevidenced mandatory consent. */
+    public const string WITHOUT_FORM_FIELDS_REFUSE = 'refuse';
+
     /**
      * @param  array<string, array<string, mixed>>  $documents
+     * @param  string  $withoutFormFields  what to do when a mandatory document is about to be
+     *                                     recorded from a request that carries no `legal_<key>`
+     *                                     field. Anything other than `refuse` means `warn`: an
+     *                                     unrecognized value must never be the thing that starts
+     *                                     failing registrations, and `legal-consent:doctor` names
+     *                                     it instead.
      */
     public function __construct(
         private ConsentManager $consent,
         private array $documents,
         private string $defaultLocale = 'de',
+        private string $withoutFormFields = self::WITHOUT_FORM_FIELDS_WARN,
     ) {}
 
     /**
@@ -60,9 +74,17 @@ final readonly class RegistrationConsentRecorder
 
         $active = $resolved[$locale] ?? $this->activeByKey($locale);
 
-        // Mandatory keys recorded WITHOUT the form field that would have carried the subject's tick.
-        // Collected across the loop so one warning names all of them rather than one line per key.
+        // Mandatory keys about to be recorded WITHOUT the form field that would have carried the
+        // subject's tick. Collected across the loop so one warning names all of them rather than
+        // one line per key — and, under `refuse`, so the decision is made ONCE with the whole set
+        // known rather than aborting on whichever key happened to come first.
         $unevidenced = [];
+
+        // Resolution is separated from writing, and the separation is the whole reason `refuse`
+        // can be honest: it decides before the first accept(), so a registration records all of
+        // its consents or none. Refusing mid-loop would leave a partial ledger in the one table
+        // that cannot be corrected afterwards.
+        $pending = [];
 
         foreach (array_keys($this->documents) as $key) {
             $document = $active->get($key);
@@ -135,16 +157,30 @@ final readonly class RegistrationConsentRecorder
             //
             // The absence of `legal_{key}` in the input is not an inference about the application —
             // it is this request, observed. (Asking the ROUTE table whether a registration form
-            // exists cannot be made reliable: an application may name that route anything.) It is
-            // reported rather than refused, because refusing is a behavior change on the path every
-            // current consumer uses; see the config comment on `listen_to_registered_event`.
+            // exists cannot be made reliable: an application may name that route anything.)
+            //
+            // Whether that is reported or REFUSED is the operator's call, and the default is to
+            // report: the check can only look for the field name RegistrationRules generates, so an
+            // application with its own form, naming its fields differently, validates the tick
+            // perfectly well and still sends no `legal_terms`. Refusing by default would turn its
+            // registrations into failures on the one path every current consumer uses. Where the
+            // flag earns its keep is the case it was written for — an external identity provider
+            // raising Registered with no form behind it at all.
             if ($document->type->isMandatory() && ! array_key_exists("legal_{$key}", $input)) {
                 $unevidenced[] = (string) $key;
             }
 
             // Snapshot the version the recorder actually resolved (its own locale), which
             // may be the default-locale fallback rather than the requested locale.
-            $this->consent->accept($subject, (string) $key, $context, $document->locale, is_string($expectedHash) ? $expectedHash : null);
+            $pending[] = [(string) $key, $document->locale, is_string($expectedHash) ? $expectedHash : null];
+        }
+
+        if ($unevidenced !== [] && $this->withoutFormFields === self::WITHOUT_FORM_FIELDS_REFUSE) {
+            throw UnevidencedConsentException::for($unevidenced);
+        }
+
+        foreach ($pending as [$key, $documentLocale, $expectedHash]) {
+            $this->consent->accept($subject, $key, $context, $documentLocale, $expectedHash);
         }
 
         if ($unevidenced !== []) {
@@ -154,8 +190,10 @@ final readonly class RegistrationConsentRecorder
                 'method' => $context->method->value,
                 'hint' => 'Way B fires on Registered, which a sign-in through an external provider '
                     .'raises with no form. Record the first acceptance at an interstitial with '
-                    .'ConsentMethod::FirstUseGate instead, or turn off '
-                    .'legal-consent.registration.listen_to_registered_event.',
+                    .'ConsentMethod::FirstUseGate instead, turn off '
+                    .'legal-consent.registration.listen_to_registered_event, or set '
+                    .'legal-consent.registration.without_form_fields to \'refuse\' to make this a '
+                    .'failed registration rather than a warning.',
             ]);
         }
     }

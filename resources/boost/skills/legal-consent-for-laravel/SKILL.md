@@ -61,6 +61,13 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   aborts the whole cache. Nothing before the deploy reproduces that, so use the class-string. The
   same applies to `gate.subject_filter`, and `legal-consent:doctor` reports either one.
 - `routes.consent_name` — the route the enforcement middleware sends a blocked subject to.
+- `routes.web` — off by default. Switch it on if you render the plain settings stub without
+  Livewire: it registers `POST {web_prefix}/consent/withdraw` behind `['web', 'auth']`, and the
+  presenter then fills each held consent's `withdraw_url`. With it off the stub renders no
+  withdraw form at all, which is deliberate — a form with no action is the appearance of a
+  control, not a control. Not needed with the Livewire component, which calls its own action.
+- `ui.variant` — `auto` by default: the WireKit-native views are served when `pushery/wirekit`
+  ≥ 2.26.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
 - `notice_mail` — the change-notice mail. `identity.declarant` names the declaring legal person
   (§ 126b BGB) and is appended to the notice AND to its append-only proof row; leave it null and
   the notice is byte-for-byte what it was. Multi-tenant apps bind `ResolvesNoticeIdentity` instead
@@ -150,9 +157,25 @@ $document = Consent::published('terms', app()->getLocale()); // null when unpubl
 
 ```php
 foreach (Consent::registrationChecklist(app()->getLocale()) as $item) {
-    // $item->key, $item->title, $item->wording, $item->required
+    // $item->field() is the input NAME — never build it yourself. A document control is
+    // `legal_{key}`, but the Art. 8 age attestation is named by its key alone, so a
+    // hand-built `legal_{$item->key}` renders a required box that can never be satisfied.
+    // $item->title, $item->wording, $item->required, $item->url
 }
 ```
+
+**Double opt-in?** Two rows, and only the second is a consent:
+
+```php
+Consent::requestConfirmation($user, 'newsletter', $context);  // action: optin_requested — NOT held
+Consent::confirm($user, 'newsletter', $context);              // action: confirmed — now held
+```
+
+The unconfirmed row does not raise `accepted_major` and `hasCurrent()` stays false;
+`statusFor()[$key]['pending_confirmation']` is how a screen shows that middle state instead of
+offering the control again. Listen for `ConsentConfirmationRequested` to send the mail — the
+package owns the ledger, not the mailbox — and never for `ConsentRecorded`, which does not fire
+for a request.
 
 **Record it** through the manager or facade, passing the hash the subject was shown so a version
 released mid-session cannot be frozen against them:
@@ -161,17 +184,22 @@ released mid-session cannot be frozen against them:
 Consent::accept($user, 'terms', ConsentContext::forMethod(ConsentMethod::RegistrationCheckbox), $locale, $shownHash);
 ```
 
-**No registration form (OAuth, SSO, invitations)?** Capture the first acceptance in an interstitial
-shown after authentication and before first use, and use `ConsentMethod::FirstUseGate` for it:
+**No registration form (OAuth, SSO, invitations)?** With the `Registered` listener on, the callback
+writes an acceptance row for every mandatory document without a human having done anything. The
+recorder logs that; set `registration.without_form_fields => 'refuse'` and it raises
+`UnevidencedConsentException` and records nothing instead. Better still, capture the first
+acceptance in an interstitial shown after authentication and before first use, and use
+`ConsentMethod::FirstUseGate` for it:
 
 ```php
 <livewire:legal-consent.re-consent-form :method="ConsentMethod::FirstUseGate" />
 ```
 
-**Drop in the optional UI** (needs `livewire/livewire`; publish `legal-consent-wirekit` for the
-WireKit variants, which need `pushery/wirekit` ≥ 2.26.0 — below 2.17.1 the admin editor loses
+**Drop in the optional UI** (needs `livewire/livewire`. The WireKit-native views are served
+automatically when `pushery/wirekit` ≥ 2.26.0 is installed — `legal-consent.ui.variant` defaults to
+`auto`; publish `legal-consent-wirekit` only to customize them. Below 2.17.1 the admin editor loses
 everything typed into it, and below 2.26.0 WireKit's own screen-reader strings are announced in
-English on a German consent surface):
+English on a German consent surface, which is why the floor is part of the automatic choice):
 
 ```blade
 <livewire:legal-consent.reconsent-form />

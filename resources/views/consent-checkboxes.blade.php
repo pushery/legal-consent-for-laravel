@@ -12,24 +12,33 @@
         dangling at an element that is not there.
 
     $documents: list of ['key', 'title', 'wording', 'url', 'required'] — `url` may be null.
+    A checklist item's ->toArray() adds 'field', 'contentHash' and 'hashField' on top of that.
+
+    `field` is the input name, and it comes from the item rather than from this template. A
+    checklist item's `->toArray()` carries it, and RegistrationRules validates exactly that name.
+    Building it here as `legal_{key}` was wrong for the one control that is NOT a document: the
+    Art. 8 age attestation is named by its key alone, so a hand-built name rendered a required
+    box the visitor could tick and never satisfy. The fallback below keeps the minimal shape above
+    working — that shape lists documents only, and a document IS `legal_{key}`.
 --}}
 @foreach ($documents as $document)
+    @php($field = $document['field'] ?? 'legal_'.$document['key'])
     <div class="legal-consent-field">
-        <label for="legal_{{ $document['key'] }}">
+        <label for="{{ $field }}">
             <input
                 type="checkbox"
-                id="legal_{{ $document['key'] }}"
-                name="legal_{{ $document['key'] }}"
+                id="{{ $field }}"
+                name="{{ $field }}"
                 value="1"
                 @checked(false)
                 @if ($document['required']) required @endif
-                @if (($document['url'] ?? null) !== null) aria-describedby="legal_{{ $document['key'] }}_link" @endif
+                @if (($document['url'] ?? null) !== null) aria-describedby="{{ $field }}_link" @endif
             >
             <span>{{ $document['wording'] }}</span>
         </label>
 
         @if (($document['url'] ?? null) !== null)
-            <a id="legal_{{ $document['key'] }}_link" href="{{ $document['url'] }}" target="_blank" rel="noopener noreferrer">
+            <a id="{{ $field }}_link" href="{{ $document['url'] }}" target="_blank" rel="noopener noreferrer">
                 {{ $document['title'] }}
             </a>
         @endif
