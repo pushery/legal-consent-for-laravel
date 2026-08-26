@@ -49,7 +49,7 @@ final class ChangeSetFreezeGuard
      * comparing against a value no row can hold. They would freeze nothing and still report success,
      * because a dead trigger and a live one look identical from the outside.
      *
-     * `ChangeSetFreezeGuardLockstepTest` holds the two together.
+     * A lockstep test holds the two together.
      */
     public const string FROZEN_STATE = 'published';
 

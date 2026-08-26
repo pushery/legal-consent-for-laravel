@@ -16,8 +16,20 @@ use Pushery\LegalConsent\Models\LegalNotice;
  *
  * A consent row and a notice-delivery row about the SAME subject must carry the SAME token, or the
  * two ledgers cannot be tied together once the account itself is gone — which is the only reason
- * the token exists: it is what keeps the proof meaningful after an Art. 17 erasure nulls
- * subject_type/subject_id (Art. 17(3)(b)/(e) — the proof survives the person).
+ * the token exists: it is what keeps the proof meaningful once the subject reference is gone
+ * (Art. 17(3)(b)/(e) — the proof survives the person).
+ *
+ * ⚠️ THIS USED TO SAY "after an Art. 17 erasure NULLS subject_type/subject_id", AND NO SUPPORTED
+ * OPERATION CAN PRODUCE THAT STATE. Clearing those columns is an UPDATE, and both ledgers refuse
+ * every UPDATE — the model blocks it and PostgreSQL and MySQL each carry a BEFORE UPDATE trigger.
+ * The retention sweep's eligibility rule reads the same columns for null and is therefore reached
+ * only by a row that never had a subject. Reconciling a lawful erasure with an append-only,
+ * hash-chained ledger is an open design question rather than an oversight: every proof field the
+ * erasure would clear is also an input to the chain hash, so removing the person and keeping a
+ * verifiable chain cannot both be done by clearing columns.
+ *
+ * What the token gives is unaffected and is why it stays: whatever shape the answer takes, the
+ * pseudonym is what still ties the two ledgers together afterwards.
  *
  * Reuses the subject's existing token and mints one only when they have none yet. Callers under
  * multi-tenancy must run this inside the right tenant (the lookup is tenant-scoped like every

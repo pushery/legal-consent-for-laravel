@@ -21,7 +21,7 @@ use RuntimeException;
  * silently disarms the proof guard on SQLite — no error, no failing migration, just a table
  * that stops being frozen.
  *
- * That failure was caught by `DocumentImmutabilityTest`, which asserts the guard from the
+ * That failure was caught by a test that asserts the guard from the
  * outside rather than trusting that a migration ran. Keep it that way: the guard here is the
  * mechanism, that test is the proof.
  *
@@ -29,8 +29,8 @@ use RuntimeException;
  * a proof column added by a future migration is protected automatically — it fails CLOSED.
  * MySQL and SQLite cannot diff a row minus columns inside a trigger, so they ENUMERATE every
  * protected column present at install time; a column added later would slip past them (fails
- * OPEN), which is the second reason re-installation matters and the reason
- * `DocumentImmutabilityTest` iterates the live column list rather than a written-down one.
+ * OPEN), which is the second reason re-installation matters and the reason that test iterates
+ * the live column list rather than a written-down one.
  */
 final class ProofColumnGuard
 {

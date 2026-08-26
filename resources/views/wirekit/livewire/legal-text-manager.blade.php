@@ -20,7 +20,7 @@
             @endif
         </div>
 
-        <x-wirekit::alert variant="neutral">{{ __('legal-consent::ui.admin_policy') }}</x-wirekit::alert>
+        <x-wirekit::alert intent="neutral">{{ __('legal-consent::ui.admin_policy') }}</x-wirekit::alert>
 
         {{-- tableLabel names the always-focusable responsive scroll region (else it falls back to a
              generic "Scrollable table"). The document cell below is a real row header

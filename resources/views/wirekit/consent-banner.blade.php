@@ -28,7 +28,7 @@
 @endphp
 
 @if (! empty($pending))
-    <x-wirekit::callout variant="warning" role="region" :aria-label="__('legal-consent::ui.banner_label')" class="legal-consent-banner">
+    <x-wirekit::callout intent="warning" role="region" :aria-label="__('legal-consent::ui.banner_label')" class="legal-consent-banner">
         <x-wirekit::stack gap="sm">
             @foreach ($pending as $item)
                 <x-wirekit::stack :gap="'xs'" class="legal-consent-banner__item">
@@ -52,9 +52,9 @@
 @endif
 
 @if (! empty($informational))
-    {{-- Info-only: announced, never gated. `variant="info"` and no CTA — the wording must not
+    {{-- Info-only: announced, never gated. `intent="info"` and no CTA — the wording must not
          imply an action the subject does not have to take (WP260 rev.01 Rz. 30-31). --}}
-    <x-wirekit::callout variant="info" role="region" :aria-label="__('legal-consent::ui.banner_label')" class="legal-consent-banner legal-consent-banner--info">
+    <x-wirekit::callout intent="info" role="region" :aria-label="__('legal-consent::ui.banner_label')" class="legal-consent-banner legal-consent-banner--info">
         <x-wirekit::stack gap="sm">
             @foreach ($informational as $item)
                 <x-wirekit::text>
@@ -71,7 +71,7 @@
 @if (! empty($deemed))
     {{-- Deemed consent: the objection window. The countdown is the § 308 Nr. 5 lit. a period —
          the subject must be able to see how long they still have to object. --}}
-    <x-wirekit::callout variant="warning" role="region" :aria-label="__('legal-consent::ui.banner_label')" class="legal-consent-banner legal-consent-banner--deemed">
+    <x-wirekit::callout intent="warning" role="region" :aria-label="__('legal-consent::ui.banner_label')" class="legal-consent-banner legal-consent-banner--deemed">
         <x-wirekit::stack gap="sm">
             @foreach ($deemed as $item)
                 <x-wirekit::stack :gap="'xs'">

@@ -4,6 +4,60 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.17.0 → 0.18.0
+
+### `subject_id` widens from an integer to a 64-character string
+
+Both proof tables (`legal_consents`, `legal_notices`) held the subject's own primary key in an
+`unsignedBigInteger`, which locked out any application whose users carry UUID or ULID keys. The
+column is now `string(64)`, and migration `0001_01_01_000018` widens an existing installation in
+place.
+
+**For almost every application this is nothing to do.** Run `php artisan migrate`. No stored row is
+rewritten, and **no tamper-evidence proof needs re-chaining**: the canonical proof form has always
+hashed the string cast of every field — so an id that was a `bigint` and comes back as text hashes
+identically. Both engine suites assert exactly that, against rows written before the type moved.
+
+Three things worth knowing before you run it:
+
+- **The migration rewrites two tables.** On a large ledger that is an `ALTER TABLE` of real
+  duration; on PostgreSQL and MySQL the affected indexes are rebuilt with it. Plan it like any
+  other schema migration on a big table rather than as a no-op.
+- **The rollback can legitimately fail.** Once a subject with a non-numeric key has consented, no
+  integer column can hold that proof, so `down()` refuses rather than dropping or zeroing it. If
+  you have only ever used integer keys it reverses cleanly.
+- **If you compare `subject_id` yourself**, a raw query that relied on numeric comparison
+  (`WHERE subject_id > 1000`, an `ORDER BY` you expected to be numeric) now sorts and compares as
+  text. Queries built through Eloquent or the query builder with `where('subject_id', $model->getKey())`
+  are unaffected.
+
+### `ConsentManager` gains `forget()`
+
+If you implement `Pushery\LegalConsent\Contracts\ConsentManager` yourself, it no longer satisfies
+the interface until you add:
+
+```php
+public function forget(\Illuminate\Database\Eloquent\Model $subject): \Pushery\LegalConsent\Support\SubjectErasure;
+```
+
+Nothing changes for an application using the bundled manager or the facade — and if you are
+performing Art. 17 erasures with your own code today, this is what replaces it.
+
+⚠️ **Check that hand-rolled version before you delete it.** It almost certainly does not re-link
+the tamper chain, because the need for that is not obvious: the erased columns are inputs to the
+row hash. If yours does not and you have `tamper_evidence` on, `legal-consent:verify-ledger` has
+been reporting a break for every erasure you have already performed — those breaks are real and
+this release does not repair them retroactively.
+
+### The optional v1 backfill no longer skips non-numeric user ids
+
+If you publish and run `0001_01_01_000004_backfill_v1_legal_acceptances`, note that it used to skip
+any `users.id` that was not all digits — while the column was an integer, that check was the only
+thing between a UUID and PHP casting it to `0`. It now accepts any value with a lossless string
+form. If you ran the backfill BEFORE upgrading and your users have UUID keys, it imported nothing;
+the run is idempotent by a `source = 'v1_backfill'` marker, so delete those rows (there are none)
+and run it again after migrating.
+
 ## 0.16.1 → 0.17.0
 
 ### If your app has WireKit installed, your consent screens will look different
@@ -968,6 +1022,6 @@ SQLite the trigger enumerates the columns present when it was created, so a proo
 column added later would slip past it. If you add a migration that backfills or
 rewrites a `legal_documents` column, it must **drop the trigger, apply the data
 change, and re-create the trigger** — the guard aborts a migration-time `UPDATE`
-exactly as it aborts runtime tampering. The `DocumentImmutabilityTest` iterates
+exactly as it aborts runtime tampering. The package's own suite iterates
 the live column list against the allowlist and fails if a new column is left
 unprotected.

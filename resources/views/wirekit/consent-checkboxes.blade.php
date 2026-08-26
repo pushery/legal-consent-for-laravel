@@ -29,12 +29,21 @@
                 :label="$document['wording']"
                 :required="$document['required']"
                 :aria-describedby="($document['url'] ?? null) !== null ? $field.'_link' : null"
+                {{-- RESTORED from the visitor's own previous submit, never preset by us — see the
+                     plain stub for why that distinction is the whole of Planet49 (C-673/17).
+                     Passed as null rather than false when there is nothing to restore, so the
+                     attribute is dropped instead of rendering as a value. --}}
+                :checked="old($field) ? true : null"
             />
 
             @if (($document['url'] ?? null) !== null)
+                {{-- `hreflang` names the language of the linked text, which is not always this
+                     page's — a mandatory document published only in the default locale still
+                     binds and appears in its own language. See the plain stub. --}}
                 <x-wirekit::link
                     :id="$field.'_link'"
                     :href="$document['url']"
+                    :hreflang="($document['locale'] ?? '') !== '' ? $document['locale'] : null"
                     external
                 >{{ $document['title'] }}</x-wirekit::link>
             @endif

@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Support;
 
 use Carbon\CarbonImmutable;
 use Pushery\LegalConsent\Content\Document;
+use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Enums\DocumentType;
@@ -132,6 +133,20 @@ final readonly class LegalDocumentPublisher
     public function preview(string $key, string $locale): Document
     {
         return $this->pipeline->process($this->sources->for($key)->resolve($key, $locale));
+    }
+
+    /**
+     * The resolved source behind a document key.
+     *
+     * Exposed so a caller can ask what KIND of source it is without building a second factory.
+     * The bulk publish needs it to tell an unwritten draft from a missing file — both raise the
+     * same exception, so the answer is on the source, not on the failure. Going through the
+     * publisher rather than resolving a factory from the container is what keeps that answer
+     * consistent with the source the publish itself used.
+     */
+    public function sourceFor(string $key): LegalDocumentSource
+    {
+        return $this->sources->for($key);
     }
 
     public function publishWithMode(

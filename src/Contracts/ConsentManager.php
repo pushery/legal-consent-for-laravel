@@ -12,6 +12,7 @@ use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\RegistrationChecklistItem;
+use Pushery\LegalConsent\Support\SubjectErasure;
 
 /**
  * The headless core for recording and querying consent. Works on any Eloquent model as
@@ -104,6 +105,21 @@ interface ConsentManager
      * @return list<array<string, mixed>>
      */
     public function history(Model $subject): array;
+
+    /**
+     * Strip the subject from both proof ledgers under Art. 17, keeping the proof itself.
+     *
+     * The document, its version, the frozen wording, the action and the instant all survive —
+     * Art. 17(3)(b)/(e) — as does `subject_token`, the pseudonym that still ties the two ledgers
+     * together. What goes is everything naming the person.
+     *
+     * It is NOT an update. Both ledgers refuse every UPDATE, so each row is deleted and written
+     * again without those columns, at its original id and inside one transaction. Where tamper
+     * evidence is on, the subject's chain is re-linked as part of the same operation: the erased
+     * columns are inputs to the row hash, so a rewrite that did not re-link would leave the
+     * verifier reporting tampering on a lawful erasure for good.
+     */
+    public function forget(Model $subject): SubjectErasure;
 
     /**
      * The PUBLISHED document a public page must render: the frozen row's verbatim bytes and

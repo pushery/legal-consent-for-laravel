@@ -4,6 +4,168 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-08-26
+
+### Changed
+
+- **A subject can now be keyed by a UUID or a ULID, not only by an auto-increment id.**
+  `subject_id` on `legal_consents` and `legal_notices` was an integer column, and there was no seam
+  an application could bend to fit: no config key, no cast, no overridable attribute. An
+  application whose users carry UUID keys — Laravel's own `HasUuids` shape — was answered by
+  PostgreSQL with `invalid input syntax for type bigint` and by MySQL with `Data truncated`, on the
+  first read of every consent path, so registration, re-consent, withdrawal and notice delivery all
+  failed together.
+
+  The column now holds 64 characters, which fits a UUID (36), a ULID (26) and an auto-increment id
+  as its own decimal text, with room for a prefixed key. Existing installations are widened by a
+  migration; **no stored row is rewritten and no proof needs re-chaining**, because the canonical
+  proof form has always hashed the string cast of every field — an id that was a `bigint` and is
+  now text produces the identical hash, on PostgreSQL and MySQL alike.
+
+  The rollback is deliberately allowed to fail: once a subject with a UUID key has consented, no
+  integer column can hold that proof, and quietly dropping it would destroy the evidence the ledger
+  exists to keep.
+
+  The optional v1 backfill changes with it. It used to skip any non-numeric `users.id` — while the
+  column was an integer that check was the only thing standing between a UUID and PHP casting it to
+  `0`. Keeping it would now silently drop exactly the installations this change is for, leaving a
+  green backfill and an empty ledger, so it refuses only values with no lossless string form.
+
+- **`Consent::forget($subject)` — Art. 17 erasure that leaves the proof and the chain intact.**
+  The package described this step in two places and made it impossible in a third: clearing the
+  subject columns is an `UPDATE`, and both ledgers refuse every `UPDATE`. There was no seam a
+  consumer could reach for, so a deleted person's rows stayed for good with the ip address and user
+  agent still in them — neither orphaned nor superseded, so the retention sweep never touched them.
+
+  Each row is now deleted and written again without the columns that name the person
+  (`subject_type`, `subject_id`, `ip_address`, `user_agent`, `request_id`), at its original id and
+  inside one transaction. What proves the consent survives untouched, as does `subject_token` — the
+  pseudonym that still ties the two ledgers together. Every rewritten row records
+  `subject_erased_at`, because a lawful change to append-only evidence that leaves no trace is
+  indistinguishable from the tampering the ledger exists to catch.
+
+  **The chain is re-linked as part of the same operation, and it has to be.** The obvious version —
+  rewrite the row carrying its old `prev_record_hash` — was measured and breaks the chain twice
+  over: the erased columns are all inputs to the row hash, and a row's hash folds in its own link,
+  so one correction changes the next one's input. Without the re-link, every lawful erasure would
+  leave `legal-consent:verify-ledger` reporting tampering for good.
+
+  Ids are reused rather than reassigned, which is load-bearing rather than tidy: the verifier flags
+  an unchained row whose id is past the first chained row **in the whole table**, so rows
+  re-inserted at fresh ids would each land past that watermark and be reported as direct database
+  writes.
+
+  The notice ledger is erased in step with a shorter column list — it has no `ip_address`,
+  `user_agent` or `request_id`. `notice_body` deliberately **stays**: it looks like per-person data
+  and is not, because the dispatch renders that proof once per version and serves the same text to
+  everyone. Clearing it would destroy the durable-medium proof that makes a deemed acceptance
+  binding and remove nothing about the person.
+
+  `ConsentFake` gains `forget()` plus `assertForgotten()` / `assertNotForgotten()`, so a consuming
+  application can prove its delete-account flow made the call without migrating these tables.
+
+- **`legal-consent:prune` re-links the chain it breaks, instead of only reporting the break.**
+  Measured before any of this existed: a chain of three verified intact, the sweep removed the two
+  superseded rows and exited 0 with its usual success line, and the next `verify-ledger` reported a
+  break — permanently, on a ledger nobody had tampered with. The previous release said so out loud;
+  this one repairs it, because a lawful removal has to leave a verifiable ledger or the package
+  trains its operators to ignore the one alarm it sells.
+
+  A survivor whose predecessors are gone becomes its chain's new start; one whose mid-chain
+  predecessor is gone points at whatever now precedes it. Only rows whose link actually moved are
+  rewritten, ids are reused, and the repair runs after every chunk of both ledgers — a later chunk
+  deleting from the same subject would otherwise break exactly what an earlier repair had fixed.
+  The sweep says when it happened, and only then.
+
+  The walk is shared with the Art. 17 erasure rather than written twice: two copies of something
+  this subtle drift apart on the first change to either.
+
+### Fixed
+
+- **The bundled WireKit views name the color axis by its canonical name.** Five `alert` and
+  `callout` tags set `variant=`, which WireKit carries only as a back-compat alias of `intent=`.
+  Both render identically today, so nothing was visibly wrong — but the alias is being retired,
+  and once the declaration falls away the prop lands in the attribute bag as inert HTML: the
+  re-consent gate's warning callout and the deemed-acceptance objection window would render in the
+  neutral default, with no error and nothing in the page to notice.
+
+  Only the components that carry a color meaning change: `card`, `empty-state` and `tabs.list`
+  keep `variant` as their *surface* axis and are untouched. If you have published these views, the
+  same five lines are worth changing in your copy — a re-publish will bring them over anyway.
+
+- **The bundled registration checkboxes mark the document link's language, and survive a failed
+  submit.** Two gaps, both reported by an application that kept its own view rather than adopt
+  these — which is the outcome a bundled view exists to prevent.
+
+  The document link now carries `hreflang` from the item's own locale. A mandatory document
+  published only in the default locale still binds, so it is shown in the language it exists in —
+  the case `RegistrationChecklistItem` describes in its own docblock — and the link then points at
+  a text in a different language than the page. Without the attribute neither a screen reader nor a
+  translation service is told (WCAG 3.1.2, Language of Parts). It is omitted, not emptied, when an
+  item carries no locale.
+
+  The checkbox state is also restored from the visitor's own previous submit. Until now a mistyped
+  e-mail wiped every consent already given and the visitor re-ticked the same boxes — which is how
+  a consent screen stops being read. **This is not a pre-ticked box**: what Planet49 (C-673/17)
+  forbids is a default set by the provider, and `old()` holds only what this visitor sent a moment
+  ago. An unticked box is not submitted at all, so it carries no key and comes back empty; a first
+  visit has no previous input and renders nothing checked. All three cases are held by tests, in
+  both the plain and the WireKit view.
+
+- **Ten shipped files pointed at test classes no consumer receives.** The test tree never ships and
+  is `export-ignore`d from the dist, so a comment naming a test class is a pointer that resolves to
+  nothing in an installed package — in `src/`, in two migrations, and in the upgrade guide. One of
+  them had rotted further and named a class that no longer existed anywhere after a rename.
+
+  Nothing secret was exposed — a reader simply had no way to follow the pointer. Each of those
+  sentences now states the fact instead of naming the symbol.
+
+- **`legal-consent:prune` says when a sweep has broken a tamper chain.** Measured: a chain of three
+  verified intact, the sweep removed the two superseded rows and exited 0 with its usual success
+  line, and the next `legal-consent:verify-ledger` reported a break — permanently, on a ledger
+  nobody had tampered with. Nothing connected the two events.
+
+  Removing those rows is correct: `DELETE` is the one mutation the ledger allows and retention is
+  not optional. What was wrong is the silence. This command's own documentation calls it "the one
+  scheduled task whose SILENCE is the failure", and an operator who cannot tell a lawful sweep from
+  an attack stops reading the alarm. The line appears only when a chained row was actually removed,
+  so an ordinary nightly sweep is unchanged.
+
+  It does **not** repair the chain. Reconciling lawful removal with an append-only hash chain is a
+  design question, not a bug fix: every proof field an erasure would clear is also an input to the
+  chain hash, so removing the person and keeping a verifiable chain cannot both be done by clearing
+  columns.
+
+- **`legal-consent:publish --all --only-missing` tells a missing file from an unwritten draft.**
+  Both raise the same `LegalDocumentNotFound`, so the gap-filler could only answer both the same
+  way — and it answered "warn". For a draft that is right: a deploy line cannot make an editor
+  write a legal text. For a markdown file that should be in the repository it is exactly wrong —
+  nobody is going to write that one, and skipping it produces the empty legal page behind a green
+  deploy this command exists to prevent.
+
+  A source now says which it is. `AwaitsAuthoring` is a marker a source carries when its empty
+  state means a person has not written yet; the shipped draft source declares it, and anything
+  else counts as provisioned and still fails. Reading the configured name instead would have
+  worked for the two drivers here and been wrong for the case the package is built around — a
+  consumer's own editorial source, told that its normal empty state is a deployment fault.
+
+  `--dry-run` makes the same distinction now, which it did not: it counted every textless source
+  as a warning and exited 0, including under the bare `--all` where the run it previews fails. A
+  preview that reports green for a run that cannot be green is worse than no preview.
+
+- **Two shipped comments described a state no supported operation can reach.** `SubjectToken` said
+  the pseudonym is what survives "after an Art. 17 erasure nulls subject_type/subject_id", and the
+  retention sweep said that deleting a subject "orphans the record". Clearing those columns is an
+  `UPDATE`, which both ledgers refuse at the model and, on PostgreSQL and MySQL, at a trigger; and
+  deleting the subject's own row leaves the columns exactly as they were, so the sweep's `is null`
+  arm is never reached that way.
+
+  The consequence is worth stating plainly rather than quietly rewording the comments: a deleted
+  person's consent rows are neither orphaned nor superseded — no newer
+  row will ever arrive for them — so they are kept for good, with the ip address and user agent
+  still in them. Both comments now say what is true today and name the open question instead of
+  describing a capability that does not exist.
+
 ## [0.17.0] - 2026-08-23
 
 **A minor bump that carries one breaking change**, which SemVer `0.y.z` allows and `UPGRADE.md` has

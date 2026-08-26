@@ -439,6 +439,16 @@ readonly class DefaultConsentManager implements ConsentManager
         return $history;
     }
 
+    /**
+     * Art. 17 erasure, delegated: the column lists, the two-ledger walk and the re-link are
+     * ledger mechanics rather than manager logic, and every consumer that rebuilt them would
+     * rebuild them differently. See {@see LedgerSubjectEraser}.
+     */
+    public function forget(Model $subject): SubjectErasure
+    {
+        return (new LedgerSubjectEraser)->forget($subject);
+    }
+
     private function append(Model $subject, LegalDocument $document, ConsentAction $action, ConsentContext $context): LegalConsent
     {
         // The choke point every write passes through, which is why the class check belongs here and

@@ -70,7 +70,7 @@ enum ConsentAction: string
      * The value is `optin_requested` and not the case name spelled out, because `action` is a
      * 20-character column. SQLite does not enforce that and Postgres and MySQL do, so a longer
      * value would pass the fast suite and fail on the engines a consumer actually runs.
-     * `EnumColumnWidthTest` holds the whole set against the schema.
+     * The suite holds the whole set against the schema.
      */
     case OptInRequested = 'optin_requested';
 

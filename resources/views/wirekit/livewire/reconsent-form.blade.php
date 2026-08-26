@@ -22,7 +22,7 @@
     </div>
 
     @if ($pending->isEmpty())
-        <x-wirekit::callout variant="success" icon>
+        <x-wirekit::callout intent="success" icon>
             {{ __('legal-consent::ui.all_current') }}
         </x-wirekit::callout>
     @else

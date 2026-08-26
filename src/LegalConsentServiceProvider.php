@@ -65,8 +65,8 @@ final class LegalConsentServiceProvider extends ServiceProvider
 {
     /**
      * The lowest `pushery/wirekit` this package's WireKit views are built and tested against —
-     * the same constraint `composer.json` pins for the dev dependency, held in lockstep by
-     * `WireKitVariantTest`.
+     * the same constraint `composer.json` pins for the dev dependency, held in lockstep by a
+     * test that reads both.
      *
      * It is a FLOOR for the automatic choice, not a requirement of the package: below it the
      * plain views are served instead. A Blade component tag compiles unconditionally, so serving
@@ -140,7 +140,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->registrationDocumentsConfig(),
             $this->defaultLocale(),
             // The literal, not RegistrationConsentRecorder::WITHOUT_FORM_FIELDS_WARN.
-            // ConfigDefaultDriftTest reads these inline defaults out of the SOURCE and compares
+            // The config-drift test reads these inline defaults out of the SOURCE and compares
             // them to the shipped config file, so an application whose published config predates a
             // key cannot end up behaving differently from a fresh one — and a class constant is
             // not something that reader can evaluate. It would drop out of the comparison
