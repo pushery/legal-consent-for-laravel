@@ -239,7 +239,7 @@ final class DoctorCommand extends Command
      */
     private function unknownRegistrationMode(): ?string
     {
-        // The literal, for the same reason the provider uses one: ConfigDefaultDriftTest reads
+        // The literal, for the same reason the provider uses one: the config-drift test reads
         // inline defaults out of the SOURCE and cannot evaluate a class constant, so a constant
         // here would drop out of that comparison without a word. The constants below are the
         // vocabulary, which is a different job.

@@ -28,7 +28,12 @@ return new class extends Migration
             // (Art. 17(3)(b)/(e)); subject_token is a stable pseudonym that also
             // survives anonymization.
             $table->string('subject_type')->nullable();
-            $table->unsignedBigInteger('subject_id')->nullable();
+            // A STRING key, not an integer one, and 64 rather than 36. The ledger has to hold
+            // whatever the consuming app keys its subjects by: an auto-increment id survives as
+            // its own decimal text, a UUID is 36 characters, a ULID 26. 64 matches the width this
+            // table already gives `document_key`, `request_id` and `tenant_id`, and leaves room
+            // for a prefixed or composite key without touching the schema again.
+            $table->string('subject_id', 64)->nullable();
             $table->uuid('subject_token')->nullable();
 
             // Optional multi-tenancy (config `tenancy`). '' = no/shared tenant.

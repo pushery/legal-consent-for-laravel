@@ -76,27 +76,34 @@ return new class extends Migration
 
                 foreach ($users as $user) {
                     // A raw builder row is a stdClass, so every property is mixed. The id is
-                    // the one value that must not be guessed at: casting mixed would turn an
-                    // unexpected shape into user 0 and attach a stranger's acceptance to it.
-                    // Skip the row instead — a backfill that silently mislabels a subject is
-                    // worse than one that leaves a row behind for the operator to see.
+                    // the one value that must not be guessed at: folding an unexpected shape
+                    // into a key would attach a stranger's acceptance to it. Skip the row
+                    // instead — a backfill that silently mislabels a subject is worse than one
+                    // that leaves a row behind for the operator to see.
                     //
-                    // The digit check is the half that makes the sentence above true. Accepting
-                    // any string and casting it does not prevent the failure it describes: PHP
-                    // turns "abc" and "" into 0 just as quietly as it turns an array into 1, so
-                    // a non-numeric key would still be folded onto user 0. Only a value that
-                    // survives the round trip is allowed through.
+                    // A NON-NUMERIC KEY IS NOW LEGITIMATE, and this check used to reject it.
+                    // While `subject_id` was an integer column, `ctype_digit()` was the only
+                    // thing standing between a UUID and PHP quietly casting it to 0 — so the
+                    // digit test WAS the safety. Since 0.18 the column holds a 64-character
+                    // string, a UUID or ULID key is an ordinary subject, and keeping that test
+                    // would silently drop exactly the installations the widening was for: the
+                    // operator would see a green backfill and an empty ledger.
+                    //
+                    // What is refused instead is the same class the proof chain refuses: a value
+                    // with no lossless string form. `false`, an array and an object all cast to
+                    // '', which is itself a legitimate value, so admitting them would put four
+                    // different subjects on one key.
                     $id = $user->id;
 
-                    if (! is_int($id) && (! is_string($id) || ! ctype_digit($id))) {
+                    if (! is_int($id) && (! is_string($id) || $id === '')) {
                         continue;
                     }
 
                     if ($hasTerms && $user->terms_accepted_at !== null) {
-                        $rows[] = $this->row($subjectType, (int) $id, 'terms', 'contract_terms', $user->terms_accepted_at, $locale, $now);
+                        $rows[] = $this->row($subjectType, $id, 'terms', 'contract_terms', $user->terms_accepted_at, $locale, $now);
                     }
                     if ($hasPrivacy && $user->privacy_accepted_at !== null) {
-                        $rows[] = $this->row($subjectType, (int) $id, 'privacy', 'privacy_notice', $user->privacy_accepted_at, $locale, $now);
+                        $rows[] = $this->row($subjectType, $id, 'privacy', 'privacy_notice', $user->privacy_accepted_at, $locale, $now);
                     }
                 }
 
@@ -118,7 +125,7 @@ return new class extends Migration
     /**
      * @return array<string, mixed>
      */
-    private function row(string $subjectType, int $subjectId, string $key, string $type, mixed $acceptedAt, string $locale, mixed $now): array
+    private function row(string $subjectType, int|string $subjectId, string $key, string $type, mixed $acceptedAt, string $locale, mixed $now): array
     {
         return [
             'subject_type' => $subjectType,

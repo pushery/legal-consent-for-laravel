@@ -14,6 +14,7 @@ use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\RegistrationChecklistItem;
+use Pushery\LegalConsent\Support\SubjectErasure;
 
 /**
  * An in-memory {@see ConsentManager} for a CONSUMING application's tests. Install it with
@@ -40,6 +41,9 @@ final class ConsentFake implements ConsentManager
 {
     /** @var list<RecordedConsent> */
     private array $recorded = [];
+
+    /** @var list<Model> every subject handed to `forget()`, in order. */
+    private array $forgotten = [];
 
     /** @var array<string, list<string>> subject identity => document keys still owed */
     private array $owed = [];
@@ -259,6 +263,43 @@ final class ConsentFake implements ConsentManager
     public function history(Model $subject): array
     {
         return $this->history;
+    }
+
+    /**
+     * Records the call and answers with zeros rather than mutating anything.
+     *
+     * A fake exists so a test can assert an app CALLED the erasure; making it also simulate a
+     * ledger rewrite would mean reimplementing the chain walk in test code, and a second
+     * implementation of the thing under test is worth less than no implementation. Assert against
+     * the real manager when the rewrite itself is the subject.
+     */
+    public function forget(Model $subject): SubjectErasure
+    {
+        $this->forgotten[] = $subject;
+
+        return new SubjectErasure;
+    }
+
+    /** Was this subject handed to `forget()`? */
+    public function assertForgotten(Model $subject): void
+    {
+        $matched = array_filter(
+            $this->forgotten,
+            fn (Model $seen): bool => $seen::class === $subject::class && $seen->getKey() === $subject->getKey(),
+        );
+
+        Assert::assertNotEmpty($matched, 'Expected the subject to have been forgotten, but forget() was never called for them.');
+    }
+
+    /** `forget()` was NOT called for this subject — the half that catches an over-eager erasure. */
+    public function assertNotForgotten(Model $subject): void
+    {
+        $matched = array_filter(
+            $this->forgotten,
+            fn (Model $seen): bool => $seen::class === $subject::class && $seen->getKey() === $subject->getKey(),
+        );
+
+        Assert::assertEmpty($matched, 'Expected the subject NOT to have been forgotten, but forget() was called for them.');
     }
 
     public function published(string $documentKey, ?string $locale = null): ?PublishedDocument

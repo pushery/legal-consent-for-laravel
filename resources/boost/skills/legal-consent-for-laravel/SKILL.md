@@ -32,6 +32,10 @@ composer require pushery/legal-consent-for-laravel
 
 The service provider is registered through package discovery.
 
+Your user model can be keyed however you key it — the ledger stores `subject_id` as a
+64-character string, so an auto-increment id, a UUID and a ULID all fit and `HasUuids` needs no
+adapter. Do NOT add a cast or a config option for it; there is nothing to configure.
+
 ### 2. Configure
 
 ```bash
@@ -98,6 +102,26 @@ php artisan legal-consent:check-drift                    # source changed since 
 fall back to the source — so every legal page renders empty with no error and no log. Run
 `legal-consent:publish --all --editorial` once, or ask `legal-consent:doctor`, which names every
 registered document with no published version.
+
+**When the application deletes an account, call `Consent::forget($user)`.** It strips
+`subject_type`, `subject_id`, `ip_address`, `user_agent` and `request_id` from both ledgers and
+keeps everything that proves the consent, including the `subject_token` pseudonym that still ties
+the two together (Art. 17(3)(b)/(e)). It returns counts per ledger.
+
+Do NOT write this by hand and do NOT try to clear those columns with an update — both ledgers
+refuse every `UPDATE`, at the model and at a database trigger. A hand-rolled delete-and-reinsert
+also breaks the tamper chain: the erased columns are inputs to the row hash, and a row's hash folds
+in its own link, so the rewrite has to re-link everything after it. `Consent::forget()` does that;
+a consumer version almost certainly does not.
+
+In tests, `Consent::fake()` records the call — assert it with `assertForgotten($user)` and
+`assertNotForgotten($other)` rather than migrating these tables into your test database.
+
+**A missing markdown file still fails `--only-missing`.** Only a source waiting on an author is
+warned about and skipped — the bundled draft source, or your own if it implements
+`Pushery\LegalConsent\Content\AwaitsAuthoring`. Everything else counts as provisioned, so a
+deployment missing a legal text goes red instead of leaving an empty page behind a green deploy.
+Do NOT add a flag for this; it follows from the source.
 
 **In the deploy script, use `--all --only-missing --editorial`, not the bare `--all`.** Re-running
 `--all` changes nothing only while the sources are unchanged. Once a text is edited and its version

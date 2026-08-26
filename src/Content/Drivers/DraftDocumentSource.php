@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Content\Drivers;
 
+use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Content\ContentFormat;
 use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Content\RawDocument;
@@ -33,7 +34,7 @@ use Pushery\LegalConsent\Support\LegalDriftChecker;
  * not live" — instead of crying every day about work in progress until someone removes it from
  * the schedule.
  */
-final readonly class DraftDocumentSource implements LegalDocumentSource
+final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocumentSource
 {
     /**
      * @param  array<string, mixed>  $documents  the `legal-consent.documents` registry, so this

@@ -20,7 +20,7 @@ use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
  *
  * @property int $id
  * @property string|null $subject_type
- * @property int|null $subject_id
+ * @property int|string|null $subject_id the subject's own primary key, held as a string column since 0.18 so a UUID or ULID key fits; it arrives as int from an in-memory model and as string from the database, and the proof chain casts both the same way
  * @property string|null $subject_token
  * @property string $tenant_id
  * @property int|null $document_id

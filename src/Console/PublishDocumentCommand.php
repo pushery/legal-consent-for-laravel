@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Console;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -130,11 +131,21 @@ final class PublishDocumentCommand extends Command
      * exit, because a registered document with no text is a configuration error — silently
      * skipping it recreates the empty page this command exists to prevent.
      *
-     * Under --only-missing that last sentence flips, and deliberately so. A gap-filler runs from a
-     * deploy line, where a draft-backed document with no reviewed text yet is not a configuration
-     * error but the normal state of an installation whose editors have not written it. Failing
-     * there would make every deploy red for a reason nobody can fix from the deploy. So a source
-     * with no text is NAMED and skipped, and only an unexpected failure is still a failure.
+     * Under --only-missing that last sentence flips FOR AN EDITORIAL SOURCE, and deliberately so.
+     * A gap-filler runs from a deploy line, where a draft-backed document with no reviewed text
+     * yet is not a configuration error but the normal state of an installation whose editors have
+     * not written it. Failing there would make every deploy red for a reason nobody can fix from
+     * the deploy. So such a source is NAMED and skipped.
+     *
+     * ⚠️ IT USED TO FLIP FOR EVERY SOURCE, and that was the wrong half of a true sentence. A
+     * markdown file that is not in the repository raises the same `LegalDocumentNotFound` as an
+     * unwritten draft, so both were warned about and skipped — but nobody is going to write that
+     * one. It is a deployment missing a file, and skipping it produces exactly the empty legal
+     * page this command exists to prevent, behind a green deploy.
+     *
+     * The two are told apart by the SOURCE rather than by the failure, because the failure cannot
+     * tell them apart: {@see AwaitsAuthoring} is what a source declares when its empty state is a
+     * person who has not written yet. Anything else counts as provisioned and still fails.
      */
     private function publishAll(LegalDocumentPublisher $publisher, NoticeMode $mode): int
     {
@@ -164,7 +175,7 @@ final class PublishDocumentCommand extends Command
                 try {
                     $document = $this->publish($publisher, $mode, $key, $locale);
                 } catch (LegalDocumentNotFound $e) {
-                    if ($onlyMissing) {
+                    if ($onlyMissing && $this->awaitsAuthoring($publisher, $key)) {
                         $textless[] = "{$key} ({$locale}): {$e->getMessage()}";
 
                         continue;
@@ -218,6 +229,11 @@ final class PublishDocumentCommand extends Command
      * It resolves rather than counts, which is the only version worth having: a document whose
      * markdown file is missing is reported here, in a command an operator runs on purpose, instead
      * of during the deploy that needed it.
+     *
+     * It answers a textless source EXACTLY as the real run does, which it did not before: every
+     * one of them counted as a warning and the dry run exited 0 — including under the bare --all,
+     * where the run it previews fails. A preview that reports green for a run that cannot be green
+     * is worse than no preview, because it is consulted precisely to avoid that red.
      */
     private function previewAll(LegalDocumentPublisher $publisher, bool $onlyMissing): int
     {
@@ -240,8 +256,15 @@ final class PublishDocumentCommand extends Command
                 try {
                     $rendered = $publisher->preview($key, $locale);
                 } catch (LegalDocumentNotFound $e) {
-                    $textless++;
-                    $this->warn("  ? {$key} ({$locale}) — no text: {$e->getMessage()}");
+                    if ($onlyMissing && $this->awaitsAuthoring($publisher, $key)) {
+                        $textless++;
+                        $this->warn("  ? {$key} ({$locale}) — no text yet: {$e->getMessage()}");
+
+                        continue;
+                    }
+
+                    $failures[] = "{$key} ({$locale}): {$e->getMessage()}";
+                    $this->error("  x {$key} ({$locale}) — no text: {$e->getMessage()}");
 
                     continue;
                 } catch (Throwable $e) {
@@ -268,6 +291,25 @@ final class PublishDocumentCommand extends Command
         $this->line("Dry run: {$would} would publish, {$current} already current, {$textless} without text, ".count($failures).' failed. Nothing was written.');
 
         return $failures === [] ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Is the source behind this document one whose empty state means nobody has written it yet?
+     *
+     * ⚠️ IT RESOLVES WITHOUT A GUARD, AND COVERAGE IS WHAT SETTLED THAT. The first version wrapped
+     * this in a try/catch returning false — defensible-sounding, and a branch no run can enter:
+     * both call sites sit inside `catch (LegalDocumentNotFound)`, the publisher never raises that
+     * itself, and the only thing that does is `sources->for($key)->resolve(...)`. Arriving here
+     * therefore PROVES the same key already resolved a source a moment ago, so resolving it again
+     * cannot fail for a configuration reason. A misconfigured registry raises
+     * `InvalidArgumentException` on the publish attempt instead and is already a failure there.
+     *
+     * The catch left a permanently uncovered line and, worse, implied a fallback for a case that
+     * cannot happen — a reader would look for the misconfiguration it handles and find none.
+     */
+    private function awaitsAuthoring(LegalDocumentPublisher $publisher, string $key): bool
+    {
+        return $publisher->sourceFor($key) instanceof AwaitsAuthoring;
     }
 
     /**

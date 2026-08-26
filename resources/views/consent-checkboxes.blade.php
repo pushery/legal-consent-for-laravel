@@ -30,7 +30,15 @@
                 id="{{ $field }}"
                 name="{{ $field }}"
                 value="1"
-                @checked(false)
+                {{-- RESTORED from the visitor's own previous submit, never preset by us. That
+                     distinction is the whole of Planet49 (C-673/17): what is forbidden is a box
+                     the provider ticked in advance. `old()` holds only what this visitor sent a
+                     moment ago, and an unticked box is not submitted at all — so it carries no
+                     key and comes back empty. Without this, one mistyped e-mail wipes every
+                     consent already given and the visitor re-ticks the same boxes, which is how a
+                     consent screen stops being read. `old()` returns the default when there is no
+                     session, so a view rendered outside a web request is unaffected. --}}
+                @checked(old($field))
                 @if ($document['required']) required @endif
                 @if (($document['url'] ?? null) !== null) aria-describedby="{{ $field }}_link" @endif
             >
@@ -38,7 +46,16 @@
         </label>
 
         @if (($document['url'] ?? null) !== null)
-            <a id="{{ $field }}_link" href="{{ $document['url'] }}" target="_blank" rel="noopener noreferrer">
+            {{-- `hreflang` names the language of the text at the other end, which is not always
+                 the language of this page: a mandatory document published only in the default
+                 locale still binds, so it appears in its own language (see
+                 RegistrationChecklistItem). Without the attribute a screen reader announces the
+                 title in the page's language and a translation service treats it as such
+                 (WCAG 3.1.2, Language of Parts). Omitted rather than emptied when the item
+                 carries no locale — `hreflang=""` is itself a claim. --}}
+            <a id="{{ $field }}_link" href="{{ $document['url'] }}"
+               @if (($document['locale'] ?? '') !== '') hreflang="{{ $document['locale'] }}" @endif
+               target="_blank" rel="noopener noreferrer">
                 {{ $document['title'] }}
             </a>
         @endif

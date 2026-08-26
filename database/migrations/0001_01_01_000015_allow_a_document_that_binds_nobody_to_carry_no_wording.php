@@ -46,7 +46,7 @@ return new class extends Migration
         // the change above is Laravel's twelve-step rebuild: create a new table, copy, drop,
         // rename. Indexes survive that. TRIGGERS DO NOT — so without this line the proof guard
         // installed by 000011 is silently gone, on the one table whose entire purpose is being
-        // un-editable. Measured here: `DocumentImmutabilityTest` went red across all 30 proof
+        // un-editable. Measured here: the immutability test went red across all 30 proof
         // columns the moment this migration was added, and green again with this line.
         //
         // It is also what keeps the MySQL and SQLite arms correct, independently of the rebuild:
