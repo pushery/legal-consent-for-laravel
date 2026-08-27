@@ -8,6 +8,8 @@ use Composer\InstalledVersions;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use Illuminate\Notifications\Events\NotificationFailed;
+use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
@@ -37,6 +39,8 @@ use Pushery\LegalConsent\Events\LegalDocumentPublished;
 use Pushery\LegalConsent\Http\Middleware\EnsureLegalConsent;
 use Pushery\LegalConsent\Listeners\FlushEnforceableCacheOnPublish;
 use Pushery\LegalConsent\Listeners\RecordConsentOnRegistration;
+use Pushery\LegalConsent\Listeners\ReopenVersionOnNoticeFailure;
+use Pushery\LegalConsent\Listeners\WriteNoticeDeliveryProof;
 use Pushery\LegalConsent\Livewire\ConsentSettings;
 use Pushery\LegalConsent\Livewire\LegalTextEditor;
 use Pushery\LegalConsent\Livewire\LegalTextManager;
@@ -186,7 +190,15 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         $this->app->singleton(ConsentBanner::class, fn (): ConsentBanner => new ConsentBanner(new ConsentGate, $this->defaultLocale()));
 
-        $this->app->singleton(EnforceableDocumentCache::class, fn (): EnforceableDocumentCache => new EnforceableDocumentCache(
+        // scoped, not singleton, for the same reason RegistrationRules is: the class memoizes its
+        // lookups, so the memo has to be discarded between requests rather than outliving them.
+        //
+        // This one is a TIDINESS change rather than a correctness fix, and saying so is the point —
+        // the memo is already capped at the store's own TTL, so a stale entry expires on its own
+        // either way. What `scoped` buys is that the lifetime is stated by the binding instead of
+        // being an internal detail a reader has to go and check, and that the two memoizing
+        // bindings in this provider are declared the same way.
+        $this->app->scoped(EnforceableDocumentCache::class, fn (): EnforceableDocumentCache => new EnforceableDocumentCache(
             $this->cacheStore(),
             $this->app->make(TenantContext::class),
             $this->intConfig('legal-consent.cache.enforceable_ttl', 60),
@@ -220,6 +232,15 @@ final class LegalConsentServiceProvider extends ServiceProvider
         }
 
         Event::listen(LegalDocumentPublished::class, FlushEnforceableCacheOnPublish::class);
+
+        // The durable-medium proof follows the DELIVERY, not the dispatch. The notice
+        // notifications are queued, so the sweep only hands jobs to a worker; a row written there
+        // would certify an enqueue, and `legal_notices` refuses every UPDATE, so it could never be
+        // corrected afterwards. Registered unconditionally — whether a proof is owed at all is
+        // `durable_medium.proof`, which the listener reads per event so a runtime change to it is
+        // honored.
+        Event::listen(NotificationSent::class, WriteNoticeDeliveryProof::class);
+        Event::listen(NotificationFailed::class, ReopenVersionOnNoticeFailure::class);
 
         if ((bool) config('legal-consent.registration.listen_to_registered_event', true)) {
             Event::listen(Registered::class, RecordConsentOnRegistration::class);
@@ -260,7 +281,13 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 if ((bool) config('legal-consent.schedule.prune', false)) {
                     $schedule->command('legal-consent:prune')
                         ->daily()
-                        ->withoutOverlapping()
+                        // Capped like its two siblings, and here the bare default is worse than
+                        // anywhere else: 1440 minutes is exactly the interval `daily()` repeats on,
+                        // so a hard-killed run (SIGKILL or an OOM — neither is released by
+                        // `releaseOnTerminationSignals`) holds the lock right up to the next due
+                        // moment and can swallow a whole day's sweep. Laravel does not report a
+                        // skipped overlapping event, so the only sign would be a missing heartbeat.
+                        ->withoutOverlapping(120)
                         ->onOneServer();
                 }
             });
@@ -373,12 +400,14 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
     /**
      * Every host path below is resolved through `$this->app`, never through the global
-     * `config_path()` / `database_path()` / `resource_path()` / `lang_path()` helpers. Those are
-     * FOUNDATION helpers — defined only in laravel/framework's Foundation/helpers.php, which no
-     * focused `illuminate/*` component provides. This package requires only `illuminate/*`, so
-     * calling them would declare a dependency contract it does not hold: a fatal the moment the
-     * package is consumed outside a full Laravel app. The methods are on
-     * Illuminate\Contracts\Foundation\Application — the type `$this->app` already has.
+     * `config_path()` / `database_path()` / `resource_path()` / `lang_path()` helpers.
+     *
+     * Not a dependency argument — the manifest requires `laravel/framework`, so those helpers are
+     * present. It is that a path a provider publishes to is the APPLICATION's, and asking the
+     * application instance for it is the honest way to say so: the methods live on
+     * Illuminate\Contracts\Foundation\Application, the type `$this->app` already has, and the
+     * value follows an application that has moved its config or lang directory. The global helpers
+     * read the same container and add a layer that hides where the answer came from.
      */
     private function registerPublishing(): void
     {
@@ -409,11 +438,18 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // A second reason to leave it alone, independent of the first: the publish command tests
         // whether a file already exists under its ORIGINAL name and renames only afterwards, so a
         // re-publish never recognizes the copy it wrote last time and lays down a duplicate of
-        // every migration under a fresh timestamp — and UPGRADE.md tells consumers to re-publish
-        // after an upgrade.
-        $this->publishes([
-            __DIR__.'/../database/migrations' => $this->app->databasePath('migrations'),
-        ], ['legal-consent', 'legal-consent-migrations']);
+        // every migration under a fresh timestamp — and the upgrade guide at
+        // https://github.com/pushery/legal-consent-for-laravel/blob/main/UPGRADE.md tells
+        // consumers to re-publish after an upgrade. The URL is absolute because that file is
+        // export-ignored from the Composer dist: a reader in `vendor/` has no local copy.
+        // FILE BY FILE, not the directory. `vendor:publish` enumerates a published directory
+        // RECURSIVELY (VendorPublishCommand::moveManagedFiles walks `listContents('from://', true)`),
+        // so publishing `database/migrations` also copied `database/migrations/optional/` — the two
+        // opt-in migrations the comment above says the umbrella excludes, one of which drops a
+        // column from the host `users` table. They land inert, because the migrator globs
+        // `*_*.php` non-recursively, and then duplicate the moment the consumer publishes
+        // `legal-consent-backfill` deliberately. A flat map publishes exactly what is auto-loaded.
+        $this->publishes($this->autoloadedMigrations(), ['legal-consent', 'legal-consent-migrations']);
 
         // Optional, opt-in migrations (not auto-loaded — they touch the host `users`
         // table, so a consumer publishes them deliberately). Their 000003/000004 prefixes
@@ -457,6 +493,26 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../resources/views/mail' => $this->app->resourcePath('views/vendor/legal-consent/mail'),
         ], 'legal-consent-mail');
+    }
+
+    /**
+     * The migrations this package loads itself, mapped one by one onto the host's migration
+     * directory — the same set `loadMigrationsFrom()` registers, and nothing under `optional/`.
+     *
+     * @return array<string, string>
+     */
+    private function autoloadedMigrations(): array
+    {
+        $map = [];
+
+        // Non-recursive, exactly like Illuminate's Migrator: `glob($path.'/*_*.php')`. What the
+        // migrator runs and what the publish copies are then the same set by construction rather
+        // than by two lists agreeing.
+        foreach (glob(__DIR__.'/../database/migrations/*_*.php') ?: [] as $migration) {
+            $map[$migration] = $this->app->databasePath('migrations/'.basename($migration));
+        }
+
+        return $map;
     }
 
     /**

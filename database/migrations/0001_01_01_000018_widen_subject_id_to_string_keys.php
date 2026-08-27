@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\ProofColumnGuard;
 
 /**
  * Widen `subject_id` on both proof tables from an integer key to a 64-character string one, so a
@@ -28,11 +29,18 @@ use Illuminate\Support\Facades\Schema;
  * schema builder emits none. MySQL and SQLite take the portable path.
  *
  * SQLite REBUILDS THE TABLE to change a column, and a rebuild keeps the indexes but DROPS the
- * triggers (see 000011). That is safe HERE and the reason is worth stating rather than leaving to
- * be rediscovered: neither `legal_consents` nor `legal_notices` carries a SQLite trigger — their
- * append-only guards have a pgsql arm and a mysql arm and nothing else, because SQLite gets the
- * same guarantee from the model layer. The unique chain-link index from 000012 survives the
- * rebuild, and the suite asserts it still bites afterwards.
+ * triggers (see 000011). Neither `legal_consents` nor `legal_notices` carries a trigger of its own
+ * on that engine — their append-only guards have a pgsql arm and a mysql arm and nothing else,
+ * because SQLite gets the same guarantee from the model layer. The unique chain-link index from
+ * 000012 survives the rebuild, and the suite asserts it still bites afterwards.
+ *
+ * What is NOT safe, and is why the rebuild runs inside `ProofColumnGuard::whileDisarmed()`: the
+ * guard on `legal_documents` names `legal_consents` in its DELETE arm, and the rebuild's last step
+ * renames the replacement table into place while the original is already gone. SQLite re-parses
+ * every trigger in the schema at that rename, so a trigger pointing at the missing table is a hard
+ * error — measured: "error in trigger legal_documents_no_referenced_delete: no such table:
+ * main.legal_consents", raised AFTER `legal_consents` has been dropped. Disarming first turns a
+ * destroyed ledger table into an ordinary schema change.
  */
 return new class extends Migration
 {
@@ -41,13 +49,15 @@ return new class extends Migration
 
     public function up(): void
     {
-        foreach (self::TABLES as $table) {
-            if ($this->holdsStringKeys($table)) {
-                continue;
-            }
+        ProofColumnGuard::whileDisarmed(function (): void {
+            foreach (self::TABLES as $table) {
+                if ($this->holdsStringKeys($table)) {
+                    continue;
+                }
 
-            $this->widen($table);
-        }
+                $this->widen($table);
+            }
+        });
     }
 
     /**
@@ -60,13 +70,15 @@ return new class extends Migration
      */
     public function down(): void
     {
-        foreach (self::TABLES as $table) {
-            if (! $this->holdsStringKeys($table)) {
-                continue;
-            }
+        ProofColumnGuard::whileDisarmed(function (): void {
+            foreach (self::TABLES as $table) {
+                if (! $this->holdsStringKeys($table)) {
+                    continue;
+                }
 
-            $this->narrow($table);
-        }
+                $this->narrow($table);
+            }
+        });
     }
 
     /**
@@ -84,7 +96,9 @@ return new class extends Migration
     private function widen(string $table): void
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
-            DB::statement("ALTER TABLE {$table} ALTER COLUMN subject_id TYPE varchar(64) USING subject_id::varchar");
+            $qualified = $this->prefixed($table);
+
+            DB::statement("ALTER TABLE {$qualified} ALTER COLUMN subject_id TYPE varchar(64) USING subject_id::varchar");
 
             return;
         }
@@ -97,7 +111,9 @@ return new class extends Migration
     private function narrow(string $table): void
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
-            DB::statement("ALTER TABLE {$table} ALTER COLUMN subject_id TYPE bigint USING subject_id::bigint");
+            $qualified = $this->prefixed($table);
+
+            DB::statement("ALTER TABLE {$qualified} ALTER COLUMN subject_id TYPE bigint USING subject_id::bigint");
 
             return;
         }
@@ -105,5 +121,33 @@ return new class extends Migration
         Schema::table($table, function (Blueprint $blueprint): void {
             $blueprint->unsignedBigInteger('subject_id')->nullable()->change();
         });
+    }
+
+    /**
+     * A table name carrying the connection's table prefix.
+     *
+     * `Schema::table()` in the portable branch applies it for us; the hand-written PostgreSQL
+     * statement is the only branch here that does not, which is exactly the shape of the defect —
+     * the portable path stays green while the engine-specific one names a table the schema does
+     * not have.
+     *
+     * THE PREFIX IS VALIDATED BEFORE THIS METHOD CAN RUN, AND NOT HERE. Sister migrations refuse a
+     * prefix that is not a bare identifier fragment on the spot, because they build their DDL as
+     * the first thing they do. This one cannot be reached that way: every caller sits inside
+     * `ProofColumnGuard::whileDisarmed()`, whose first act is `drop()` -> `qualify()`, which
+     * applies the identical `/^\w*$/` rule and throws. This method used to repeat that check, and
+     * the copy could not fire — measured 2026-08-27, `up()` on a prefix of `legal-` raises
+     * "refusing to build the legal_documents guards for an unexpected table prefix", never this
+     * file's own sentence. A branch no run can enter is not a defense; it only reads like one.
+     *
+     * So the guarantee lives one level up, and the suite pins it there rather than here: both
+     * halves are run on a hostile prefix and the refusal is required to arrive BEFORE any statement
+     * is issued. Take `whileDisarmed()` off this migration and that goes red, which is the point —
+     * the wrapper is what makes the interpolation below safe, on top of the rebuild hazard it was
+     * added for.
+     */
+    private function prefixed(string $name): string
+    {
+        return DB::connection()->getTablePrefix().$name;
     }
 };

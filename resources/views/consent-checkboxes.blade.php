@@ -11,6 +11,11 @@
         link to render, and the description reference is dropped with it rather than left
         dangling at an element that is not there.
 
+    A rejected required box renders its message below the label, and the input points at it. The
+    WireKit twin carries no such block on purpose: `x-wirekit::checkbox` reads Laravel's error bag
+    itself and merges its own error target into the `aria-describedby` it is handed, so the same
+    result arrives through the component. This stub has no component to do that for it.
+
     $documents: list of ['key', 'title', 'wording', 'url', 'required'] — `url` may be null.
     A checklist item's ->toArray() adds 'field', 'contentHash' and 'hashField' on top of that.
 
@@ -22,7 +27,24 @@
     working — that shape lists documents only, and a document IS `legal_{key}`.
 --}}
 @foreach ($documents as $document)
-    @php($field = $document['field'] ?? 'legal_'.$document['key'])
+    @php
+        $field = $document['field'] ?? 'legal_'.$document['key'];
+
+        // The bag `ShareErrorsFromSession` puts on every web request. Read defensively: a view
+        // rendered outside a request has no `$errors` at all, and this stub is renderable anywhere.
+        $errorMessage = ($errors ?? null)?->first($field);
+        $hasError = ($errorMessage ?? '') !== '';
+
+        // ONE `aria-describedby`, assembled here rather than written twice. Two of them on the
+        // same element are not two descriptions: the browser keeps the first and drops the rest,
+        // so an error target appended next to the document link would silently take the link away.
+        // The error comes first — why the field is flagged is said before what it points at.
+        $describedBy = trim(
+            ($hasError ? $field.'_error' : '')
+            .' '
+            .(($document['url'] ?? null) !== null ? $field.'_link' : '')
+        );
+    @endphp
     <div class="legal-consent-field">
         <label for="{{ $field }}">
             <input
@@ -40,10 +62,27 @@
                      session, so a view rendered outside a web request is unaffected. --}}
                 @checked(old($field))
                 @if ($document['required']) required @endif
-                @if (($document['url'] ?? null) !== null) aria-describedby="{{ $field }}_link" @endif
+                @if ($hasError) aria-invalid="true" @endif
+                @if ($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
             >
             <span>{{ $document['wording'] }}</span>
         </label>
+
+        @if ($hasError)
+            {{-- The message the server rejected the submit with. `RegistrationRules::messages()`
+                 produces it and the package ships all three in seven locales; without a block to
+                 render it none of them can reach a visitor, because an unticked checkbox is not
+                 submitted at all, so `old()` restores nothing and the page after a refusal is
+                 identical to a fresh one (WCAG 3.3.1, 3.3.3).
+
+                 What carries the announcement is the pairing above — `aria-invalid` plus the
+                 reference — so the message is read out WITH the control rather than sitting
+                 somewhere on the page. `role="alert"` covers the other direction: a host that
+                 re-renders this field without a full page load gets the failure spoken. It does
+                 nothing on a plain redirect-back, where the region is already in the document when
+                 it loads, which is why the association is the half that has to be right. --}}
+            <p id="{{ $field }}_error" class="legal-consent-error" role="alert">{{ $errorMessage }}</p>
+        @endif
 
         @if (($document['url'] ?? null) !== null)
             {{-- `hreflang` names the language of the text at the other end, which is not always

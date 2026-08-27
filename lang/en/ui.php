@@ -50,6 +50,7 @@ return [
     // The one state a settings screen must not blur: a new major version is waiting, so
     // this is the invitation to do voluntarily what the gate will otherwise compel.
     'action_required' => 'Action required',
+    'retired' => 'No longer offered',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}Effective today|{1}:count day left|[2,*]:count days left',
@@ -81,6 +82,11 @@ return [
     'admin_preview' => 'Preview',
     'granted_confirmation' => 'Consent given. You can withdraw it at any time.',
     'withdrawn_confirmation' => 'Consent withdrawn. It takes effect immediately.',
+    // The refusal a subject can actually reach — a stale page, a hand-built post or a custom
+    // stub asking to withdraw something that was never a consent. It states the position
+    // without the document key or the internal type: those are the operator's business, and
+    // they go to the log.
+    'not_withdrawable' => 'This document cannot be withdrawn — only a consent you gave voluntarily can be.',
 
     // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
     'reconsent_recorded' => 'Thank you — your consent has been recorded.',
@@ -95,6 +101,6 @@ return [
     'admin_status_no_source' => 'Write the source text first — there is nothing to translate from.',
     'admin_status_machine_translated' => 'Machine-translated. A human must review it before it can be published.',
     'admin_status_reviewed' => 'Marked reviewed. This text is now publishable.',
-    'admin_status_release_blocked' => '\':key\' was not released: :reasons',
-    'admin_status_released' => 'Released \':key\' across :count locale(s) — affects :affects subject(s).',
+    'admin_status_release_blocked' => '“:key” was not released: :reasons',
+    'admin_status_released' => 'Released “:key” across :count locale(s) — affects :affects subject(s).',
 ];

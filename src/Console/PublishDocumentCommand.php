@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Console;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Pushery\LegalConsent\Content\AwaitsAuthoring;
+use Pushery\LegalConsent\Content\Document;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -98,7 +99,7 @@ final class PublishDocumentCommand extends Command
         $locale = $this->resolveLocale();
 
         return (bool) $this->option('dry-run')
-            ? $this->previewOne($publisher, $key, $locale)
+            ? $this->previewOne($publisher, $mode, $key, $locale)
             : $this->publishOne($publisher, $mode, $key, $locale);
     }
 
@@ -137,11 +138,11 @@ final class PublishDocumentCommand extends Command
      * not written it. Failing there would make every deploy red for a reason nobody can fix from
      * the deploy. So such a source is NAMED and skipped.
      *
-     * ⚠️ IT USED TO FLIP FOR EVERY SOURCE, and that was the wrong half of a true sentence. A
-     * markdown file that is not in the repository raises the same `LegalDocumentNotFound` as an
-     * unwritten draft, so both were warned about and skipped — but nobody is going to write that
-     * one. It is a deployment missing a file, and skipping it produces exactly the empty legal
-     * page this command exists to prevent, behind a green deploy.
+     * IT MUST NOT FLIP FOR EVERY SOURCE, and the reason is that the failure cannot tell two very
+     * different situations apart. A markdown file missing from the repository raises the same
+     * `LegalDocumentNotFound` as an unwritten draft — but nobody is going to write that one. It is
+     * a deployment missing a file, and skipping it produces exactly the empty legal page this
+     * command exists to prevent, behind a green deploy.
      *
      * The two are told apart by the SOURCE rather than by the failure, because the failure cannot
      * tell them apart: {@see AwaitsAuthoring} is what a source declares when its empty state is a
@@ -152,7 +153,7 @@ final class PublishDocumentCommand extends Command
         $onlyMissing = (bool) $this->option('only-missing');
 
         if ((bool) $this->option('dry-run')) {
-            return $this->previewAll($publisher, $onlyMissing);
+            return $this->previewAll($publisher, $mode, $onlyMissing);
         }
 
         $published = 0;
@@ -234,8 +235,15 @@ final class PublishDocumentCommand extends Command
      * one of them counted as a warning and the dry run exited 0 — including under the bare --all,
      * where the run it previews fails. A preview that reports green for a run that cannot be green
      * is worse than no preview, because it is consulted precisely to avoid that red.
+     *
+     * The same sentence is why it resolves through {@see LegalDocumentPublisher::previewWithMode()}
+     * rather than the bare renderer. The renderer answers "what text would this produce"; the
+     * question an operator is actually asking is "would this publish succeed", and every guard
+     * between the two — the locale, the regime, the notice mode the document type may carry, the
+     * statutory advance period — used to be skipped here. The preview said "would publish" and
+     * exited 0 for combinations the very next command refuses.
      */
-    private function previewAll(LegalDocumentPublisher $publisher, bool $onlyMissing): int
+    private function previewAll(LegalDocumentPublisher $publisher, NoticeMode $mode, bool $onlyMissing): int
     {
         $would = 0;
         $current = 0;
@@ -254,7 +262,7 @@ final class PublishDocumentCommand extends Command
                 }
 
                 try {
-                    $rendered = $publisher->preview($key, $locale);
+                    $rendered = $this->preview($publisher, $mode, $key, $locale);
                 } catch (LegalDocumentNotFound $e) {
                     if ($onlyMissing && $this->awaitsAuthoring($publisher, $key)) {
                         $textless++;
@@ -296,16 +304,15 @@ final class PublishDocumentCommand extends Command
     /**
      * Is the source behind this document one whose empty state means nobody has written it yet?
      *
-     * ⚠️ IT RESOLVES WITHOUT A GUARD, AND COVERAGE IS WHAT SETTLED THAT. The first version wrapped
-     * this in a try/catch returning false — defensible-sounding, and a branch no run can enter:
-     * both call sites sit inside `catch (LegalDocumentNotFound)`, the publisher never raises that
+     * IT RESOLVES WITHOUT A GUARD, and a try/catch around it would be a branch no run can enter.
+     * Both call sites sit inside `catch (LegalDocumentNotFound)`, the publisher never raises that
      * itself, and the only thing that does is `sources->for($key)->resolve(...)`. Arriving here
      * therefore PROVES the same key already resolved a source a moment ago, so resolving it again
      * cannot fail for a configuration reason. A misconfigured registry raises
      * `InvalidArgumentException` on the publish attempt instead and is already a failure there.
      *
-     * The catch left a permanently uncovered line and, worse, implied a fallback for a case that
-     * cannot happen — a reader would look for the misconfiguration it handles and find none.
+     * Guarding it would leave a permanently uncovered line and, worse, imply a fallback for a case
+     * that cannot happen — a reader would look for the misconfiguration it handles and find none.
      */
     private function awaitsAuthoring(LegalDocumentPublisher $publisher, string $key): bool
     {
@@ -314,11 +321,15 @@ final class PublishDocumentCommand extends Command
 
     /**
      * One combination, resolved and reported. Writes nothing.
+     *
+     * Through the same guarded path as {@see previewAll}, and for the same reason: the exit code
+     * has to match the run being previewed. A refusal here is reported and exits FAILURE exactly
+     * as `publishOne` does, so an operator scripting `--dry-run &&` gets the answer they asked for.
      */
-    private function previewOne(LegalDocumentPublisher $publisher, string $key, string $locale): int
+    private function previewOne(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale): int
     {
         try {
-            $rendered = $publisher->preview($key, $locale);
+            $rendered = $this->preview($publisher, $mode, $key, $locale);
         } catch (Throwable $e) {
             $this->error($e->getMessage());
 
@@ -353,6 +364,32 @@ final class PublishDocumentCommand extends Command
             ->where('locale', $locale)
             ->where('is_active', true)
             ->first();
+    }
+
+    /**
+     * The dry run's counterpart to {@see publish}, and deliberately its MIRROR — same options, same
+     * order, same names.
+     *
+     * That is what makes the preview answerable for the run: `--regime` and `--enforce-at` decide
+     * whether a publish is refused, so a preview that quietly dropped them would report on a
+     * different command than the one the operator is about to type. The guards themselves stay in
+     * the publisher, because each is a legal rule and a second copy of a legal rule is a second
+     * answer that drifts from the first the moment one is amended.
+     */
+    private function preview(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale): Document
+    {
+        return $publisher->previewWithMode(
+            $key,
+            $locale,
+            $mode,
+            changeClass: $this->stringOption('change-class'),
+            regime: $this->stringOption('regime'),
+            announceAt: $this->dateOption('announce-at'),
+            enforceAt: $this->dateOption('enforce-at'),
+            objectionDeadline: $this->dateOption('objection-at'),
+            offersTermination: (bool) $this->option('offers-termination'),
+            keepsUnmodified: (bool) $this->option('keeps-unmodified'),
+        );
     }
 
     private function publish(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale): LegalDocument

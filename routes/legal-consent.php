@@ -40,8 +40,31 @@ if (! config('legal-consent.routes.api', false)) {
 
 $middleware = config('legal-consent.routes.api_middleware', ['api', 'auth']);
 $prefix = config('legal-consent.routes.api_prefix', 'legal');
+$stack = is_array($middleware) ? $middleware : ['api', 'auth'];
 
-Route::middleware(is_array($middleware) ? $middleware : ['api', 'auth'])
+// The rate limit is applied here rather than left inside `api_middleware`, and the inline default
+// above is the load-bearing half of it.
+//
+// Naming the `api` group buys no throttling: since Laravel 11 that group contains a limiter only
+// when the application called `throttleApi()`, and it resolves to bare SubstituteBindings
+// otherwise. Behind these four write endpoints is an append-only ledger with no de-duplication
+// and no pruning by default, so an unlimited caller mints permanent rows.
+//
+// It is a separate setting because both ways of arriving here have to be covered: a consumer who
+// replaces `api_middleware` wholesale — which the config invites, since they supply their own auth
+// — would drop a throttle bundled into that list, and an application whose PUBLISHED config
+// predates this key never receives it at all (`mergeConfigFrom()` is flat, and its `routes` block
+// wins whole). In that second case this default is the only value that runs.
+$throttle = config('legal-consent.routes.api_throttle', '60,1');
+
+if (is_string($throttle) && trim($throttle) !== '') {
+    // First in the stack, so a flood is refused before anything else does work for it, and so the
+    // limiter keys on the authenticated subject where there is one (it reads the user off the
+    // request, which resolves through the guard regardless of middleware order).
+    array_unshift($stack, 'throttle:'.$throttle);
+}
+
+Route::middleware($stack)
     ->prefix(is_string($prefix) ? $prefix : 'legal')
     ->group(function (): void {
         Route::post('consent', [ConsentController::class, 'store'])->name('legal-consent.api.store');

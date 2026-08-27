@@ -10,6 +10,13 @@
       `legal-consent.document_url` and every item carries its `url`; without it there is no link
       to render, and the description reference is dropped with it rather than left dangling.
 
+    The validation error is deliberately NOT wired here. `x-wirekit::checkbox` resolves it from
+    Laravel's error bag by `name`, renders the message, sets `aria-invalid` and merges its own error
+    target into the `aria-describedby` passed below — into ONE attribute, because a second one would
+    make the browser drop the caller's association. Passing an `:error` prop would set exactly what
+    the component already resolves and change nothing. The plain stub renders the block itself; it
+    has no component to do this for it.
+
     $documents: list{key, title, wording, url, required} — `url` may be null.
     A checklist item's ->toArray() adds 'field', 'contentHash' and 'hashField' on top of that.
 

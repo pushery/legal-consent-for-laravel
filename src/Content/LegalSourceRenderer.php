@@ -11,7 +11,7 @@ use Pushery\LegalConsent\Support\TenantContext;
 /**
  * Renders the configured SOURCE — NOT the published row. This is a preview/drift tool.
  *
- * ⚠️ DO NOT build a public legal page on this. It resolves the live source (a Markdown file, a
+ * Warning: do not build a public legal page on this. It resolves the live source (a Markdown file, a
  * draft, a CMS row), renders and hashes it, and caches the result. That text can differ from the
  * published `legal_documents` row at any moment — between an author's edit and the next publish,
  * this returns the NEW text while the gate enforces, and the ledger snapshots, the OLD one. A page

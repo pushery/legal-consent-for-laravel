@@ -166,6 +166,15 @@ final class ReConsentForm extends Component
         }
 
         if ($recorded > 0) {
+            // A tick is good for the ROUND it was made in, never beyond it — the same line both
+            // failure paths above already run. Kept, it survives into a round where a new major
+            // version is outstanding under the same key, and accepts that one silently: the subject
+            // ticked v1 and the ledger records v2. The accept-time hash guard cannot see it, because
+            // render() has meanwhile re-captured the new version's fingerprint — that guard answers
+            // "did the version change between render and submit", not "is this tick older than the
+            // version". Append-only, so the row cannot be corrected afterwards.
+            $this->accept = [];
+
             $this->setStatus((string) __('legal-consent::ui.reconsent_recorded'));
 
             // A re-consent GATE that is now fully cleared returns the subject to where the
@@ -213,11 +222,25 @@ final class ReConsentForm extends Component
      */
     private function isSameOrigin(string $target): bool
     {
-        // Strip the leading control chars / whitespace a browser ignores before resolving a URL,
-        // then reject the shapes parse_url does NOT read as an authority but a browser does: a
-        // backslash (browsers treat `\` as `/`, so `/\evil` becomes `//evil`) and a protocol-relative
-        // `//host`. Do not trust the caller to have pre-sanitized the value — honor the contract here.
-        $target = ltrim($target, " \t\n\r\0\x0B");
+        // Read the target the way the BROWSER will read it, not the way parse_url does — the check
+        // is worthless anywhere the two disagree, and they disagree on control characters.
+        //
+        // The URL parser removes U+0009, U+000A and U+000D from ANY position before it parses
+        // (WHATWG URL, "URL parsing"), so `/<TAB>/evil.example` is fetched as `//evil.example` — the
+        // protocol-relative shape the next line exists to reject. Stripping them only at the front
+        // judged a string no browser ever navigates to. The other two the old list named — NUL and
+        // the vertical tab — keep being trimmed at the front only, because that is what the parser
+        // does with them: stripped at the edges, ordinary path bytes in the middle. Any other
+        // leading control byte simply fails the rooted-path test below, which is the safe direction.
+        //
+        // Nothing is handed on from here: the raw value is what gets redirected to, and the browser
+        // performs this same removal itself. This function only has to judge the same string.
+        $target = ltrim(str_replace(["\t", "\n", "\r"], '', $target), " \0\x0B");
+
+        // The same disagreement, one layer down: parse_url reads neither of these as an authority
+        // and a browser reads both — a backslash (`\` is treated as `/`, so `/\evil` becomes
+        // `//evil`) and the protocol-relative `//host`. Do not trust the caller to have
+        // pre-sanitized the value — honor the contract here.
 
         if ($target === '' || str_contains($target, '\\') || str_starts_with($target, '//')) {
             return false;

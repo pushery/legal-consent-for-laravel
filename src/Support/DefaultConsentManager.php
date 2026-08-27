@@ -12,12 +12,14 @@ use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentAction;
+use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Events\ConsentConfirmationRequested;
 use Pushery\LegalConsent\Events\ConsentObjected;
 use Pushery\LegalConsent\Events\ConsentRecorded;
 use Pushery\LegalConsent\Events\ConsentTerminated;
 use Pushery\LegalConsent\Events\ConsentWithdrawn;
 use Pushery\LegalConsent\Exceptions\DocumentChangedException;
+use Pushery\LegalConsent\Exceptions\IncompatibleConsentActionException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Exceptions\NotConfirmableException;
 use Pushery\LegalConsent\Exceptions\NotConsentBearingException;
@@ -25,6 +27,7 @@ use Pushery\LegalConsent\Exceptions\NotGrantableException;
 use Pushery\LegalConsent\Exceptions\NotObjectableException;
 use Pushery\LegalConsent\Exceptions\NotTerminableException;
 use Pushery\LegalConsent\Exceptions\NotWithdrawableException;
+use Pushery\LegalConsent\Exceptions\SubjectKeyTooLong;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use RuntimeException;
@@ -179,12 +182,19 @@ readonly class DefaultConsentManager implements ConsentManager
      * The active documents for a locale, keyed by document key — the raw material both the checklist
      * and its default-locale fallback are built from.
      *
+     * `id` is selected because each row is handed to the host's `document_url` resolver, which
+     * receives the MODEL: the most ordinary thing a Laravel host does with one is
+     * `route('legal.show', $document)`, implicit route-model binding, and that reads the primary
+     * key. Without the column it reads null and the seam raises a UrlGenerationException — a 500 on
+     * the sign-up form, while the same closure works on the re-consent gate, whose document set
+     * does select it. The presenter carries the identical note for the identical reason.
+     *
      * @return Collection<string, LegalDocument>
      */
     private function checklistRows(string $locale): Collection
     {
         return LegalDocument::query()
-            ->select(['key', 'type', 'title', 'ui_wording', 'version', 'locale', 'requires_explicit_optin', 'content_hash'])
+            ->select(['id', 'key', 'type', 'title', 'ui_wording', 'version', 'locale', 'requires_explicit_optin', 'content_hash'])
             ->where('locale', $locale)
             ->where('is_active', true)
             ->get()
@@ -196,9 +206,26 @@ readonly class DefaultConsentManager implements ConsentManager
         $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
 
         // The court-proof ledger must never hold a legally impossible entry: only a real
-        // consent can be withdrawn or declined (Art. 7(3)).
+        // consent can be withdrawn or declined (Art. 7(3)). Kept here rather than left to the
+        // type matrix in append() so the caller still gets the named exception and its wording;
+        // the matrix is the backstop for every other pairing.
         if (($action === ConsentAction::Withdrawn || $action === ConsentAction::Declined) && ! $document->type->isWithdrawable()) {
             throw NotWithdrawableException::for($documentKey, $document->type);
+        }
+
+        // A confirmation is the SECOND half of a double opt-in, and its whole evidential value is
+        // that a first half exists: for advertising e-mail the confirmed double opt-in is the
+        // benchmark (§ 7 Abs. 2 UWG with Art. 7 DSGVO), and a lone confirmation row documents a
+        // two-step consent that only ever had one step. confirm() refuses it; this is the same
+        // refusal on the untyped door, which is the one a consuming application reaches through
+        // HasLegalConsents::recordConsent(). The richer checks (window, superseded major) stay in
+        // confirm(), which is the supported path and already knows the request row.
+        if ($action === ConsentAction::Confirmed) {
+            $pending = $this->gate->latestActionFor($subject, $documentKey);
+
+            if (! $pending instanceof LegalConsent || $pending->action !== ConsentAction::OptInRequested) {
+                throw NotConfirmableException::noPendingRequest($documentKey);
+            }
         }
 
         return $this->append($subject, $document, $action, $context);
@@ -237,7 +264,7 @@ readonly class DefaultConsentManager implements ConsentManager
 
     public function withdraw(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
     {
-        $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
+        $document = $this->documentForTransition($subject, $documentKey, $this->resolveLocale($context, $locale));
 
         if (! $document->type->isWithdrawable()) {
             throw NotWithdrawableException::for($documentKey, $document->type);
@@ -248,7 +275,7 @@ readonly class DefaultConsentManager implements ConsentManager
 
     public function object(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
     {
-        $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
+        $document = $this->documentForTransition($subject, $documentKey, $this->resolveLocale($context, $locale));
 
         // Guarded exactly as withdraw() is, and for a stronger reason than symmetry. Every public
         // method of the bundled Livewire component is a reachable endpoint whether or not the
@@ -266,7 +293,7 @@ readonly class DefaultConsentManager implements ConsentManager
 
     public function terminate(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
     {
-        $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
+        $document = $this->documentForTransition($subject, $documentKey, $this->resolveLocale($context, $locale));
 
         if (! $document->type->isTerminable()) {
             throw NotTerminableException::for($documentKey, $document->type);
@@ -347,12 +374,15 @@ readonly class DefaultConsentManager implements ConsentManager
     {
         $locale ??= $this->defaultLocale;
 
-        $active = LegalDocument::query()
-            ->select(['major_version'])
-            ->where('key', $documentKey)
-            ->where('locale', $locale)
-            ->where('is_active', true)
-            ->first();
+        // The active set comes from the SAME cached, publish-invalidated fact the gate reads on
+        // every authenticated request, rather than a private `legal_documents` query per call.
+        // This method is public API — `HasLegalConsents::hasAcceptedCurrentLegal()` is one line
+        // over it — so a consumer asking about three keys in one request paid three uncached
+        // lookups for a fact that does not vary between them. Sharing the cache also serves the
+        // agreement below: the two methods now read the same active set, not two reads of it.
+        $active = app(EnforceableDocumentCache::class)
+            ->activeFor($locale)
+            ->first(static fn (LegalDocument $document): bool => $document->key === $documentKey);
 
         if (! $active instanceof LegalDocument) {
             // No published document means the subject holds NOTHING — the honest answer to
@@ -365,7 +395,14 @@ readonly class DefaultConsentManager implements ConsentManager
 
         // Held is computed cross-locale and withdrawal/objection-aware, via the SAME fold the
         // gate uses — so hasCurrent() and outstandingFor() can never disagree about one subject.
-        return ($this->gate->heldMajorByKey($subject)[$documentKey] ?? 0) >= $active->major_version;
+        //
+        // Scoped to the ONE key being asked about, exactly as the gate scopes it to the keys it
+        // could block on. The ledger is append-only and grows for the life of the account, so an
+        // unfiltered fold made a single-key question cost a scan proportional to how long the
+        // subject has been a customer. The fold is per-key independent — the rows are ordered by
+        // (document_key, accepted_at, id) and each key folds on its own — so filtering cannot
+        // change the answer for the key that survives it.
+        return ($this->gate->heldMajorByKey($subject, [$documentKey])[$documentKey] ?? 0) >= $active->major_version;
     }
 
     public function statusFor(Model $subject, ?string $locale = null): array
@@ -387,17 +424,45 @@ readonly class DefaultConsentManager implements ConsentManager
             // a row for the Impressum that can never be satisfied.
             ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing());
 
-        $status = [];
+        // The holdings whose document has been retired out from under them. Resolved by the SAME
+        // class the settings screen uses, because a status map and the screen built from it
+        // disagreeing about which documents a subject stands in is the divergence this package
+        // refuses everywhere else. See RetiredHoldings for why the row belongs here at all.
+        $retired = new RetiredHoldings()->forSubject(
+            $subject,
+            $accepted,
+            array_values($documents->map(static fn (LegalDocument $document): string => $document->key)->all()),
+        );
+
+        /** @var list<array{LegalDocument, bool}> $rows */
+        $rows = [];
 
         foreach ($documents as $document) {
+            $rows[] = [$document, false];
+        }
+
+        foreach ($retired as $document) {
+            $rows[] = [$document, true];
+        }
+
+        $status = [];
+
+        foreach ($rows as [$document, $isRetired]) {
             $acceptedMajor = $accepted[$document->key] ?? 0;
 
             $status[$document->key] = [
                 'key' => $document->key,
                 'accepted_major' => $acceptedMajor,
+                // For a retired row this is the version the SUBJECT accepted, not a current one:
+                // there is no current version, and naming a later one would describe a text they
+                // never saw.
                 'current_major' => $document->major_version,
                 'requires_explicit_optin' => $document->requires_explicit_optin,
-                'outstanding' => ! $document->requires_explicit_optin && $acceptedMajor < $document->major_version,
+                // A retired holding is never outstanding — nothing is being enforced, and this flag
+                // is what a screen turns into "please accept". See the same reasoning, at length,
+                // in ConsentPresenter::settingsFor().
+                'outstanding' => ! $isRetired && ! $document->requires_explicit_optin && $acceptedMajor < $document->major_version,
+                'retired' => $isRetired,
                 // The double opt-in's middle state, and the only one `accepted_major` cannot
                 // express: entered but not yet confirmed reads as never entered, so a screen built
                 // from this map would invite the subject to enter themselves a second time and a
@@ -413,7 +478,7 @@ readonly class DefaultConsentManager implements ConsentManager
     {
         $rows = LegalConsent::query()
             ->where('subject_type', $subject->getMorphClass())
-            ->where('subject_id', $subject->getKey())
+            ->where('subject_id', SubjectKey::for($subject))
             ->orderBy('accepted_at')
             ->orderBy('id')
             ->get();
@@ -461,11 +526,29 @@ readonly class DefaultConsentManager implements ConsentManager
             throw NotConsentBearingException::for($document->key, $document->type);
         }
 
+        // The rest of the compatibility question, in the same place and for the same reason. Each
+        // named transition asks its own half before calling here, so a caller who used one keeps
+        // its specific message; this arm is what the untyped `record()` never had.
+        if (! $this->allowsAction($action, $document->type)) {
+            throw IncompatibleConsentActionException::for($document->key, $document->type, $action);
+        }
+
+        $subjectId = SubjectKey::for($subject);
+
+        // Checked HERE rather than left to the column, because the column answers differently on
+        // every engine: SQLite keeps an over-long key, PostgreSQL and MySQL refuse it with a raw
+        // SQLSTATE at the first write of the subject's life. One named refusal at the door is the
+        // only version of this a consumer can act on — and it is the door every recorded consent
+        // passes through, including the registration recorder and the untyped `record()`.
+        if ($subjectId !== null && mb_strlen($subjectId) > SubjectKeyTooLong::MAX_LENGTH) {
+            throw SubjectKeyTooLong::for($subject->getMorphClass(), mb_strlen($subjectId));
+        }
+
         $token = $this->tokenFor($subject);
 
         $attributes = [
             'subject_type' => $subject->getMorphClass(),
-            'subject_id' => $subject->getKey(),
+            'subject_id' => $subjectId,
             'subject_token' => $token,
             'document_id' => $document->getKey(),
             'document_key' => $document->key,
@@ -571,26 +654,129 @@ readonly class DefaultConsentManager implements ConsentManager
         return filter_var(config('legal-consent.tamper_evidence', false), FILTER_VALIDATE_BOOL);
     }
 
-    private function activeDocument(string $documentKey, string $locale): LegalDocument
+    /**
+     * Which document types each ledger action may legally be written against.
+     *
+     * The predicates are the ones {@see DocumentType} already publishes, so this table asserts no
+     * law of its own — it puts the SAME rule on the untyped door that each named transition
+     * applies to itself. `deemed_accepted` is spelled out rather than derived because there is no
+     * predicate for it: silence is deemed acceptance only for a contract change (§ 308 Nr. 5 BGB;
+     * BGH XI ZR 26/20), which is exactly what the publisher refuses to classify any other way.
+     *
+     * `re_accepted` and `parental` are allowed against every type that binds anyone. Re-acceptance
+     * after a material change is meaningful for all three, and a guardian acts for a minor both
+     * where a consent is asked for (Art. 8) and where a contract is (§ 107 BGB) — refusing either
+     * would refuse a lawful row, which is the more expensive mistake in an append-only ledger.
+     */
+    private function allowsAction(ConsentAction $action, DocumentType $type): bool
     {
-        $document = $this->activeDocumentIn($documentKey, $locale);
+        return match ($action) {
+            ConsentAction::Granted,
+            ConsentAction::Withdrawn,
+            ConsentAction::Declined,
+            ConsentAction::OptInRequested,
+            ConsentAction::Confirmed => $type->requiresExplicitOptin(),
+            ConsentAction::Acknowledged => $type->isMandatory(),
+            ConsentAction::Objected => $type->isObjectable(),
+            ConsentAction::Terminated => $type->isTerminable(),
+            ConsentAction::DeemedAccepted => $type === DocumentType::ContractTerms,
+            ConsentAction::ReAccepted, ConsentAction::Parental => $type->isConsentBearing(),
+        };
+    }
 
-        // Fall back to the configured fallback locale when the document is not published in
-        // the requested one (config `fallback_locale`) — a graceful default for multilingual
-        // apps, rather than a hard failure. The recorded row carries the fallback's locale.
-        if (! $document instanceof LegalDocument) {
-            $fallback = $this->fallbackLocale();
-
-            if ($fallback !== '' && $fallback !== $locale) {
-                $document = $this->activeDocumentIn($documentKey, $fallback);
-            }
-        }
+    /**
+     * The document a TRANSITION out of a holding — a withdrawal, an objection, a termination —
+     * is recorded against.
+     *
+     * The active version when there is one. When there is not, the version the subject actually
+     * accepted, read from their own ledger row. Art. 7(3) requires withdrawal to be as easy as
+     * giving consent was, and retiring a document — `is_active = false`, which is the supported
+     * retirement route, the column being in {@see LegalDocument::MUTABLE_AFTER_PUBLISH} — must not
+     * be able to close that door: the acceptance stays in the ledger and the gate keeps folding it
+     * as held, so the subject would be bound by a record they can no longer act on while the
+     * document has already vanished from every screen.
+     *
+     * Nothing is invented on that path. The ledger row names the exact frozen version, and
+     * retiring a document deactivates it rather than deleting it, so the row it points at is still
+     * on file with its type, its text and its hash. The type guards keep working unchanged,
+     * because the type is read from that row.
+     */
+    private function documentForTransition(Model $subject, string $documentKey, string $locale): LegalDocument
+    {
+        $document = $this->publishedDocument($documentKey, $locale) ?? $this->acceptedVersionFor($subject, $documentKey);
 
         if (! $document instanceof LegalDocument) {
             throw LegalDocumentNotFound::forSource($documentKey, $locale, LegalDocumentNotFound::PUBLISHED_LOOKUP);
         }
 
         return $document;
+    }
+
+    /**
+     * The version this subject last acted on for a document key, or null when they never did.
+     *
+     * Cross-locale, like every other holding question: an acceptance attaches to a document's
+     * identity, not to the language it was read in.
+     */
+    private function acceptedVersionFor(Model $subject, string $documentKey): ?LegalDocument
+    {
+        $latest = $this->gate->latestActionFor($subject, $documentKey);
+
+        if (! $latest instanceof LegalConsent) {
+            return null;
+        }
+
+        if ($latest->document_id !== null) {
+            $document = LegalDocument::query()->whereKey($latest->document_id)->first();
+
+            if ($document instanceof LegalDocument) {
+                return $document;
+            }
+        }
+
+        // A row whose `document_id` was never set, or whose version row was re-inserted under a
+        // fresh id by a lawful rewrite: the denormalized (key, locale, version) triple identifies
+        // the same version just as exactly, which is why migration 000008 could drop the foreign
+        // key in the first place.
+        return LegalDocument::query()
+            ->where('key', $latest->document_key)
+            ->where('locale', $latest->locale)
+            ->where('version', $latest->document_version)
+            ->first();
+    }
+
+    private function activeDocument(string $documentKey, string $locale): LegalDocument
+    {
+        $document = $this->publishedDocument($documentKey, $locale);
+
+        if (! $document instanceof LegalDocument) {
+            throw LegalDocumentNotFound::forSource($documentKey, $locale, LegalDocumentNotFound::PUBLISHED_LOOKUP);
+        }
+
+        return $document;
+    }
+
+    /**
+     * The active version for (key, locale), falling back to the configured fallback locale when
+     * the document is not published in the requested one (config `fallback_locale`) — a graceful
+     * default for multilingual apps rather than a hard failure. The recorded row carries the
+     * fallback's locale.
+     */
+    private function publishedDocument(string $documentKey, string $locale): ?LegalDocument
+    {
+        $document = $this->activeDocumentIn($documentKey, $locale);
+
+        if ($document instanceof LegalDocument) {
+            return $document;
+        }
+
+        $fallback = $this->fallbackLocale();
+
+        if ($fallback !== '' && $fallback !== $locale) {
+            return $this->activeDocumentIn($documentKey, $fallback);
+        }
+
+        return null;
     }
 
     private function activeDocumentIn(string $documentKey, string $locale): ?LegalDocument

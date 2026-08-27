@@ -110,11 +110,26 @@
                                         {{ __('legal-consent::ui.cancel') }}
                                     </x-wirekit::alert-dialog.cancel>
 
-                                    <x-wirekit::button intent="danger" wire:click="withdraw(@js($item['key']))">
+                                    {{-- `{{ Js::from() }}`, NOT `@js()`. A Blade directive inside a
+                                         COMPONENT TAG attribute is never compiled — the tag compiler
+                                         lifts the attribute out as a literal before the directive
+                                         compiler reaches it, so the text `@js($item['key'])` is what
+                                         the browser gets and the withdrawal never fires, for every
+                                         key and with nothing logged. On Art. 7(3) that is the one
+                                         control that must not be decorative. An echo IS compiled in
+                                         that position and emits what `@js()` emits on a plain
+                                         element, which is the form the plain stub uses. --}}
+                                    <x-wirekit::button intent="danger" wire:click="withdraw({{ \Illuminate\Support\Js::from($item['key']) }})">
                                         {{ __('legal-consent::ui.withdraw') }}
                                     </x-wirekit::button>
                                 </x-wirekit::alert-dialog.actions>
                             </x-wirekit::alert-dialog>
+                        {{-- A document retired out from under a holding: `is_active = false` does
+                             not end the consents recorded against it, and the row keeps its
+                             withdrawal control. It takes the Give button's place because there is
+                             nothing left to give — the version is no longer published. --}}
+                        @elseif ($item['retired'] ?? false)
+                            <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.retired') }}</x-wirekit::badge>
                         {{-- The double opt-in's middle state, and it takes the place of the Give
                              button rather than sitting beside it: giving again would write a
                              second request, which supersedes the first and stops the confirmation
@@ -127,7 +142,9 @@
                              put friction on the harmless direction and none on the irreversible
                              one — the exact opposite of what Art. 7(3) is about. --}}
                         @elseif (! $item['held'] && $this->allowGrant)
-                            <x-wirekit::button surface="outline" wire:click="grant(@js($item['key']))" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
+                            {{-- An echo, not `@js()` — see the withdraw button above for why the
+                                 directive never compiles in a component tag attribute. --}}
+                            <x-wirekit::button surface="outline" wire:click="grant({{ \Illuminate\Support\Js::from($item['key']) }})" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
                                 {{ __('legal-consent::ui.grant') }}
                             </x-wirekit::button>
                         @endif

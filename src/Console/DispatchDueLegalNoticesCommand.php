@@ -6,50 +6,60 @@ namespace Pushery\LegalConsent\Console;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Console\Isolatable;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notification as BaseNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\LazyCollection;
+use Pushery\LegalConsent\Console\Concerns\SkipsWhenTablesAreMissing;
 use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
 use Pushery\LegalConsent\Contracts\SendsNoticeMail;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Events\NoticeDispatched;
 use Pushery\LegalConsent\Events\NoticeDispatching;
+use Pushery\LegalConsent\Listeners\ReopenVersionOnNoticeFailure;
+use Pushery\LegalConsent\Listeners\WriteNoticeDeliveryProof;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\NoticeMailConfig;
-use Pushery\LegalConsent\Support\SubjectToken;
-use Pushery\LegalConsent\Support\TenantContext;
 
 /**
  * Version-level sweep: for every active version that owes a notice (active re-consent,
  * info-only, or deemed consent) whose announcement date has passed but which has not yet been
- * notified, notify the affected subjects with the notification that matches its NoticeMode and
- * — when durable-medium proof is on — write an append-only legal_notices proof row per subject.
- * Streams subjects lazily in batches and collects garbage per version (128 MB budget): each chunk
- * is notified with one send() call and — the actual round-trip saving — resolves its pseudonym tokens
- * in one query per ledger instead of two per subject. The queued notification jobs and the proof-row
- * inserts stay one per subject, as they inherently must.
+ * notified, hand the affected subjects the notification that matches its NoticeMode. Streams
+ * subjects lazily in batches and collects garbage per version, so peak memory does not grow with
+ * the size of the audience: each chunk is queued with one send() call.
  *
  * Routing: ActiveReconsent → ReconsentRequired, InfoPush → LegalChangeInformational,
  * DeemedConsent → DeemedConsentNotice. A voluntary consent is never swept (Art. 7(4)).
  *
+ * THIS RUN QUEUES; IT DOES NOT DELIVER, and it no longer says otherwise. The notifications are
+ * `ShouldQueue`, so `Notification::send()` returns once the jobs are on the queue. The
+ * append-only durable-medium proof is therefore written by {@see WriteNoticeDeliveryProof} from
+ * the `NotificationSent` event — a row states that a notice went out, and this command is in no
+ * position to know that. Writing it here certified an enqueue, which came apart from delivery on
+ * exactly the runs that matter: a dead worker or a refusing transport produced a green sweep, no
+ * mail, and an uncorrectable row that `legal-consent:close-objection-windows` then reads to bind
+ * a subject by silence.
+ *
  * Delivery is deliberately AT-LEAST-ONCE: the `notified_at` watermark is stamped only after a
- * version's full subject sweep completes, so a clean re-run never re-sends, and a missed § 308 /
+ * version's full subject sweep completes, so a clean re-run never re-queues, and a missed § 308 /
  * § 675g notice is never risked. A process killed mid-sweep — or a run overtaken when the 120-min
  * `withoutOverlapping` lock expires on a large population — RESUMES: with durable-medium proof on,
  * {@see AffectedSubjectResolver::forVersion()} skips subjects that already carry a proof row for the
  * version, so the retry serves only those still owed a notice and does not write a second proof for
  * one already notified. This removes the bulk of duplication without a unique constraint; a proof
  * written by a genuinely simultaneous sweep in the same window is still tolerated (a duplicate email
- * is acceptable, a missed notice is not).
+ * is acceptable, a missed notice is not). A channel that FAILS re-opens the version rather than
+ * leaving it stamped — see {@see ReopenVersionOnNoticeFailure}.
  */
-final class DispatchDueLegalNoticesCommand extends Command
+final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
 {
+    use SkipsWhenTablesAreMissing;
+
     /** Subjects processed per batch — one send() call and one token lookup per ledger per chunk. */
     private const int CHUNK = 500;
 
@@ -59,12 +69,15 @@ final class DispatchDueLegalNoticesCommand extends Command
 
     protected $description = 'Notify subjects of a now-announced legal change with the notification matching its notice mode.';
 
-    public function handle(AffectedSubjectResolver $resolver, LegalConsentMonitor $monitor, TenantContext $tenant, SubjectToken $tokens): int
+    public function handle(AffectedSubjectResolver $resolver, LegalConsentMonitor $monitor): int
     {
         DB::disableQueryLog();
 
+        if ($this->tablesAreMissing(['legal_documents', 'legal_consents', 'legal_notices'])) {
+            return self::SUCCESS;
+        }
+
         $proofEnabled = (bool) config('legal-consent.durable_medium.proof', true);
-        $medium = $this->medium();
 
         if ($this->option('dry-run')) {
             return $this->report($resolver);
@@ -74,6 +87,7 @@ final class DispatchDueLegalNoticesCommand extends Command
 
         $notified = 0;
         $held = 0;
+        $deficient = 0;
 
         foreach ($versions as $version) {
             // Count BEFORE sending, always — not only when a limit is configured. The size of a
@@ -122,64 +136,70 @@ final class DispatchDueLegalNoticesCommand extends Command
             // and queueNotification() then overwrites every notification's own locale with that
             // frozen value. This sweep notifies several versions, each in its own language, in one
             // process: through the facade, every version after the first would render in the first
-            // one's language while renderProof() — which sets the locale on the application — went
+            // one's language while the proof — which is rendered under the version's locale — went
             // on certifying the right one. The proof row is append-only, so that mismatch would be
             // an uncorrectable record of a text the subject never received.
             $notification->locale($version->locale);
 
+            // Whether this notice carries the mandatory content its regime demands, asked ONCE per
+            // version because the answer depends on the version and its locale, not on who
+            // receives it. The proof row records the same fact per delivery; what was missing was
+            // anyone READING it: a notice with an emptied § 308 Nr. 5 lit. b warning went out, was
+            // logged as deficient, stamped the watermark and ended the run at exit 0.
+            if (! $this->mandatoryContentPresent($notification, $version)) {
+                $deficient++;
+                $this->error(sprintf(
+                    '  %s %s (%s) does not carry the mandatory content its notice mode requires — the notice goes out, but it cannot found a deemed acceptance. Fix the `legal-consent::notifications` lines for this locale, then re-run with `legal-consent:renotify`.',
+                    $version->key,
+                    $version->version,
+                    $version->locale,
+                ));
+            }
+
             $before = $notified;
 
-            $proof = $proofEnabled ? $this->renderProof($notification, $version, $medium) : null;
-
-            // RESUMABLE + BATCHED: skip subjects already proofed for this version (a killed or
-            // lock-expired run resumes on those still owed a notice), and process in chunks so the
-            // subject-token lookup is one query per ledger instead of two per subject (the queued
-            // notification jobs and the proof-row inserts stay one per subject). `skipNotified` only
-            // bites when proof is on; with proof off there is nothing to resume from and no proof to
+            // RESUMABLE: skip subjects already proved for this version, so a killed or
+            // lock-expired run resumes on those still owed a notice. `skipNotified` only bites when
+            // proof is on; with proof off there is nothing to resume from and no proof to
             // duplicate — a killed run then re-notifies the WHOLE population (tolerated duplicate
             // emails under at-least-once), it simply writes no duplicate proof row.
             $resolver->forVersion($version, skipNotified: $proofEnabled)
                 ->chunk(self::CHUNK)
-                ->each(function (LazyCollection $chunk) use ($version, $notification, $proof, $tenant, $tokens, &$notified): void {
+                ->each(function (LazyCollection $chunk) use ($notification, &$notified): void {
                     $subjects = $chunk->collect();
 
-                    // One send() for the whole chunk — still one queued job per subject (the win is
-                    // the batched token lookup below). The locale is already pinned on the
-                    // notification itself, which matters because the notice is QUEUED: without a
-                    // pin the worker would render it in whatever locale it happens to run under.
+                    // One send() for the whole chunk — still one queued job per subject. The locale
+                    // is already pinned on the notification itself, which matters because the
+                    // notice is QUEUED: without a pin the worker would render it in whatever locale
+                    // it happens to run under.
                     Notification::send($subjects, $notification);
-
-                    if ($proof !== null) {
-                        // Pin the version's tenant around the token lookup + proof writes: this sweep
-                        // crosses tenants and runs unauthenticated, so an unpinned lookup would read
-                        // the shared '' bucket, miss the subject's pseudonym and mint a fresh one —
-                        // severing the notice proof from their consent ledger. Resolve the whole
-                        // chunk's tokens in one query per ledger, then write each proof with its token.
-                        $tenant->forTenant($version->tenant_id, function () use ($subjects, $version, $proof, $tokens): void {
-                            $tokenMap = $tokens->forSubjects($subjects);
-
-                            foreach ($subjects as $subject) {
-                                $this->writeProof($subject, $version, $proof, $tokenMap[$tokens->mapKey($subject)]);
-                            }
-                        });
-                    }
 
                     $notified += $subjects->count();
                 });
 
             $version->forceFill(['notified_at' => CarbonImmutable::now()])->saveQuietly();
 
-            // The only signal that says a legally required communication went out, and how far it
-            // reached. A sweep that quietly reaches nobody is the defect this package has already
-            // paid for once; a metric on this event makes it visible without reading a log.
-            event(new NoticeDispatched($version, $notified - $before, $proof === null ? 0 : $notified - $before));
+            // The signal that says how far a legally required communication reached. A sweep that
+            // quietly reaches nobody is the defect this package has already paid for once; a metric
+            // on this event makes it visible without reading a log.
+            event(new NoticeDispatched($version, $notified - $before, $this->provedFor($version)));
 
             gc_collect_cycles();
         }
 
         $monitor->heartbeat('legal-consent:dispatch-notices', $notified);
 
-        $this->info("Dispatched {$notified} notice(s) across {$versions->count()} version(s).");
+        // "Queued", not "sent": what this run can attest to is that the jobs are on the queue. The
+        // durable-medium proof row is written when a notice actually leaves the mailer.
+        $this->info("Queued {$notified} notice(s) for delivery across {$versions->count()} version(s).");
+
+        if ($deficient > 0) {
+            // Non-zero, and named. A notice missing its mandatory line is void where it matters
+            // most — § 308 Nr. 5 lit. b makes the silence warning a validity condition — and until
+            // now the only trace was a boolean column nothing in this command read.
+            $this->error("{$deficient} version(s) went out without their mandatory notice content. Silence cannot bind against those notices; fix the wording and re-notify.");
+            $monitor->heartbeat('legal-consent:dispatch-notices.deficient', $deficient);
+        }
 
         if ($held > 0) {
             // Non-zero, because a held notice is still owed. A scheduled run that reports success
@@ -187,11 +207,42 @@ final class DispatchDueLegalNoticesCommand extends Command
             // release is about.
             $this->error("{$held} version(s) held back by notifications.max_recipients_per_run. Review with --dry-run, then release with --force or raise the limit.");
             $monitor->heartbeat('legal-consent:dispatch-notices.held', $held);
-
-            return self::FAILURE;
         }
 
-        return self::SUCCESS;
+        return $held > 0 || $deficient > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * Does this version's notice carry the mandatory content its regime demands?
+     *
+     * Evaluated INSIDE the version's locale — the same locale the notice is rendered and proved
+     * in — or it would pass on a translation the subject never receives.
+     */
+    private function mandatoryContentPresent(BaseNotification&SendsNoticeMail $notification, LegalDocument $version): bool
+    {
+        $original = app()->getLocale();
+        app()->setLocale($version->locale);
+
+        try {
+            return $notification->mandatoryContentPresent();
+        } finally {
+            app()->setLocale($original);
+        }
+    }
+
+    /**
+     * How many delivery proofs stand for this version once the sweep has queued its audience.
+     *
+     * With a synchronous queue that is the whole audience; with a worker it is whatever has been
+     * delivered so far, which is usually nothing yet. Both are the honest number — the proof is
+     * written by the delivery, not by this run.
+     */
+    private function provedFor(LegalDocument $version): int
+    {
+        return LegalNotice::query()
+            ->withoutGlobalScope(TenantScope::class) // the sweep crosses tenants
+            ->where('document_id', $version->getKey())
+            ->count();
     }
 
     /**
@@ -240,16 +291,61 @@ final class DispatchDueLegalNoticesCommand extends Command
      * real sweep after that fix is also the first time an operator's info-only changes actually
      * leave the queue — for a large installation that is a fan-out they have never seen. This is
      * where they get to look at the number first.
+     *
+     * It runs the SAME brake the real sweep runs, and ends on the same exit code. A preview that
+     * promises a fan-out the real run refuses is worse than no preview — and three different texts
+     * (the sweep's own error, `legal-consent:renotify`, the config comment) send an operator here
+     * for exactly the case the brake decides.
      */
     private function report(AffectedSubjectResolver $resolver): int
     {
         $proofEnabled = (bool) config('legal-consent.durable_medium.proof', true);
+        $held = 0;
 
         foreach ($this->dueVersions() as $version) {
             $total = $resolver->countForVersion($version);
-            // What a real run would actually send: the resume predicate skips subjects already
-            // proofed for this version, so reporting the raw total would overstate a resumed run.
-            $remaining = $resolver->forVersion($version, skipNotified: $proofEnabled)->count();
+            // The resume predicate skips subjects already proofed for this version, so reporting
+            // the raw total would overstate a resumed run.
+            //
+            // COUNTED, NOT STREAMED, and the reason is correctness before cost. `forVersion()` is
+            // the sweep's hydrate path: it loads real subject models a page at a time, and calling
+            // `count()` on it built the entire remaining population as objects purely to arrive at
+            // an integer, in a command whose whole promise is that it writes and sends nothing.
+            //
+            // The cost was the smaller half. The two paths answer the same question over the same
+            // grouped set EXCEPT for an orphaned group — one whose `subject_type` no longer maps to
+            // a live model class, because the app removed or renamed the model. The aggregate
+            // counts it; the hydrate path silently drops it, having nothing to build. Subtracting
+            // one from the other therefore booked every orphaned group as `already proofed`:
+            // measured before this change, a ledger holding one live subject and one orphan
+            // reported "2 recipient(s), 1 already proofed, 1 would be sent" with not one proof row
+            // in the database. On the line an operator reads before sending a legally required
+            // communication, a fabricated "already served" is the worst of the available errors.
+            //
+            // ⚠️ WHAT THE SWAP COSTS, said rather than left to be discovered: `would be sent` now
+            // counts an orphaned group too, and the real run cannot deliver to one. It is an
+            // audience size, not a delivery forecast — it errs toward more notice rather than less,
+            // which is the safe direction here, but it is not the same number.
+            $remaining = $resolver->countForVersion($version, skipNotified: $proofEnabled);
+            $proofed = max(0, $total - $remaining);
+
+            // The real sweep measures the brake against the RAW audience, before the resume
+            // discount, so this has to as well or the two would disagree on the boundary.
+            if ($this->exceedsLimit($total)) {
+                $held++;
+
+                $this->line(sprintf(
+                    '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, 0 would be sent — held back by notifications.max_recipients_per_run.',
+                    $version->key,
+                    $version->version,
+                    $version->locale,
+                    $version->tenant_id === '' ? '-' : $version->tenant_id,
+                    $total,
+                    $proofed,
+                ));
+
+                continue;
+            }
 
             $this->line(sprintf(
                 '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, %d would be sent.',
@@ -258,12 +354,18 @@ final class DispatchDueLegalNoticesCommand extends Command
                 $version->locale,
                 $version->tenant_id === '' ? '-' : $version->tenant_id,
                 $total,
-                max(0, $total - $remaining),
+                $proofed,
                 $remaining,
             ));
         }
 
         $this->info('Dry run — nothing was sent, no proof was written, no watermark was stamped.');
+
+        if ($held > 0) {
+            $this->error("{$held} version(s) would be held back by notifications.max_recipients_per_run. Re-run with --force or raise the limit.");
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }
@@ -275,87 +377,5 @@ final class DispatchDueLegalNoticesCommand extends Command
         // worst possible split: the subject would receive one text and the append-only row would
         // certify another.
         return NoticeMailConfig::notificationFor($version->noticeMode(), $version);
-    }
-
-    /**
-     * Render the notice content once per version in the version's locale — the durable-medium
-     * proof of what was communicated (the per-subject fact is the delivery row itself).
-     *
-     * @return array{body: string, hash: string, medium: string, mandatory_ok: bool}
-     */
-    private function renderProof(BaseNotification&SendsNoticeMail $notification, LegalDocument $version, string $medium): array
-    {
-        $original = app()->getLocale();
-        app()->setLocale($version->locale);
-
-        try {
-            $mail = $notification->toMail($version);
-
-            /** @var list<string> $lines */
-            $lines = array_values(array_filter([
-                $mail->subject,
-                ...$mail->introLines,
-                $mail->actionText,
-                ...$mail->outroLines,
-            ], is_string(...)));
-
-            // Must be evaluated INSIDE the version's locale — the same locale the notice was
-            // rendered in — or it would certify a translation the subject never received.
-            // Ask the notice itself: a non-empty body proves nothing (subject + intro alone keep
-            // it non-empty while the § 308 Nr. 5 lit. b warning silently drops out).
-            $mandatoryOk = $notification->mandatoryContentPresent();
-        } finally {
-            app()->setLocale($original);
-        }
-
-        $body = implode("\n", $lines);
-
-        return [
-            'body' => $body,
-            'hash' => hash('sha256', $body),
-            'medium' => $medium,
-            'mandatory_ok' => $mandatoryOk,
-        ];
-    }
-
-    /**
-     * @param  array{body: string, hash: string, medium: string, mandatory_ok: bool}  $proof
-     */
-    private function writeProof(Model $subject, LegalDocument $version, array $proof, string $subjectToken): LegalNotice
-    {
-        return LegalNotice::query()->forceCreate([
-            'subject_type' => $subject->getMorphClass(),
-            'subject_id' => $subject->getKey(),
-            // The stable pseudonym, shared with this subject's consent ledger — it is what keeps
-            // the proof tied to them once an Art. 17 erasure nulls subject_type/subject_id. Resolved
-            // once per chunk (see forSubjects), not per subject.
-            'subject_token' => $subjectToken,
-            // Carry the VERSION's tenant explicitly: this sweep crosses tenants and runs without
-            // an authenticated user, so the ambient tenant would resolve to the shared '' bucket
-            // and the proof would be invisible to the tenant it belongs to. An explicitly-set
-            // value is honored (BelongsToTenant only stamps a null attribute).
-            'tenant_id' => $version->tenant_id,
-            'document_id' => $version->getKey(),
-            'document_key' => $version->key,
-            'document_version' => $version->version,
-            'document_major_version' => $version->major_version,
-            // The language the notice went out in — the notice_body is rendered under this
-            // locale, so the proof states it rather than leaving it to be inferred.
-            'locale' => $version->locale,
-            'notice_mode' => $version->noticeMode(),
-            'medium' => $proof['medium'],
-            'notice_body' => $proof['body'],
-            'notice_content_hash' => $proof['hash'],
-            'mandatory_content_ok' => $proof['mandatory_ok'],
-            'sent_at' => CarbonImmutable::now(),
-        ]);
-    }
-
-    private function medium(): string
-    {
-        $channels = config('legal-consent.durable_medium.channels', ['mail']);
-        $channels = is_array($channels) ? $channels : ['mail'];
-
-        return in_array('mail', $channels, true) ? 'email' : 'durable_message';
     }
 }

@@ -50,6 +50,7 @@ return [
     // The one state a settings screen must not blur: a new major version is waiting, so
     // this is the invitation to do voluntarily what the gate will otherwise compel.
     'action_required' => 'Aktion erforderlich',
+    'retired' => 'Nicht mehr angeboten',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}Ab heute wirksam|{1}Noch :count Tag|[2,*]Noch :count Tage',
@@ -59,7 +60,7 @@ return [
     // The withdraw confirmation. Art. 7(3) sentence 3: withdrawal must be as easy as
     // giving consent — so this asks once, states the consequence, and never nags.
     'withdraw_confirm_title' => 'Einwilligung widerrufen?',
-    'withdraw_confirm_body' => 'Deine Einwilligung zu „:title" wird widerrufen. Der Widerruf gilt ab sofort und lässt die Rechtmäßigkeit der bisherigen Verarbeitung unberührt.',
+    'withdraw_confirm_body' => 'Deine Einwilligung zu „:title“ wird widerrufen. Der Widerruf gilt ab sofort und lässt die Rechtmäßigkeit der bisherigen Verarbeitung unberührt.',
     'cancel' => 'Abbrechen',
 
     // Admin screens (LegalTextManager / LegalTextEditor).
@@ -80,7 +81,12 @@ return [
     'admin_mark_reviewed' => 'Als geprüft markieren',
     'admin_preview' => 'Vorschau',
     'granted_confirmation' => 'Einwilligung erteilt. Du kannst sie jederzeit widerrufen.',
-    'withdrawn_confirmation' => 'Einwilligung widerrufen. Sie wirkt ab sofort.',
+    'withdrawn_confirmation' => 'Einwilligung widerrufen. Der Widerruf wirkt ab sofort.',
+    // The refusal a subject can actually reach — a stale page, a hand-built post or a custom
+    // stub asking to withdraw something that was never a consent. It states the position
+    // without the document key or the internal type: those are the operator's business, and
+    // they go to the log.
+    'not_withdrawable' => 'Dieses Dokument kannst du nicht widerrufen — widerrufen lässt sich nur eine Einwilligung, die du freiwillig gegeben hast.',
 
     // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
     'reconsent_recorded' => 'Danke — deine Zustimmung wurde gespeichert.',
@@ -95,6 +101,6 @@ return [
     'admin_status_no_source' => 'Schreibe zuerst den Quelltext — es gibt nichts, wovon übersetzt werden könnte.',
     'admin_status_machine_translated' => 'Maschinell übersetzt. Ein Mensch muss den Text prüfen, bevor er veröffentlicht werden kann.',
     'admin_status_reviewed' => 'Als geprüft markiert. Dieser Text ist jetzt veröffentlichbar.',
-    'admin_status_release_blocked' => '„:key" wurde nicht veröffentlicht: :reasons',
-    'admin_status_released' => '„:key" in :count Sprache(n) veröffentlicht — betrifft :affects Person(en).',
+    'admin_status_release_blocked' => '„:key“ wurde nicht veröffentlicht: :reasons',
+    'admin_status_released' => '„:key“ in :count Sprache(n) veröffentlicht — betrifft :affects Person(en).',
 ];

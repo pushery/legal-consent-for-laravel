@@ -6,10 +6,12 @@ namespace Pushery\LegalConsent\Console;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Console\Isolatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\LazyCollection;
+use Pushery\LegalConsent\Console\Concerns\SkipsWhenTablesAreMissing;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
 use Pushery\LegalConsent\Enums\ConsentAction;
@@ -22,6 +24,7 @@ use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\ConsentGate;
 use Pushery\LegalConsent\Support\DeemedAcceptanceDecision;
+use Pushery\LegalConsent\Support\SubjectKey;
 use Pushery\LegalConsent\Support\TenantContext;
 
 /**
@@ -29,12 +32,19 @@ use Pushery\LegalConsent\Support\TenantContext;
  * active DeemedConsent version whose objection deadline has passed but which has not yet been
  * closed, append a system-generated `DeemedAccepted` ledger row for every affected subject
  * who neither objected nor terminated in time — so silence binds PROVABLY (§ 308 Nr. 5 BGB),
- * without ever hard-blocking access. Streams subjects lazily and collects garbage per version
- * (128 MB budget), mirroring the notice sweep.
+ * without ever hard-blocking access. Streams subjects lazily and collects garbage per version, so
+ * peak memory does not grow with the size of the audience — mirroring the notice sweep.
  *
  * Idempotent twice over: the per-version `objection_closed_at` watermark stops a re-scan, and the
  * decision refuses a subject who already holds this version (a DeemedAccepted row gives them it),
  * so even a mid-run crash + re-run never double-deems a subject.
+ *
+ * THE WATERMARK IS STAMPED ONLY ON A VERSION THAT WAS FULLY WORKED THROUGH. A version that could
+ * not deem part of its population keeps its window open, so this task stays red until somebody
+ * acts on it — the notice sweep applies the same rule to both of its hold-backs. Stamping a
+ * partially handled version retires it from the selection above while that population is still
+ * unbound: the first run exits non-zero, and every run after it is green over a state nothing
+ * restored.
  *
  * SILENCE BINDS ONLY AGAINST A PROOF ROW. § 308 Nr. 5 lit. b BGB makes the special warning a
  * validity condition of the fiction, so this sweep deems nobody it cannot show a delivered notice
@@ -47,8 +57,10 @@ use Pushery\LegalConsent\Support\TenantContext;
  * than deem an entire population against no evidence — and says so, instead of leaving an operator
  * to discover it from an empty ledger.
  */
-final class CloseObjectionWindowsCommand extends Command
+final class CloseObjectionWindowsCommand extends Command implements Isolatable
 {
+    use SkipsWhenTablesAreMissing;
+
     /** Subjects per batch — one notice-proof lookup per chunk instead of one per subject. */
     private const int CHUNK = 500;
 
@@ -59,6 +71,10 @@ final class CloseObjectionWindowsCommand extends Command
     public function handle(AffectedSubjectResolver $resolver, ConsentGate $gate, ConsentManager $consent, LegalConsentMonitor $monitor, TenantContext $tenant, DeemedAcceptanceDecision $decision): int
     {
         DB::disableQueryLog();
+
+        if ($this->tablesAreMissing(['legal_documents', 'legal_consents', 'legal_notices'])) {
+            return self::SUCCESS;
+        }
 
         $now = CarbonImmutable::now();
 
@@ -89,11 +105,14 @@ final class CloseObjectionWindowsCommand extends Command
 
         $deemed = 0;
         $unproved = 0;
+        $closed = 0;
 
         foreach ($versions as $version) {
+            $unprovedHere = 0;
+
             $resolver->forVersion($version, $maxConsentId)
                 ->chunk(self::CHUNK)
-                ->each(function (LazyCollection $chunk) use ($version, $gate, $consent, $tenant, $decision, &$deemed, &$unproved): void {
+                ->each(function (LazyCollection $chunk) use ($version, $gate, $consent, $tenant, $decision, &$deemed, &$unprovedHere): void {
                     $subjects = $chunk->collect();
                     // One query per chunk, not one per subject: the answer to "was this subject
                     // sent a valid notice for this version" is the same table for all of them.
@@ -106,7 +125,7 @@ final class CloseObjectionWindowsCommand extends Command
                         // TenantScope) and miss the subject's own Objected row — deeming someone who
                         // objected in time to have agreed by silence. An unpinned write would
                         // likewise strand the § 308 proof outside the tenant it belongs to.
-                        $tenant->forTenant($version->tenant_id, function () use ($version, $subject, $gate, $consent, $decision, $proved, &$deemed, &$unproved): void {
+                        $tenant->forTenant($version->tenant_id, function () use ($version, $subject, $gate, $consent, $decision, $proved, &$deemed, &$unprovedHere): void {
                             // Read LIVE (not from the snapshot): only this can see an objection or an
                             // express acceptance recorded since the sweep started.
                             $latest = $gate->latestActionFor($subject, $version->key, $version->locale);
@@ -119,7 +138,7 @@ final class CloseObjectionWindowsCommand extends Command
                                 // deficiency in a number that is never zero. Only a subject who
                                 // WOULD have been bound, and cannot be for want of proof, counts.
                                 if (! $noticeProved && $decision->shouldDeem($latest, $version, noticeProved: true)) {
-                                    $unproved++;
+                                    $unprovedHere++;
                                 }
 
                                 return;
@@ -138,19 +157,35 @@ final class CloseObjectionWindowsCommand extends Command
                     }
                 });
 
-            $version->forceFill(['objection_closed_at' => $now])->saveQuietly();
+            // STAMP ONLY A VERSION THAT WAS FULLY WORKED THROUGH — the rule the notice sweep
+            // already applies to both of its hold-backs ("Skip WITHOUT stamping. The version stays
+            // due"). Line 78 above selects on `objection_closed_at is null`, so stamping a version
+            // that could not deem part of its population retires it while that population stays
+            // unbound: the first run exits 1, every run after it exits 0 over a state nothing
+            // restored, and § 308 Nr. 5 BGB never takes hold for those subjects.
+            //
+            // Leaving it open keeps the alarm STICKY, which is the point. It does not promise that
+            // a late notice can still bind anyone — a § 308 Nr. 5 lit. b warning served after the
+            // objection deadline cannot found a fiction, and re-announcing is a new version's job.
+            // It promises that the scheduled task keeps saying so until somebody acts.
+            if ($unprovedHere === 0) {
+                $version->forceFill(['objection_closed_at' => $now])->saveQuietly();
+                $closed++;
+            }
+
+            $unproved += $unprovedHere;
 
             gc_collect_cycles();
         }
 
         $monitor->heartbeat('legal-consent:close-objection-windows', $deemed);
 
-        $this->info("Deemed {$deemed} acceptance(s) across {$versions->count()} closed objection window(s).");
+        $this->info("Deemed {$deemed} acceptance(s) across {$closed} closed objection window(s).");
 
         if ($unproved > 0) {
             // Loud, and non-zero. A silent skip here is indistinguishable from "nobody was owed
             // anything", and the difference is whether a population is bound or not.
-            $this->error("{$unproved} subject(s) were NOT deemed: no delivered notice carrying the § 308 Nr. 5 lit. b warning is on record for them. Silence does not bind without it. Check `legal-consent:dispatch-notices` ran for these versions, and that legal_notices.mandatory_content_ok is true.");
+            $this->error("{$unproved} subject(s) were NOT deemed: no delivered notice carrying the § 308 Nr. 5 lit. b warning is on record for them. Silence does not bind without it. Their window stays OPEN, so this run keeps failing until it is resolved — check `legal-consent:dispatch-notices` ran for these versions, and that legal_notices.mandatory_content_ok is true.");
             $monitor->heartbeat('legal-consent:close-objection-windows.unproved', $unproved);
 
             return self::FAILURE;
@@ -174,7 +209,7 @@ final class CloseObjectionWindowsCommand extends Command
             ->withoutGlobalScope(TenantScope::class) // the sweep crosses tenants and runs unauthenticated
             ->where('document_id', $version->getKey())
             ->where('mandatory_content_ok', true)
-            ->whereIn('subject_id', $subjects->map(fn (Model $subject): mixed => $subject->getKey())->all())
+            ->whereIn('subject_id', $subjects->map(fn (Model $subject): ?string => SubjectKey::for($subject))->all())
             ->whereIn('subject_type', $subjects->map(fn (Model $subject): string => $subject->getMorphClass())->unique()->values()->all())
             ->get(['subject_type', 'subject_id']);
 

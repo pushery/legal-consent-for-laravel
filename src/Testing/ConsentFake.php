@@ -10,6 +10,8 @@ use PHPUnit\Framework\Assert;
 use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentAction;
+use Pushery\LegalConsent\Enums\DocumentType;
+use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\ConsentContext;
@@ -21,10 +23,10 @@ use Pushery\LegalConsent\Support\SubjectErasure;
  * `Consent::fake()`; nothing it does touches a database.
  *
  * It exists because this package's own suite could never notice the gap it fills. Every test in
- * here runs against a real schema, so the eleven-method interface is always satisfied by the real
- * manager — while a consuming app that wanted to test "the register form shows the right checkbox"
- * had to either migrate this package's tables into its own test database or hand-roll a stub of
- * all eleven methods, and a hand-rolled stub silently rots on the next method added here.
+ * here runs against a real schema, so the interface is always satisfied by the real manager —
+ * while a consuming app that wanted to test "the register form shows the right checkbox" had to
+ * either migrate this package's tables into its own test database or hand-roll a stub of every
+ * method on it, and a hand-rolled stub silently rots on the next method added here.
  *
  * READ DEFAULTS DESCRIBE A FULLY-CONSENTED SUBJECT: nothing outstanding, `hasCurrent()` true,
  * empty status and history, nothing published. That direction is deliberate. A consuming test about
@@ -54,7 +56,7 @@ final class ConsentFake implements ConsentManager
     /** @var list<RegistrationChecklistItem> */
     private array $checklist = [];
 
-    /** @var array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool}> */
+    /** @var array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool}> */
     private array $status = [];
 
     /** @var list<array<string, mixed>> */
@@ -91,7 +93,7 @@ final class ConsentFake implements ConsentManager
     }
 
     /**
-     * @param  array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool}>  $status
+     * @param  array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool}>  $status
      */
     public function statusIs(array $status): self
     {
@@ -226,22 +228,78 @@ final class ConsentFake implements ConsentManager
     // ---------------------------------------------------------------- reads
 
     /**
+     * The documents a test arranged with `owes()`, carrying the same attribute surface the real
+     * manager hands out.
+     *
+     * HYDRATED, not `new` + `forceFill`, and that is the whole point of the method. The real
+     * manager returns models the gate hydrated from a narrow SELECT: `exists` is true, the columns
+     * the contract names are loaded, and every other column is MISSING — which under
+     * `Model::shouldBeStrict()` throws on access. A fake built with `new` has `exists === false`,
+     * and the framework's check reads `$this->exists` first, so such a model answers null to
+     * everything and throws at nothing. That is the dangerous direction: the consuming test would
+     * be green on exactly the read that 500s in production.
+     *
+     * The values are stand-ins — the fake has no database to have read them from — but the SHAPE
+     * is the one {@see ConsentManager::outstanding()} names, and this package's suite holds the
+     * two implementations against that list rather than against each other.
+     *
      * @return Collection<int, LegalDocument>
      */
     public function outstanding(Model $subject, ?string $locale = null): Collection
     {
-        /** @var Collection<int, LegalDocument> $documents */
-        $documents = new Collection(array_map(
-            static function (string $key) use ($locale): LegalDocument {
-                $document = new LegalDocument;
-                $document->forceFill(['key' => $key, 'locale' => $locale ?? 'de', 'is_active' => true]);
+        $locale ??= 'de';
+        $keys = $this->owed[$this->identify($subject)] ?? [];
 
-                return $document;
-            },
-            $this->owed[$this->identify($subject)] ?? [],
+        /** @var Collection<int, LegalDocument> $documents */
+        // array_map over TWO arrays reindexes on its own, so the arranged keys arrive as a list
+        // even when `owes()` was called with named arguments.
+        $documents = LegalDocument::hydrate(array_map(
+            fn (int $index, string $key): array => [
+                'id' => $index + 1,
+                'key' => $key,
+                'locale' => $locale,
+                // Raw column values, not enum instances: hydrate() sets the attributes the way the
+                // driver would, and the model's casts turn them back on the way out.
+                'type' => DocumentType::ContractTerms->value,
+                'major_version' => 1,
+                'version' => '1.0.0',
+                'title' => $key,
+                'ui_wording' => $this->acceptanceWordingFor($key, $locale),
+                'content_hash' => hash('sha256', $key.'|'.$locale),
+                // An arranged document is mandatory and still owed — the two reads a gate makes,
+                // kept consistent with hasCurrent() answering false for exactly these keys.
+                'requires_explicit_optin' => false,
+                'requires_reconsent' => true,
+                'notice_mode' => NoticeMode::ActiveReconsent->value,
+                'announce_from' => null,
+                'enforce_from' => null,
+                'objection_deadline' => null,
+                'offers_termination' => false,
+                'is_active' => true,
+            ],
+            array_keys($keys),
+            $keys,
         ));
 
         return $documents;
+    }
+
+    /**
+     * The acceptance sentence for an arranged document, resolved the way the render pipeline
+     * resolves it: the document's own line, then the generic one. A consuming test that renders
+     * the gate therefore sees a real sentence rather than an empty label.
+     */
+    private function acceptanceWordingFor(string $key, string $locale): string
+    {
+        foreach (["legal-consent::wording.{$key}", 'legal-consent::wording.default'] as $line) {
+            $translated = trans($line, [], $locale);
+
+            if (is_string($translated) && $translated !== $line && trim($translated) !== '') {
+                return $translated;
+            }
+        }
+
+        return '';
     }
 
     public function hasCurrent(Model $subject, string $documentKey, ?string $locale = null): bool
@@ -250,7 +308,7 @@ final class ConsentFake implements ConsentManager
     }
 
     /**
-     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool}>
+     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool}>
      */
     public function statusFor(Model $subject, ?string $locale = null): array
     {

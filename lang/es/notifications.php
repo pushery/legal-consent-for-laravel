@@ -34,7 +34,7 @@ return [
             'intro' => 'Hemos actualizado nuestro contrato. No es necesaria ninguna acción por tu parte.',
             'cta' => 'Ver los cambios',
             'effective' => 'Los cambios entran en vigor el :deadline.',
-            'objection' => 'Si no estás de acuerdo con los cambios, puedes cancelar de forma gratuita hasta el :deadline.',
+            'objection' => 'Si no estás de acuerdo con los cambios, puedes rescindir de forma gratuita hasta el :deadline.',
         ],
         'acknowledgement' => [
             'subject' => 'Política de privacidad actualizada',

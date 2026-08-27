@@ -110,9 +110,9 @@ trait RendersChangeItems
     }
 
     /**
-     * Loaded once. A notification is constructed per version and rendered per subject plus once
-     * more for the proof row, so an unmemoized lookup would query per recipient across a sweep that
-     * exists to avoid exactly that.
+     * Loaded once per instance. A queued notice renders twice for the same recipient — once for the
+     * mail and once for the append-only proof row that records what was delivered — so an
+     * unmemoized lookup would double the change-set query on every notice the sweep sends.
      */
     private function changeSetFor(LegalDocument $document): ?LegalChangeSet
     {

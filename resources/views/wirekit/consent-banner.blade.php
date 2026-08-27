@@ -25,6 +25,12 @@
     // duration: a duration drifts the moment the tab sleeps or the page is cached, and a drifting
     // § 308 Nr. 5 deadline misstates the subject's rights.
     $lcWarn = 7 * 24 * 60 * 60; // the final week reads as urgent
+
+    // No target, no call to action — identical to the plain stub, and to the decision the
+    // withdrawal control already carries in consent-settings. A link falling back to `#` reads as
+    // an actionable item with a fully worded promise and moves focus to the top of the document
+    // when activated. The countdown keeps stating what changes and by when.
+    $consentUrl = ($consentUrl ?? '') !== '' ? $consentUrl : null;
 @endphp
 
 @if (! empty($pending))
@@ -44,7 +50,9 @@
                         />
                     @endif
 
-                    <x-wirekit::link :href="$consentUrl ?? '#'">{{ __('legal-consent::ui.review') }}</x-wirekit::link>
+                    @if ($consentUrl !== null)
+                        <x-wirekit::link :href="$consentUrl">{{ __('legal-consent::ui.review') }}</x-wirekit::link>
+                    @endif
                 </x-wirekit::stack>
             @endforeach
         </x-wirekit::stack>
@@ -61,7 +69,9 @@
                     {{ $item['title'] }}
                     <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
                     — {{ __('legal-consent::ui.updated_note') }}
-                    <x-wirekit::link :href="$consentUrl ?? '#'">{{ __('legal-consent::ui.review') }}</x-wirekit::link>
+                    @if ($consentUrl !== null)
+                        <x-wirekit::link :href="$consentUrl">{{ __('legal-consent::ui.review') }}</x-wirekit::link>
+                    @endif
                 </x-wirekit::text>
             @endforeach
         </x-wirekit::stack>
@@ -87,7 +97,9 @@
                         />
                     @endif
 
-                    <x-wirekit::link :href="$consentUrl ?? '#'">{{ __('legal-consent::ui.object_review') }}</x-wirekit::link>
+                    @if ($consentUrl !== null)
+                        <x-wirekit::link :href="$consentUrl">{{ __('legal-consent::ui.object_review') }}</x-wirekit::link>
+                    @endif
                 </x-wirekit::stack>
             @endforeach
         </x-wirekit::stack>

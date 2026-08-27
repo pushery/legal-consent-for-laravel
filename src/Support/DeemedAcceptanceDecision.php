@@ -11,7 +11,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
 /**
  * Decides whether silence binds a single subject when a deemed-consent objection window closes.
  *
- * Extracted from the sweep because this is the one judgement in the package that CREATES consent
+ * Extracted from the sweep because this is the one judgment in the package that CREATES consent
  * out of inaction (§ 308 Nr. 5 BGB) — it deserves to be readable and testable on its own rather
  * than buried in a streaming loop where its branches are only reachable under real concurrency.
  */

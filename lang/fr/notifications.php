@@ -46,7 +46,7 @@ return [
     ],
     'deemed' => [
         'subject' => 'Une modification de notre contrat',
-        'intro' => 'Nous mettons à jour notre contrat (« :title »).',
+        'intro' => 'Nous mettons à jour notre contrat (« :title »).',
         'warning' => 'Si tu ne t\'y opposes pas avant le :deadline, cela vaudra acceptation des modifications.',
         'cta' => 'Consulter les modifications et t\'y opposer si tu le souhaites',
         'termination' => 'Tu peux résilier le contrat gratuitement jusqu\'au :effective.',

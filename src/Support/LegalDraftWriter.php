@@ -167,18 +167,31 @@ readonly class LegalDraftWriter
     {
         if (! $existing instanceof LegalDraft) {
             try {
-                // Saved through the model so the tenant stamp (BelongsToTenant's creating hook) lands.
-                $draft = new LegalDraft;
-                $draft->forceFill(array_merge([
-                    'key' => $key,
-                    'locale' => $locale,
-                    'body' => '',
-                    'content_hash' => $this->pipeline->hashOf(''),
-                    'revision' => 1,
-                ], $attributes));
-                $draft->save();
+                // The INSERT runs inside its own transaction, and on PostgreSQL that is the whole
+                // point rather than tidiness. A failed statement there aborts the ENTIRE open
+                // transaction — every following query answers SQLSTATE 25P02, "current transaction
+                // is aborted, commands ignored until end of transaction block" — so the recovery
+                // read below is impossible unless the violation is confined to a savepoint. MySQL
+                // and SQLite abort only the statement, which is why this was invisible on both.
+                //
+                // Measured on PostgreSQL 18.4: without the wrapper the recovery is reachable only
+                // at transaction level 0, and any consumer wrapping a save in DB::transaction() —
+                // or any test under RefreshDatabase — sits at level 1. Laravel turns a nested
+                // transaction into a SAVEPOINT, so this costs one savepoint and nothing else.
+                return DB::transaction(function () use ($key, $locale, $attributes): LegalDraft {
+                    // Saved through the model so the tenant stamp (BelongsToTenant's creating hook) lands.
+                    $draft = new LegalDraft;
+                    $draft->forceFill(array_merge([
+                        'key' => $key,
+                        'locale' => $locale,
+                        'body' => '',
+                        'content_hash' => $this->pipeline->hashOf(''),
+                        'revision' => 1,
+                    ], $attributes));
+                    $draft->save();
 
-                return $draft;
+                    return $draft;
+                });
             } catch (UniqueConstraintViolationException) {
                 // A concurrent writer (a queued translation racing the editor's sync save) inserted
                 // this (key, locale, tenant) between the caller's read and this insert. The unique

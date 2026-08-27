@@ -4,6 +4,158 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.18.0 → 0.19.0
+
+### The change-notice proof is now written when the notice is DELIVERED
+
+`ChangeNotification` implements `ShouldQueue`, so `Notification::send()` enqueued and returned —
+and `legal-consent:dispatch-notices` then wrote the `legal_notices` proof row, stamped
+`notified_at` on the version and exited 0. With a dead worker, a poisoned job or a refusing mail
+transport that produced a green hourly run **plus an append-only row certifying a notice nobody
+received**. `legal-consent:close-objection-windows` reads exactly those rows and binds each subject
+to the contract change by silence, so the false proof turned into a deemed acceptance.
+
+The proof now comes from the delivery side. A listener on `Illuminate\Notifications\Events\NotificationSent`
+(channel `mail`) writes the row; a listener on `NotificationFailed` clears the version's
+`notified_at` so the notice is owed again instead of sitting stamped.
+
+**What you have to do: nothing, if your queue works.** The observable result of a working run is
+unchanged — the same rows, for the same subjects, with the same content hash.
+
+**What changes if it does not:**
+
+- The command now says `Queued N notice(s) for delivery`, not `Dispatched`. It reports what it
+  did.
+- A version whose delivery fails becomes due again on the next sweep, by itself.
+- **A queue that discards silently** — `queue.default=null`, or a worker that never starts — fires
+  neither event. `notified_at` stays stamped and the version is not re-swept on its own; use
+  `legal-consent:renotify` as documented. What is different is that there is no longer a false
+  proof row, so `close-objection-windows` **refuses loudly** (exit 1, the objection window stays
+  open) instead of binding the subject by silence.
+- **If you test against this package with `Notification::fake()`**, a faked notifier never
+  delivers, so no proof row is written. Pin the channel instead —
+  `config(['legal-consent.notifications.channels' => ['mail']])` — and assert on `NotificationSent`
+  events. The mail transport in a test environment is the array driver, so nothing leaves the
+  process.
+
+### Tamper-evidence now covers `tenant_id`
+
+`LedgerHashChain` folds `tenant_id` into a row's canonical form. Until now it did not, although
+`ConsentGate` filters on that column under multi-tenancy — so an acceptance could be moved from one
+tenant to another with `prev_record_hash` untouched, and `legal-consent:verify-ledger` reported the
+chain intact, with or without an HMAC key.
+
+**Single-tenant installations: nothing to do.** The field is appended only when it names a tenant,
+and `tenant_id` is `NOT NULL DEFAULT ''` — so every row of an installation that never enabled
+`legal-consent.tenancy` produces the same canonical bytes it produced before, and every stored link
+keeps verifying.
+
+**Multi-tenant installations with `tamper_evidence` already on must re-chain.** Every
+`prev_record_hash` written before this version was computed without the tenant, so
+`legal-consent:verify-ledger` reports every chained row as broken from the first run after the
+upgrade. Decide before upgrading:
+
+- re-chain the ledger — `LedgerChainRepair::relink()` per `subject_token`, in id order, delete and
+  insert inside one transaction (the shape `LedgerSubjectEraser` uses) — and record that you did it
+  and why; or
+- accept the discontinuity, note the upgrade date, and read every break at or before it as the
+  upgrade rather than as tampering.
+
+Rows written after the upgrade chain and verify normally either way.
+
+### Tamper-evidence is bound to the database engine and the connection time zone
+
+This is not new behavior — it has always been true and was not written down. The chain hashes
+`accepted_at` as the string the driver returns. PostgreSQL renders a `timestamptz` with an offset
+while MySQL and SQLite render none, and on PostgreSQL and MySQL that rendering follows the session
+time zone, which Laravel sets from `database.connections.*.timezone`.
+
+So once the first row is chained, each of these invalidates every stored `prev_record_hash` at once:
+
+- restoring a dump onto a different engine;
+- adding, changing or removing that `timezone` key.
+
+`legal-consent:verify-ledger` then reports the whole ledger as tampered although nothing was
+touched. Treat both as a re-chain event, exactly like `tamper_evidence_key`: fix the engine and the
+connection time zone before the first chained row. The chain deliberately does **not** normalize the
+instant — normalizing would change the canonical form of every row already written, on every engine,
+and the only route back to a verifiable ledger is to rewrite every proof row, which is the one
+operation the chain exists to make conspicuous.
+
+### The ledger refuses an action its document type cannot carry
+
+`Consent::record()` took an arbitrary action from an arbitrary caller and wrote it. The append-only
+ledger therefore accepted an objection against a consent, a consent given by silence, a `granted`
+on a privacy notice, and a double-opt-in confirmation with no request before it — rows asserting a
+state the law has no shape for, in a table that cannot be corrected afterwards.
+
+A compatibility matrix now sits at the write choke point and throws
+`Pushery\LegalConsent\Exceptions\IncompatibleConsentActionException`. The named transitions
+(`accept()`, `withdraw()`, `object()`, `terminate()`, `confirm()`) are unaffected — they already
+asked their own half of the question.
+
+**Check any direct `record()` call.** Contract terms and privacy notices are `Acknowledged` (or
+`ReAccepted` after a material change); `Granted`, `Withdrawn`, `Declined`, `OptInRequested` and
+`Confirmed` belong to documents with `requires_explicit_optin`. A confirmation additionally needs a
+preceding `OptInRequested` row for the same subject and key.
+
+### A document a consent points at can no longer be deleted
+
+`legal_documents` had no delete protection, so the text a subject agreed to could be removed while
+the consent row kept pointing at it — against the promise the README makes in as many words. A
+`BEFORE DELETE` trigger (migration `0001_01_01_000021`) and a model hook now refuse it and throw
+`LegalDocumentInEvidenceException`.
+
+**Retire a version with `is_active = false`, which is the supported route and always was.**
+Deleting a version nobody ever accepted still works.
+
+Withdrawal follows from the same change: `withdraw()`, `object()` and `terminate()` fall back to
+the version the subject actually accepted when no active version exists, so retiring a document no
+longer makes Art. 7(3) unreachable.
+
+### `legal-consent:publish` refuses an inverted notice timeline
+
+`published_at < announce_from < enforce_from` was enforced nowhere, so a hard-gating change could
+take effect **before** its own announcement and freeze `notice_period_days` at a negative number.
+An unconditional guard now throws `NoticeTimelineInvertedException`, and the period is floored at
+zero. An `--enforce-at` in the past with no `--announce-at` is still the documented immediate gate.
+
+### The JSON API is rate-limited by default
+
+The shipped default middleware carried no throttle, so four unauthenticated write endpoints pointed
+at an append-only ledger with nothing in front of them. The new config key `routes.api_throttle`
+defaults to `'60,1'` and is applied in the package's route file, ahead of your configured chain.
+
+**A config published under 0.17 or 0.18 already declares the `routes` block**, and the shallow
+merge never delivers a new key into it — so the package applies the inline default and the behavior
+changes for you either way. Add `'api_throttle' => '120,1'` to your own `routes` block for a
+different limit, or `null` to switch it off.
+
+### Smaller behavior changes
+
+| | |
+|---|---|
+| `vendor:publish --tag=legal-consent` | no longer copies the two opt-in migrations along with the required ones. Publish those with their own tags when you want them. |
+| `legal-consent:dispatch-notices` | exits non-zero when a notice went out without its § 308 Nr. 5 lit. b mandatory content, and its `--dry-run` exits non-zero when the size brake would hold a version back. |
+| `legal-consent:close-objection-windows` | leaves the window open when it could not deem every subject for lack of proof, instead of stamping it closed and reporting success. |
+| all three sweeps | implement `Isolatable`, so `--isolated` works, and survive a fresh install whose migrations have not run yet. |
+| `ConsentSettings` and `ReConsentForm` | `$locale` and `$status` are `#[Locked]`. If you set them from a parent component, pass them as mount parameters. |
+| `LegalTextManager::releaseAll()` | answers `404` for a key the manager does not list, where it previously reached the source factory and threw. |
+| the settings screen | no longer lists informational documents as outstanding consents. |
+| `notice_periods.dcd_termination_days` | removed from the published config: it is the § 327r Abs. 3 free-termination window, fixed by statute, and nothing read it. |
+| new key `legal-consent::ui.not_withdrawable` | in all seven bundled locales. |
+| withdraw route | returns only to your own origin; a foreign `Referer` lands on `routes.home`. |
+| new trait method `hasAcceptedCurrentLegalMany(array $keys)` | answers the `hasAcceptedCurrentLegal()` question for several keys in one read. |
+
+### MySQL: the identity columns of `legal_documents` get a binary collation
+
+Migration `0001_01_01_000022` gives `key`, `locale`, `tenant_id` and `version` a binary collation on
+MySQL. The unique index over them decides whether two rows are the same document, and MySQL's
+default collation is case- and accent-insensitive while PostgreSQL and SQLite are not — so `terms`
+and `Terms` were one document on one engine and two on another. Nothing to do; existing rows are
+unaffected unless you already relied on that insensitivity, in which case the migration fails loudly
+on the duplicate rather than silently picking one.
+
 ## 0.17.0 → 0.18.0
 
 ### `subject_id` widens from an integer to a 64-character string
@@ -57,6 +209,38 @@ thing between a UUID and PHP casting it to `0`. It now accepts any value with a 
 form. If you ran the backfill BEFORE upgrading and your users have UUID keys, it imported nothing;
 the run is idempotent by a `source = 'v1_backfill'` marker, so delete those rows (there are none)
 and run it again after migrating.
+
+### `legal-consent:publish --only-missing` and `--dry-run` now fail on a missing text
+
+A registered document whose source resolves no text used to be a warning under `--only-missing`,
+and the run finished green. Only a source whose empty state means *nobody has written it yet* is
+warned about and skipped now — the bundled draft source, or your own source class if it implements
+`Pushery\LegalConsent\Content\AwaitsAuthoring`. Everything else counts as provisioned and fails,
+naming the document and the locale.
+
+A missing Markdown file is the case this separates out: nobody is going to write that one. It is a
+deployment missing a file, and skipping it leaves the empty legal page behind a green deploy — the
+state this command exists to prevent.
+
+Two runs change their exit code because of it:
+
+- **`php artisan legal-consent:publish --all --only-missing --editorial`**, the line a deploy script
+  runs, exits non-zero when a registered document has no text and its source does not declare
+  `AwaitsAuthoring`.
+- **`--dry-run`** now answers a textless source exactly as the real run does. It used to count every
+  one of them as a warning and end at `0`, so the preview reported green for a run that could not be
+  green.
+
+**What to do before you deploy this.** Run the preview once against your own registry:
+
+```bash
+php artisan legal-consent:publish --all --only-missing --dry-run --editorial
+```
+
+Every line marked `x … no text` is a combination that will now fail. For each one, either author the
+missing file, take the key out of the `documents` registry, or — if it really is waiting on an
+editor — put it behind a source that declares `AwaitsAuthoring`. `legal-consent:doctor` names the
+same gaps at any time and changes nothing.
 
 ## 0.16.1 → 0.17.0
 
@@ -232,11 +416,16 @@ If your application is a Laravel application, you already have the framework and
 New in this release: `ConsentMethod::FirstUseGate`, for the interstitial after authentication and
 before first use. Two things are worth doing together:
 
-```php
-// 1. capture the first acceptance where it actually happens
-<livewire:legal-consent.re-consent-form :method="ConsentMethod::FirstUseGate" />
+First, capture the acceptance where it actually happens — in the interstitial template:
 
-// 2. turn off the Registered listener — it assumes a form validated the tick
+```blade
+<livewire:legal-consent.reconsent-form :method="ConsentMethod::FirstUseGate" />
+```
+
+Then turn off the `Registered` listener, which assumes a form validated the tick:
+
+```php
+// config/legal-consent.php
 'registration' => ['listen_to_registered_event' => false],
 ```
 
@@ -867,6 +1056,43 @@ re-consent form already has. It is **opt-in** and off by default:
   saw.
 - A form that does **not** render the field behaves exactly as before; no action is required to keep
   the current behavior.
+
+## 0.4.0 → 0.5.0
+
+`0.5.0` is a **minor** bump with two changes that alter existing behavior. **No new migrations
+ship** — nothing in your schema changes.
+
+### 1. The ledger models are no longer mass-assignable
+
+`LegalConsent`, `LegalNotice` and `LegalDocument` carried `$guarded = []`. The append-only guard
+refuses a row's *mutation*, and a forged proof row is an *insert*, so anything reaching
+`LegalConsent::create($attributes)` could write or backdate one. All three models are fully guarded
+now, and the package writes through its own curated attribute arrays.
+
+If you wrote these rows yourself, `create()` and `fill()` throw `MassAssignmentException` after the
+upgrade. Switch those calls to `forceCreate()` / `forceFill()` — the deliberate, auditable door —
+or, better, route them through `Consent::record()` and its named transitions, which fill the proof
+columns and the tamper-chain link for you. The break is loud and immediate; nothing fails quietly
+here.
+
+### 2. Registration rules, the displayed checklist and the recorded row resolve identically
+
+The three used to answer the same question separately: the validation rules came from the config
+registry, the checklist read published rows, and the recorder fell back to the default-locale
+version of a mandatory document. A registration could therefore require a checkbox for a document
+that was not published, or omit a control whose acceptance was recorded anyway. All three now use
+the recorder's resolution — configured keys intersected with the **active** rows, with the
+default-locale fallback for mandatory documents only (a voluntary consent may never be required,
+Art. 7(4)).
+
+Two consequences to check against your own install:
+
+- **The consent section is dormant until you publish.** An unpublished document demands nothing and
+  renders no control. If your registration form was relying on the config registry alone, publish
+  the documents it asks for before deploying.
+- **A document's legal nature is read from the published row**, not from its config entry, so a
+  `legal_basis` that drifted from what was published can no longer decide whether a checkbox is
+  mandatory.
 
 ## 0.3.x → 0.4.0
 

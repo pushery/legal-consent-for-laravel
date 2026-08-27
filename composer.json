@@ -40,41 +40,14 @@
     },
     "suggest": {
         "laravel/fortify": "Record registration consent inside the account-creating request (Way A).",
-        "livewire/livewire": "Opt-in reactive UI: the ReConsentForm and ConsentSettings inline components (publish the plain or WireKit-flavored views)."
+        "livewire/livewire": "Opt-in reactive UI: the ReConsentForm and ConsentSettings inline components (publish the plain or WireKit-flavored views).",
+        "phpunit/phpunit": "Assertions for Consent::fake(): the in-memory double calls PHPUnit\\Framework\\Assert, so every assert*() method needs PHPUnit on the class path. Any Pest or PHPUnit test toolchain already brings it.",
+        "pushery/wirekit": "WireKit-native view variant, 2.26.0 or newer: publish --tag=legal-consent-wirekit, or leave ui.variant on its 'auto' default and the themed views are served as soon as the package is installed."
     },
     "autoload": {
         "psr-4": {
             "Pushery\\LegalConsent\\": "src/"
         }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "Pushery\\LegalConsent\\Tests\\": "tests/",
-            "Workbench\\App\\": "workbench/app/",
-            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
-            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
-        }
-    },
-    "scripts": {
-        "test": "pest",
-        "test:coverage": "@php -d pcov.directory=. vendor/bin/pest --coverage --min=100",
-        "test:type-coverage": "pest --type-coverage --min=100",
-        "test:browser": "pest tests/Browser tests/BrowserAdmin",
-        "test:database": "pest --testsuite=Postgres,MySql",
-        "analyse": "phpstan analyse --memory-limit=1G",
-        "format": "pint",
-        "format:test": "pint --test",
-        "rector": "rector process",
-        "rector:test": "rector process --dry-run",
-        "mutate": "@php -d pcov.directory=. vendor/bin/pest --mutate --everything --covered-only --min=67 --testsuite=Unit,Feature",
-        "mutate:detect": "@php -d pcov.directory=. vendor/bin/pest --mutate --everything --covered-only --parallel --processes=4 --min=67 --testsuite=Unit,Feature",
-        "qa": [
-            "@format:test",
-            "@rector:test",
-            "@analyse",
-            "@test:type-coverage",
-            "@test:coverage"
-        ]
     },
     "config": {
         "sort-packages": true,

@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\ProofColumnGuard;
 
 /**
  * Drop the `legal_consents.document_id` foreign key on SQLite too.
@@ -24,6 +25,13 @@ use Illuminate\Support\Facades\Schema;
  *
  * Guarded to SQLite: PostgreSQL and MySQL already dropped this constraint in 000008, so running the
  * drop there would fail on a missing key.
+ *
+ * The rebuild runs inside `ProofColumnGuard::whileDisarmed()`, and that is not caution — it is the
+ * difference between a schema change and a destroyed ledger table. Dropping a foreign key on
+ * SQLite means rebuilding `legal_consents`: copy into a replacement, DROP the original, rename the
+ * replacement into place. `legal_documents` carries a DELETE guard that names `legal_consents`,
+ * SQLite re-parses every trigger in the schema at that rename, and a trigger whose referenced
+ * table is missing at that instant is a hard error — raised after the original has already gone.
  */
 return new class extends Migration
 {
@@ -33,8 +41,10 @@ return new class extends Migration
             return;
         }
 
-        Schema::table('legal_consents', function (Blueprint $table): void {
-            $table->dropForeign(['document_id']);
+        ProofColumnGuard::whileDisarmed(function (): void {
+            Schema::table('legal_consents', function (Blueprint $table): void {
+                $table->dropForeign(['document_id']);
+            });
         });
     }
 
@@ -44,8 +54,10 @@ return new class extends Migration
             return;
         }
 
-        Schema::table('legal_consents', function (Blueprint $table): void {
-            $table->foreign('document_id')->references('id')->on('legal_documents')->nullOnDelete();
+        ProofColumnGuard::whileDisarmed(function (): void {
+            Schema::table('legal_consents', function (Blueprint $table): void {
+                $table->foreign('document_id')->references('id')->on('legal_documents')->nullOnDelete();
+            });
         });
     }
 

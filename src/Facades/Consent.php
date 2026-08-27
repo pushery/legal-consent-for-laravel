@@ -14,6 +14,7 @@ use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\RegistrationChecklistItem;
+use Pushery\LegalConsent\Support\SubjectErasure;
 use Pushery\LegalConsent\Testing\ConsentFake;
 
 /**
@@ -28,6 +29,7 @@ use Pushery\LegalConsent\Testing\ConsentFake;
  * @method static bool hasCurrent(Model $subject, string $documentKey, ?string $locale = null)
  * @method static array<string, array<string, mixed>> statusFor(Model $subject, ?string $locale = null)
  * @method static list<array<string, mixed>> history(Model $subject)
+ * @method static SubjectErasure forget(Model $subject)
  * @method static ?PublishedDocument published(string $documentKey, ?string $locale = null)
  * @method static list<RegistrationChecklistItem> registrationChecklist(?string $locale = null)
  *

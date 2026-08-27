@@ -39,9 +39,19 @@ adapter. Do NOT add a cast or a config option for it; there is nothing to config
 ### 2. Configure
 
 ```bash
-php artisan vendor:publish --tag=legal-consent
+php artisan vendor:publish --tag=legal-consent-config
+php artisan vendor:publish --tag=legal-consent-lang
 php artisan migrate
 ```
+
+There is an umbrella tag, `--tag=legal-consent`, which adds migrations and views to those two.
+**Do NOT reach for it on an application that has WireKit installed.** It copies the whole view
+tree into `resources/views/vendor/legal-consent/`, whose top level is the PLAIN stubs, and a
+published view is resolved before either of the package's own sets — so the umbrella publish
+silently turns `ui.variant => 'auto'` into plain, unstyled consent screens. Nothing errors and
+`legal-consent:doctor` cannot see it. If views are already published on such an app, run
+`php artisan vendor:publish --tag=legal-consent-wirekit --force` to pull the WireKit twins over
+the published copies (`--force` is required; the files exist).
 
 Every option in `config/legal-consent.php` is documented inline. The ones that usually matter first:
 
@@ -97,6 +107,10 @@ php artisan legal-consent:publish --all --dry-run --editorial        # what woul
 php artisan legal-consent:check-drift                    # source changed since it was published?
 ```
 
+The mode is the legal classification of the change, so it is never guessed: `--active` (the subject
+must accept again), `--deemed` (silence counts, contract terms only), `--info` (announced, takes
+effect regardless), `--editorial` (no material change).
+
 **A fresh install has published nothing, and nothing says so.** `legal_documents` is empty after
 `migrate`, `Consent::published()` returns `null` for every document, and the read path does not
 fall back to the source — so every legal page renders empty with no error and no log. Run
@@ -130,34 +144,6 @@ by a script instead of a person. `--only-missing` never reads a combination that
 active version, so it cannot classify a change. It also treats a source with no text yet as a named
 skip rather than a failure, which is what a draft-backed document looks like before an editor has
 written it.
-
-## Testing your own app against it
-
-`Consent::fake()` swaps the manager for an in-memory double — no database, no migrations of this
-package's tables into your test schema.
-
-```php
-$fake = Consent::fake();
-
-$this->post('/register', [...]);
-
-$fake->assertAccepted($user, 'terms');
-```
-
-Reads default to a fully-consented subject (nothing outstanding, `hasCurrent()` true, nothing
-published), so a test about something else is never blocked by a gate it did not mention. Declare
-what you care about with `owes($user, 'terms')`, `publishes($document)`, `checklistIs(...)`,
-`statusIs([...])` or `historyIs([...])`.
-
-Writes are recorded, not performed: the returned `LegalConsent` carries the attributes but
-`exists` stays false. Assertions: `assertRecorded`, `assertNotRecorded`, `assertAccepted`,
-`assertWithdrawn`, `assertNothingRecorded`, `assertRecordedCount`, plus `recorded()` for anything
-else. `assertAccepted` matches `granted`, `acknowledged` and `re_accepted` — never
-`deemed_accepted`, because silence is not an act of the subject.
-
-The mode is the legal classification of the change, so it is never guessed: `--active` (the subject
-must accept again), `--deemed` (silence counts, contract terms only), `--info` (announced, takes
-effect regardless), `--editorial` (no material change).
 
 **Enforce re-consent.** Add the middleware to the routes that require an accepted contract:
 
@@ -197,7 +183,9 @@ Consent::confirm($user, 'newsletter', $context);              // action: confirm
 
 The unconfirmed row does not raise `accepted_major` and `hasCurrent()` stays false;
 `statusFor()[$key]['pending_confirmation']` is how a screen shows that middle state instead of
-offering the control again. Listen for `ConsentConfirmationRequested` to send the mail — the
+offering the control again. The sibling flag `retired` says the document has no active version any
+more: the holding stays, its withdrawal control stays, and it is never `outstanding` — retiring a
+document must not close the door on Art. 7(3). Listen for `ConsentConfirmationRequested` to send the mail — the
 package owns the ledger, not the mailbox — and never for `ConsentRecorded`, which does not fire
 for a request.
 
@@ -215,8 +203,8 @@ recorder logs that; set `registration.without_form_fields => 'refuse'` and it ra
 acceptance in an interstitial shown after authentication and before first use, and use
 `ConsentMethod::FirstUseGate` for it:
 
-```php
-<livewire:legal-consent.re-consent-form :method="ConsentMethod::FirstUseGate" />
+```blade
+<livewire:legal-consent.reconsent-form :method="ConsentMethod::FirstUseGate" />
 ```
 
 **Drop in the optional UI** (needs `livewire/livewire`. The WireKit-native views are served
@@ -263,6 +251,56 @@ an Impressum, a cookie policy — is published so it can be read and asks the re
 of `not_consent_bearing`. Do not offer such a document as something to accept; render it, and let
 the gate ignore it.
 
+`Consent::record()` also refuses an action the document's TYPE cannot carry, with
+`IncompatibleConsentActionException`. Contract terms and privacy notices are `Acknowledged` (or
+`ReAccepted` after a material change); `Granted`, `Withdrawn`, `Declined`, `OptInRequested` and
+`Confirmed` belong to documents with `requires_explicit_optin`, and a `Confirmed` additionally needs
+a preceding `OptInRequested` row for the same subject and key. The named transitions —
+`accept()`, `withdraw()`, `object()`, `terminate()`, `confirm()` — ask their own half already, so
+prefer them over `record()` unless you genuinely need the untyped write. The ledger is append-only,
+so a row asserting a state the law has no shape for can never be corrected.
+
+Asking about several documents at once costs one read rather than two per key:
+
+```php
+$held = $user->hasAcceptedCurrentLegalMany(['terms', 'privacy']);
+// ['terms' => true, 'privacy' => false]
+```
+
+**Alert on the scheduled sweeps.** Bind `Pushery\LegalConsent\Contracts\LegalConsentMonitor` (the
+default binding discards everything) and each sweep calls `heartbeat(string $task, int $processed)`.
+Three task names are the ordinary beat — `legal-consent:prune`, `legal-consent:dispatch-notices`,
+`legal-consent:close-objection-windows` — and two are sent ONLY when a run failed:
+`legal-consent:dispatch-notices.held`, a notice still owed because the audience exceeded
+`notifications.max_recipients_per_run`, and `legal-consent:close-objection-windows.unproved`,
+subjects that could not be deemed for want of a delivered § 308 Nr. 5 lit. b warning. **Alert on
+those two by name.** The ordinary heartbeat is sent BEFORE the failure branch, so a run that held a
+legally required notice back still beats as usual with the count it managed.
+
+## Testing your own app against it
+
+`Consent::fake()` swaps the manager for an in-memory double — no database, no migrations of this
+package's tables into your test schema.
+
+```php
+$fake = Consent::fake();
+
+$this->post('/register', [...]);
+
+$fake->assertAccepted($user, 'terms');
+```
+
+Reads default to a fully-consented subject (nothing outstanding, `hasCurrent()` true, nothing
+published), so a test about something else is never blocked by a gate it did not mention. Declare
+what you care about with `owes($user, 'terms')`, `publishes($document)`, `checklistIs(...)`,
+`statusIs([...])` or `historyIs([...])`.
+
+Writes are recorded, not performed: the returned `LegalConsent` carries the attributes but
+`exists` stays false. Assertions: `assertRecorded`, `assertNotRecorded`, `assertAccepted`,
+`assertWithdrawn`, `assertNothingRecorded`, `assertRecordedCount`, plus `recorded()` for anything
+else. `assertAccepted` matches `granted`, `acknowledged` and `re_accepted` — never
+`deemed_accepted`, because silence is not an act of the subject.
+
 ## Examples
 
 A minimal, complete adoption: publish the config, author `resources/legal/terms/de.md` with
@@ -272,6 +310,22 @@ embed `<livewire:legal-consent.reconsent-form />` on the consent route. Schedule
 `legal-consent:dispatch-notices` so a change with a grace period actually reaches subjects, and put
 `legal-consent:publish --all --editorial` in the deploy script so a fresh database is never left
 with empty legal pages.
+
+The public page renders the stored bytes **unescaped**, which is the one place in this integration
+where that is the right call:
+
+```blade
+{{-- $document came from Consent::published('terms', app()->getLocale()) in the route --}}
+@if ($document !== null)
+    <h1>{{ $document->title }}</h1>
+    {!! $document->html !!}
+@endif
+```
+
+`html` is exactly what the package sanitized before it froze the row, and the hash the ledger
+carries is the hash of those bytes. So `{{ }}` there is not the safe choice, it is the wrong one —
+the page shows visible tags — and sanitizing the value a second time changes the bytes, which
+separates the page from the proof. Everything else on a consent screen is escaped as usual.
 
 ## Anti-Patterns
 

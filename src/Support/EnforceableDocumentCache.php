@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Database\Eloquent\Collection;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -26,14 +27,37 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * `is_active` write — a manual UPDATE, a restored dump — is not seen by either, so it needs
  * `legal-consent:cache-flush`.
  */
-final readonly class EnforceableDocumentCache
+final class EnforceableDocumentCache
 {
     public const string PREFIX = 'legal:enforceable';
 
+    /**
+     * The already-hydrated set per cache key, with the wall-clock second it stops being usable.
+     *
+     * The documented layout asks for this set FOUR times in one request — once from the gate's
+     * middleware, three times from the banner — and a store read alone is not what that costs: the
+     * rows are re-hydrated into models, casts and all, on every hit. On the framework-default
+     * `database` store it is also four identical cache-table SELECTs. The set is one global fact
+     * per (tenant, locale), so all four asks are the same answer.
+     *
+     * The lifetime is capped at the store TTL rather than left open, which is what makes this safe
+     * for an object that may live longer than a request (a queue worker, an Octane process): the
+     * memo can never be staler than the cache entry it was built from, so the class's standing
+     * promise — the worst a stale entry can do is delay the ONSET of a gate by the TTL — holds
+     * either way. A flush drops it immediately, so an in-process publish is never invisible.
+     *
+     * It also means callers share one instance of each document rather than getting a private copy.
+     * Every caller in the package reads; a caller that MUTATES a document handed out here would be
+     * writing to a partially selected model, which the freeze rules refuse anyway.
+     *
+     * @var array<string, array{Collection<int, LegalDocument>, int}>
+     */
+    private array $memo = [];
+
     public function __construct(
-        private CacheRepository $cache,
-        private TenantContext $tenant,
-        private int $ttl = 60,
+        private readonly CacheRepository $cache,
+        private readonly TenantContext $tenant,
+        private readonly int $ttl = 60,
     ) {}
 
     /**
@@ -55,6 +79,14 @@ final readonly class EnforceableDocumentCache
     public function activeFor(string $locale): Collection
     {
         $key = $this->keyFor($locale);
+        $now = CarbonImmutable::now()->getTimestamp();
+
+        [$memoized, $expiresAt] = $this->memo[$key] ?? [null, 0];
+
+        if ($memoized instanceof Collection && $expiresAt > $now) {
+            return $memoized;
+        }
+
         $cached = $this->cache->get($key);
 
         if (is_array($cached)) {
@@ -64,7 +96,11 @@ final readonly class EnforceableDocumentCache
             $this->cache->put($key, $rows, $this->ttl);
         }
 
-        return LegalDocument::hydrate($rows);
+        $documents = LegalDocument::hydrate($rows);
+
+        $this->memo[$key] = [$documents, $now + $this->ttl];
+
+        return $documents;
     }
 
     /**
@@ -96,12 +132,22 @@ final readonly class EnforceableDocumentCache
 
     public function flush(string $locale): void
     {
-        $this->cache->forget($this->keyFor($locale));
+        $key = $this->keyFor($locale);
+
+        // The in-process copy goes with it. A publish that dropped only the shared entry would be
+        // invisible to the very process that performed it for the rest of the request.
+        unset($this->memo[$key]);
+
+        $this->cache->forget($key);
     }
 
     /** Forget every locale the app declares — what a publish or an explicit flush needs. */
     public function flushAll(): void
     {
+        // Cleared wholesale rather than per locale: a set memoized for a locale the app no longer
+        // declares would otherwise outlive the flush that was meant to be total.
+        $this->memo = [];
+
         foreach ($this->locales() as $locale) {
             $this->flush($locale);
         }

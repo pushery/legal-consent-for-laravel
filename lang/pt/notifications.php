@@ -17,7 +17,7 @@ return [
         'issuer' => 'Declarado por: :declarant',
         'why' => 'Recebes esta mensagem porque tens uma conta connosco e somos obrigados a informar-te desta alteração. Não é publicidade e não há nada para cancelar.',
         'no_reply' => 'Este endereço não aceita respostas. Usa a ligação acima se quiseres agir.',
-        'more' => 'Ficha legal',
+        'more' => 'Informação legal',
         'privacy' => 'Política de privacidade',
         'subject_effective' => ':subject (em vigor a :date)',
     ],

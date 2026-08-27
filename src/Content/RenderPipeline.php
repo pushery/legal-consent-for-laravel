@@ -23,10 +23,31 @@ final readonly class RenderPipeline
     /** Legal texts are small; anything larger is a mistake or an attack. */
     public const int MAX_BYTES = 512 * 1024;
 
+    /**
+     * The markdown settings this package renders with, and the value the shipped config file
+     * declares. They are applied PER KEY, and that is load-bearing rather than tidy.
+     *
+     * `mergeConfigFrom()` merges one level deep, so an application that publishes
+     * `'markdown' => ['max_nesting_level' => 10]` replaces this whole block instead of overriding
+     * one key of it. Handing that array to CommonMark unmerged would fall back to ITS defaults for
+     * the two keys that went missing — `html_input: allow`, `allow_unsafe_links: true`, no nesting
+     * cap. The sanitizer still holds the security line, so the visible damage is subtler and
+     * permanent: different HTML, therefore a different `content_hash`, therefore a drift report on
+     * a text nobody edited and a fresh version of an unchanged document.
+     *
+     * @var array<string, mixed>
+     */
+    public const array MARKDOWN_DEFAULTS = [
+        'html_input' => 'strip',
+        'allow_unsafe_links' => false,
+        'max_nesting_level' => 20,
+    ];
+
     private CommonMarkConverter $converter;
 
     /**
-     * @param  array<string, mixed>  $markdownConfig
+     * @param  array<string, mixed>  $markdownConfig  overrides, per key, on top of
+     *                                                {@see self::MARKDOWN_DEFAULTS}
      * @param  array<string, mixed>  $documents  the `legal-consent.documents` registry, so the
      *                                           pipeline can tell whether a key binds anyone.
      *                                           An empty registry means every key defaults to
@@ -35,11 +56,11 @@ final readonly class RenderPipeline
      */
     public function __construct(
         private LegalHtmlSanitizer $sanitizer = new LegalHtmlSanitizer,
-        array $markdownConfig = ['html_input' => 'strip', 'allow_unsafe_links' => false, 'max_nesting_level' => 20],
+        array $markdownConfig = [],
         private int $maxBytes = self::MAX_BYTES,
         private array $documents = [],
     ) {
-        $this->converter = new CommonMarkConverter($markdownConfig);
+        $this->converter = new CommonMarkConverter(array_merge(self::MARKDOWN_DEFAULTS, $markdownConfig));
     }
 
     public function process(RawDocument $raw): Document

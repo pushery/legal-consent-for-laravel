@@ -41,6 +41,12 @@ use Pushery\LegalConsent\Support\DefaultConsentManager;
  * @property string|null $request_id
  * @property string|null $prev_record_hash
  * @property CarbonImmutable $accepted_at
+ * @property CarbonImmutable|null $subject_erased_at when an Art. 17 erasure rewrote this row without
+ *                                                   its personal columns. Deliberately NOT a hashed
+ *                                                   proof field (migration 000019): it is the trace
+ *                                                   that a lawful rewrite happened, never a claim the
+ *                                                   tamper chain vouches for — do not add it to
+ *                                                   LedgerHashChain::PROOF_FIELDS
  * @property CarbonImmutable|null $created_at
  */
 final class LegalConsent extends Model
@@ -103,6 +109,7 @@ final class LegalConsent extends Model
             'action' => ConsentAction::class,
             'method' => ConsentMethod::class,
             'accepted_at' => 'immutable_datetime',
+            'subject_erased_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
         ];
     }

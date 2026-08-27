@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
+use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use stdClass;
 
@@ -21,6 +23,9 @@ use stdClass;
  */
 final class VerifyLedgerCommand extends Command
 {
+    /** Chained rows per keyset page. */
+    private const int PAGE = 1000;
+
     protected $signature = 'legal-consent:verify-ledger';
 
     protected $description = 'Verify the tamper-evidence hash chain of the consent ledger.';
@@ -45,34 +50,28 @@ final class VerifyLedgerCommand extends Command
         /** @var list<string> $breaks */
         $breaks = [];
 
-        DB::table('legal_consents')
-            ->whereNotNull('prev_record_hash')
-            ->whereNotNull('subject_token')
-            ->orderBy('subject_token')
-            ->orderBy('id')
-            ->lazy()
-            ->each(function (stdClass $row) use ($chain, $genesis, &$currentToken, &$expectedPrev, &$subjects, &$rows, &$breaks): void {
-                $rows++;
+        foreach ($this->chainedRows() as $row) {
+            $rows++;
 
-                if ($row->subject_token !== $currentToken) {
-                    $currentToken = $row->subject_token;
-                    $expectedPrev = $genesis;
-                    $subjects++;
-                }
+            if ($row->subject_token !== $currentToken) {
+                $currentToken = $row->subject_token;
+                $expectedPrev = $genesis;
+                $subjects++;
+            }
 
-                $stored = is_string($row->prev_record_hash ?? null) ? $row->prev_record_hash : '';
+            $stored = is_string($row->prev_record_hash ?? null) ? $row->prev_record_hash : '';
 
-                if ($stored !== $expectedPrev) {
-                    $reason = $expectedPrev === $genesis
-                        ? 'chain does not start at genesis (a prior row may have been removed)'
-                        : 'link does not match the previous row (edit, deletion, insertion, or reorder)';
-                    $rowId = is_int($row->id) || is_string($row->id) ? (string) $row->id : '?';
-                    $token = is_string($row->subject_token) ? $row->subject_token : '?';
-                    $breaks[] = "subject_token {$token}, row #{$rowId}: {$reason}";
-                }
+            if ($stored !== $expectedPrev) {
+                $reason = $expectedPrev === $genesis
+                    ? 'chain does not start at genesis (a prior row may have been removed)'
+                    : 'link does not match the previous row (edit, deletion, insertion, or reorder)';
+                $rowId = is_int($row->id) || is_string($row->id) ? (string) $row->id : '?';
+                $token = is_string($row->subject_token) ? $row->subject_token : '?';
+                $breaks[] = "subject_token {$token}, row #{$rowId}: {$reason}";
+            }
 
-                $expectedPrev = $chain->hashRow($row);
-            });
+            $expectedPrev = $chain->hashRow($row);
+        }
 
         // A forged row inserted with prev_record_hash = NULL is skipped by the walk above (it
         // filters on whereNotNull) — so on its own it would read as "intact" while the gate counts
@@ -158,6 +157,81 @@ final class VerifyLedgerCommand extends Command
         }
 
         return self::FAILURE;
+    }
+
+    /**
+     * Every chained row, once, in (subject_token, id) order — KEYSET-paged over a pinned ledger.
+     *
+     * Two things were wrong with `->lazy()`, and only one of them was about speed. Laravel's
+     * lazy() pages with `forPage()`, which is LIMIT/OFFSET: page N makes the engine sort and
+     * discard N*1000 rows before it yields its own, on a table this package expects to be large.
+     *
+     * The other is a correctness bug, and it is not exotic. The ledger is append-only and takes
+     * rows WHILE this runs; a row whose subject_token sorts before the current window shifts the
+     * offset by one, and the next page re-delivers a row the walk has already seen. Tokens are
+     * UUIDs, so a concurrent append lands before the window about half the time. On the second
+     * sighting the walk is still inside that token, so it compares the row's stored link against
+     * the hash of the row ITSELF and reports "link does not match the previous row (edit,
+     * deletion, insertion, or reorder)" — a tamper alarm on an untouched ledger, from the one
+     * command whose entire value is that an alarm means something.
+     *
+     * So: a strict `> (lastToken, lastId)` seek — the sort key IS the group key, which is what
+     * makes that resumable — plus a snapshot bound at the highest id present when the walk begins,
+     * so a concurrent append is out of scope rather than merely out of order. The engine branch is
+     * the one {@see AffectedSubjectResolver} already argues for:
+     * PostgreSQL and SQLite range-scan the sargable row-value tuple, every other engine keeps the
+     * portable OR/tie-break form.
+     *
+     * `select *` STAYS. The 18 columns {@see LedgerHashChain}
+     * folds into a row hash include `user_agent` and `ui_wording_snapshot`; narrowing the list
+     * would drop the verifier'."'".'s own inputs to save three columns.
+     *
+     * @return iterable<int, stdClass>
+     */
+    private function chainedRows(): iterable
+    {
+        $highest = DB::table('legal_consents')->whereNotNull('prev_record_hash')->max('id');
+
+        if (! is_numeric($highest)) {
+            return;
+        }
+
+        $ceiling = (int) $highest;
+        $rowValueSeek = in_array(DB::connection()->getDriverName(), ['pgsql', 'sqlite'], true);
+
+        $lastToken = null;
+        $lastId = null;
+
+        do {
+            $query = DB::table('legal_consents')
+                ->whereNotNull('prev_record_hash')
+                ->whereNotNull('subject_token')
+                ->where('id', '<=', $ceiling)
+                ->orderBy('subject_token')
+                ->orderBy('id')
+                ->limit(self::PAGE);
+
+            if ($lastToken !== null) {
+                if ($rowValueSeek) {
+                    $query->whereRowValues(['subject_token', 'id'], '>', [$lastToken, $lastId]);
+                } else {
+                    $query->where(function (QueryBuilder $seek) use ($lastToken, $lastId): void {
+                        $seek->where('subject_token', '>', $lastToken)
+                            ->orWhere(fn (QueryBuilder $tie): QueryBuilder => $tie->where('subject_token', $lastToken)->where('id', '>', $lastId));
+                    });
+                }
+            }
+
+            $page = $query->get();
+
+            foreach ($page as $row) {
+                yield $row;
+            }
+
+            $last = $page->last();
+            $lastToken = $last instanceof stdClass ? $last->subject_token : null;
+            $lastId = $last instanceof stdClass ? $last->id : null;
+        } while ($page->count() === self::PAGE);
     }
 
     /**
