@@ -31,7 +31,7 @@ namespace Pushery\LegalConsent\Enums;
  *                      new/expanded real consent (Art. 6(1)(a) DSGVO; never deemed —
  *                      EDPB 05/2020 Rz. 79).
  *
- * Which mode a change is is a case-by-case legal judgement CARRIED as data, never
+ * Which mode a change is is a case-by-case legal judgment CARRIED as data, never
  * inferred from a content diff (EuGH C-287/19 gives the standard, not a checklist).
  */
 enum NoticeMode: string

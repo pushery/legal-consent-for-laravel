@@ -40,7 +40,7 @@ final readonly class PublishedDocument
         /**
          * The acceptance sentence, or NULL for an `informational` page — one that is published
          * and binds nobody (Impressum, cookie policy, accessibility statement). Such a page has
-         * no sentence to carry, and this value is frozen proof, so the absence is modelled
+         * no sentence to carry, and this value is frozen proof, so the absence is modeled
          * rather than filled with a placeholder nobody said.
          */
         public ?string $uiWording,

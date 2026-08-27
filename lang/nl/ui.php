@@ -50,6 +50,7 @@ return [
     // The one state a settings screen must not blur: a new major version is waiting, so
     // this is the invitation to do voluntarily what the gate will otherwise compel.
     'action_required' => 'Actie vereist',
+    'retired' => 'Niet langer aangeboden',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}Vandaag van kracht|{1}Nog :count dag|[2,*]Nog :count dagen',
@@ -81,6 +82,11 @@ return [
     'admin_preview' => 'Voorbeeld',
     'granted_confirmation' => 'Toestemming gegeven. Je kunt die op elk moment intrekken.',
     'withdrawn_confirmation' => 'Toestemming ingetrokken. Het gaat direct in.',
+    // The refusal a subject can actually reach — a stale page, a hand-built post or a custom
+    // stub asking to withdraw something that was never a consent. It states the position
+    // without the document key or the internal type: those are the operator's business, and
+    // they go to the log.
+    'not_withdrawable' => 'Dit document kun je niet intrekken — je kunt alleen toestemming intrekken die je vrijwillig hebt gegeven.',
 
     // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
     'reconsent_recorded' => 'Bedankt — je toestemming is vastgelegd.',
@@ -95,6 +101,6 @@ return [
     'admin_status_no_source' => 'Schrijf eerst de brontekst — er is niets om uit te vertalen.',
     'admin_status_machine_translated' => 'Machinaal vertaald. Iemand moet de tekst controleren voordat die gepubliceerd kan worden.',
     'admin_status_reviewed' => 'Als gecontroleerd gemarkeerd. Deze tekst kan nu gepubliceerd worden.',
-    'admin_status_release_blocked' => '\':key\' is niet gepubliceerd: :reasons',
-    'admin_status_released' => '\':key\' gepubliceerd in :count taal/talen — betreft :affects perso(o)n(en).',
+    'admin_status_release_blocked' => '‘:key’ is niet gepubliceerd: :reasons',
+    'admin_status_released' => '‘:key’ gepubliceerd in :count taal/talen — betreft :affects perso(o)n(en).',
 ];

@@ -19,17 +19,11 @@ use Pushery\LegalConsent\Models\LegalNotice;
  * the token exists: it is what keeps the proof meaningful once the subject reference is gone
  * (Art. 17(3)(b)/(e) — the proof survives the person).
  *
- * ⚠️ THIS USED TO SAY "after an Art. 17 erasure NULLS subject_type/subject_id", AND NO SUPPORTED
- * OPERATION CAN PRODUCE THAT STATE. Clearing those columns is an UPDATE, and both ledgers refuse
- * every UPDATE — the model blocks it and PostgreSQL and MySQL each carry a BEFORE UPDATE trigger.
- * The retention sweep's eligibility rule reads the same columns for null and is therefore reached
- * only by a row that never had a subject. Reconciling a lawful erasure with an append-only,
- * hash-chained ledger is an open design question rather than an oversight: every proof field the
- * erasure would clear is also an input to the chain hash, so removing the person and keeping a
- * verifiable chain cannot both be done by clearing columns.
- *
- * What the token gives is unaffected and is why it stays: whatever shape the answer takes, the
- * pseudonym is what still ties the two ledgers together afterwards.
+ * An Art. 17 erasure cannot simply clear the naming columns: that is an UPDATE, and both ledgers
+ * refuse every UPDATE — the model blocks it, and PostgreSQL and MySQL each carry a BEFORE UPDATE
+ * trigger. `Consent::forget()` therefore deletes each row and writes it again without the columns
+ * that name the person, inside one transaction, re-linking the chain as it goes. The token is what
+ * survives that: it is the only thing left tying a delivery proof to the consent it proves.
  *
  * Reuses the subject's existing token and mints one only when they have none yet. Callers under
  * multi-tenancy must run this inside the right tenant (the lookup is tenant-scoped like every
@@ -43,7 +37,7 @@ final class SubjectToken
         // is NOTICED before it is accepted, and a subject carried over by the v1 backfill has
         // consent rows with a null token — so the notice ledger mints first, and a consents-only
         // lookup would mint a SECOND token for the acceptance that follows. Two tokens for one
-        // subject silently defeats the whole point: after an erasure nulls subject_id, the
+        // subject silently defeats the whole point: once an erasure has removed subject_id, the
         // delivery proof could no longer be tied to the consent it proves.
         $existing = $this->tokenIn(LegalConsent::query(), $subject)
             ?? $this->tokenIn(LegalNotice::query(), $subject);
@@ -57,6 +51,13 @@ final class SubjectToken
      * as {@see forSubject}: an existing consent token wins, then a notice token, else a freshly
      * minted UUID. Keyed by "{morphClass}\0{key}" (see {@see mapKey}).
      *
+     * One query is not one ROW. A subject's ledger is append-only and holds one row per consent
+     * action they have ever taken, all carrying the same token — so a lookup that does not collapse
+     * them returns chunk-size x ledger-depth rows to arrive at chunk-size tokens, and the `??=` fold
+     * below then discards every duplicate. `distinct()` collapses them in the engine instead, which
+     * it can do exactly because the selection is already narrowed to the (subject_id, subject_token)
+     * pair. The sweep this feeds runs in 500-subject chunks and argues from a memory budget.
+     *
      * @param  Collection<int, Model>  $subjects
      * @return array<string, string>
      */
@@ -69,9 +70,10 @@ final class SubjectToken
         foreach ([LegalConsent::class, LegalNotice::class] as $model) {
             foreach ($subjects->groupBy(static fn (Model $subject): string => $subject->getMorphClass()) as $type => $group) {
                 $type = (string) $type;
-                $ids = $group->map(static fn (Model $subject): mixed => $subject->getKey())->all();
+                $ids = $group->map(static fn (Model $subject): ?string => SubjectKey::for($subject))->all();
 
                 $rows = $model::query()
+                    ->distinct()
                     ->where('subject_type', $type)
                     ->whereIn('subject_id', $ids)
                     ->whereNotNull('subject_token')
@@ -121,7 +123,7 @@ final class SubjectToken
     {
         $token = $query
             ->where('subject_type', $subject->getMorphClass())
-            ->where('subject_id', $subject->getKey())
+            ->where('subject_id', SubjectKey::for($subject))
             ->whereNotNull('subject_token')
             ->value('subject_token');
 

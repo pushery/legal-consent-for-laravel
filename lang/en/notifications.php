@@ -49,7 +49,7 @@ return [
     // courtesy copy. Contract only (silence never binds a privacy notice or a real consent).
     'deemed' => [
         'subject' => 'A change to our contract',
-        'intro' => 'We are updating our contract (":title").',
+        'intro' => 'We are updating our contract (“:title”).',
         'warning' => 'If you do not object by :deadline, this will be treated as your agreement to the changes.',
         'cta' => 'Review the changes and object if you wish',
         'termination' => 'You can terminate the contract free of charge until :effective.',

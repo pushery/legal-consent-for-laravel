@@ -32,7 +32,7 @@ final readonly class Document
          * The acceptance sentence, or NULL for a document that asks the reader for nothing —
          * an `informational` page (Impressum, cookie policy, accessibility statement). There
          * is no honest sentence for one, and this column is frozen proof, so the absence is
-         * modelled rather than filled.
+         * modeled rather than filled.
          */
         public ?string $uiWording,
         public ?CarbonImmutable $announceAt = null,

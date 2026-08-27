@@ -35,6 +35,10 @@ use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
  * @property bool $mandatory_content_ok
  * @property CarbonImmutable $sent_at
  * @property CarbonImmutable|null $delivered_at
+ * @property CarbonImmutable|null $subject_erased_at when an Art. 17 erasure rewrote this row without
+ *                                                   its personal columns. This ledger carries no hash
+ *                                                   chain, so the stamp is purely the operator's trace
+ *                                                   that a lawful rewrite happened
  * @property CarbonImmutable|null $created_at
  */
 final class LegalNotice extends Model
@@ -95,6 +99,7 @@ final class LegalNotice extends Model
             'mandatory_content_ok' => 'boolean',
             'sent_at' => 'immutable_datetime',
             'delivered_at' => 'immutable_datetime',
+            'subject_erased_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
         ];
     }

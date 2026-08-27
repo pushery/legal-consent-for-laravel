@@ -12,6 +12,7 @@ use Illuminate\Contracts\Cache\Store;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +20,7 @@ use Override;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
+use Pushery\LegalConsent\Exceptions\LegalDocumentInEvidenceException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
@@ -146,6 +148,52 @@ final class LegalDocument extends Model
 
         self::saved($flush);
         self::deleted($flush);
+
+        // The text a subject was shown exists exactly ONCE, here, in `content`. The ledger row
+        // beside it holds `content_hash` and the acceptance sentence — a fingerprint verifies a
+        // text somebody produces, it cannot produce one. So deleting a version that consents point
+        // at destroys the Art. 7(1) evidence for every one of them, silently: the rows survive,
+        // history() still answers, and only a supervisory authority asking "what exactly did they
+        // agree to?" finds that nothing can answer it any more.
+        //
+        // Refused, rather than warned about, because it cannot be undone and because the ledger's
+        // subordinate tables (legal_change_sets / legal_change_items) have carried BEFORE DELETE
+        // triggers since they existed — the load-bearing table was the unprotected one. Retirement
+        // is `is_active = false`, which is what the column is for and what every retirement path in
+        // the package already uses.
+        self::deleting(function (self $document): void {
+            $consents = $document->consentsInEvidence();
+
+            if ($consents > 0) {
+                throw LegalDocumentInEvidenceException::for(
+                    (string) $document->key,
+                    (string) $document->version,
+                    (string) $document->locale,
+                    $consents,
+                );
+            }
+        });
+    }
+
+    /**
+     * How many ledger rows prove themselves against THIS version.
+     *
+     * Both links are checked, and the second is not redundant. `document_id` is the direct one, but
+     * it is nullable and migration 000008 removed its foreign key on the grounds that every ledger
+     * row is self-proving through its denormalized snapshots — so a row written without it, or one
+     * re-inserted by a lawful rewrite, is still an acceptance of this exact text. Counted through
+     * the query builder rather than the relation, because the model's tenant scope would hide the
+     * rows of every other tenant and answer zero for a version they also accepted.
+     */
+    private function consentsInEvidence(): int
+    {
+        return DB::table('legal_consents')
+            ->where('document_id', $this->getKey())
+            ->orWhere(fn (QueryBuilder $denormalized): QueryBuilder => $denormalized
+                ->where('document_key', $this->key)
+                ->where('document_version', $this->version)
+                ->where('locale', $this->locale))
+            ->count();
     }
 
     /**
@@ -224,7 +272,7 @@ final class LegalDocument extends Model
      */
     public function activateSerialized(): void
     {
-        $store = $this->lockStore();
+        $store = self::activationLockStore();
 
         // Two different failure shapes, and only the first is obvious:
         //  - a store with no LockProvider at all (session, storage, apc, a custom one) would make
@@ -284,8 +332,17 @@ final class LegalDocument extends Model
     }
 
     /**
-     * The cache store the lock lives on — the package's own (`legal-consent.cache.store`), not
-     * whatever happens to be the app default.
+     * The cache store the activation lock lives on — the package's own
+     * (`legal-consent.cache.store`), not whatever happens to be the app default.
+     *
+     * PUBLIC AND STATIC because it has two callers, and having had two spellings is what the
+     * method exists to prevent. {@see \Pushery\LegalConsent\Support\LegalDocumentReleaser} took the
+     * same lock NAME through the bare `Cache` facade, which resolves the app default. Both sides
+     * agreed in every test because the package store is unset there and both fell back to the same
+     * default; the moment an operator sets `LEGAL_CONSENT_CACHE_STORE` — which this very docblock
+     * recommends — a release and a `legal-consent:publish` of the same document held two different
+     * locks and stopped excluding each other, which is precisely how a serialized activation still
+     * ends with two active rows. A comparison of lock names cannot see that class of defect.
      *
      * Be honest about the limit: this guarantee is only as real as the store's lock. `array` and
      * `null` both implement LockProvider — so an interface check alone would call them protected —
@@ -293,7 +350,7 @@ final class LegalDocument extends Model
      * anything. On those the one-active-version invariant rests on PostgreSQL's partial unique index
      * alone (MySQL and SQLite have none). Use redis, memcached or database in production.
      */
-    private function lockStore(): Store
+    public static function activationLockStore(): Store
     {
         $name = config('legal-consent.cache.store');
 

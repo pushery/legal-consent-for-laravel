@@ -14,6 +14,14 @@
     $pending ??= [];
     $informational ??= [];
     $deemed ??= [];
+
+    // No target, no call to action — the same decision the withdrawal control in
+    // consent-settings already carries ("a form with no action is not a control, it is the
+    // appearance of one"). A link falling back to `#` is that one element over: it stands in a
+    // screen reader's link list with the full promise of its text, and activating it moves focus
+    // to the top of the document and does nothing else, leaving the banner above the focus
+    // position. The countdown still states what changes and by when; only the dead control goes.
+    $consentUrl = ($consentUrl ?? '') !== '' ? $consentUrl : null;
 @endphp
 
 @if (! empty($pending) || ! empty($informational) || ! empty($deemed))
@@ -24,7 +32,9 @@
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>
                         <span>{{ trans_choice('legal-consent::ui.days_left', $item['days_left'], ['count' => $item['days_left']]) }}</span>
-                        <a href="{{ $consentUrl ?? '#' }}">{{ __('legal-consent::ui.review') }}</a>
+                        @if ($consentUrl !== null)
+                            <a href="{{ $consentUrl }}">{{ __('legal-consent::ui.review') }}</a>
+                        @endif
                     </li>
                 @endforeach
             </ul>
@@ -36,7 +46,9 @@
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>
                         <span>{{ __('legal-consent::ui.updated_note') }}</span>
-                        <a href="{{ $consentUrl ?? '#' }}">{{ __('legal-consent::ui.review') }}</a>
+                        @if ($consentUrl !== null)
+                            <a href="{{ $consentUrl }}">{{ __('legal-consent::ui.review') }}</a>
+                        @endif
                     </li>
                 @endforeach
             </ul>
@@ -48,7 +60,9 @@
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>
                         <span>{{ trans_choice('legal-consent::ui.days_left', $item['days_left'], ['count' => $item['days_left']]) }}</span>
-                        <a href="{{ $consentUrl ?? '#' }}">{{ __('legal-consent::ui.object_review') }}</a>
+                        @if ($consentUrl !== null)
+                            <a href="{{ $consentUrl }}">{{ __('legal-consent::ui.object_review') }}</a>
+                        @endif
                     </li>
                 @endforeach
             </ul>

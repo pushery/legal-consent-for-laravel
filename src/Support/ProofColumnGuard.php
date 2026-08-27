@@ -10,8 +10,27 @@ use Pushery\LegalConsent\Models\LegalDocument;
 use RuntimeException;
 
 /**
- * Installs and removes the BEFORE UPDATE trigger that makes a published `legal_documents` row
- * physically un-editable.
+ * Installs and removes the two triggers that make a published `legal_documents` row physically
+ * un-editable: a BEFORE UPDATE guard over its proof columns, and a BEFORE DELETE guard over any
+ * row a ledger entry still points at.
+ *
+ * The DELETE half exists because the UPDATE half alone protects the wrong thing. `legal_consents`
+ * carries a `content_hash` and the one acceptance sentence, never the text itself — the full text
+ * exists exactly once, in `legal_documents.content`. A hash can verify a text somebody produces;
+ * it cannot produce one. So deleting a superseded version leaves every consent recorded against it
+ * holding a fingerprint of a document nobody has any more, which is precisely the Art. 7(1)
+ * evidence the ledger is built to carry. The subordinate `legal_change_sets` tables have had a
+ * BEFORE DELETE guard since they were introduced; the load-bearing table had none.
+ *
+ * The guard is CONDITIONAL, and the condition is the point: a version no subject ever consented to
+ * is still deletable. Refusing every delete would make the guard something operators route around
+ * rather than something they keep — retirement runs through `is_active = false`, which is what that
+ * column is for, and a version nobody is bound by is ordinary data.
+ *
+ * The DELETE half names a second table, and on SQLite that has a cost every future migration has
+ * to pay: a migration that rebuilds `legal_consents` or `legal_documents` must run inside
+ * {@see self::whileDisarmed()}, or it dies mid-rebuild with the original table already dropped.
+ * The full mechanism and the measurement are documented on that method.
  *
  * This lives in `src/` rather than inside the migration that first created it because it has
  * to be RE-INSTALLABLE, and that is not a refactoring preference — it is a portability fact
@@ -38,8 +57,19 @@ final class ProofColumnGuard
 
     public const string FUNCTION = 'legal_documents_guard_proof';
 
+    public const string DELETE_TRIGGER = 'legal_documents_no_referenced_delete';
+
+    public const string DELETE_FUNCTION = 'legal_documents_guard_delete';
+
     /**
-     * (Re-)install the trigger for the connection's engine.
+     * Kept under MySQL's 128-character limit for `SIGNAL … SET MESSAGE_TEXT`, which truncates
+     * silently rather than erroring — a guard whose sentence is cut in half still refuses, but
+     * stops telling the operator what to do instead.
+     */
+    private const string DELETE_MESSAGE = 'a legal_documents row a consent points at IS the proof text: retire it with is_active = false, never DELETE (Art. 7(1))';
+
+    /**
+     * (Re-)install the triggers for the connection's engine.
      *
      * Idempotent by construction: it drops any existing trigger first, so calling it after a
      * table rebuild — or after adding a proof column that the enumerating engines would
@@ -99,12 +129,48 @@ final class ProofColumnGuard
         return $driver;
     }
 
+    /**
+     * Take the guards off, run a schema change, put them back.
+     *
+     * This is not convenience, it is the safe form of a hazard SQLite makes real. The DELETE guard
+     * names a SECOND table, and SQLite has no way to alter a column in place: Laravel changes one
+     * by creating a replacement table, copying, dropping the original and RENAMING the replacement
+     * into its place. That final rename re-parses every trigger in the schema — and a trigger
+     * whose referenced table is missing at that instant is a hard error. Measured on 2026-08-27
+     * against SQLite 3.45.2: rebuilding `legal_consents` with this guard installed fails with
+     * "error in trigger legal_documents_no_referenced_delete: no such table: main.legal_consents",
+     * AFTER the original has already been dropped. The ledger table is gone and the migration is
+     * halfway through — the worst outcome in the package, produced by the guard meant to protect
+     * it.
+     *
+     * So ANY migration that rebuilds `legal_consents` or `legal_documents` runs its schema work
+     * inside this call. The two that already do (000014, 000018) are the working examples.
+     *
+     * The re-install sits in `finally` deliberately: a schema change that throws must not also
+     * leave the proof table unguarded, and an unguarded `legal_documents` is a state with no
+     * symptom — nothing fails, rows simply stop being frozen.
+     */
+    public static function whileDisarmed(callable $work): void
+    {
+        self::drop();
+
+        try {
+            $work();
+        } finally {
+            self::install();
+        }
+    }
+
     public static function drop(): void
     {
         $driver = DB::connection()->getDriverName();
+        $documents = self::qualify('legal_documents');
+        $update = self::qualify(self::TRIGGER);
+        $delete = self::qualify(self::DELETE_TRIGGER);
 
         if ($driver === 'pgsql') {
-            DB::unprepared('DROP TRIGGER IF EXISTS '.self::TRIGGER.' ON legal_documents;');
+            self::execute("DROP TRIGGER IF EXISTS {$update} ON {$documents};");
+            self::execute("DROP TRIGGER IF EXISTS {$delete} ON {$documents};");
 
             return;
         }
@@ -114,12 +180,13 @@ final class ProofColumnGuard
         // it, and an installation carrying them must still be able to take them off. Naming it here
         // costs an IF EXISTS that matches nothing everywhere else.
         if (in_array($driver, ['mysql', 'mariadb', 'sqlite'], true)) {
-            DB::unprepared('DROP TRIGGER IF EXISTS '.self::TRIGGER.';');
+            self::execute("DROP TRIGGER IF EXISTS {$update};");
+            self::execute("DROP TRIGGER IF EXISTS {$delete};");
         }
     }
 
     /**
-     * Remove the trigger AND, on PostgreSQL, the function behind it.
+     * Remove the triggers AND, on PostgreSQL, the functions behind them.
      *
      * Separate from drop() on purpose: re-installing must not drop the function while another
      * statement could still reference it, and a rollback must not leave the function orphaned.
@@ -129,8 +196,57 @@ final class ProofColumnGuard
         self::drop();
 
         if (DB::connection()->getDriverName() === 'pgsql') {
-            DB::unprepared('DROP FUNCTION IF EXISTS '.self::FUNCTION.'();');
+            self::execute('DROP FUNCTION IF EXISTS '.self::qualify(self::FUNCTION).'();');
+            self::execute('DROP FUNCTION IF EXISTS '.self::qualify(self::DELETE_FUNCTION).'();');
         }
+    }
+
+    /**
+     * A table, trigger or function name carrying the connection's table prefix.
+     *
+     * The prefix is a first-class Laravel setting that `Schema::create()` and `DB::table()` apply
+     * transparently — so hand-written DDL that names a table literally is the one place it goes
+     * missing, and it goes missing loudly: on a prefixed connection the CREATE TRIGGER below would
+     * name a table the schema does not have, and the migration chain would stop half-applied.
+     *
+     * Trigger and function names take the prefix too. They live in the schema namespace rather
+     * than under the table, so two prefixed installations sharing one database would otherwise
+     * collide on the second install rather than on the first tampering attempt.
+     *
+     * The prefix is configuration, not input, but so is a column name — and protectedColumns()
+     * already refuses to take that on trust. Same rule here: anything that is not a bare
+     * identifier fragment stops before it reaches a statement.
+     */
+    private static function qualify(string $name): string
+    {
+        $prefix = DB::connection()->getTablePrefix();
+
+        if (preg_match('/^\w*$/', $prefix) !== 1) {
+            throw new RuntimeException(
+                "refusing to build the legal_documents guards for an unexpected table prefix: {$prefix}"
+            );
+        }
+
+        return $prefix.$name;
+    }
+
+    /**
+     * The ONE place hand-built DDL from this class reaches the connection.
+     *
+     * Nothing here can be a literal string: the MySQL and SQLite arms enumerate the live column
+     * list because neither engine can diff a row minus a set of keys inside a trigger, and every
+     * arm carries a table prefix that is only known at runtime. Funnelling them through a single
+     * method keeps the static exemption for `unprepared()`'s literal-string requirement to one
+     * line, pointing at the place the validation lives, instead of a file-wide waiver that would
+     * also cover a statement assembled from something less careful.
+     *
+     * What may reach this method: names from {@see self::qualify()} and columns from
+     * {@see self::protectedColumns()}, both of which refuse anything that is not a bare SQL
+     * identifier, plus the class's own constants.
+     */
+    private static function execute(string $sql): void
+    {
+        DB::unprepared($sql);
     }
 
     /**
@@ -171,8 +287,16 @@ final class ProofColumnGuard
             LegalDocument::MUTABLE_AFTER_PUBLISH,
         ));
 
-        DB::unprepared(<<<SQL
-            CREATE OR REPLACE FUNCTION legal_documents_guard_proof() RETURNS trigger AS \$\$
+        $documents = self::qualify('legal_documents');
+        $consents = self::qualify('legal_consents');
+        $updateTrigger = self::qualify(self::TRIGGER);
+        $updateFunction = self::qualify(self::FUNCTION);
+        $deleteTrigger = self::qualify(self::DELETE_TRIGGER);
+        $deleteFunction = self::qualify(self::DELETE_FUNCTION);
+        $deleteMessage = self::DELETE_MESSAGE;
+
+        self::execute(<<<SQL
+            CREATE OR REPLACE FUNCTION {$updateFunction}() RETURNS trigger AS \$\$
             BEGIN
                 IF to_jsonb(NEW){$strip} IS DISTINCT FROM to_jsonb(OLD){$strip} THEN
                     RAISE EXCEPTION 'legal_documents rows are frozen proof — publish a new version instead (EDPB 05/2020 Rz. 108)';
@@ -181,28 +305,72 @@ final class ProofColumnGuard
             END;
             \$\$ LANGUAGE plpgsql;
 
-            CREATE TRIGGER legal_documents_no_proof_update
-                BEFORE UPDATE ON legal_documents
-                FOR EACH ROW EXECUTE FUNCTION legal_documents_guard_proof();
+            CREATE TRIGGER {$updateTrigger}
+                BEFORE UPDATE ON {$documents}
+                FOR EACH ROW EXECUTE FUNCTION {$updateFunction}();
+
+            CREATE OR REPLACE FUNCTION {$deleteFunction}() RETURNS trigger AS \$\$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM {$consents} WHERE document_id = OLD.id) THEN
+                    RAISE EXCEPTION '{$deleteMessage}';
+                END IF;
+                RETURN OLD;
+            END;
+            \$\$ LANGUAGE plpgsql;
+
+            CREATE TRIGGER {$deleteTrigger}
+                BEFORE DELETE ON {$documents}
+                FOR EACH ROW EXECUTE FUNCTION {$deleteFunction}();
             SQL);
     }
 
     private static function installMysql(): void
     {
-        // Enumerated null-safe equality over every protected column: if any differs, SIGNAL.
+        // Enumerated distinctness over every protected column, compared as BYTES.
+        //
+        // `<=>` alone was the defect: it is null-safe EQUALITY, and equality on a string column
+        // follows that column's collation. Every collation Laravel configures by default
+        // (utf8mb4_unicode_ci, utf8mb4_0900_ai_ci) is case- AND accent-insensitive and PAD SPACE,
+        // so a raw `UPDATE … SET ui_wording = UPPER(ui_wording)` read as "unchanged" and walked
+        // through a trigger whose whole claim is that the row is frozen. PostgreSQL compares
+        // `to_jsonb` images and SQLite compares BINARY, so MySQL was the one engine of the three
+        // where a case, accent or trailing-space edit of `title`, `ui_wording` or `version`
+        // survived. CAST(… AS BINARY) restores byte equality while keeping `<=>`'s NULL handling,
+        // and it is the non-deprecated spelling of the old `BINARY x` operator.
         $sameCondition = implode(' AND ', array_map(
-            static fn (string $column): string => "NEW.`{$column}` <=> OLD.`{$column}`",
+            static fn (string $column): string => "CAST(NEW.`{$column}` AS BINARY) <=> CAST(OLD.`{$column}` AS BINARY)",
             self::protectedColumns(),
         ));
 
-        DB::unprepared(<<<SQL
-            CREATE TRIGGER legal_documents_no_proof_update
-                BEFORE UPDATE ON legal_documents
+        $documents = self::qualify('legal_documents');
+        $consents = self::qualify('legal_consents');
+        $updateTrigger = self::qualify(self::TRIGGER);
+        $deleteTrigger = self::qualify(self::DELETE_TRIGGER);
+        $deleteMessage = self::DELETE_MESSAGE;
+
+        self::execute(<<<SQL
+            CREATE TRIGGER {$updateTrigger}
+                BEFORE UPDATE ON {$documents}
                 FOR EACH ROW
             BEGIN
                 IF NOT ({$sameCondition}) THEN
                     SIGNAL SQLSTATE '45000'
                         SET MESSAGE_TEXT = 'legal_documents rows are frozen proof — publish a new version instead (EDPB 05/2020 Rz. 108)';
+                END IF;
+            END;
+            SQL);
+
+        // A separate statement: MySQL takes one CREATE TRIGGER per call, and reading
+        // `legal_consents` here is allowed because that table is not the one the firing statement
+        // is modifying — the restriction is on the table under the trigger, not on every table.
+        self::execute(<<<SQL
+            CREATE TRIGGER {$deleteTrigger}
+                BEFORE DELETE ON {$documents}
+                FOR EACH ROW
+            BEGIN
+                IF EXISTS (SELECT 1 FROM {$consents} WHERE document_id = OLD.id) THEN
+                    SIGNAL SQLSTATE '45000'
+                        SET MESSAGE_TEXT = '{$deleteMessage}';
                 END IF;
             END;
             SQL);
@@ -216,13 +384,29 @@ final class ProofColumnGuard
             self::protectedColumns(),
         ));
 
-        DB::unprepared(<<<SQL
-            CREATE TRIGGER legal_documents_no_proof_update
-                BEFORE UPDATE ON legal_documents
+        $documents = self::qualify('legal_documents');
+        $consents = self::qualify('legal_consents');
+        $updateTrigger = self::qualify(self::TRIGGER);
+        $deleteTrigger = self::qualify(self::DELETE_TRIGGER);
+        $deleteMessage = self::DELETE_MESSAGE;
+
+        self::execute(<<<SQL
+            CREATE TRIGGER {$updateTrigger}
+                BEFORE UPDATE ON {$documents}
                 FOR EACH ROW
                 WHEN ({$changedCondition})
             BEGIN
                 SELECT RAISE(ABORT, 'legal_documents rows are frozen proof — publish a new version instead (EDPB 05/2020 Rz. 108)');
+            END;
+            SQL);
+
+        self::execute(<<<SQL
+            CREATE TRIGGER {$deleteTrigger}
+                BEFORE DELETE ON {$documents}
+                FOR EACH ROW
+                WHEN (EXISTS (SELECT 1 FROM {$consents} WHERE {$consents}.document_id = OLD.id))
+            BEGIN
+                SELECT RAISE(ABORT, '{$deleteMessage}');
             END;
             SQL);
     }

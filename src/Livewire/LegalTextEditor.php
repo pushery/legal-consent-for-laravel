@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Livewire;
 
 use Illuminate\Contracts\View\View;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Pushery\LegalConsent\Contracts\LegalTextTranslator;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
@@ -29,10 +30,24 @@ final class LegalTextEditor extends Component
     use AnnouncesStatus;
     use AuthorizesLegalAdmin;
 
+    /**
+     * The draft identity this editor was opened on — one document key, one locale.
+     *
+     * Both are `#[Locked]`. They are set once at mount and never derived again, and together they
+     * address the row that save(), translate() and markReviewed() write to. Left writable, the
+     * browser picks that address at click time: markReviewed() is the human sign-off on THESE
+     * bytes and the only route to a publishable draft, so a sign-off that can be redirected to a
+     * draft the screen never rendered is not a sign-off. No view binds either of them — only
+     * $body is bound.
+     */
+    #[Locked]
     public string $key = '';
 
+    /** Locked for the reason above: it is half of the row identity, not an input. */
+    #[Locked]
     public string $locale = '';
 
+    /** The edited bytes. Client-writable by design — {@see LegalDraftWriter} sanitizes on the way in. */
     public string $body = '';
 
     /**

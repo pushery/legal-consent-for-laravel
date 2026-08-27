@@ -50,6 +50,7 @@ return [
     // The one state a settings screen must not blur: a new major version is waiting, so
     // this is the invitation to do voluntarily what the gate will otherwise compel.
     'action_required' => 'Action requise',
+    'retired' => 'N\'est plus proposé',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}En vigueur aujourd\'hui|{1}Encore :count jour|[2,*]Encore :count jours',
@@ -59,7 +60,7 @@ return [
     // The withdraw confirmation. Art. 7(3) sentence 3: withdrawal must be as easy as
     // giving consent — so this asks once, states the consequence, and never nags.
     'withdraw_confirm_title' => 'Retirer le consentement ?',
-    'withdraw_confirm_body' => "Ton consentement à « :title » sera retiré. Le retrait prend effet immédiatement et n'affecte pas la licéité du traitement antérieur.",
+    'withdraw_confirm_body' => "Ton consentement à « :title » sera retiré. Le retrait prend effet immédiatement et n'affecte pas la licéité du traitement antérieur.",
     'cancel' => 'Annuler',
 
     // Admin screens (LegalTextManager / LegalTextEditor).
@@ -81,6 +82,11 @@ return [
     'admin_preview' => 'Aperçu',
     'granted_confirmation' => 'Consentement donné. Tu peux le retirer à tout moment.',
     'withdrawn_confirmation' => 'Consentement retiré. Il prend effet immédiatement.',
+    // The refusal a subject can actually reach — a stale page, a hand-built post or a custom
+    // stub asking to withdraw something that was never a consent. It states the position
+    // without the document key or the internal type: those are the operator's business, and
+    // they go to the log.
+    'not_withdrawable' => 'Ce document ne peut pas être retiré — seul un consentement que tu as donné librement peut être retiré.',
 
     // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
     'reconsent_recorded' => 'Merci — ton consentement a été enregistré.',
@@ -95,6 +101,6 @@ return [
     'admin_status_no_source' => 'Écris d\'abord le texte source — il n\'y a rien à traduire.',
     'admin_status_machine_translated' => 'Traduit automatiquement. Une personne doit le relire avant toute publication.',
     'admin_status_reviewed' => 'Marqué comme relu. Ce texte est désormais publiable.',
-    'admin_status_release_blocked' => '« :key » n\'a pas été publié : :reasons',
-    'admin_status_released' => '« :key » publié dans :count langue(s) — concerne :affects personne(s).',
+    'admin_status_release_blocked' => '« :key » n\'a pas été publié : :reasons',
+    'admin_status_released' => '« :key » publié dans :count langue(s) — concerne :affects personne(s).',
 ];

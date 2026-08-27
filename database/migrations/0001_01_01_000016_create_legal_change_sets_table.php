@@ -43,7 +43,16 @@ return new class extends Migration
 
             // Set at freeze time. `document_content_hash` binds the description to exactly the text
             // it describes, so a later reader can tell whether they belong together.
-            $table->foreignId('document_id')->nullable()->constrained('legal_documents')->nullOnDelete();
+            //
+            // Deliberately NOT a foreign key, for the reason 000006 and 000008 give for the two
+            // ledger tables: an `ON DELETE SET NULL` is an UPDATE of this row, and this table
+            // carries a BEFORE UPDATE trigger keyed on `state = 'published'`. PostgreSQL runs a
+            // referential action through SPI, so the trigger fires and the parent DELETE aborts;
+            // MySQL applies it WITHOUT firing the row trigger and silently mutates a row this
+            // package calls frozen; SQLite has no trigger to fire and mutates it too. The plain
+            // column keeps the relation readable and simply dangles once the document is gone —
+            // which is what the SET NULL was reaching for, without the illegal write.
+            $table->unsignedBigInteger('document_id')->nullable();
             $table->char('document_content_hash', 64)->nullable();
 
             // § 327r Abs. 2 Satz 2 Nr. 1 BGB wants the characteristics of the change; WP260 rev.01

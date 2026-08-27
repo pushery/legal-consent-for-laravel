@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use InvalidArgumentException;
+
 /**
  * Re-link a subject's chain after a LAWFUL removal, so the verifier stops reporting one.
  *
@@ -53,12 +55,24 @@ final readonly class LedgerChainRepair
     /**
      * Correct `prev_record_hash` across one token's rows.
      *
+     * ONE TOKEN, AND IT IS CHECKED RATHER THAN ASSUMED. The link pointer is carried across the
+     * whole array, so a second token's rows in the same call get chained onto the first token's
+     * tail — while the verifier restarts at genesis for every token and then reports that chain as
+     * starting nowhere, permanently, on a ledger nobody attacked. A subject holding two tokens is
+     * reachable (they are minted per write with no uniqueness, which is why the verifier has a
+     * check for it), so this was a contract that lived only in a docblock and was broken through
+     * exactly that gap. Rows with no token carry no assertion and are left out of the comparison.
+     *
      * @param  list<array<string, mixed>>  $rows  one subject_token's rows, in id order, as they
      *                                            will be stored
      * @return list<array<string, mixed>> the same rows with their links corrected
+     *
+     * @throws InvalidArgumentException when the rows span more than one subject_token
      */
     public function relink(array $rows): array
     {
+        $this->assertOneToken($rows);
+
         $previousChained = null;
 
         foreach ($rows as $index => $row) {
@@ -81,6 +95,35 @@ final readonly class LedgerChainRepair
         }
 
         return $rows;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     *
+     * @throws InvalidArgumentException
+     */
+    private function assertOneToken(array $rows): void
+    {
+        $tokens = [];
+
+        foreach ($rows as $row) {
+            $token = $row['subject_token'] ?? null;
+
+            if (is_string($token) && $token !== '') {
+                $tokens[$token] = true;
+            }
+        }
+
+        if (count($tokens) > 1) {
+            throw new InvalidArgumentException(sprintf(
+                'relink() was given rows from %d subject tokens (%s). A chain is per token and the '
+                .'verifier restarts at genesis for each one, so linking them together would make the '
+                .'second one read as a chain with a removed first row — for ever. Group by '
+                .'subject_token and call this once per group.',
+                count($tokens),
+                implode(', ', array_keys($tokens)),
+            ));
+        }
     }
 
     /**

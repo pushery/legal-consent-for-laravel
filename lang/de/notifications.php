@@ -49,7 +49,7 @@ return [
     // courtesy copy. Contract only (silence never binds a privacy notice or a real consent).
     'deemed' => [
         'subject' => 'Änderung unseres Vertrags',
-        'intro' => 'Wir passen unseren Vertrag („:title") an.',
+        'intro' => 'Wir passen unseren Vertrag („:title“) an.',
         'warning' => 'Wenn du nicht bis zum :deadline widersprichst, gilt dies als deine Zustimmung zu den Änderungen.',
         'cta' => 'Änderungen ansehen und ggf. widersprechen',
         'termination' => 'Du kannst den Vertrag bis zum :effective kostenfrei kündigen.',

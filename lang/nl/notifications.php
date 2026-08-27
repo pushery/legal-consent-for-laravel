@@ -46,7 +46,7 @@ return [
     ],
     'deemed' => [
         'subject' => 'Een wijziging van ons contract',
-        'intro' => 'We werken ons contract bij (":title").',
+        'intro' => 'We werken ons contract bij (‘:title’).',
         'warning' => 'Als je vóór :deadline geen bezwaar maakt, geldt dit als jouw akkoord met de wijzigingen.',
         'cta' => 'Wijzigingen bekijken en zo nodig bezwaar maken',
         'termination' => 'Je kunt het contract tot :effective kosteloos opzeggen.',

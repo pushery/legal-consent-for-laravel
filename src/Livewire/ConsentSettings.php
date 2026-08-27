@@ -59,6 +59,16 @@ final class ConsentSettings extends Component
     use AnnouncesStatus;
     use RefusesUnavailableTransitions;
 
+    /**
+     * The language version every transition on this screen resolves against.
+     *
+     * #[Locked] because it decides WHICH version is resolved and frozen: the manager reads it to
+     * find the active document, and the ledger row keeps that document's locale, version,
+     * content_hash and acceptance sentence as proof. Left writable, a subject could switch it at
+     * click time and have an append-only row assert agreement to — or withdrawal of — a text they
+     * were never shown. No view binds it; it is set once at mount by the embedding screen.
+     */
+    #[Locked]
     public string $locale = '';
 
     /**

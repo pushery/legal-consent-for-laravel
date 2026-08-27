@@ -94,13 +94,27 @@
                                              backdrop keeps the page unreachable (WCAG 4.1.3). The parent
                                              alert-dialog provides close(); alert-dialog.cancel does the
                                              same for the cancel side. --}}
-                                        <x-wirekit::button x-on:click="close()" wire:click="releaseAll(@js($key))">
+                                        {{-- `{{ Js::from() }}`, NOT `@js()`. A Blade directive inside
+                                             a COMPONENT TAG attribute is never compiled: the tag
+                                             compiler lifts the attribute out as a literal before the
+                                             directive compiler sees it, so the text `@js($key)` is
+                                             what reaches the browser — for every key, with no error
+                                             anywhere, and the release simply never fires. An echo is
+                                             compiled in that position and emits exactly what `@js()`
+                                             emits on a plain element. The plain stub, whose button is
+                                             a real `<button>`, uses the directive. --}}
+                                        <x-wirekit::button x-on:click="close()" wire:click="releaseAll({{ \Illuminate\Support\Js::from($key) }})">
                                             {{ __('legal-consent::ui.admin_release_all') }}
                                         </x-wirekit::button>
                                     </x-wirekit::alert-dialog.actions>
                                 </x-wirekit::alert-dialog>
                             @else
-                                <x-wirekit::button size="sm" disabled aria-describedby="blocking-{{ $key }}" :aria-label="__('legal-consent::ui.admin_release_all').' — '.$key">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
+                                {{-- The blocking reasons stay OUTSIDE aria-describedby, the same call
+                                     the plain stub writes out: the button renders a native `disabled`
+                                     (not `aria-disabled`) plus `disabled:pointer-events-none`, so it
+                                     is not focusable and a description hung on it is never announced.
+                                     They are the visible text below instead, reachable in read mode. --}}
+                                <x-wirekit::button size="sm" disabled :aria-label="__('legal-consent::ui.admin_release_all').' — '.$key">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
                                 <x-wirekit::stack gap="xs" id="blocking-{{ $key }}">
                                     @foreach ($rows[$key]['_release']['blocking'] as $locale => $reason)
                                         <x-wirekit::text size="sm">{{ $locale }}: {{ $reason }}</x-wirekit::text>

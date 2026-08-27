@@ -31,7 +31,10 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * NOTE for any FUTURE migration that backfills or rewrites a protected column: it must
  * `ProofColumnGuard::drop()`, run the data change, and `ProofColumnGuard::install()` again — the
  * PG guard fails closed against a migration-time UPDATE exactly as it does against runtime
- * tampering (documented in UPGRADE.md). A migration that changes a COLUMN must call
+ * tampering (documented at
+ * https://github.com/pushery/legal-consent-for-laravel/blob/main/UPGRADE.md — the URL is absolute
+ * because that file is export-ignored from the Composer dist, so a reader in `vendor/` has no
+ * local copy to follow a relative name to). A migration that changes a COLUMN must call
  * `install()` afterwards for the SQLite reason above, whether or not it touched any data.
  */
 return new class extends Migration

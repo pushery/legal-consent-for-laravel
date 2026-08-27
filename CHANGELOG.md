@@ -4,6 +4,241 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-08-27
+
+### Added
+
+- **`Consent::forget()` is documented on the facade**, so static analysis stops failing on the call
+  the shipped Boost skill prescribes. A guard now holds the facade's `@method` list against the
+  contract by reflection, argument for argument, because that list drifts by omission and nothing
+  else notices.
+
+- **`hasAcceptedCurrentLegalMany(array $keys)`** on the `HasLegalConsents` trait — the
+  `hasAcceptedCurrentLegal()` question for several documents in one read instead of two queries per
+  key.
+
+- **`routes.api_throttle`**, defaulting to `'60,1'`. See the upgrade guide: a config published under
+  an earlier version does not receive the key, and the package applies the default anyway.
+
+- **Three exceptions that name what was refused**: `IncompatibleConsentActionException`,
+  `LegalDocumentInEvidenceException`, `NoticeTimelineInvertedException`.
+
+- **`legal-consent::ui.not_withdrawable`** in all seven bundled locales.
+
+- **`--isolated` on all three scheduled sweeps**, which now implement `Isolatable`. Until now
+  `withoutOverlapping` protected only the scheduler path, so a hand-started prune ran unguarded
+  beside a scheduled one.
+
+- **`retired` in the `statusFor()` map and in the settings screen.** Retiring a document does not
+  end the consents recorded against it, so the holding stays — at the version the subject accepted,
+  with its withdrawal control, flagged, and never as `outstanding`. `ConsentFake` returns the same
+  key, which is the only way a consuming test can stay honest about it.
+
+- **`LegalDocumentPublisher::previewWithMode()`** — the publish-time checks with nothing written,
+  so `legal-consent:publish --dry-run` runs the rules the real command runs instead of reporting
+  green for a publish it would refuse. Both paths call the same extracted guards; there is still
+  exactly one source for the legal rules.
+
+- **`SubjectKeyTooLong`**, thrown when a subject's key exceeds the 64 characters `subject_id`
+  holds. SQLite truncated it silently while PostgreSQL and MySQL raised a bare SQLSTATE.
+
+### Changed
+
+- **The change-notice proof is written when the notice is DELIVERED, not when it is queued.** See
+  the upgrade guide — the observable result of a working run is unchanged, and what changes is what
+  a broken one leaves behind.
+
+- **`Consent::record()` refuses an action the document's type cannot carry.** The ledger used to
+  accept an objection against a consent, a consent given by silence, a `granted` on a privacy
+  notice, and a double-opt-in confirmation with no request before it. The named transitions are
+  unaffected.
+
+- **A `legal_documents` row a consent points at can no longer be deleted**, by trigger and by model
+  hook. Retiring a version with `is_active = false` is the supported route and still works, and so
+  does deleting a version nobody ever accepted.
+
+- **Withdrawal survives retirement.** `withdraw()`, `object()` and `terminate()` fall back to the
+  version the subject actually accepted when no active version exists. Deactivating a document used
+  to remove it from every screen while leaving the consent in the ledger as held — the subject was
+  bound by a record they could no longer act on.
+
+- **Tamper-evidence covers `tenant_id`.** Appended only when it names a tenant, so a single-tenant
+  installation produces the same canonical bytes as before and keeps verifying with no action. A
+  multi-tenant installation with tamper-evidence on must re-chain; the upgrade guide says how.
+
+- **`legal-consent:publish` refuses an inverted notice timeline** and floors `notice_period_days` at
+  zero. A hard-gating change could take effect thirty-one days before its own announcement and
+  freeze that as `-31`.
+
+- **`vendor:publish --tag=legal-consent` no longer copies the two opt-in migrations.** The umbrella
+  tag ships what the package requires; the optional tables keep their own tags.
+
+- **Terminology is now held per locale rather than per string.** A withdrawal was called one thing
+  on the button and another in the confirmation, the imprint page had one name in the footer link
+  and another as its heading, and free-of-charge termination was named two ways in Spanish.
+
+- **The MySQL identity columns of `legal_documents` carry a binary collation.** The unique index over
+  them decides whether two rows are the same document, and MySQL's default collation is case- and
+  accent-insensitive where the other two engines are not.
+
+- **The change-set freeze guard refuses an engine it cannot protect** instead of installing nothing
+  and saying nothing — the same choice `ProofColumnGuard` already made, and for the reason written
+  there: a migration that stops is recoverable, a table that only looks frozen is not. For
+  PostgreSQL, MySQL and SQLite this is a no-op; a fourth engine already failed earlier in the chain.
+
+### Removed
+
+- **`notice_periods.dcd_termination_days`** from the published config. It is the § 327r Abs. 3
+  free-termination window — a figure fixed by statute that a notice states, not a period before it —
+  and nothing read it. A configuration key that offers to change an unchangeable number is worse
+  than no key.
+
+### Fixed
+
+- **A subject with an integer key stopped using the ledger's indexes on MySQL.** 0.18.0 widened
+  `subject_id` to `varchar(64)` so a UUID- or ULID-keyed subject fits alongside an auto-increment
+  id. The binding did not move with it: a model with an integer key hands `getKey()` back as a PHP
+  int, Laravel binds an int as `PDO::PARAM_INT`, and MySQL compares a `varchar` column against a
+  numeric operand by casting both sides to floating point — a comparison that cannot use an index
+  on that column. Every subject lookup on MySQL became a full scan of the ledger, and `2`, `'02'`
+  and `'2.0'` became one value to a comparison that this table treats as three different subjects.
+
+  Both fast engines hide it, which is why nothing went red: SQLite converts the operand through
+  column affinity, and the pgsql driver sends parameters untyped so PostgreSQL infers `varchar`
+  from the column. The narrowing now lives in one place, and the regression test asserts on the
+  BINDING rather than on a query plan, which is the only portable way to hold it.
+
+- **The consent gate read the subject's whole ledger on every request.** `outstandingFor()` runs on
+  every authenticated request of an application that enforces re-consent, and it folded the entire
+  append-only ledger to answer a question about a handful of enforceable documents — so the
+  per-request cost rose with how long someone had been a customer, for rows the fold then
+  discarded. It now restricts the read to the keys the answer can turn on.
+
+- **Three shipped WireKit controls sent an uncompiled Blade directive to the browser.** A directive
+  inside a component tag attribute is never compiled: the tag compiler lifts the attribute value
+  out as a literal before the directive compiler sees it. `wire:click="releaseAll(@js($key))"`
+  therefore reached the browser verbatim, for every key, with no console error and no log line.
+  One of the three is the Art. 7(3) withdrawal.
+
+- **The plain `consent-checkboxes` stub showed no validation error.** Twenty-one shipped error
+  strings were unreachable there, so a failed mandatory consent was silent — to everyone, screen
+  reader included. The message is now rendered, announced, and referenced from the field's existing
+  `aria-describedby` rather than beside it (two of that attribute on one element means the browser
+  keeps the first and discards the second).
+
+- **Both consent banners rendered a dead call to action** when the embedding page passed no consent
+  URL, which is the `href="#"` pattern 0.16.1 already removed from the withdraw button. There is
+  now no link rather than one that goes nowhere. The same applies to the placeholder edit link in
+  the legal-text grid.
+
+- **The withdraw controller flashed an English exception message into a user-facing alert**,
+  internal document key and enum value included, in every locale. It now flashes a translated
+  sentence and logs the internal reason for the operator, who is the reader who can act on it.
+
+- **The withdraw controller followed the `Referer` header unchecked** while its sibling in the
+  re-consent form defends against exactly that. It now returns only to its own origin, and falls
+  back to the configured home route otherwise.
+
+- **Three documents showed a Livewire component name the package does not register.** The Boost
+  skill, `UPGRADE.md` and the recording-consent guide all used
+  `<livewire:legal-consent.re-consent-form />`; the registered alias is
+  `legal-consent.reconsent-form`, so a consumer following any of the three got an exception on the
+  first render.
+- **An interrupted retention sweep left the hash chain broken and never healed it.** The repeat run
+  reported success while `legal-consent:verify-ledger` reported tampering for good. The repair is
+  state-based now rather than run-based.
+
+- **`legal-consent:close-objection-windows` stamped a window closed for subjects it could not deem**
+  for lack of proof, which killed the recovery path its own error message names.
+
+- **`legal-consent:verify-ledger` walked the chain with LIMIT/OFFSET**, so a concurrent append could
+  make it see one row twice and report a break that was not there. It is a keyset seek now.
+
+- **`legal_change_sets.document_id` carried the foreign key that migration 000008 removed from
+  `legal_consents`** — `ON DELETE SET NULL` against a table that is frozen by trigger. The three
+  engines answered it three different ways, one of them by silently mutating a row the package
+  promises is immutable.
+
+- **The freeze guard had no SQLite arm at all**, so a published change description was editable and
+  deletable there through any path that is not the model.
+
+- **The MySQL proof trigger compared with `<=>`, which is collation-dependent**, so a change of case
+  or accent alone on a frozen proof column went through.
+
+- **Every raw statement named its table unprefixed**, so `php artisan migrate` aborted on any
+  connection with a table prefix set.
+
+- **The Art. 17 erasure re-linked rows belonging to several subject tokens in one pass**, chaining
+  two strangers' ledgers together.
+
+- **The activation lock was taken on a different cache store by the releaser than by the model**,
+  under the same name — so the two never actually excluded each other.
+
+- **`LegalDraftWriter::persist()`'s recovery from a concurrent insert was unreachable on
+  PostgreSQL.** A failed statement there aborts the whole open transaction, so the read that
+  recovers could not run inside one. The insert is confined to a savepoint now.
+
+- **`ReConsentForm::submit()` did not clear the ticked boxes after a successful round**, so a tick
+  from an earlier round silently accepted a LATER version of the document.
+
+- **Three shipped WireKit controls sent an uncompiled Blade directive to the browser.** A directive
+  inside a component tag attribute is never compiled, so `wire:click="releaseAll(@js($key))"` was
+  delivered verbatim for every key, with no console error and no log line. One of the three is the
+  Art. 7(3) withdrawal.
+
+- **`ConsentFake` was more forgiving than the real manager under `Model::shouldBeStrict()`**, so a
+  green test in a consuming application hid the exact 500 production would produce. It now hydrates
+  the same attribute set, and the contract names that set.
+
+- **`ConsentPresenter` selected documents without their primary key**, so the `document_url` seam
+  threw a `UrlGenerationException` on two of the three surfaces that use it, and it dropped the
+  withdraw button after a major bump although the withdrawal still worked. The registration
+  checklist had the same omission.
+
+- **`hasCurrent()` cost two queries per document key with no memo**, which made the public trait
+  method an N+1 by design. It now reads the document from the enforceable-document cache and the
+  ledger through the gate's key filter — and a contract arm holds it against `outstandingFor()`
+  across four states, because the two must never disagree about one subject.
+
+- **The ledger walk's keyset seek had no index to seek on.** Measured on PostgreSQL 18.4 over 100
+  chained subjects: with only the single-column index the planner fell back to an incremental sort
+  and re-read each subject's chain from the start on every page — cost that scales with one
+  person's history, not with the page. The composite `(subject_token, id)` replaces it; on MySQL
+  the swap is a no-op, because InnoDB appends the primary key to every secondary index anyway.
+
+- **`legal-consent:prune`'s correlated subquery named its table unprefixed**, so the sweep broke on
+  any connection with a table prefix. It is expressed through the query builder now, which
+  prefixes the alias and the correlated columns itself.
+
+- **`legal-consent:dispatch-notices --dry-run` hydrated the whole affected population to count it.**
+  It counts in the database now — and stops reporting subjects as "already proofed" when the only
+  thing wrong with them is that their `subject_type` no longer resolves to a model.
+
+### Security
+
+- **The JSON API's shipped default middleware carried no throttle**, so four unauthenticated write
+  endpoints pointed at an append-only ledger with nothing in front of them.
+
+- **Four public Livewire properties were client input steering an unforgeable record.**
+  `ConsentSettings::$locale` let the client choose which language version of a document was written
+  into the ledger as the proof; `LegalTextEditor::$key` and `$locale` let an editor mounted on one
+  draft save, translate and human-approve a different one; `AnnouncesStatus::$status` let the client
+  put words into the region a screen reader announces. All are `#[Locked]`, and a reflection ratchet
+  now requires every public property to be classified.
+
+- **`ReConsentForm::isSameOrigin()` judged the URL before removing the tab, newline and carriage
+  return a browser strips out of a path.** `/<TAB>/evil.example` passed as same-origin and resolves
+  to another host once the browser is done with it. The withdraw controller followed the `Referer`
+  header with no check at all; it now returns only to its own origin.
+
+- **`LegalTextManager::releaseAll()` trusted its action argument**, so an unknown key reached the
+  source factory as an uncaught exception — a 500 on an admin screen where the rest of the package
+  answers 404.
+
+- **A partially specified `markdown` config block fell through to CommonMark's own defaults**,
+  `html_input=allow` and `allow_unsafe_links=true`, which changes what is rendered into the frozen
+  proof text. The package defaults now merge per key.
+
 ## [0.18.0] - 2026-08-26
 
 ### Changed
@@ -1941,3 +2176,26 @@ its recorded row from the same resolution, so the consent section stays dormant 
 - Multi-language completeness: fully localized UI stubs, a pluralized grace countdown, a
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
+
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.18.0...v0.19.0
+[0.18.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.17.0...v0.18.0
+[0.17.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.16.1...v0.17.0
+[0.16.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.16.0...v0.16.1
+[0.16.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/pushery/legal-consent-for-laravel/releases/tag/v0.1.0

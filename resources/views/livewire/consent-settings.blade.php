@@ -76,6 +76,12 @@
                         <button type="button" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $item['title']]) }}" wire:click="withdraw(@js($item['key']))">
                             {{ __('legal-consent::ui.withdraw') }}
                         </button>
+                    {{-- A document retired out from under a holding: `is_active = false` does not
+                         end the consents recorded against it, and the row keeps its withdrawal
+                         control. It takes the Give button's place because there is nothing left to
+                         give — the version it names is no longer published. --}}
+                    @elseif ($item['retired'] ?? false)
+                        <span class="legal-consent-retired">{{ __('legal-consent::ui.retired') }}</span>
                     {{-- The double opt-in's middle state, and it takes the place of the Give
                          button rather than sitting beside it. Offering to give again would write a
                          second request, which supersedes the first — and stops the confirmation

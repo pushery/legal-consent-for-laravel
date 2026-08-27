@@ -62,7 +62,11 @@ final class ConsentGate
             return $enforceable;
         }
 
-        $held = $this->heldMajorByKey($subject);
+        // Ask the ledger only about the keys this answer can possibly turn on. The ledger is
+        // append-only and grows for the life of the account, while the enforceable set is a
+        // handful of documents — without the filter the per-request cost rises with how long the
+        // subject has been a customer, for rows the fold then discards.
+        $held = $this->heldMajorByKey($subject, array_values($enforceable->map(fn (LegalDocument $document): string => $document->key)->all()));
 
         return $enforceable
             ->filter(fn (LegalDocument $document): bool => ($held[$document->key] ?? 0) < $document->major_version)
@@ -77,11 +81,13 @@ final class ConsentGate
      * preference, not a fresh contractual encounter), and the recorded locale is provenance in
      * the ledger. See {@see standingFor()} for how the fold works.
      *
+     * @param  list<string>|null  $keys  restrict the read to these document keys; null reads the
+     *                                   whole ledger, which is what a full status screen needs
      * @return array<string, int>
      */
-    public function heldMajorByKey(Model $subject): array
+    public function heldMajorByKey(Model $subject, ?array $keys = null): array
     {
-        return $this->standingFor($subject)['held'];
+        return $this->standingFor($subject, $keys)['held'];
     }
 
     /**
@@ -111,16 +117,19 @@ final class ConsentGate
      *    BGB) and not the agreement, and an OPT-IN REQUEST is the unconfirmed first half of a
      *    double opt-in. Neither grants anything and neither takes anything away.
      *
+     * @param  list<string>|null  $keys  restrict the read to these document keys; null reads the
+     *                                   subject's whole ledger, which is what a status screen needs
      * @return array{held: array<string, int>, pending: list<string>}
      */
-    public function standingFor(Model $subject): array
+    public function standingFor(Model $subject, ?array $keys = null): array
     {
         $tenant = app(TenantContext::class);
 
         $rows = DB::table('legal_consents')
             ->select('document_key', 'document_major_version', 'action')
             ->where('subject_type', $subject->getMorphClass())
-            ->where('subject_id', $subject->getKey())
+            ->where('subject_id', SubjectKey::for($subject))
+            ->when($keys !== null, fn (QueryBuilder $query): QueryBuilder => $query->whereIn('document_key', $keys ?? []))
             ->when($tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $tenant->current()))
             ->orderBy('document_key')
             ->orderBy('accepted_at')
@@ -170,7 +179,7 @@ final class ConsentGate
     {
         return LegalConsent::query()
             ->where('subject_type', $subject->getMorphClass())
-            ->where('subject_id', $subject->getKey())
+            ->where('subject_id', SubjectKey::for($subject))
             ->where('document_key', $documentKey)
             ->when($locale !== null, fn (Builder $query): Builder => $query->where('locale', $locale))
             ->orderByDesc('accepted_at')

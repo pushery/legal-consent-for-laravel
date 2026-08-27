@@ -89,24 +89,33 @@ return new class extends Migration
     {
         $driver = DB::connection()->getDriverName();
 
+        // Hand-written DDL, so the table prefix is applied by hand. The schema builder does it
+        // transparently everywhere else, which is exactly what makes a literal name here invisible
+        // until an application with a configured prefix runs `migrate` and dies on a missing table
+        // in the middle of the chain. Trigger and function names take the prefix too: both live in
+        // the schema namespace rather than under the table.
+        $table = $this->prefixed('legal_consents');
+        $trigger = $this->prefixed('legal_consents_no_update');
+        $function = $this->prefixed('legal_consents_block_update');
+
         if ($driver === 'pgsql') {
-            DB::unprepared(<<<'SQL'
-                CREATE OR REPLACE FUNCTION legal_consents_block_update() RETURNS trigger AS $$
+            $this->execute(<<<SQL
+                CREATE OR REPLACE FUNCTION {$function}() RETURNS trigger AS \$\$
                 BEGIN
                     RAISE EXCEPTION 'legal_consents is append-only (Art. 5(2) DSGVO Rechenschaftspflicht)';
                 END;
-                $$ LANGUAGE plpgsql;
+                \$\$ LANGUAGE plpgsql;
 
-                CREATE TRIGGER legal_consents_no_update
-                    BEFORE UPDATE ON legal_consents
-                    FOR EACH ROW EXECUTE FUNCTION legal_consents_block_update();
+                CREATE TRIGGER {$trigger}
+                    BEFORE UPDATE ON {$table}
+                    FOR EACH ROW EXECUTE FUNCTION {$function}();
                 SQL);
         }
 
         if ($driver === 'mysql') {
-            DB::unprepared(<<<'SQL_WRAP'
-            CREATE TRIGGER legal_consents_no_update
-                BEFORE UPDATE ON legal_consents
+            $this->execute(<<<SQL_WRAP
+            CREATE TRIGGER {$trigger}
+                BEFORE UPDATE ON {$table}
                 FOR EACH ROW
                 SIGNAL SQLSTATE '45000'
                 SET MESSAGE_TEXT = 'legal_consents is append-only (Art. 5(2) GDPR accountability)';
@@ -118,15 +127,50 @@ return new class extends Migration
     {
         $driver = DB::connection()->getDriverName();
 
+        $table = $this->prefixed('legal_consents');
+        $trigger = $this->prefixed('legal_consents_no_update');
+        $function = $this->prefixed('legal_consents_block_update');
+
         if ($driver === 'pgsql') {
-            DB::unprepared('DROP TRIGGER IF EXISTS legal_consents_no_update ON legal_consents;');
-            DB::unprepared('DROP FUNCTION IF EXISTS legal_consents_block_update();');
+            $this->execute("DROP TRIGGER IF EXISTS {$trigger} ON {$table};");
+            $this->execute("DROP FUNCTION IF EXISTS {$function}();");
         }
 
         // `mariadb` on the DROP side only — the engine is refused on install (ProofColumnGuard),
         // but 0.13.0 installed this trigger there and such a database must still be able to shed it.
         if ($driver === 'mysql' || $driver === 'mariadb') {
-            DB::unprepared('DROP TRIGGER IF EXISTS legal_consents_no_update;');
+            $this->execute("DROP TRIGGER IF EXISTS {$trigger};");
         }
+    }
+
+    /**
+     * A table, trigger or function name carrying the connection's table prefix.
+     *
+     * The prefix is configuration rather than input, but it is interpolated into DDL either way,
+     * and "it cannot be hostile" is an assumption rather than a guard. Refuse anything that is not
+     * a bare identifier fragment before a character of it reaches a statement.
+     */
+    private function prefixed(string $name): string
+    {
+        $prefix = DB::connection()->getTablePrefix();
+
+        if (preg_match('/^\w*$/', $prefix) !== 1) {
+            throw new RuntimeException("refusing to build legal_consents DDL for an unexpected table prefix: {$prefix}");
+        }
+
+        return $prefix.$name;
+    }
+
+    /**
+     * The ONE place this migration's hand-built DDL reaches the connection.
+     *
+     * The statements carry a table prefix that is only known at runtime, so they cannot be literal
+     * strings. Funnelling them through a single method keeps the static exemption for
+     * `unprepared()`'s literal-string requirement to one line next to the validation that earns
+     * it, rather than a file-wide waiver.
+     */
+    private function execute(string $sql): void
+    {
+        DB::unprepared($sql);
     }
 };

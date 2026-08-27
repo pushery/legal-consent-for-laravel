@@ -7,10 +7,13 @@ namespace Pushery\LegalConsent\Notifications;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Route;
+use Override;
+use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Contracts\ResolvesNoticeIdentity;
 use Pushery\LegalConsent\Contracts\SendsNoticeMail;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -50,7 +53,68 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
     use Queueable;
     use RendersChangeItems;
 
+    /**
+     * Every column of `legal_documents`, so {@see getQueryForModelRestoration()} can name what a
+     * queued notice needs by SUBTRACTION instead of by an allow-list that would silently drop a
+     * column added later — the failure mode being a legal text rendered from a null. The list is
+     * held against the live schema, so a column added to the table and not to this list fails
+     * loudly rather than arriving as a missing attribute.
+     *
+     * @var list<string>
+     */
+    public const array DOCUMENT_COLUMNS = [
+        'id', 'key', 'type', 'requires_explicit_optin', 'locale', 'tenant_id', 'version',
+        'major_version', 'minor_version', 'patch_version', 'title', 'content_format', 'content',
+        'content_hash', 'ui_wording', 'source_driver', 'source_reference', 'requires_reconsent',
+        'change_summary', 'is_active', 'published_at', 'announce_from', 'enforce_from',
+        'notified_at', 'created_at', 'updated_at', 'notice_mode', 'change_class', 'regime',
+        'notice_period_days', 'offers_termination', 'keeps_unmodified_offered',
+        'objection_deadline', 'objection_closed_at',
+    ];
+
     public function __construct(public readonly LegalDocument $document) {}
+
+    /**
+     * Columns a queued notice job does NOT need restored with its document.
+     *
+     * `SerializesModels` puts a model identifier in the payload — 1.9 KB rather than 424 KB, which
+     * is right — and the worker then restores the row with `select *`. That pulls the whole legal
+     * text back out of the database for every RECIPIENT, and `content` is allowed up to 512 KB
+     * ({@see RenderPipeline}) while a notice renders the title, the
+     * version, the key, the dates and the notice mode. At a hundred thousand recipients that is
+     * tens of gigabytes moved for text no mail ever shows.
+     *
+     * Narrowed HERE rather than on the model, deliberately: a `newQueryForRestoration()` override
+     * would apply to every restore of a LegalDocument anywhere, and only this path is known to be
+     * safe. A subclass whose `toMail()` reaches for the body widens the list back.
+     *
+     * @return list<string>
+     */
+    protected function documentColumnsNotRestored(): array
+    {
+        return ['content'];
+    }
+
+    /**
+     * @template TModel of Model
+     *
+     * @param  TModel  $model
+     * @param  array<array-key, mixed>|int  $ids
+     * @return Builder<TModel>
+     */
+    #[Override]
+    protected function getQueryForModelRestoration($model, $ids): Builder
+    {
+        $query = parent::getQueryForModelRestoration($model, $ids);
+
+        if (! $model instanceof LegalDocument) {
+            // A consumer subclass may carry other models of its own, and the narrowing below is
+            // only known to be safe for the document this notice is about.
+            return $query;
+        }
+
+        return $query->select(array_values(array_diff(self::DOCUMENT_COLUMNS, $this->documentColumnsNotRestored())));
+    }
 
     /**
      * The `notifications.*` group this notice's lines live under — `contract`, `deemed`, or
@@ -199,7 +263,12 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         // announcement of a change whose enforce_from is still in the future, so the document is
         // not yet enforceable and `outstanding()` would report nothing — suppressing every
         // scheduled notice the package exists to send.
-        $held = new ConsentGate()->heldMajorByKey($notifiable);
+        //
+        // Restricted to the ONE key this answer turns on. The question runs in the worker, once
+        // per recipient, and the ledger it reads grows for the life of the account — so the
+        // unrestricted fold made a single-key yes/no cost more the longer someone had been a
+        // customer, for rows it then threw away.
+        $held = new ConsentGate()->heldMajorByKey($notifiable, [$this->document->key]);
 
         return ($held[$this->document->key] ?? 0) < $this->document->major_version;
     }

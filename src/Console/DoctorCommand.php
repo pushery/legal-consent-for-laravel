@@ -333,15 +333,22 @@ final class DoctorCommand extends Command
             $this->newLine();
         }
 
+        // Every finding folds into ONE variable, and every return below reads it. Three separate
+        // returns each restating the rule is how the legal contradiction fell out of the exit code
+        // on the third one: the same deemed-consent-without-proof installation ended 1 or 0
+        // depending on whether the published config happened to carry an unrelated stale key.
+        $failed = $incoherent;
+
         // $this->laravel->configPath(), never the config_path() helper: that one lives in
-        // laravel/framework's Foundation, which this package deliberately does not require. A
-        // consumer on a lean illuminate/* install would get a fatal error instead of a report.
+        // laravel/framework's Foundation, which this package does not import a symbol from. The
+        // methods used here are on Illuminate\Contracts\Foundation\Application, the type
+        // `$this->laravel` already has, so the report does not depend on a global function.
         $publishedPath = $this->laravel->configPath('legal-consent.php');
 
         if (! is_file($publishedPath)) {
             $this->info('No published config — the package config applies in full, so nothing can drift.');
 
-            return $incoherent ? self::FAILURE : self::SUCCESS;
+            return $failed ? self::FAILURE : self::SUCCESS;
         }
 
         $published = $this->load($publishedPath);
@@ -354,7 +361,7 @@ final class DoctorCommand extends Command
         if ($lost === [] && $stale === [] && $narrowed === []) {
             $this->info('Published config is in sync with the package.');
 
-            return $incoherent ? self::FAILURE : self::SUCCESS;
+            return $failed ? self::FAILURE : self::SUCCESS;
         }
 
         if ($lost !== []) {
@@ -399,8 +406,10 @@ final class DoctorCommand extends Command
         $this->line('review the stale ones and delete what no longer applies.');
 
         // Only LOST keys are a defect — the runtime is not what the file says. A stale key is
-        // hygiene, and exiting non-zero for it would make this command useless in a CI check.
-        return $lost === [] ? self::SUCCESS : self::FAILURE;
+        // hygiene, and exiting non-zero for it would make this command useless in a CI check. The
+        // legal contradiction is folded in rather than restated, so config hygiene can never
+        // decide it.
+        return $failed || $lost !== [] ? self::FAILURE : self::SUCCESS;
     }
 
     /**

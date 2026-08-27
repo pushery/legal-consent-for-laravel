@@ -13,6 +13,7 @@ use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Events\LegalDocumentPublished;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
+use Pushery\LegalConsent\Exceptions\NoticeTimelineInvertedException;
 use Pushery\LegalConsent\Models\LegalDocument;
 use RuntimeException;
 
@@ -119,9 +120,6 @@ final readonly class LegalDocumentPublisher
     }
 
     /**
-     * Freeze a new version under an explicit notice mode plus its change-class metadata.
-     */
-    /**
      * Resolve and render what a publish WOULD freeze, writing nothing.
      *
      * It lives here rather than in the command because the source factory does: a caller that
@@ -149,6 +147,12 @@ final readonly class LegalDocumentPublisher
         return $this->sources->for($key);
     }
 
+    /**
+     * Freeze a new version under an explicit notice mode plus its change-class metadata.
+     *
+     * Its guards are also the dry run's guards — see {@see previewWithMode}, which runs this
+     * method's checks in this method's order and writes nothing.
+     */
     public function publishWithMode(
         string $key,
         string $locale,
@@ -161,74 +165,254 @@ final readonly class LegalDocumentPublisher
         bool $offersTermination = false,
         bool $keepsUnmodified = false,
     ): LegalDocument {
+        $this->assertRequestCoherent($key, $locale, $mode, $regime);
+
+        $rendered = $this->preview($key, $locale);
+        $type = $this->typeFor($key);
+
+        $this->assertVersionPublishable($key, $locale, $mode, $type, $rendered);
+
+        $existing = $this->existingVersion($key, $locale, $rendered->version);
+
+        if ($existing instanceof LegalDocument) {
+            $this->assertRepublishable($existing, $mode, $rendered, $key, $locale);
+
+            if (! $existing->is_active) {
+                $existing->activate();
+            }
+
+            return $existing;
+        }
+
+        if ($this->isMajorBump($key, $locale, $rendered)) {
+            $this->assertMajorBumpMode($mode, $type, $rendered->version, $key, $locale);
+        }
+
+        $now = CarbonImmutable::now();
+
+        [$announce, $enforce] = $this->assertedSchedule($key, $locale, $mode, $regime, $rendered, $announceAt, $enforceAt, $objectionDeadline, $now);
+
+        $document = LegalDocument::query()->forceCreate([
+            'key' => $key,
+            'type' => $type,
+            'requires_explicit_optin' => $type->requiresExplicitOptin(),
+            'locale' => $locale,
+            'version' => $rendered->version,
+            'major_version' => $rendered->majorVersion,
+            'minor_version' => $rendered->minorVersion,
+            'patch_version' => $rendered->patchVersion,
+            'title' => $rendered->title,
+            'content_format' => 'html',
+            'content' => $rendered->html,
+            'content_hash' => $rendered->contentHash,
+            'ui_wording' => $rendered->uiWording,
+            'source_driver' => $this->sourceNameFor($key),
+            'source_reference' => $rendered->sourceRef,
+            'notice_mode' => $mode,
+            'requires_reconsent' => $mode->gates(),
+            'change_class' => $changeClass,
+            'regime' => $regime,
+            // Floored at zero, because this is the period that was GRANTED and a granted period is
+            // never negative. The guard above rules out an inverted timeline; what remains is the
+            // immediate publish whose effective date is already past, where the honest answer is
+            // "no grace at all" rather than a negative count of days. The column sits outside
+            // MUTABLE_AFTER_PUBLISH, so whatever lands here is frozen — and it is the number a
+            // consumer's compliance report reads back as the notice period.
+            'notice_period_days' => max(0, (int) round($announce->diffInDays($enforce))),
+            'offers_termination' => $offersTermination,
+            'keeps_unmodified_offered' => $keepsUnmodified,
+            'is_active' => false,
+            'published_at' => $now,
+            'announce_from' => $announce,
+            'enforce_from' => $enforce,
+            'objection_deadline' => $objectionDeadline,
+        ]);
+
+        // Freeze the operator's description of THIS change onto THIS version, before the row goes
+        // active. No new parameter: the freezer finds the draft by (key, locale, tenant), so the
+        // ten-argument signature stays as it is and no caller has to learn about the feature to
+        // keep working. Absence is not an error — see ChangeItemsFreezer.
+        $this->changeItems->freeze($document, $this->sources->for($key)->fingerprint($key, $locale));
+
+        $document->activate();
+
+        event(new LegalDocumentPublished($document));
+
+        return $document;
+    }
+
+    /**
+     * What {@see publishWithMode} WOULD freeze, with every one of its guards applied and nothing
+     * written.
+     *
+     * The signature is the real one deliberately, argument for argument, so a caller previews the
+     * publish it is about to make rather than an approximation of it — `--regime` and `--enforce-at`
+     * decide whether a run is refused, so a preview that cannot receive them cannot answer for it.
+     * `$changeClass`, `$offersTermination` and `$keepsUnmodified` are frozen onto the row and
+     * decide nothing, so nothing here reads them; they are accepted so the call site stays a
+     * mirror of the publish and a future guard over one of them needs no new signature.
+     *
+     * ⚠️ THE GUARDS MAY NOT BE REBUILT IN A COMMAND. Every one of them is a legal rule — which
+     * locales exist, which notice mode a document type can carry, what a statutory advance period
+     * is — and a second copy of a legal rule is a second answer to it, diverging silently from the
+     * moment one side is amended. That is why this lives beside the real path and calls the same
+     * private methods, rather than being a checklist a caller assembles.
+     *
+     * The identical-content case returns rather than throws, because the real run does not refuse
+     * it either: it returns the existing row untouched. A dry run that invented a refusal there
+     * would be as misleading as one that promised a publish the real run refuses.
+     */
+    public function previewWithMode(
+        string $key,
+        string $locale,
+        NoticeMode $mode,
+        ?string $changeClass = null,
+        ?string $regime = null,
+        ?CarbonImmutable $announceAt = null,
+        ?CarbonImmutable $enforceAt = null,
+        ?CarbonImmutable $objectionDeadline = null,
+        bool $offersTermination = false,
+        bool $keepsUnmodified = false,
+    ): Document {
+        $this->assertRequestCoherent($key, $locale, $mode, $regime);
+
+        $rendered = $this->preview($key, $locale);
+        $type = $this->typeFor($key);
+
+        $this->assertVersionPublishable($key, $locale, $mode, $type, $rendered);
+
+        $existing = $this->existingVersion($key, $locale, $rendered->version);
+
+        if ($existing instanceof LegalDocument) {
+            $this->assertRepublishable($existing, $mode, $rendered, $key, $locale);
+
+            return $rendered;
+        }
+
+        if ($this->isMajorBump($key, $locale, $rendered)) {
+            $this->assertMajorBumpMode($mode, $type, $rendered->version, $key, $locale);
+        }
+
+        $this->assertedSchedule($key, $locale, $mode, $regime, $rendered, $announceAt, $enforceAt, $objectionDeadline, CarbonImmutable::now());
+
+        return $rendered;
+    }
+
+    /**
+     * The guards that need no rendered text — so a typo in a locale or a regime is refused before
+     * a source is read.
+     */
+    private function assertRequestCoherent(string $key, string $locale, NoticeMode $mode, ?string $regime): void
+    {
         $this->assertLocaleSupported($locale);
         $this->assertRegimeKnown($regime, $key);
         $this->assertRegimeCoherentWithMode($regime, $mode, $key);
+    }
 
-        $rendered = $this->pipeline->process($this->sources->for($key)->resolve($key, $locale));
-        $type = $this->typeFor($key);
-
-        // The legal invariants are asserted BEFORE the identical-content short-circuit below: an
-        // early return must never become a path around them (re-publishing unchanged text under a
-        // deemed-consent mode would otherwise skip "deemed consent is contract-only" entirely).
+    /**
+     * The guards over the rendered version, all of which run BEFORE the identical-content
+     * short-circuit: an early return must never become a path around them (re-publishing unchanged
+     * text under a deemed-consent mode would otherwise skip "deemed consent is contract-only"
+     * entirely).
+     *
+     * The downgrade refusal belongs here for a sharper reason. The `$existing` branch re-activates
+     * an inactive matching row, so an inactive lower version whose row still exists (v1 after v2
+     * went active) would otherwise be silently re-activated — retroactively un-gating everyone.
+     * The plain `>` major check runs only after that branch has already returned, so it never
+     * guards this vector. Version is monotonic by design; a revert is a new, higher version
+     * carrying the old text, never a re-activation of an old row.
+     */
+    private function assertVersionPublishable(string $key, string $locale, NoticeMode $mode, DocumentType $type, Document $rendered): void
+    {
         $this->assertModeAllowedForType($mode, $type, $key);
         $this->assertModeConsistentAcrossLocales($mode, $key, $locale, $rendered->majorVersion);
-
-        // Refuse a downgrade BEFORE the identical-version lookup below. This placement is
-        // load-bearing: the `$existing` branch re-activates an inactive matching row, so an
-        // inactive lower version whose row still exists (v1 after v2 went active) would
-        // otherwise be silently re-activated — retroactively un-gating everyone. The plain
-        // `>` major check further down runs only after that branch has already returned, so
-        // it never guards this vector. Version is monotonic by design; a revert is a new,
-        // higher version carrying the old text, never a re-activation of an old row.
         $this->assertNotDowngrade($key, $locale, $rendered);
+    }
 
-        $existing = LegalDocument::query()
+    /** The row this version would collide with, if one is already on file. */
+    private function existingVersion(string $key, string $locale, string $version): ?LegalDocument
+    {
+        return LegalDocument::query()
             ->where('key', $key)
             ->where('locale', $locale)
-            ->where('version', $rendered->version)
+            ->where('version', $version)
             ->first();
+    }
 
-        if ($existing instanceof LegalDocument) {
-            if ($existing->content_hash === $rendered->contentHash) {
-                // Identical text, different classification is NOT a no-op: the notice mode decides
-                // the notice duty, so silently keeping the old one would let an operator "fix" a
-                // mis-published editorial change into a deemed-consent one, get a success message,
-                // and have no notice ever go out. A re-classification needs a new version.
-                if ($existing->noticeMode() !== $mode) {
-                    throw new RuntimeException(
-                        "Version {$rendered->version} of '{$key}' ({$locale}) already exists as {$existing->noticeMode()->value}; re-publishing identical content cannot re-classify it as {$mode->value} — bump the version before publishing."
-                    );
-                }
-
-                if (! $existing->is_active) {
-                    $existing->activate();
-                }
-
-                return $existing;
-            }
-
+    /**
+     * Whether an existing row of the same version may be re-published over.
+     *
+     * Identical text is the only case that passes, and identical text under a DIFFERENT
+     * classification is not a no-op: the notice mode decides the notice duty, so silently keeping
+     * the old one would let an operator "fix" a mis-published editorial change into a
+     * deemed-consent one, get a success message, and have no notice ever go out. A
+     * re-classification needs a new version.
+     */
+    private function assertRepublishable(LegalDocument $existing, NoticeMode $mode, Document $rendered, string $key, string $locale): void
+    {
+        if ($existing->content_hash !== $rendered->contentHash) {
             throw new RuntimeException(
                 "Version {$rendered->version} of '{$key}' ({$locale}) already exists with different content — bump the version before publishing."
             );
         }
 
+        if ($existing->noticeMode() !== $mode) {
+            throw new RuntimeException(
+                "Version {$rendered->version} of '{$key}' ({$locale}) already exists as {$existing->noticeMode()->value}; re-publishing identical content cannot re-classify it as {$mode->value} — bump the version before publishing."
+            );
+        }
+    }
+
+    /** Whether this version raises the major over the one currently active for (key, locale). */
+    private function isMajorBump(string $key, string $locale, Document $rendered): bool
+    {
         $previousMajor = LegalDocument::query()
             ->where('key', $key)
             ->where('locale', $locale)
             ->where('is_active', true)
             ->value('major_version');
 
-        $isMajorBump = $previousMajor !== null && is_numeric($previousMajor) && $rendered->majorVersion > (int) $previousMajor;
+        return $previousMajor !== null && is_numeric($previousMajor) && $rendered->majorVersion > (int) $previousMajor;
+    }
 
-        if ($isMajorBump) {
-            $this->assertMajorBumpMode($mode, $type, $rendered->version, $key, $locale);
-        }
-
-        $now = CarbonImmutable::now();
-
-        $announce = $announceAt ?? $rendered->announceAt ?? $now;
+    /**
+     * The announcement and effective dates a publish would freeze, with every schedule guard
+     * applied. Resolution and validation are one method because the guards run on the RESOLVED
+     * dates: a caller that resolved them itself and then asked for a check would be checking a
+     * different schedule than the one that gets written.
+     *
+     * @return array{CarbonImmutable, CarbonImmutable}
+     */
+    private function assertedSchedule(
+        string $key,
+        string $locale,
+        NoticeMode $mode,
+        ?string $regime,
+        Document $rendered,
+        ?CarbonImmutable $announceAt,
+        ?CarbonImmutable $enforceAt,
+        ?CarbonImmutable $objectionDeadline,
+        CarbonImmutable $now,
+    ): array {
+        $chosenAnnounce = $announceAt ?? $rendered->announceAt;
+        $announce = $chosenAnnounce ?? $now;
         $enforce = $enforceAt ?? $rendered->enforceAt ?? $now;
+
+        // The timeline invariant, checked BEFORE the mode branches and therefore independent of
+        // mode, regime and minimum lead time. Both branches below could be skipped entirely — the
+        // deemed-consent one measures against the objection deadline rather than the effective
+        // date, and the other runs only for a mode that owes notice AND an effective date still in
+        // the future — so an inverted timeline reached the insert with nothing having looked at it.
+        //
+        // Only an announcement the operator CHOSE is refused, and the distinction is not
+        // squeamishness: an effective date already in the past with no announcement date given is a
+        // documented, supported publish ("an immediate gate with no grace" — an initial version, or
+        // a change whose effective date was reached before it was published), and it is the
+        // announcement that is defaulted there, not chosen. What has never been supported, and what
+        // nothing refused, is an operator naming an announcement date AFTER the effective date.
+        if ($chosenAnnounce instanceof CarbonImmutable && $announce->greaterThan($enforce)) {
+            throw NoticeTimelineInvertedException::for($key, $locale, $announce, $enforce);
+        }
 
         if ($mode === NoticeMode::DeemedConsent) {
             $deadline = $this->assertObjectionWindow($objectionDeadline, $enforce, $key);
@@ -266,47 +450,7 @@ final readonly class LegalDocumentPublisher
             }
         }
 
-        $document = LegalDocument::query()->forceCreate([
-            'key' => $key,
-            'type' => $type,
-            'requires_explicit_optin' => $type->requiresExplicitOptin(),
-            'locale' => $locale,
-            'version' => $rendered->version,
-            'major_version' => $rendered->majorVersion,
-            'minor_version' => $rendered->minorVersion,
-            'patch_version' => $rendered->patchVersion,
-            'title' => $rendered->title,
-            'content_format' => 'html',
-            'content' => $rendered->html,
-            'content_hash' => $rendered->contentHash,
-            'ui_wording' => $rendered->uiWording,
-            'source_driver' => $this->sourceNameFor($key),
-            'source_reference' => $rendered->sourceRef,
-            'notice_mode' => $mode,
-            'requires_reconsent' => $mode->gates(),
-            'change_class' => $changeClass,
-            'regime' => $regime,
-            'notice_period_days' => (int) round($announce->diffInDays($enforce)),
-            'offers_termination' => $offersTermination,
-            'keeps_unmodified_offered' => $keepsUnmodified,
-            'is_active' => false,
-            'published_at' => $now,
-            'announce_from' => $announce,
-            'enforce_from' => $enforce,
-            'objection_deadline' => $objectionDeadline,
-        ]);
-
-        // Freeze the operator's description of THIS change onto THIS version, before the row goes
-        // active. No new parameter: the freezer finds the draft by (key, locale, tenant), so the
-        // ten-argument signature stays as it is and no caller has to learn about the feature to
-        // keep working. Absence is not an error — see ChangeItemsFreezer.
-        $this->changeItems->freeze($document, $this->sources->for($key)->fingerprint($key, $locale));
-
-        $document->activate();
-
-        event(new LegalDocumentPublished($document));
-
-        return $document;
+        return [$announce, $enforce];
     }
 
     /**
@@ -560,8 +704,8 @@ final readonly class LegalDocumentPublisher
      * and is inert.
      *
      * Deliberately narrow. Whether, say, a P2B change may be published as deemed consent rather
-     * than info-push is a legal judgement per case, and a guard that decided it here would be
-     * asserting law the package has no business asserting. This one needs no judgement: the mode
+     * than info-push is a legal judgment per case, and a guard that decided it here would be
+     * asserting law the package has no business asserting. This one needs no judgment: the mode
      * says there is nothing to announce.
      */
     private function assertRegimeCoherentWithMode(?string $regime, NoticeMode $mode, string $key): void

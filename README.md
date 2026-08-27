@@ -63,11 +63,13 @@ tested against a real PostgreSQL and a real MySQL, not just SQLite.
 - [Quick start](https://docs.pushery.com/legal-consent-for-laravel/quick-start) — write a text,
   publish a version, give a model a ledger, switch the gate on.
 - [Recording consent](https://docs.pushery.com/legal-consent-for-laravel/recording-consent) — the
-  three ways to write the ledger, the registration checklist, and the accept-time hash guard.
+  four ways to write the ledger, the registration checklist, and the accept-time hash guard.
 - [The four notice modes](https://docs.pushery.com/legal-consent-for-laravel/notice-modes/overview)
   — how a change is classified, announced, and only sometimes enforced, with a worked example each.
 - [Configuration reference](https://docs.pushery.com/legal-consent-for-laravel/reference/configuration)
   — every key, its default, and what it decides.
+- [Testing your integration](https://docs.pushery.com/legal-consent-for-laravel/testing) —
+  `Consent::fake()`, so your tests need none of this package's tables.
 
 ## Quality bar
 

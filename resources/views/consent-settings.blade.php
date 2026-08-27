@@ -95,6 +95,15 @@
                         <span class="legal-consent-pending">{{ __('legal-consent::ui.confirmation_pending') }}</span>
                     @endif
 
+                    {{-- A document retired out from under a holding. `is_active = false` does not
+                         end the consents already recorded against it, so the row stays here with
+                         its withdrawal control intact — but it is never `outstanding`, and without
+                         this label the subject cannot see why the version is older than the one
+                         they last read about. --}}
+                    @if ($consent['retired'] ?? false)
+                        <span class="legal-consent-retired">{{ __('legal-consent::ui.retired') }}</span>
+                    @endif
+
                     {{-- The withdraw control is exactly as reachable as the grant was — and it is
                          rendered only when there is somewhere for it to go. A form with no action
                          is not a control, it is the appearance of one. --}}

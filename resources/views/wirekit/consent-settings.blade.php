@@ -100,6 +100,14 @@
                         @endif
                     </x-wirekit::text>
 
+                    {{-- A document retired out from under a holding. `is_active = false` does not
+                         end the consents recorded against it, so the row stays with its withdrawal
+                         control intact — but it is never `outstanding`, and without this the
+                         subject cannot see why the version is older than the one they read about. --}}
+                    @if ($item['retired'] ?? false)
+                        <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.retired') }}</x-wirekit::badge>
+                    @endif
+
                     {{-- The double opt-in's middle state: entered but not yet confirmed reads as
                          never entered otherwise, and the screen would say nothing at all. --}}
                     @if ($item['pending_confirmation'] ?? false)

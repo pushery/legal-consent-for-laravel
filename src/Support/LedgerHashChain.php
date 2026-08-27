@@ -56,11 +56,66 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  * anonymization), not global — so it detects unauthorized tampering of a subject's proof
  * without serializing every write on a single global tail. A LEGITIMATE retention prune of
  * a superseded row will therefore show as an expected discontinuity at that point; correlate
- * it with your retention schedule. Both the writer and the verifier compute hashes from the
- * SAME database-read representation, so there is no write-vs-read drift.
+ * it with your retention schedule.
+ *
+ * THE CHAIN IS BOUND TO THE ENGINE AND THE CONNECTION TIME ZONE IT WAS STARTED ON. Both the
+ * writer and the verifier hash the SAME database-read representation, so there is no
+ * write-vs-read drift while those two facts hold — and they are facts about the deployment, not
+ * about the code. `accepted_at` enters the hash as the string the driver hands back, and that
+ * string differs between engines (PostgreSQL renders `timestamptz` with an offset, MySQL and
+ * SQLite render none) and moves with the connection's `timezone` setting on PostgreSQL and MySQL.
+ * So a dump restored onto the other engine, or a `database.connections.*.timezone` added or
+ * changed after the first chained row, invalidates every stored link at once: `verify-ledger`
+ * then reports the whole ledger as tampered although nobody touched a row.
+ *
+ * That is a precondition of the same shape as the HMAC secret above — fix it before the first
+ * chained row — and it is stated rather than removed on purpose. Normalizing the instant would
+ * change the canonical form of every row already written, on every engine, and the only way back
+ * to a verifiable ledger is to re-chain the whole table: rewriting every proof row is exactly the
+ * operation this chain exists to make conspicuous, and afterwards nothing can show that the
+ * ledger verified BEFORE the change. An engine migration is therefore a deliberate re-chain
+ * event, decided by an operator who knows why, not a silent one imposed by a package upgrade.
  */
 final class LedgerHashChain
 {
+    /**
+     * The immutable proof fields, in the exact order they are folded into the hash.
+     *
+     * Order is part of the format: change it and every stored link stops matching. Held against
+     * the live schema by a test, so a migration that adds a column to `legal_consents` fails the
+     * suite until the column is classified either into this list or into
+     * {@see UNHASHED_COLUMNS} — the list was hand-maintained, and `tenant_id` fell out of the
+     * proof that way for as long as the column existed.
+     *
+     * @var list<string>
+     */
+    public const array PROOF_FIELDS = [
+        'subject_type', 'subject_id', 'subject_token', 'document_id', 'document_key',
+        'document_type', 'document_version', 'document_major_version', 'content_hash',
+        'locale', 'ui_wording_snapshot', 'action', 'method', 'source', 'ip_address',
+        'user_agent', 'request_id', 'accepted_at',
+    ];
+
+    /**
+     * Hashed, but encoded conditionally — see {@see canonical()}. Named separately because it is
+     * neither an ordinary proof field nor an exclusion, and a reader has to be able to tell.
+     */
+    public const string TENANT_FIELD = 'tenant_id';
+
+    /**
+     * The columns deliberately OUTSIDE the hash, each for a reason that is not "we forgot":
+     *
+     *  - `id` is assigned by the database and is preserved verbatim by every lawful rewrite;
+     *  - `created_at` is when the row was stored, not what it asserts (`accepted_at` is that);
+     *  - `prev_record_hash` is the link itself and is folded in separately by {@see hashRow()};
+     *  - `subject_erased_at` records that an Art. 17 erasure rewrote the row, and migration
+     *    000019 declares it as not a hashed proof field — it is a trace for the operator, never
+     *    a claim the chain vouches for.
+     *
+     * @var list<string>
+     */
+    public const array UNHASHED_COLUMNS = ['id', 'created_at', 'prev_record_hash', 'subject_erased_at'];
+
     /** The link value a subject's first chained row points back to. */
     public static function genesis(): string
     {
@@ -117,10 +172,28 @@ final class LedgerHashChain
     }
 
     /**
-     * Deterministic serialization of the immutable proof fields (never id / created_at /
-     * prev_record_hash itself). Each field is emitted self-delimiting: `N` for null, else
-     * `S<byte-length>:<value>`. That distinguishes null from '' and length-prefixes every value, so
-     * a field containing the old `\x1f` separator can no longer shift boundaries.
+     * Deterministic serialization of the immutable proof fields ({@see PROOF_FIELDS}, then
+     * {@see TENANT_FIELD}; never anything in {@see UNHASHED_COLUMNS}). Each field is emitted
+     * self-delimiting: `N` for null, else `S<byte-length>:<value>`. That distinguishes null from ''
+     * and length-prefixes every value, so a field containing the old `\x1f` separator can no longer
+     * shift boundaries.
+     *
+     * WHY tenant_id IS HASHED AT ALL, AND WHY IT IS HASHED LIKE THIS. Under multi-tenancy the gate
+     * filters on that column ({@see ConsentGate::standingFor()}), so it decides WHETHER a subject
+     * holds a document — and while it sat outside the hash, an actor with DELETE+INSERT rights (both
+     * of which this table allows on purpose, so retention and Art. 17 erasure can work) could move
+     * an acceptance from one tenant into another, leave `prev_record_hash` untouched, and have
+     * `verify-ledger` report the chain intact. No secret needed: a keyed hash does not close a gap
+     * over a field that is not in the payload.
+     *
+     * It is appended LAST and only when it names a tenant, so a row in the shared bucket (`''`,
+     * which is every row of every single-tenant installation — the column is NOT NULL and defaults
+     * to the empty string) produces a canonical string byte-for-byte identical to the one it
+     * produced before this field existed. Those chains keep verifying with no operator action. A
+     * multi-tenant installation that already has chained rows is the case that must re-chain, and
+     * the upgrade notes say so. The conditional encoding costs nothing in strength: the field count
+     * before it is fixed and every part is length-prefixed, so a trailing part can only be read as
+     * the tenant, and every move — into, out of, or between tenants — changes the payload.
      *
      * WHAT THE INJECTIVITY CLAIM COVERS — it is narrower than "two distinct rows differ", and saying
      * so is the point. The form is injective over the STRING VALUES of the fields: two rows whose
@@ -128,42 +201,50 @@ final class LedgerHashChain
      * cannot be crafted to hash-collide onto a real one.
      *
      * It deliberately does NOT distinguish values that string-cast identically, because that is what
-     * makes the hash stable across drivers: a column returned as `2` by one PDO driver and `'2'` by
-     * another has to agree, or every consumer's chain would depend on their driver. The cost of that
-     * choice is that a value with no lossless string form cannot be admitted at all — `false`, an
-     * array and an object all cast to `''`, which is itself a legitimate value, so admitting them
-     * would put four different rows on one hash. They are REFUSED (UnhashableProofFieldException)
-     * rather than folded, which keeps the claim above true and changes no existing row's hash:
-     * null, string, int and float encode exactly as they always did.
+     * makes the hash stable across PDO drivers for the same stored value: a column returned as `2`
+     * by one driver and `'2'` by another has to agree, or every consumer's chain would depend on
+     * their driver. It does NOT make the hash stable across ENGINES — a column whose stored value is
+     * RENDERED differently (`accepted_at` on PostgreSQL versus MySQL, and either one under a
+     * different connection time zone) is a different string here, and the class docblock states that
+     * binding. The cost of the choice is that a value with no lossless string form cannot be
+     * admitted at all — `false`, an array and an object all cast to `''`, which is itself a
+     * legitimate value, so admitting them would put four different rows on one hash. They are
+     * REFUSED (UnhashableProofFieldException) rather than folded.
      */
     private function canonical(object $row): string
     {
-        $fields = [
-            'subject_type', 'subject_id', 'subject_token', 'document_id', 'document_key',
-            'document_type', 'document_version', 'document_major_version', 'content_hash',
-            'locale', 'ui_wording_snapshot', 'action', 'method', 'source', 'ip_address',
-            'user_agent', 'request_id', 'accepted_at',
-        ];
-
         $parts = [];
 
-        foreach ($fields as $field) {
-            $value = $row->{$field} ?? null;
+        foreach (self::PROOF_FIELDS as $field) {
+            $parts[] = $this->encode($field, $row->{$field} ?? null);
+        }
 
-            if ($value === null) {
-                $parts[] = 'N';
+        $tenant = $row->{self::TENANT_FIELD} ?? null;
 
-                continue;
-            }
-
-            if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
-                throw UnhashableProofFieldException::for($field, $value);
-            }
-
-            $string = (string) $value;
-            $parts[] = 'S'.strlen($string).':'.$string;
+        if ($tenant !== null && $tenant !== '') {
+            $parts[] = $this->encode(self::TENANT_FIELD, $tenant);
         }
 
         return implode('', $parts);
+    }
+
+    /**
+     * One field, self-delimiting.
+     *
+     * @throws UnhashableProofFieldException when the value has no lossless string form
+     */
+    private function encode(string $field, mixed $value): string
+    {
+        if ($value === null) {
+            return 'N';
+        }
+
+        if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
+            throw UnhashableProofFieldException::for($field, $value);
+        }
+
+        $string = (string) $value;
+
+        return 'S'.strlen($string).':'.$string;
     }
 }

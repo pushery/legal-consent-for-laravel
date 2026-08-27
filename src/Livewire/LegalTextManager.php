@@ -33,6 +33,13 @@ final class LegalTextManager extends Component
 
     public function releaseAll(string $key): void
     {
+        // An action argument comes from the browser, so the key is client input and is checked
+        // against the set this screen derives itself. Passed through, an unconfigured key reaches
+        // the source factory, which has nothing to resolve for it and raises — leaving an admin
+        // screen with a 500 for a request that is simply not a thing. 404, matching the rest of the
+        // package: a key this instance does not have is one that does not exist here.
+        abort_unless(in_array($key, $this->documentKeys(), true), 404);
+
         // The manager releases the common case — an initial version or a re-consent change, both of
         // which gate. The deemed/info-only modes are a per-change legal call made from the editor
         // controls or the CLI, not a button on an overview grid.

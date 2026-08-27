@@ -72,14 +72,21 @@ final readonly class LedgerSubjectEraser
      */
     private const array NOTICE_PERSONAL_COLUMNS = ['subject_type', 'subject_id'];
 
+    /**
+     * The placeholder budget one multi-row INSERT is allowed to spend. Deliberately under SQLite's
+     * most conservative shipped SQLITE_MAX_VARIABLE_NUMBER (999) rather than at a modern build's
+     * 32766: exceeding it is a hard driver error in the middle of an erasure transaction.
+     */
+    private const int MAX_BOUND_PARAMETERS = 900;
+
     public function __construct(private LedgerChainRepair $repair = new LedgerChainRepair) {}
 
     public function forget(Model $subject): SubjectErasure
     {
         $type = $subject->getMorphClass();
-        $id = $subject->getKey();
+        $id = SubjectKey::for($subject);
 
-        if (! is_int($id) && ! is_string($id)) {
+        if ($id === null) {
             return new SubjectErasure;
         }
 
@@ -101,7 +108,7 @@ final readonly class LedgerSubjectEraser
      *
      * @return array{0: int, 1: int} rows erased, rows re-linked
      */
-    private function eraseConsents(string $type, int|string $id, CarbonImmutable $erasedAt): array
+    private function eraseConsents(string $type, string $id, CarbonImmutable $erasedAt): array
     {
         // Every row this subject's chain touches, not only the rows still naming them. A previous
         // erasure leaves rows with a null subject and the same token, and their hashes are inputs
@@ -154,21 +161,95 @@ final readonly class LedgerSubjectEraser
         // it computes. Doing it the other way round would link each row to a value that the very
         // next statement invalidates.
         $rechained = $this->repair->chainedCount($rewritten);
-        $rewritten = $this->repair->relink($rewritten);
+        $rewritten = $this->relinkPerToken($rewritten);
 
         // Delete before insert, in one transaction, so the unique chain-link index from 000012 is
         // never asked to hold two rows with the same (token, prev_record_hash) at once.
         DB::table('legal_consents')->whereIn('id', array_column($rewritten, 'id'))->delete();
 
-        foreach ($rewritten as $attributes) {
-            DB::table('legal_consents')->insert($attributes);
-        }
+        $this->insertRows('legal_consents', $rewritten);
 
         return [$erased, $rechained];
     }
 
+    /**
+     * Re-link each `subject_token`'s rows on its OWN chain.
+     *
+     * {@see LedgerChainRepair::relink()} carries one link pointer across the whole array it is
+     * handed, and its contract says what that array is: one subject_token's rows, in id order. A
+     * subject can hold MORE than one token — {@see SubjectToken} mints on (subject_type,
+     * subject_id) with no uniqueness, so two concurrent first writers (a notice sweep and a
+     * consent write) mint two, which is the state `verify-ledger` has a dedicated check for.
+     * Handing both sets over in one call chained the second token's first row onto the first
+     * token's last one, and the verifier — which restarts at genesis for every token — then
+     * reported "chain does not start at genesis" permanently, on a ledger the lawful erasure had
+     * just broken itself. The retention sweep loops per token for exactly this reason.
+     *
+     * Rows with no token are left exactly as they are: the walk never reaches them, so giving one
+     * a link would invent a chain rather than repair one.
+     *
+     * Every row that goes in comes back out, repaired or untouched — the walk replaces entries and
+     * never adds or drops one. The signature says so on both sides, which is what lets the caller
+     * hand the result straight to {@see insertRows()} without proving all over again that a
+     * non-empty read of the ledger is still non-empty.
+     *
+     * @param  non-empty-list<array<string, mixed>>  $rows  in id order
+     * @return non-empty-list<array<string, mixed>>
+     */
+    private function relinkPerToken(array $rows): array
+    {
+        /** @var array<string, array<int, array<string, mixed>>> $groups */
+        $groups = [];
+
+        foreach ($rows as $index => $row) {
+            $token = $row['subject_token'] ?? null;
+
+            if (is_string($token) && $token !== '') {
+                $groups[$token][$index] = $row;
+            }
+        }
+
+        foreach ($groups as $group) {
+            $positions = array_keys($group);
+            $corrected = $this->repair->relink(array_values($group));
+
+            foreach ($positions as $offset => $index) {
+                $rows[$index] = $corrected[$offset];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Write the rewritten rows back in as few statements as the driver's placeholder budget allows.
+     *
+     * One INSERT per row is one network round trip per row, and on a remote (serverless) database
+     * the latency is the whole cost of an erasure. The rows are already complete, uniform attribute
+     * arrays, so a multi-row INSERT needs nothing else from the caller.
+     *
+     * Chunked by PLACEHOLDER count rather than by row count, because that is what actually has a
+     * ceiling: SQLite has shipped builds with SQLITE_MAX_VARIABLE_NUMBER at 999, and a proof row is
+     * wide. Deriving the chunk from the row's own width keeps this correct as columns are added.
+     *
+     * The rows are NON-EMPTY by contract rather than by a check here. Both callers return early on
+     * an empty read of their own ledger long before they get this far, so an emptiness guard in
+     * this method is a branch no run can enter — and one that quietly makes `$rows[0]` below look
+     * like it needs proving. Stating the precondition in the type is what actually proves it.
+     *
+     * @param  non-empty-list<array<string, mixed>>  $rows
+     */
+    private function insertRows(string $table, array $rows): void
+    {
+        $columns = max(1, count($rows[0]));
+
+        foreach (array_chunk($rows, max(1, intdiv(self::MAX_BOUND_PARAMETERS, $columns))) as $chunk) {
+            DB::table($table)->insert($chunk);
+        }
+    }
+
     /** The notice ledger, which carries no chain — so the rewrite is the erasure and nothing more. */
-    private function eraseNotices(string $type, int|string $id, CarbonImmutable $erasedAt): int
+    private function eraseNotices(string $type, string $id, CarbonImmutable $erasedAt): int
     {
         $rows = DB::table('legal_notices')
             ->where('subject_type', $type)
@@ -195,9 +276,7 @@ final readonly class LedgerSubjectEraser
 
         DB::table('legal_notices')->whereIn('id', array_column($rewritten, 'id'))->delete();
 
-        foreach ($rewritten as $attributes) {
-            DB::table('legal_notices')->insert($attributes);
-        }
+        $this->insertRows('legal_notices', $rewritten);
 
         return count($rewritten);
     }

@@ -44,10 +44,19 @@
                                         <span> · {{ __('legal-consent::ui.admin_unpublished') }}</span>
                                     @endif
                                 @endif
-                                {{-- Placeholder link: the package ships no admin routes, so wire href
-                                     to your own editor route. The per-cell aria-label keeps a screen
-                                     reader's link list from reading "edit, edit, edit…". --}}
-                                <a href="#" wire:navigate aria-label="{{ __('legal-consent::ui.admin_edit_for', ['key' => $key, 'locale' => $locale]) }}">{{ __('legal-consent::ui.admin_edit') }}</a>
+                                {{-- No edit control ships here, and the WireKit twin has none either.
+                                     The package brings no admin routes, so anything rendered would
+                                     have to point at `#`: a link with a fully worded promise that
+                                     stands in a screen reader's link list, one per cell, and moves
+                                     focus to the top of the document when activated. `wire:navigate`
+                                     makes it worse rather than inert — Livewire decides natively on
+                                     protocol, origin, `download` and `target` alone, so a hash href
+                                     is same-origin http(s), Livewire takes over and runs a full fetch
+                                     and DOM morph against the page the visitor is already on.
+
+                                     Wire your own editor route in here. `ui.admin_edit` is the label
+                                     and `ui.admin_edit_for` the per-cell accessible name, so a link
+                                     list does not read "edit, edit, edit…". --}}
                             </td>
                         @endforeach
                         <td>
@@ -56,7 +65,7 @@
                                      "Release all locales" are indistinguishable in a screen reader's
                                      button list (WCAG 2.4.6) — the same rule this package already
                                      enforces for the withdraw control. --}}
-                                <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.$key }}" wire:click="releaseAll('{{ $key }}')">{{ __('legal-consent::ui.admin_release_all') }}</button>
+                                <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.$key }}" wire:click="releaseAll(@js($key))">{{ __('legal-consent::ui.admin_release_all') }}</button>
                             @else
                                 {{-- The blocking reasons stay OUTSIDE aria-describedby on a disabled
                                      button (a disabled control is skipped, so its description is never

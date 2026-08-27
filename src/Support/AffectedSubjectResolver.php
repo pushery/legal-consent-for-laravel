@@ -34,8 +34,9 @@ use stdClass;
  * then reported success over an empty set and stamped its watermark, which is why nothing surfaced
  * it.
  *
- * Streamed lazily in bounded chunks and hydrated per subject_type in ONE query each (no N+1), so a
- * large user base never loads into memory at once (128 MB budget).
+ * Streamed lazily in bounded chunks and hydrated per subject_type in ONE query each (no N+1), so
+ * peak memory is bounded by the chunk size rather than by the size of the population — a large
+ * user base never loads at once.
  *
  * Not final: a test overrides {@see keysetSeekDriver} to cover the MySQL OR-form seek branch on the
  * SQLite suite (the protected-seam pattern DefaultConsentManager uses for its retry test).
@@ -109,19 +110,7 @@ readonly class AffectedSubjectResolver
             // The notice sweep crosses tenants, so scope subjects to THIS version's tenant.
             ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id))
             ->when($maxConsentId !== null, fn (QueryBuilder $query): QueryBuilder => $query->where('id', '<=', $maxConsentId))
-            // RESUMABILITY (notice sweep): skip subjects who already have a durable-medium proof row
-            // for THIS version. A run killed or overtaken mid-sweep (the 120-min lock can expire on a
-            // large population) resumes on the subjects still owed a notice instead of re-sending from
-            // the top — and, crucially, it stops the concurrent/re-run case from writing a SECOND
-            // proof row for a subject already notified. Delivery stays at-least-once (a proof written
-            // by a genuinely simultaneous sweep in the same window is still tolerated — see the
-            // command docblock); this removes the bulk of the duplication, not a unique constraint.
-            ->when($skipNotified, fn (QueryBuilder $query): QueryBuilder => $query->whereNotExists(
-                fn (QueryBuilder $sub): QueryBuilder => $sub->from('legal_notices')
-                    ->whereColumn('legal_notices.subject_type', 'legal_consents.subject_type')
-                    ->whereColumn('legal_notices.subject_id', 'legal_consents.subject_id')
-                    ->where('legal_notices.document_id', $version->getKey())
-            ))
+            ->when($skipNotified, fn (QueryBuilder $query): QueryBuilder => $this->withoutAlreadyNotified($query, $version))
             ->whereNotNull('subject_type')
             ->whereNotNull('subject_id')
             ->whereIn('action', $accepting)
@@ -199,8 +188,19 @@ readonly class AffectedSubjectResolver
      * to a live model class — the hydrate path silently drops those (it cannot build the model),
      * this counts them. For any app whose subjects still exist the two are identical; and counting
      * every ledger population on the older major is the more faithful answer for an advisory number.
+     *
+     * `$skipNotified` applies {@see forVersion}'s resume predicate to the SAME grouped set, so a
+     * caller that wants "how many does a resumed run still owe" no longer has to stream and hydrate
+     * the remaining population to arrive at a number. It is the same predicate, from the same
+     * method, so the two answers cannot drift.
+     *
+     * ⚠️ SWAPPING `forVersion(...)->count()` FOR THIS CHANGES THE REPORTED NUMBER for an orphaned
+     * group, in the direction the paragraph above describes: such a group is counted here and
+     * dropped there. That is the honest answer for an audience SIZE — the acceptance is on file and
+     * the notice is owed to it — but it is not the number of notifications a run will manage to
+     * send, so a line that promises deliveries has to say which of the two it is reporting.
      */
-    public function countForVersion(LegalDocument $version, ?int $maxConsentId = null): int
+    public function countForVersion(LegalDocument $version, ?int $maxConsentId = null, bool $skipNotified = false): int
     {
         $accepting = array_map(static fn (ConsentAction $action): string => $action->value, ConsentAction::accepting());
 
@@ -210,6 +210,7 @@ readonly class AffectedSubjectResolver
             ->where('locale', $version->locale)
             ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id))
             ->when($maxConsentId !== null, fn (QueryBuilder $query): QueryBuilder => $query->where('id', '<=', $maxConsentId))
+            ->when($skipNotified, fn (QueryBuilder $query): QueryBuilder => $this->withoutAlreadyNotified($query, $version))
             ->whereNotNull('subject_type')
             ->whereNotNull('subject_id')
             ->whereIn('action', $accepting)
@@ -220,6 +221,29 @@ readonly class AffectedSubjectResolver
             );
 
         return DB::query()->fromSub($grouped, 'affected')->count();
+    }
+
+    /**
+     * RESUMABILITY (notice sweep): skip subjects who already have a durable-medium proof row for
+     * THIS version. A run killed or overtaken mid-sweep (the 120-min lock can expire on a large
+     * population) resumes on the subjects still owed a notice instead of re-sending from the top —
+     * and, crucially, it stops the concurrent/re-run case from writing a SECOND proof row for a
+     * subject already notified. Delivery stays at-least-once (a proof written by a genuinely
+     * simultaneous sweep in the same window is still tolerated — see the command docblock); this
+     * removes the bulk of the duplication, not a unique constraint.
+     *
+     * ONE method, applied to both the streaming query and the counting one, because the whole point
+     * of counting is to predict what the stream will serve. Two copies of this predicate would be
+     * two answers to that question, and the one nobody runs is the one that rots.
+     */
+    private function withoutAlreadyNotified(QueryBuilder $query, LegalDocument $version): QueryBuilder
+    {
+        return $query->whereNotExists(
+            fn (QueryBuilder $sub): QueryBuilder => $sub->from('legal_notices')
+                ->whereColumn('legal_notices.subject_type', 'legal_consents.subject_type')
+                ->whereColumn('legal_notices.subject_id', 'legal_consents.subject_id')
+                ->where('legal_notices.document_id', $version->getKey())
+        );
     }
 
     /**

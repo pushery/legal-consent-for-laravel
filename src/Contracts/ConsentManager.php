@@ -83,6 +83,16 @@ interface ConsentManager
     /**
      * The mandatory documents this subject still owes acceptance for.
      *
+     * The models are PARTIALLY HYDRATED — they carry the columns the gate reads and nothing else,
+     * and they carry them with `exists = true`. Reading any other column off them returns null, or
+     * throws a `MissingAttributeException` under `Model::shouldBeStrict()`. Call `refresh()` for a
+     * full row, and `published()` for the agreed text itself: that is the read path, and it returns
+     * the frozen bytes rather than a model.
+     *
+     * Guaranteed attributes: `id`, `key`, `locale`, `type`, `major_version`, `version`, `title`,
+     * `ui_wording`, `content_hash`, `requires_explicit_optin`, `requires_reconsent`, `notice_mode`,
+     * `announce_from`, `enforce_from`, `objection_deadline`, `offers_termination`, `is_active`.
+     *
      * @return Collection<int, LegalDocument>
      */
     public function outstanding(Model $subject, ?string $locale = null): Collection;
@@ -95,7 +105,7 @@ interface ConsentManager
     /**
      * A per-document status map for the subject.
      *
-     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool}>
+     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool}>
      */
     public function statusFor(Model $subject, ?string $locale = null): array;
 

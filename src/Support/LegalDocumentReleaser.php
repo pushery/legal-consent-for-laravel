@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Illuminate\Cache\ArrayStore;
+use Illuminate\Cache\NullStore;
+use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -47,10 +50,32 @@ final readonly class LegalDocumentReleaser
         // SAME lock name LegalDocument::activate() uses, so a direct `legal-consent:publish` cannot
         // interleave with a release — this lock is the one that spans the outer transaction, while
         // activate()'s own is a savepoint inside it and would be released before the commit.
-        $lock = Cache::lock(LegalDocument::activationLockName($key), 10);
+        //
+        // The same name on a DIFFERENT store is no lock at all, and that is what this line used to
+        // be: `Cache::lock(...)` resolves the app default, while the model resolves the package's
+        // own `legal-consent.cache.store`. Both sides agree until an operator sets that option —
+        // which the model's own docblock recommends — and then the two writers of a document's
+        // active version queue on two separate locks and interleave freely. One resolver, called
+        // from both sides, is the only shape that cannot drift again.
+        $store = LegalDocument::activationLockStore();
+        $release = fn (): Collection => $this->releaseNow($key, $mode, $locales, $options);
+
+        // Mirrors LegalDocument::activateSerialized(): a store with no LockProvider would make a
+        // release FATAL, and `array` and `null` DO implement it while serializing nothing across
+        // processes. Degrade and SAY so, rather than let a lock imply a protection it is not
+        // giving — the release itself still runs, and on PostgreSQL the partial unique index
+        // remains the real guarantee.
+        if (! $store instanceof LockProvider || $store instanceof ArrayStore || $store instanceof NullStore) {
+            Log::warning('legal-consent: cache store cannot serialize a release, running unserialized', [
+                'document_key' => $key,
+                'store' => $store::class,
+            ]);
+
+            return $release();
+        }
 
         /** @var Collection<int, LegalDocument> $released */
-        $released = $lock->block(5, fn (): Collection => $this->releaseNow($key, $mode, $locales, $options));
+        $released = $store->lock(LegalDocument::activationLockName($key), 10)->block(5, $release);
 
         return $released;
     }

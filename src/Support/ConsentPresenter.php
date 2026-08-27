@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
+use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
@@ -56,21 +57,73 @@ final readonly class ConsentPresenter
         // `locale` is selected even though it equals the argument: it is a document COLUMN, and the
         // host's URL resolver receives the model. A resolver that builds a per-locale route would
         // otherwise read null off a column that was simply never fetched.
+        //
+        // `id` is selected for the same reason, one step further: the resolver is handed the MODEL,
+        // so the most ordinary thing a Laravel host can do with it — `route('legal.show', $document)`,
+        // implicit route-model binding — reads the primary key. Without the column that read is null
+        // and the seam throws a UrlGenerationException on a settings page, while the same closure
+        // works on the re-consent gate, whose document set does select it.
         $documents = LegalDocument::query()
-            ->select(['key', 'title', 'version', 'major_version', 'type', 'locale', 'requires_explicit_optin'])
+            ->select(['id', 'key', 'title', 'version', 'major_version', 'type', 'locale', 'requires_explicit_optin'])
             ->where('locale', $locale)
             ->where('is_active', true)
+            // The same boundary statusFor() draws, drawn on the same side of it: an informational
+            // page (an Impressum, a cookie policy) binds nobody, so it has no standing to report.
+            // Nobody ever accepts one, which makes `held` false and `outstanding` permanently true —
+            // a "your agreements" row for a page nobody agrees to, with a grant control next to it
+            // that can only ever 404. The set is derived from the predicate rather than naming the
+            // one type to exclude, so a future type is classified by isConsentBearing() alone.
+            ->whereIn('type', array_map(
+                static fn (DocumentType $type): string => $type->value,
+                array_values(array_filter(
+                    DocumentType::cases(),
+                    static fn (DocumentType $type): bool => $type->isConsentBearing(),
+                )),
+            ))
             ->orderBy('key')
             ->get();
 
+        // A document the subject still holds whose active version is gone. Retiring one is
+        // `is_active = false`, which leaves the ledger untouched: the acceptance stands, the fold
+        // reports it as held, and the application keeps processing on it — while the row it is
+        // exercised from disappears from this screen. Art. 7(3) wants withdrawal to stay as easy as
+        // granting was, and the manager already makes it WORK against a retired document; this is
+        // what makes it visible. Same resolution as statusFor(), from the same class, so the screen
+        // and the map a screen is built from cannot disagree.
+        $retired = new RetiredHoldings()->forSubject(
+            $subject,
+            $held,
+            array_values($documents->map(static fn (LegalDocument $document): string => $document->key)->all()),
+        );
+
+        /** @var list<array{LegalDocument, bool}> $rows */
+        $rows = [];
+
         foreach ($documents as $document) {
+            $rows[] = [$document, false];
+        }
+
+        foreach ($retired as $document) {
+            $rows[] = [$document, true];
+        }
+
+        foreach ($rows as [$document, $isRetired]) {
             // Computed before the array rather than as a multi-line ternary inside it: a ternary
             // whose arms sit on their own lines leaves one of them unexecutable to line coverage
             // when the condition short-circuits earlier, which reads as an untested branch and is
             // really a formatting artifact.
+            //
+            // The holding test is "> 0", not ">= the active major", and the difference is the whole
+            // point: after the operator publishes a new major of a voluntary consent, the subject
+            // still holds the OLD one and the application still processes on it — `withdraw()`
+            // executes against it without complaint. Comparing against the active major removed the
+            // only control the package ships for Art. 7(3) at the moment the subject most plausibly
+            // wants it, and a voluntary consent never reaches the re-consent screen either, because
+            // it never gates (Art. 7(4)). The version difference still reaches the view through
+            // `held` / `outstanding`.
             $offersWithdrawal = $withdrawUrl !== null
                 && $document->type->isWithdrawable()
-                && ($held[$document->key] ?? 0) >= $document->major_version;
+                && ($held[$document->key] ?? 0) > 0;
 
             $entry = [
                 'key' => $document->key,
@@ -85,8 +138,17 @@ final readonly class ConsentPresenter
                 //
                 // Computed exactly as statusFor() does, including the opt-in exclusion: a
                 // voluntary consent is never outstanding, because demanding one is Art. 7(4).
-                'outstanding' => ! $document->requires_explicit_optin
+                //
+                // A RETIRED holding is never outstanding either, and that is the deliberate half of
+                // showing it at all. Nothing is being enforced — the gate reads the active set, so a
+                // retired document cannot block anyone — and `outstanding` is the flag a screen
+                // turns into "please accept this". Inviting an acceptance here would ask the subject
+                // to agree to a version that is no longer published; the row exists to let them END
+                // a holding, not to start one.
+                'outstanding' => ! $isRetired
+                    && ! $document->requires_explicit_optin
                     && ($held[$document->key] ?? 0) < $document->major_version,
+                'retired' => $isRetired,
                 'withdrawable' => $document->type->isWithdrawable(),
                 // Null unless the host configured `document_url`. A settings screen on which the
                 // document being withdrawn cannot be read is silent exactly where Art. 7(3) assumes
@@ -104,6 +166,13 @@ final readonly class ConsentPresenter
                 'withdraw_url' => $offersWithdrawal ? $withdrawUrl : null,
             ];
 
+            // ⚠️ THE TYPE BOUNDARY IS THE QUERY ABOVE, NOT THIS MATCH. The catch-all reads like one
+            // — it is what filed an informational page under "consents", absorbing a basis it had
+            // never been told about while nothing went red — but tightening it here cannot be the
+            // fix: `legalBasis()` is typed `string`, so an exhaustive match is impossible, and an
+            // explicit arm for a basis no shipped type has is a line no run can enter. What keeps a
+            // page that binds nobody out of this loop is the `isConsentBearing()` filter on the
+            // document set, which is also where statusFor() draws it.
             $group = match ($document->type->legalBasis()) {
                 'contract' => 'contracts',
                 'acknowledgement' => 'acknowledgements',

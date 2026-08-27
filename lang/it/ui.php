@@ -50,6 +50,7 @@ return [
     // The one state a settings screen must not blur: a new major version is waiting, so
     // this is the invitation to do voluntarily what the gate will otherwise compel.
     'action_required' => 'Azione necessaria',
+    'retired' => 'Non più offerto',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}In vigore da oggi|{1}Ancora :count giorno|[2,*]Ancora :count giorni',
@@ -79,8 +80,13 @@ return [
     'admin_translate' => 'Traduci da :locale',
     'admin_mark_reviewed' => 'Segna come rivisto',
     'admin_preview' => 'Anteprima',
-    'granted_confirmation' => 'Consenso concesso. Puoi ritirarlo quando vuoi.',
-    'withdrawn_confirmation' => 'Consenso ritirato. Ha effetto immediato.',
+    'granted_confirmation' => 'Consenso concesso. Puoi revocarlo quando vuoi.',
+    'withdrawn_confirmation' => 'Consenso revocato. Ha effetto immediato.',
+    // The refusal a subject can actually reach — a stale page, a hand-built post or a custom
+    // stub asking to withdraw something that was never a consent. It states the position
+    // without the document key or the internal type: those are the operator's business, and
+    // they go to the log.
+    'not_withdrawable' => 'Questo documento non può essere revocato — puoi revocare solo un consenso che hai dato liberamente.',
 
     // Re-consent submit confirmation + plain admin-stub labels (announced / localized).
     'reconsent_recorded' => 'Grazie — il tuo consenso è stato registrato.',

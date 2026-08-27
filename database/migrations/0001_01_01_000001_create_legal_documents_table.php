@@ -74,10 +74,20 @@ return new class extends Migration
         // Postgres can guarantee "one active version per (key, locale)" at the DB
         // level with a partial unique index; MySQL/SQLite rely on the app-layer
         // guard in LegalDocument::activate().
+        //
+        // Hand-written SQL, so the table prefix has to be applied by hand — the schema builder
+        // does it everywhere else, which is precisely why a literal name here goes unnoticed until
+        // an application with a configured prefix runs `migrate` and gets a missing table
+        // half-way through the chain. The INDEX name takes the prefix too: an index lives in the
+        // schema namespace rather than under its table, so two prefixed installations sharing one
+        // database would otherwise collide on the second install.
         if (DB::connection()->getDriverName() === 'pgsql') {
+            $table = $this->prefixed('legal_documents');
+            $index = $this->prefixed('legal_documents_one_active_per_key_locale');
+
             DB::statement(
-                'CREATE UNIQUE INDEX legal_documents_one_active_per_key_locale '
-                .'ON legal_documents (key, locale, tenant_id) WHERE is_active = true'
+                "CREATE UNIQUE INDEX {$index} "
+                ."ON {$table} (key, locale, tenant_id) WHERE is_active = true"
             );
         }
     }
@@ -85,5 +95,23 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('legal_documents');
+    }
+
+    /**
+     * A table or index name carrying the connection's table prefix.
+     *
+     * The prefix is configuration rather than input, but a name that is not a bare identifier
+     * fragment would be interpolated into DDL, and "it cannot be hostile" is an assumption, not a
+     * guard. Refuse before a single character of it reaches a statement.
+     */
+    private function prefixed(string $name): string
+    {
+        $prefix = DB::connection()->getTablePrefix();
+
+        if (preg_match('/^\w*$/', $prefix) !== 1) {
+            throw new RuntimeException("refusing to build legal_documents DDL for an unexpected table prefix: {$prefix}");
+        }
+
+        return $prefix.$name;
     }
 };

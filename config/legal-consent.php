@@ -100,10 +100,11 @@ return [
         'markdown' => [
             'driver' => MarkdownFilesDriver::class,
 
-            // null = the app's `resources/legal`. It is resolved at runtime rather than written
-            // here as `resource_path('legal')`, because this file is require'd on every app boot
-            // (mergeConfigFrom runs in register()) and that helper only exists in
-            // laravel/framework — which this package deliberately does not require.
+            // null = the app's `resources/legal`, resolved from the container when the driver is
+            // built. Writing `resource_path('legal')` here instead would put an ABSOLUTE path into
+            // a file that gets cached: `config:cache` stores the evaluated value, so a cache built
+            // in one directory (a deploy release folder, a container image, a colleague's machine)
+            // would keep pointing at that one afterwards.
             'path' => null,
         ],
         'drafts' => [
@@ -261,6 +262,16 @@ return [
     | bundled plain view offers them, and a public session-backed surface is not widened for a
     | case nothing asks for.
     |
+    | `api_throttle` is a rate limit this package applies itself, and it is separate from
+    | `api_middleware` on purpose. Since Laravel 11 the `api` group carries a limiter only if your
+    | application called `throttleApi()` — the name promises nothing — and behind these routes sits
+    | an append-only ledger: four write endpoints, no de-duplication, and no pruning by default, so
+    | every accepted request is a row that stays. Keeping it out of `api_middleware` means replacing
+    | that list (which you are meant to do, to supply your own auth) does not drop the limit with
+    | it. The value is passed straight to Laravel's `throttle` middleware, so anything it accepts
+    | works: `'60,1'` for sixty a minute, or the name of a limiter you registered. Set it to null
+    | to take the limit off entirely.
+    |
     */
     'routes' => [
         'consent_name' => 'legal.consent',
@@ -270,6 +281,7 @@ return [
         'api' => false,
         'api_prefix' => 'legal',
         'api_middleware' => ['api', 'auth'],
+        'api_throttle' => '60,1',
         'web' => false,
         'web_prefix' => 'legal',
         'web_middleware' => ['web', 'auth'],
@@ -440,7 +452,7 @@ return [
     | Registration integration
     |--------------------------------------------------------------------------
     |
-    | ⚠️ THIS DEFAULT IS SAFE ONLY BECAUSE A REGISTRATION FORM VALIDATED THE TICK.
+    | Warning: this default is safe only because a registration form validated the tick.
     |
     | For a CONSENT document the recorder checks the submitted field itself and
     | skips the key when it is absent. For a CONTRACT or an ACKNOWLEDGEMENT it
@@ -451,8 +463,8 @@ return [
     | Sign people in through an external provider — OAuth, SSO, an invitation
     | link — and there is no form. The callback carries no such fields, so
     | nothing validated the tick. With this switch on, the first callback writes
-    | an acceptance row for every mandatory document WITHOUT A HUMAN HAVING DONE
-    | ANYTHING — in the one table whose entire purpose is to prove that a human
+    | an acceptance row for every mandatory document without a human having done
+    | anything — in the one table whose entire purpose is to prove that a human
     | did.
     |
     | The recorder now SAYS so: recording a mandatory document whose
@@ -541,17 +553,18 @@ return [
     |          bgb_agb   -> nothing; § 308 Nr. 5's "angemessene Frist" IS the mode benchmark
     |          dcd_327r  -> nothing; § 327r Abs. 2 fixes no number (see below)
     |
-    | `dcd_termination_days` is NOT a lead time and is not read as one. It is the 30-day
-    | free-termination window of § 327r Abs. 3, which runs from the LATER of notice and
-    | modification — the figure your notice has to state, not a period before it. Reading it
-    | as an advance period would assert a statutory rule that does not exist.
+    | Every key below is a lead time and every one of them is read. That is the whole rule for
+    | this block, and it is why the § 327r Abs. 3 free-termination window is NOT among them: that
+    | window runs from the LATER of notice and modification, so it is a figure your notice has to
+    | state, not a period before anything. It is also fixed at 30 days by statute, so a setting for
+    | it would offer to change a number nobody can change. The package neither reads it nor stores
+    | it; state it in your own notice text.
     |
     */
     'notice_periods' => [
         'active_reconsent_min_days' => 60, // § 308 Nr. 5 / BGH XI ZR 26/20 grace (also MATERIAL_MIN_LEAD_DAYS)
         'deemed_consent_min_days' => 60,   // the 2-month § 308 / § 675g benchmark
         'psd2_min_days' => 60,             // HARD: § 675g(1) BGB / Art. 54 PSD2 (2 months)
-        'dcd_termination_days' => 30,      // § 327r Abs. 3 free-termination window
         'p2b_standstill_days' => 15,       // Reg. (EU) 2019/1150 Art. 3 minimum standstill
         'eecc_min_days' => 30,             // Dir. (EU) 2018/1972 Art. 105(4)
         'privacy_advance_days' => 30,      // "well in advance" (WP260) — a sane default, not statutory
