@@ -74,6 +74,56 @@ final class ConsentGate
     }
 
     /**
+     * The mandatory documents the subject does not hold — the first-acceptance question.
+     *
+     * The predicate is `held === 0`, which is wider than "never accepted": an ENDING action drops
+     * the holding to zero (see {@see standingFor()}), so a withdrawn, declined or terminated
+     * document lands here as well. Deliberate — that subject holds no agreement, and excluding
+     * them would reinstate exactly the divergence this method exists to close.
+     *
+     * {@see outstandingFor()} cannot answer it, and that is not a defect in it: it filters on
+     * `notice_mode`, which states how a version CHANGE is communicated. A first acceptance is not
+     * a change — nothing was announced because nothing moved — so the field has no opinion to
+     * give, and a document first published as a silent editorial version stayed invisible to the
+     * gate for good. Measured on 0.19.0: a subject who accepted nothing got `outstanding = true`
+     * from `statusFor()` and an EMPTY set from `outstanding()`, for the same documents, at the
+     * same moment. The application then treated them as having accepted a text they were never
+     * shown, in a ledger that is append-only.
+     *
+     * THE TWO QUESTIONS STAY SEPARATE, and the split is `held === 0` rather than
+     * `held < major_version`. Once a subject holds ANYTHING for a key, the next version is a
+     * change, and an operator who published that change as silent has said in the published row
+     * that it needs no re-consent. Folding the two sets would overrule that decision from here.
+     *
+     * A voluntary consent is never owed (Art. 7(4): a consent that can be required is not freely
+     * given), and an informational page is never accepted at all — so both are out, by the type's
+     * own predicate and by the per-document override, in case an operator has made a mandatory
+     * document voluntary.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    public function firstAcceptanceFor(Model $subject, string $locale): Collection
+    {
+        // Same cache and same short-circuit as outstandingFor(): an install that has published
+        // nothing must not pay a ledger read on a path a consumer may put on every request.
+        $mandatory = app(EnforceableDocumentCache::class)
+            ->activeFor($locale)
+            ->filter(fn (LegalDocument $document): bool => $document->type->isMandatory()
+                && ! $document->requires_explicit_optin)
+            ->values();
+
+        if ($mandatory->isEmpty()) {
+            return $mandatory;
+        }
+
+        $held = $this->heldMajorByKey($subject, array_values($mandatory->map(fn (LegalDocument $document): string => $document->key)->all()));
+
+        return $mandatory
+            ->filter(fn (LegalDocument $document): bool => ($held[$document->key] ?? 0) === 0)
+            ->values();
+    }
+
+    /**
      * The major version the subject CURRENTLY holds per document key, ACROSS ALL LOCALES.
      *
      * Consent attaches to a document's identity, not the language it was read in: accepting the

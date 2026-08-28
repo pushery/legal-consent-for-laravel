@@ -204,7 +204,7 @@ acceptance in an interstitial shown after authentication and before first use, a
 `ConsentMethod::FirstUseGate` for it:
 
 ```blade
-<livewire:legal-consent.reconsent-form :method="ConsentMethod::FirstUseGate" />
+<livewire:legal-consent.reconsent-form :method="\Pushery\LegalConsent\Enums\ConsentMethod::FirstUseGate" />
 ```
 
 **Drop in the optional UI** (needs `livewire/livewire`. The WireKit-native views are served
@@ -259,6 +259,29 @@ a preceding `OptInRequested` row for the same subject and key. The named transit
 `accept()`, `withdraw()`, `object()`, `terminate()`, `confirm()` — ask their own half already, so
 prefer them over `record()` unless you genuinely need the untyped write. The ledger is append-only,
 so a row asserting a state the law has no shape for can never be corrected.
+
+**No registration form to put a checkbox on?** Sign-in through an external provider raises
+`Registered` with no form, so there is nothing to validate a tick against. Show an interstitial
+after authentication and mount the bundled form as a first-use gate:
+
+```blade
+<livewire:legal-consent.reconsent-form
+    :method="\Pushery\LegalConsent\Enums\ConsentMethod::FirstUseGate" />
+```
+
+It lists every mandatory document the subject does not hold — `Consent::firstAcceptance()` is the
+same read if you build your own screen — and records each with that method. "Does not hold" is
+wider than "never accepted": somebody who withdrew, declined or terminated holds nothing either,
+and is asked again rather than served without an agreement. Do not reach for
+`ReConsentGate` there: the ledger is append-only, and that value asserts an acceptance *after a
+document changed*, which never happened.
+
+`Consent::outstanding()` answers a different question and will not do: it filters on the notice
+mode of a version CHANGE, and a first acceptance is not a change.
+
+Set `legal-consent.gate.first_use` to `true` to have the middleware stop people until they have
+been through that screen — and only together with the screen, or they land on a consent route that
+tells them nothing is due.
 
 Asking about several documents at once costs one read rather than two per key:
 

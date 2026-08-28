@@ -38,13 +38,25 @@ final readonly class EnsureLegalConsent
             return $next($request);
         }
 
-        $outstanding = $this->consent->outstanding($subject, app()->getLocale());
+        $locale = app()->getLocale();
+        $owed = $this->consent->outstanding($subject, $locale);
 
-        if ($outstanding->isEmpty()) {
+        // A FIRST acceptance is a different question and is off by default. `outstanding()` asks
+        // whether a CHANGE is owed; a subject who never accepted anything has had no change, so
+        // that read is silent about them — and an application whose sign-up carries no consent
+        // checkbox then treats people as having accepted a text they were never shown. The two
+        // sets are merged rather than chosen between: a subject can owe a first acceptance of one
+        // document and a re-consent of another at the same time, and stopping for one while
+        // ignoring the other would be arbitrary.
+        if ($this->gatesFirstUse()) {
+            $owed = $owed->concat($this->consent->firstAcceptance($subject, $locale))->values();
+        }
+
+        if ($owed->isEmpty()) {
             return $next($request);
         }
 
-        $keys = $outstanding->map(static fn (LegalDocument $document): string => $document->key)->values()->all();
+        $keys = $owed->map(static fn (LegalDocument $document): string => $document->key)->unique()->values()->all();
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -58,6 +70,18 @@ final readonly class EnsureLegalConsent
         // return a deep-linked subject to where they were headed once re-consent is cleared.
         // Identical redirect otherwise; the extra session key is inert for apps that never read it.
         return redirect()->guest($this->consentTarget());
+    }
+
+    /**
+     * Does this installation also gate a FIRST acceptance?
+     *
+     * Read strictly: anything but a literal `true` leaves it off. A gate that turns itself on
+     * because a config value happened to be truthy would stop every subject of an application
+     * that never asked for it, and the failure would look like an outage rather than a setting.
+     */
+    private function gatesFirstUse(): bool
+    {
+        return config('legal-consent.gate.first_use') === true;
     }
 
     private function isAllowlisted(Request $request): bool

@@ -285,6 +285,21 @@ final class ConsentFake implements ConsentManager
     }
 
     /**
+     * The same arranged set as {@see outstanding()}, and the fake says so rather than inventing a
+     * distinction it cannot compute.
+     *
+     * In production the two reads answer different questions and can differ: `outstanding()`
+     * filters on the notice mode of a version CHANGE, while this one asks whether the subject ever
+     * accepted anything at all. A double has no published rows and no notice modes, so it cannot
+     * derive that split — arranging one set and answering both from it is the honest shape.
+     * Arrange with `owes()` and assert on whichever read the screen under test uses.
+     */
+    public function firstAcceptance(Model $subject, ?string $locale = null): Collection
+    {
+        return $this->outstanding($subject, $locale);
+    }
+
+    /**
      * The acceptance sentence for an arranged document, resolved the way the render pipeline
      * resolves it: the document's own line, then the generic one. A consuming test that renders
      * the gate therefore sees a real sentence rather than an empty label.

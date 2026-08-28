@@ -4,6 +4,93 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.19.0 → 0.20.0
+
+### `ConsentManager` gains `firstAcceptance()`
+
+If you implement `Pushery\LegalConsent\Contracts\ConsentManager` yourself, it no longer satisfies
+the interface until you add:
+
+```php
+public function firstAcceptance(\Illuminate\Database\Eloquent\Model $subject, ?string $locale = null): \Illuminate\Support\Collection;
+```
+
+Nothing changes for an application using the bundled manager, the facade, or `ConsentFake` — all
+three already have it. If you stubbed the interface in your own test suite rather than using
+`ConsentFake`, that stub is what breaks: the class fatals at load with *"contains 1 abstract method
+and must therefore be declared abstract"*. Extending `DefaultConsentManager` or switching the stub
+to `ConsentFake` are both one-line fixes, and the second one survives the next method too.
+
+### `legal-consent:doctor` exits 1 if you have published the config
+
+This is the one change an installation meets **without opting into anything**, so it is worth
+knowing before your pipeline tells you.
+
+`gate.first_use` is a new key inside the existing `gate` block. Laravel merges a published config
+**flat** — `array_merge` over the top-level keys of `legal-consent`, no recursion — so your
+published `gate` block wins whole and the package default is not applied. The key reads as `null`,
+which leaves the gating **off**; that direction is safe and nothing about your application changes.
+
+What does change is the report. `doctor` lists a package key that never reaches your runtime as
+lost, and a lost key is a failure, not a warning:
+
+```
+These keys exist in the package but NEVER reach your runtime config:
+  - gate.first_use  (package default: false)
+```
+
+**Add the key to your published `config/legal-consent.php`** and the report is clean again:
+
+```php
+'gate' => [
+    // …
+    'first_use' => false,
+],
+```
+
+If you have **not** published the config, there is nothing to do — the package default applies and
+`doctor` is unchanged.
+
+### A form already mounted as a first-use gate now lists documents
+
+`ConsentMethod::FirstUseGate` has existed since 0.15.0 and the documentation named this exact tag,
+but the bundled form sourced from `Consent::outstanding()`, which filters on the notice mode of a
+version **change**. A first acceptance is not a change, so wherever a document had been published
+silently the screen rendered nothing at all.
+
+**If you already mount the form that way, it starts working at this upgrade.** That is the fix, and
+it is also a change in what your users see: people who were waved through are now shown a screen
+and asked. Expect the acceptances you were never collecting to start arriving — which is the point,
+but it is not nothing on a Monday morning.
+
+The set it shows is *the mandatory documents the subject does not hold*, which is wider than "never
+accepted": somebody who withdrew, declined or terminated holds nothing either and is asked again.
+Voluntary consents are never in it (Art. 7(4)), and informational pages never are.
+
+⚠️ **Check the spelling of your mount.** A Blade template compiles into a file with no namespace, so
+a bare `ConsentMethod::FirstUseGate` in the attribute throws `Class "ConsentMethod" not found`. Our
+own documentation carried the short form in four places until this release. The form that works:
+
+```blade
+<livewire:legal-consent.reconsent-form
+    :method="\Pushery\LegalConsent\Enums\ConsentMethod::FirstUseGate" />
+```
+
+### `gate.first_use` is opt-in, and it needs the screen
+
+Setting `legal-consent.gate.first_use` to `true` makes `EnsureLegalConsent` also stop a subject who
+owes a first acceptance. It is read strictly — anything but a literal `true` leaves it off, because
+a gate that switched itself on for a truthy value would stop every subject of an application that
+never asked for it.
+
+**Turn it on together with the screen above.** Without one it is a dead end rather than a loop: the
+consent route is allowlisted, so the subject lands there and is told nothing is due. `doctor`
+reports mandatory documents published while the gating is off, and stays quiet once it is on —
+that is a decision, and it leaves decisions alone.
+
+**Doing nothing is a complete answer.** The default is `false`, and an application whose sign-up
+records consent on the registration form does not need it.
+
 ## 0.18.0 → 0.19.0
 
 ### The change-notice proof is now written when the notice is DELIVERED
@@ -419,7 +506,8 @@ before first use. Two things are worth doing together:
 First, capture the acceptance where it actually happens — in the interstitial template:
 
 ```blade
-<livewire:legal-consent.reconsent-form :method="ConsentMethod::FirstUseGate" />
+<livewire:legal-consent.reconsent-form
+    :method="\Pushery\LegalConsent\Enums\ConsentMethod::FirstUseGate" />
 ```
 
 Then turn off the `Registered` listener, which assumes a form validated the tick:

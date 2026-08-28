@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Enums\ConsentAction;
+use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\ConsentContext;
@@ -96,6 +97,33 @@ interface ConsentManager
      * @return Collection<int, LegalDocument>
      */
     public function outstanding(Model $subject, ?string $locale = null): Collection;
+
+    /**
+     * The mandatory documents this subject does not hold — the first-acceptance question.
+     *
+     * "Does not hold" is the exact predicate, and it is wider than "never accepted": a subject
+     * whose holding an ENDING action dropped to zero — withdrawn, declined, a terminated contract —
+     * is in this set too. That is deliberate. Somebody who terminated their contract terms holds no
+     * contract, `hasCurrent()` says so, and a gate that skipped them would let an ending action buy
+     * permanent access. The honest label for what they are asked next is a first-use gate, not a
+     * re-consent: nothing changed, they simply hold nothing.
+     *
+     * {@see outstanding()} answers a different one and cannot answer this: it filters on the
+     * notice mode, which states how a version CHANGE is communicated, and a first acceptance is
+     * not a change. A document first published as a silent editorial version is therefore never
+     * in `outstanding()`, while `statusFor()` has always reported it as owed — the two disagreed
+     * about the same subject, and an application that trusted the first treated people as having
+     * accepted a text they were never shown.
+     *
+     * Use this behind an interstitial after sign-in and record with
+     * {@see ConsentMethod::FirstUseGate}. Once the subject holds
+     * anything for a key, the next version is a change and belongs to `outstanding()`.
+     *
+     * Partially hydrated with the same guaranteed attributes as `outstanding()`.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    public function firstAcceptance(Model $subject, ?string $locale = null): Collection;
 
     /**
      * Whether the subject currently holds the active major version of a document.

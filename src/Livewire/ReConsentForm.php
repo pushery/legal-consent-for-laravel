@@ -15,6 +15,7 @@ use Pushery\LegalConsent\Exceptions\DocumentChangedException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\RefusesUnavailableTransitions;
+use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
 use Pushery\LegalConsent\Support\DocumentUrlResolver;
@@ -120,7 +121,7 @@ final class ReConsentForm extends Component
         $manager = app(ConsentManager::class);
         $recorded = 0;
 
-        foreach ($manager->outstanding($subject, $this->locale) as $document) {
+        foreach ($this->pendingFor($subject) as $document) {
             if (($this->accept[$document->key] ?? false) === true) {
                 if (! array_key_exists($document->key, $this->hashes)) {
                     // Fail closed: this document is ticked but carries no render-time hash — it was
@@ -181,7 +182,7 @@ final class ReConsentForm extends Component
             // enforcement middleware intercepted them (redirect()->guest stashed it), falling back
             // to the configured home. Opt-in, and never for a settings-page embed, so the in-place
             // "all current" confirmation existing consumers rely on is unchanged by default.
-            if ($this->shouldReturnToIntended() && $manager->outstanding($subject, $this->locale)->isEmpty()) {
+            if ($this->shouldReturnToIntended() && $this->pendingFor($subject)->isEmpty()) {
                 $home = config('legal-consent.routes.home', '/');
                 $fallback = is_string($home) && $home !== '' ? $home : '/';
 
@@ -277,13 +278,38 @@ final class ReConsentForm extends Component
         }
     }
 
+    /**
+     * The documents THIS MOUNT is asking about.
+     *
+     * A first-use interstitial and a re-consent gate ask different questions, and the method the
+     * mount declares is where they separate — the same value that will end up in the ledger row,
+     * so a screen cannot show one question and record the other.
+     *
+     * `outstanding()` filters on the notice mode of a version CHANGE, which is meaningless for a
+     * subject who never accepted anything: a document first published as a silent editorial
+     * version was never in that set, so a form mounted with `FirstUseGate` rendered zero
+     * documents while `statusFor()` reported the same keys as owed. Measured on 0.19.0, and the
+     * reason this seam exists (LegalConsent's own `ConsentMethod::FirstUseGate` docblock had
+     * described the case since it was introduced).
+     *
+     * `$method` is `#[Locked]`, so the choice is the embedding application's and not the browser's.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    private function pendingFor(Model $subject): Collection
+    {
+        $manager = app(ConsentManager::class);
+
+        return $this->method === ConsentMethod::FirstUseGate
+            ? $manager->firstAcceptance($subject, $this->locale)
+            : $manager->outstanding($subject, $this->locale);
+    }
+
     public function render(): View
     {
         $subject = $this->subject();
 
-        $pending = $subject instanceof Model
-            ? app(ConsentManager::class)->outstanding($subject, $this->locale)
-            : new Collection;
+        $pending = $subject instanceof Model ? $this->pendingFor($subject) : new Collection;
 
         // Capture the content hash of each shown document into component state (persisted across the
         // Livewire request), so submit() can pass what the subject ACTUALLY saw — not a value

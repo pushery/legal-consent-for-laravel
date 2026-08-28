@@ -4,6 +4,58 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-08-28
+
+**A minor bump that carries one breaking change**, which SemVer `0.y.z` allows: `ConsentManager`
+gains `firstAcceptance()`, so a custom implementation of the interface no longer satisfies it. The
+bundled manager and `ConsentFake` already have it, so an application that uses either is unaffected.
+Written up in `UPGRADE.md`, together with the one behavior change an installation meets without
+opting in.
+
+### Added
+
+- **A first acceptance finally has a shipped surface.** `ConsentMethod::FirstUseGate` has described
+  this screen since it was introduced — "the only place a first acceptance can happen when there is
+  no registration form to put a checkbox on" — the registration recorder recommends it in as many
+  words for a sign-in through an external provider, and the documentation told you to mount the
+  bundled form with it. Mounted that way the form rendered **nothing** wherever the document had
+  been published silently.
+
+  It sourced its documents from `Consent::outstanding()`, which filters on the notice mode of a
+  version CHANGE. A first acceptance is not a change: nothing was announced because nothing moved,
+  so a document first published as a silent editorial version was never in that set — which is
+  every privacy notice, and any contract published with `--editorial`. A subject who
+  had accepted nothing was shown "everything current, nothing to do", while `statusFor()` reported
+  the same keys as owed — the two surfaces disagreeing about one person, each correct for its own
+  question.
+
+  `Consent::firstAcceptance()` asks the other one: does this subject hold this at all. That is
+  wider than "never accepted" — somebody who withdrew, declined or terminated holds nothing either,
+  and is asked again rather than served without an agreement. The form picks its source from the
+  method the mount declares, which is `#[Locked]`, so a screen cannot show one question and record
+  the other.
+
+  **It covers the privacy notice too**, which the previous surface structurally could not: a
+  privacy notice may not be published as an active re-consent, for a correct legal reason, so an
+  interstitial built on `outstanding()` collected the contract and never the acknowledgement —
+  quietly, with nothing red and a data export that looked complete.
+
+- **`legal-consent.gate.first_use`** (default `false`) — the enforcement middleware also stops a
+  subject who owes a first acceptance. Read strictly: anything but a literal `true` leaves it off,
+  because a gate that switched itself on for a truthy value would stop every subject of an
+  application that never asked for it. Turn it on together with the screen above; without one the
+  subject lands on the allowlisted consent route and is told nothing is due.
+
+  If you have **published** the config, the key will not reach your runtime until you add it
+  yourself: `gate` is a top-level block and the merge is flat, so your published block wins whole
+  and the package default is not applied. It reads as `null`, which leaves the gating off — the
+  safe direction, and a silent one. `legal-consent:doctor` names the key in its drift section.
+
+- **`legal-consent:doctor` reports mandatory documents published while first-use gating is off** —
+  the state a consumer cannot see for themselves, because nobody is counted and nothing goes red.
+  It stays quiet when the gating is on: that is a decision, and a doctor that argues with decisions
+  gets skipped on the finding that matters.
+
 ## [0.19.0] - 2026-08-27
 
 ### Added
@@ -2177,7 +2229,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.16.1...v0.17.0
