@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Console;
 
 use Closure;
 use Illuminate\Console\Command;
+use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -161,6 +162,76 @@ final class DoctorCommand extends Command
     }
 
     /**
+     * The keys of the mandatory documents this installation has published and still serves.
+     *
+     * @return list<string>
+     */
+    private function publishedMandatoryKeys(): array
+    {
+        try {
+            $keys = LegalDocument::query()
+                ->withoutGlobalScope(TenantScope::class)
+                ->where('is_active', true)
+                ->where('requires_explicit_optin', false)
+                ->whereIn('type', [DocumentType::ContractTerms->value, DocumentType::PrivacyNotice->value])
+                ->orderBy('key')
+                ->pluck('key')
+                ->all();
+        } catch (Throwable) {
+            // Not migrated yet — the same answer its siblings give. A schema that does not exist
+            // has published nothing, and a doctor that fatals on a fresh checkout is useless
+            // exactly where it is needed most.
+            return [];
+        }
+
+        // One key per document identity: the same contract published in seven locales is one
+        // thing a subject accepts, and naming it seven times would read as seven problems.
+        return array_values(array_unique(array_filter($keys, is_string(...))));
+    }
+
+    /**
+     * What is worth saying about first-use gating, given what is published and how it is set.
+     *
+     * Pure on purpose, like {@see describeVariant()}: no config read and no query, so both answers
+     * are reachable from a test rather than one of them shipping as prose nobody ever ran.
+     *
+     * Only ONE state is reported, and the omission matters. Gating that is switched ON is a
+     * decision and is left alone. Gating that is OFF while mandatory documents are published is
+     * the state a consumer cannot see: `outstanding()` filters on the notice mode of a version
+     * CHANGE, so a subject who never accepted anything is not in it, is not counted anywhere, and
+     * is served the application as if they had accepted. Nothing goes red, no row is written, and
+     * the screen that would have asked them renders "everything current".
+     *
+     * @param  list<string>  $mandatoryKeys
+     * @return array{0: string, 1: list<string>}|null
+     */
+    public static function describeFirstUseGate(array $mandatoryKeys, mixed $firstUseSetting): ?array
+    {
+        if ($mandatoryKeys === [] || $firstUseSetting === true) {
+            return null;
+        }
+
+        return [
+            'First-use gating is off, and '.count($mandatoryKeys).' mandatory document(s) are published: '.implode(', ', $mandatoryKeys).'.',
+            [
+                '  The enforcement middleware asks about a CHANGE. A subject who never accepted any',
+                '  of these has had no change, so they are not asked, not counted, and served the',
+                '  application as though they had accepted — in a ledger that cannot be corrected.',
+                '',
+                '  If your sign-up records consent (a checkbox on the registration form), this is',
+                '  fine and expected. If it does not — an OAuth-only sign-in, an imported user base —',
+                '  set `legal-consent.gate.first_use` to true AND mount the form as a first-use gate',
+                '  on your consent route, or those people are never asked:',
+                '',
+                '      <livewire:legal-consent.reconsent-form :method="\Pushery\LegalConsent\Enums\ConsentMethod::FirstUseGate" />',
+                '',
+                '  Turning the switch on without that screen is a dead end, not a loop: the consent',
+                '  route is allowlisted, so they land there and are told nothing is due.',
+            ],
+        ];
+    }
+
+    /**
      * What is worth saying about which view set is being served, or null when there is nothing.
      *
      * Thin on purpose: it reads the environment and hands the three facts to a pure describer. The
@@ -260,6 +331,7 @@ final class DoctorCommand extends Command
     public function handle(): int
     {
         $variantFinding = $this->uiVariantFinding();
+        $firstUseFinding = self::describeFirstUseGate($this->publishedMandatoryKeys(), config('legal-consent.gate.first_use'));
         $unknownMode = $this->unknownRegistrationMode();
         $incoherent = $this->deemedConsentWithoutProof();
         $unpublished = $this->unpublishedCombinations();
@@ -267,6 +339,19 @@ final class DoctorCommand extends Command
 
         if ($variantFinding !== null) {
             [$headline, $explanation] = $variantFinding;
+
+            $this->newLine();
+            $this->warn($headline);
+
+            foreach ($explanation as $line) {
+                $this->line($line);
+            }
+
+            $this->newLine();
+        }
+
+        if ($firstUseFinding !== null) {
+            [$headline, $explanation] = $firstUseFinding;
 
             $this->newLine();
             $this->warn($headline);

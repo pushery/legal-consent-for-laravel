@@ -417,6 +417,32 @@ return [
     */
     'gate' => [
         'subject_filter' => null,
+
+        /*
+        | FIRST-USE GATING — off by default, and the default is a decision.
+        |
+        | The gate above enforces a CHANGE: a document published as an active re-consent, whose
+        | enforcement date has passed, that the subject has not accepted at its current major.
+        | It says nothing about a subject who never accepted ANYTHING, because a first acceptance
+        | is not a change and `notice_mode` — the field the gate filters on — has no opinion to
+        | give about it.
+        |
+        | Turn this on and the middleware also stops a subject who owes a FIRST acceptance of a
+        | mandatory document. That is the honest behavior for an application whose sign-up has no
+        | consent checkbox — an OAuth-only sign-in, for instance — where the alternative is
+        | treating people as having accepted a text they were never shown.
+        |
+        | ⚠️ IT IS OFF BY DEFAULT BECAUSE TURNING IT ON WITHOUT A SCREEN IS A DEAD END. The
+        | middleware sends the subject to `routes.consent_name`, which is allowlisted, so there is
+        | no redirect loop — but if that page mounts only the re-consent form, it will tell them
+        | "everything current, nothing to do" while the gate keeps stopping them. Mount the form
+        | as a first-use gate there:
+        |
+        |   <livewire:legal-consent.reconsent-form :method="\Pushery\LegalConsent\Enums\ConsentMethod::FirstUseGate" />
+        |
+        | `legal-consent:doctor` reports the combination.
+        */
+        'first_use' => false,
     ],
 
     /*

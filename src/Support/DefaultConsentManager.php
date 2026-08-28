@@ -370,6 +370,11 @@ readonly class DefaultConsentManager implements ConsentManager
         return $this->gate->outstandingFor($subject, $locale ?? $this->defaultLocale);
     }
 
+    public function firstAcceptance(Model $subject, ?string $locale = null): Collection
+    {
+        return $this->gate->firstAcceptanceFor($subject, $locale ?? $this->defaultLocale);
+    }
+
     public function hasCurrent(Model $subject, string $documentKey, ?string $locale = null): bool
     {
         $locale ??= $this->defaultLocale;
