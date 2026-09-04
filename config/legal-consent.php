@@ -272,6 +272,13 @@ return [
     | works: `'60,1'` for sixty a minute, or the name of a limiter you registered. Set it to null
     | to take the limit off entirely.
     |
+    | `web_throttle` is the same limit for the SESSION-backed writes: the web route above and the
+    | actions of the bundled Livewire components (grant, withdraw, object, terminate). They reach
+    | the same append-only ledger, and a Livewire request is one POST with a CSRF token — as
+    | scriptable as a JSON call. One budget for the whole surface, however it is reached, keyed on
+    | the authenticated subject and kept apart from any `throttle:` your own routes apply. Same
+    | shape as `api_throttle`; null takes it off.
+    |
     */
     'routes' => [
         'consent_name' => 'legal.consent',
@@ -285,6 +292,7 @@ return [
         'web' => false,
         'web_prefix' => 'legal',
         'web_middleware' => ['web', 'auth'],
+        'web_throttle' => '60,1',
     ],
 
     /*

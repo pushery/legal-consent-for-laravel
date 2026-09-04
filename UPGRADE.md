@@ -4,6 +4,23 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.20.0 → 0.21.0
+
+### The session-backed writes are rate-limited by default
+
+The Livewire components' grant, withdraw, object and terminate actions and the web withdraw route
+append to the same append-only ledger the JSON API does, and were the only ways in with no limit in
+front of them. The new config key `routes.web_throttle` defaults to `'60,1'` — sixty writes a
+minute per authenticated subject, on ONE budget however the surface is reached — and is applied by
+the package itself, through the same `throttle` middleware your routes use (Redis-backed where you
+called `throttleWithRedis()`). Past the limit the answer is `429` and no row is written.
+
+**A config published under an earlier version already declares the `routes` block**, and the
+shallow merge never delivers a new key into it — so the package applies the inline default and the
+behavior changes for you either way, exactly as `routes.api_throttle` did. Add
+`'web_throttle' => '120,1'` to your own `routes` block for a different limit, the name of a limiter
+you registered with `RateLimiter::for()`, or `null` to switch it off.
+
 ## 0.19.0 → 0.20.0
 
 ### `ConsentManager` gains `firstAcceptance()`

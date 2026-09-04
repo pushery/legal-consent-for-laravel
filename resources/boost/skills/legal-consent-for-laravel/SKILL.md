@@ -80,6 +80,9 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   presenter then fills each held consent's `withdraw_url`. With it off the stub renders no
   withdraw form at all, which is deliberate — a form with no action is the appearance of a
   control, not a control. Not needed with the Livewire component, which calls its own action.
+- `routes.web_throttle` — `'60,1'` by default: one rate limit, keyed on the subject, in front of
+  every session-backed ledger write — that route and the Livewire components' grant, withdraw,
+  object and terminate actions. Same shape as `routes.api_throttle`; `null` switches it off.
 - `ui.variant` — `auto` by default: the WireKit-native views are served when `pushery/wirekit`
   ≥ 2.26.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
 - `notice_mail` — the change-notice mail. `identity.declarant` names the declaring legal person

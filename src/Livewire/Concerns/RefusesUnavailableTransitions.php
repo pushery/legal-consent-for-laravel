@@ -10,6 +10,7 @@ use Pushery\LegalConsent\Exceptions\NotGrantableException;
 use Pushery\LegalConsent\Exceptions\NotObjectableException;
 use Pushery\LegalConsent\Exceptions\NotTerminableException;
 use Pushery\LegalConsent\Exceptions\NotWithdrawableException;
+use Pushery\LegalConsent\Support\SessionWriteThrottle;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -69,6 +70,13 @@ trait RefusesUnavailableTransitions
      */
     private function guardedTransition(Closure $transition): void
     {
+        // Every ledger write a bundled component offers passes through here, which makes it the one
+        // place the session-write limit can sit and cover them all. A 429 rather than a 404: the
+        // transition exists, the subject has simply spent the budget for the minute. The re-consent
+        // screen's `submit()` does not come through here and needs no limit — it records only what
+        // is still pending, and a document stops being pending the moment it is recorded.
+        SessionWriteThrottle::enforce(request());
+
         try {
             $transition();
         } catch (LegalDocumentNotFound $e) {

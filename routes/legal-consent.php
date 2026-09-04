@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Pushery\LegalConsent\Http\Controllers\ConsentController;
 use Pushery\LegalConsent\Http\Controllers\WithdrawConsentController;
+use Pushery\LegalConsent\Support\SessionWriteThrottle;
 
 // The one SESSION-BACKED route in the package: a form POST that withdraws a consent and redirects
 // back. Opt-in, like the API, and deliberately the only thing it does.
@@ -25,8 +26,20 @@ use Pushery\LegalConsent\Http\Controllers\WithdrawConsentController;
 if (config('legal-consent.routes.web', false)) {
     $webMiddleware = config('legal-consent.routes.web_middleware', ['web', 'auth']);
     $webPrefix = config('legal-consent.routes.web_prefix', 'legal');
+    $webStack = is_array($webMiddleware) ? $webMiddleware : ['web', 'auth'];
 
-    Route::middleware(is_array($webMiddleware) ? $webMiddleware : ['web', 'auth'])
+    // The same limit the Livewire component actions apply, on the same budget — the reasoning that
+    // put `api_throttle` in front of the JSON API (below) is about the ledger, not about JSON, and
+    // this route reaches the same append. Listed after the configured chain rather than ahead of
+    // it: the framework's middleware priority places the throttle after the session and the guard
+    // anyway, and that is what makes the bucket the SUBJECT rather than the address.
+    $webThrottle = SessionWriteThrottle::middleware();
+
+    if ($webThrottle !== null) {
+        $webStack[] = $webThrottle;
+    }
+
+    Route::middleware($webStack)
         ->prefix(is_string($webPrefix) ? $webPrefix : 'legal')
         ->post('consent/withdraw', WithdrawConsentController::class)
         ->name('legal-consent.web.withdraw');
