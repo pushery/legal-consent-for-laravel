@@ -4,6 +4,26 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] - 2026-09-04
+
+**A minor bump whose one behavior change arrives without opting in**, which SemVer `0.y.z` allows: the bundled Livewire actions and the web withdraw route are now rate-limited, on the same budget as the JSON API. Written up in `UPGRADE.md`. The declared install range does not move — it has been `laravel/framework ^13.0` and `php ^8.4` all along, and is now pinned so it cannot narrow quietly.
+
+### Changed
+
+- **The supported floor is Laravel 13.0 and PHP 8.4, and nothing may raise it quietly.** Neither number moves here — `require` has read `"laravel/framework": "^13.0"` since the manifest named the framework at all, and `"php": "^8.4"` since the first release. What changes is that both are now pinned literally, so an install range cannot narrow as a side effect of something else.
+
+  The distinction being defended: `require` decides who can **install** the package, which makes it a promise to you rather than a report on what our test toolchain resolved. Those two come apart in one direction — a suite proves the package from the lowest version its toolchain will install, and below that the floor is read from the code rather than exercised. That gap is worth stating, and it is stated here; what it is not is a reason to raise the floor, because doing so locks out applications the package runs on perfectly well.
+
+  `league/commonmark` keeps its `^2.9`, narrower than its major base on purpose: six advisories, four of them HIGH, are patched in 2.9.0. A security floor is about you, a toolchain floor is about us, and only the first belongs in `require`.
+
+- **The README carries a `mutation ≥80%` badge.** It is held to the floor the shipped `composer mutate` script enforces, in both directions, so it can neither claim more than is checked nor go stale the next time that floor moves. There was deliberately no badge before: one that overstates what a gate enforces is worse than none.
+
+### Security
+
+- **The session-backed ledger writes are rate-limited, on one budget.** `routes.api_throttle` put a limit in front of the JSON API because behind it sits an append-only ledger with no de-duplication and no pruning by default, so an unlimited caller mints permanent rows. That reasoning is about the ledger, not about JSON, and the other ways in had nothing in front of them: measured, three `grant` calls on the settings screen wrote three `granted` rows and three `withdraw` calls after them three `withdrawn` rows. A Livewire request is one POST with a CSRF token, as scriptable as any other.
+
+  The new `routes.web_throttle` (default `'60,1'`) covers the web withdraw route and the grant, withdraw, object and terminate actions of both bundled components, through the same middleware the route runs — including the host's Redis-backed one where `throttleWithRedis()` was called. One budget for the whole surface, keyed on the authenticated subject and kept apart from any `throttle:` the application applies to the same subject elsewhere. Past the limit the answer is `429`, and no row is written. `null` switches it off; a config published before the key existed receives the inline default, exactly as the API limit does.
+
 ## [0.20.0] - 2026-08-28
 
 **A minor bump that carries one breaking change**, which SemVer `0.y.z` allows: `ConsentManager`
@@ -2229,7 +2249,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.17.0...v0.18.0
