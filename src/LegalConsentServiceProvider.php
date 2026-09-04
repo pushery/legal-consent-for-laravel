@@ -415,7 +415,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // `vendor:publish --tag=legal-consent` publishes the whole normal set in one go while each
         // group stays individually addressable. The umbrella deliberately EXCLUDES the opt-in
         // migrations below (one drops a column, one backfills) and the WireKit view variant (it
-        // OVERWRITES the plain stubs — publishing both at once would be self-contradictory).
+        // maps onto the plain stubs' own destinations, and needs --force to actually replace them).
         $this->publishes([
             __DIR__.'/../config/legal-consent.php' => $this->app->configPath('legal-consent.php'),
         ], ['legal-consent', 'legal-consent-config']);
@@ -451,36 +451,17 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // `legal-consent-backfill` deliberately. A flat map publishes exactly what is auto-loaded.
         $this->publishes($this->autoloadedMigrations(), ['legal-consent', 'legal-consent-migrations']);
 
-        // Optional, opt-in migrations (not auto-loaded — they touch the host `users`
-        // table, so a consumer publishes them deliberately). Their 000003/000004 prefixes
-        // are chosen, not incidental: the backfill must run after 000002 creates
-        // legal_consents, and both must run before the later schema changes.
-        $this->publishes([
-            __DIR__.'/../database/migrations/optional/0001_01_01_000003_drop_legal_consent_cache_from_users_table.php' => $this->app->databasePath('migrations/0001_01_01_000003_drop_legal_consent_cache_from_users_table.php'),
-        ], 'legal-consent-users-cache');
-
-        $this->publishes([
-            __DIR__.'/../database/migrations/optional/0001_01_01_000004_backfill_v1_legal_acceptances.php' => $this->app->databasePath('migrations/0001_01_01_000004_backfill_v1_legal_acceptances.php'),
-        ], 'legal-consent-backfill');
+        // ⚠️ THE OPT-IN GROUPS LIVE ON THEIR OWN PROVIDER, and moving them there is the fix rather
+        // than a tidy-up. `publishes()` merges into `static::$publishes[static::class]` whatever
+        // tag it is given, so `vendor:publish --provider="…\LegalConsentServiceProvider"` — an
+        // interactive first-class choice, and the obvious thing to type — published the three
+        // groups the tag design deliberately withholds, two of which write to the host `users`
+        // table. Tags are global and keep working exactly as documented.
+        $this->app->register(LegalConsentOptInPublishing::class);
 
         $this->publishes([
             __DIR__.'/../resources/views' => $this->app->resourcePath('views/vendor/legal-consent'),
         ], ['legal-consent', 'legal-consent-views']);
-
-        // WireKit-native variants — publishing this tag overrides the plain stubs with versions
-        // built from real <x-wirekit::*> components. It covers the Livewire views too: those are
-        // what the ConsentSettings/ReConsentForm components actually render, so a tag that skipped
-        // them would leave a WireKit+Livewire app with unstyled reactive screens while reporting
-        // that it had themed the UI.
-        $this->publishes([
-            __DIR__.'/../resources/views/wirekit/consent-checkboxes.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/consent-checkboxes.blade.php'),
-            __DIR__.'/../resources/views/wirekit/consent-banner.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/consent-banner.blade.php'),
-            __DIR__.'/../resources/views/wirekit/consent-settings.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/consent-settings.blade.php'),
-            __DIR__.'/../resources/views/wirekit/livewire/consent-settings.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/livewire/consent-settings.blade.php'),
-            __DIR__.'/../resources/views/wirekit/livewire/reconsent-form.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/livewire/reconsent-form.blade.php'),
-            __DIR__.'/../resources/views/wirekit/livewire/legal-text-manager.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/livewire/legal-text-manager.blade.php'),
-            __DIR__.'/../resources/views/wirekit/livewire/legal-text-editor.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/livewire/legal-text-editor.blade.php'),
-        ], 'legal-consent-wirekit');
 
         $this->publishes([
             __DIR__.'/../lang' => $this->app->langPath('vendor/legal-consent'),

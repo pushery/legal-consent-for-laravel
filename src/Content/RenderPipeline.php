@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Content;
 
-use League\CommonMark\CommonMarkConverter;
+use League\CommonMark\Environment\Environment;
+use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
+use League\CommonMark\Extension\Table\TableExtension;
+use League\CommonMark\MarkdownConverter;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Exceptions\InvalidDocumentVersion;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
@@ -43,7 +46,7 @@ final readonly class RenderPipeline
         'max_nesting_level' => 20,
     ];
 
-    private CommonMarkConverter $converter;
+    private MarkdownConverter $converter;
 
     /**
      * @param  array<string, mixed>  $markdownConfig  overrides, per key, on top of
@@ -60,7 +63,25 @@ final readonly class RenderPipeline
         private int $maxBytes = self::MAX_BYTES,
         private array $documents = [],
     ) {
-        $this->converter = new CommonMarkConverter(array_merge(self::MARKDOWN_DEFAULTS, $markdownConfig));
+        // ⚠️ TABLES ARE REGISTERED, AND THE SANITIZER IS WHY THIS IS A FIX RATHER THAN A FEATURE.
+        // Its allowlist has permitted `table`, `thead`, `tbody`, `tr`, `th` and `td` all along —
+        // it was describing a capability the converter never had. A Markdown table in a legal text
+        // came out as a paragraph full of pipe characters, and nothing went red: the sanitizer
+        // would have passed the tags, the converter simply never produced them.
+        //
+        // That lands on exactly the wrong text type. A privacy notice or a cookie policy is the
+        // document that lists recipients, purposes and retention periods in a table, and a
+        // consumer only sees it on the rendered page.
+        //
+        // TableExtension alone, not GithubFlavoredMarkdownExtension: the latter also brings
+        // autolinking, strikethrough and task lists, and turning three unrelated behaviors on
+        // while fixing one is how a rendering surface changes underneath texts that are hashed
+        // into append-only proof rows.
+        $environment = new Environment(array_merge(self::MARKDOWN_DEFAULTS, $markdownConfig));
+        $environment->addExtension(new CommonMarkCoreExtension);
+        $environment->addExtension(new TableExtension);
+
+        $this->converter = new MarkdownConverter($environment);
     }
 
     public function process(RawDocument $raw): Document

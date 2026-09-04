@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Exceptions;
 
+use Pushery\LegalConsent\Enums\BlockingReason;
 use RuntimeException;
 
 /**
@@ -15,7 +16,7 @@ use RuntimeException;
 final class LegalReleaseNotReady extends RuntimeException
 {
     /**
-     * @param  array<string, string>  $blocking  locale => reason
+     * @param  array<string, BlockingReason>  $blocking  locale => reason
      */
     public function __construct(
         public readonly string $key,
@@ -28,7 +29,10 @@ final class LegalReleaseNotReady extends RuntimeException
         // fighting it. Verified across associative, reordered, numeric-string-keyed, empty and
         // single-entry arrays: identical in all five.
         $detail = implode('; ', array_map(
-            static fn (string $locale, string $reason): string => "{$locale}: {$reason}",
+            // ->value, not ->label(): this message is for a developer reading a log or a stack
+            // trace, and the backing value is the same English sentence it always was. The
+            // translated form belongs to the screen, which asks the enum for its label.
+            static fn (string $locale, BlockingReason $reason): string => "{$locale}: {$reason->value}",
             array_keys($blocking),
             $blocking,
         ));
@@ -40,7 +44,7 @@ final class LegalReleaseNotReady extends RuntimeException
     }
 
     /**
-     * @param  array<string, string>  $blocking
+     * @param  array<string, BlockingReason>  $blocking
      */
     public static function for(string $key, array $blocking): self
     {

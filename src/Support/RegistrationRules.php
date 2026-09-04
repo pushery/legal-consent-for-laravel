@@ -104,6 +104,19 @@ final class RegistrationRules
      */
     private function resolvedTypes(): array
     {
+        // ⚠️ THE SHORT-CIRCUIT COMES BEFORE THE CHAIN, and that ordering is the whole point.
+        // The loop below resolves the locale chain and issues one SELECT per candidate BEFORE it
+        // ever looks at the registry, so an installation that registers no documents — an age-gate
+        // only setup is the real one — paid one to two queries on every `POST /register` to build a
+        // map it then walked zero keys of.
+        //
+        // Reading it as a micro-optimization undersells it: this runs on the request that creates
+        // an account, which is the one request an application cannot afford to have depend on the
+        // database more than it must.
+        if ($this->documents === []) {
+            return [];
+        }
+
         $locale = app()->getLocale();
         $chain = RegistrationLocaleChain::resolve($locale, $this->defaultLocale);
 

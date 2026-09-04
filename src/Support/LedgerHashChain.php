@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
 
 /**
@@ -33,17 +35,23 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  * re-keyed).
  *
  * WHAT KEYING DOES NOT CLOSE — say it plainly, because "keyed" invites more confidence than it earns.
- * Two structural gaps survive any key:
- *  1. The chain ROOT is a public constant. `genesis()` depends on neither the key nor the subject, and
- *     the verifier resets to it at every new `subject_token`. An attacker who can INSERT picks a fresh
- *     token, links to genesis, and has a self-consistent chain the verifier walks as valid — while the
- *     GATE reads by `subject_type`+`subject_id` and never looks at the token, so the fabricated row
- *     counts as a real holding. No re-chaining required, hence no secret required.
- *  2. Only the backward LINK is stored, never a row's own hash. So the newest row of any chain can be
- *     REPLACED (not just truncated) with nothing to mismatch against.
- * Both are closed by storing a per-row MAC and keying the root per subject; until that ships, the
- * append-only DB trigger — extended to restrict INSERT to the application role — is the real defense,
- * and `verify-ledger`'s "intact" means "no evidence of re-chaining", not "authentic".
+ * Two structural gaps used to survive any key. ONE OF THEM IS NOW CLOSED, and the distinction matters
+ * because the remaining one calls for a different defense:
+ *  1. CLOSED (keyed installations only). The chain ROOT was a public constant: `genesis()` depends on
+ *     neither the key nor the subject, and the verifier resets to it at every new `subject_token`. An
+ *     attacker who could INSERT picked a fresh token, linked to genesis, and had a self-consistent
+ *     chain the verifier walked as valid — while the GATE reads by `subject_type`+`subject_id` and
+ *     never looks at the token, so the fabricated row counted as a real holding. The row that opens a
+ *     chain now carries {@see rootProof()}, an HMAC over the token, and the verifier requires it above
+ *     the boundary {@see stampRootBoundary()} records. Below that boundary, and on an UNKEYED
+ *     installation, this gap is exactly as open as it was — there is no secret to prove anything with.
+ *  2. STILL OPEN, and keying cannot close it. Only the backward LINK is stored, never a row's own
+ *     hash, so the newest row of any chain can be REPLACED (not just truncated) with nothing to
+ *     mismatch against. The link lives on the row that FOLLOWS, and the last row has no follower.
+ *     Closing it needs a per-row MAC or a witness kept outside this database.
+ * So the append-only DB trigger — extended to restrict INSERT to the application role — remains the
+ * real defense, and `verify-ledger`'s "intact" means "no evidence of re-chaining, and above the
+ * boundary every chain was opened by a key holder", never "authentic".
  *
  * Independent of keying, the UNSIGNED head leaves two limits: it cannot detect deletion of a
  * subject's NEWEST row (a tail truncation — nothing follows it to mismatch); and a row written
@@ -114,12 +122,98 @@ final class LedgerHashChain
      *
      * @var list<string>
      */
-    public const array UNHASHED_COLUMNS = ['id', 'created_at', 'prev_record_hash', 'subject_erased_at'];
+    public const array UNHASHED_COLUMNS = ['id', 'created_at', 'prev_record_hash', 'subject_erased_at', 'root_proof'];
+
+    /** The name of the marker row recording where key-bound chain roots begin. */
+    public const string ROOT_BOUNDARY_MARKER = 'chain_root_boundary';
 
     /** The link value a subject's first chained row points back to. */
     public static function genesis(): string
     {
         return str_repeat('0', 64);
+    }
+
+    /**
+     * The proof a NEW chain's first row carries beside the genesis link, or null when the chain is
+     * unkeyed and there is therefore no secret to prove anything with.
+     *
+     * ⚠️ THIS SITS BESIDE THE ROOT RATHER THAN REPLACING IT, and that is not a stylistic call.
+     * Keying `genesis()` itself invalidates every first row already stored — correcting those means
+     * UPDATE on an append-only table whose MySQL trigger refuses one unconditionally — and it also
+     * strips `PruneExpiredConsentRecordsCommand` of the single constant its SQL compares against.
+     * A separate INSERT-only column costs one column and leaves both intact.
+     *
+     * Bound to the token, so a proof lifted from one subject's row does not validate another's.
+     */
+    public function rootProof(string $subjectToken): ?string
+    {
+        $key = $this->key();
+
+        return $key === null ? null : hash_hmac('sha256', 'root|'.$subjectToken, $key);
+    }
+
+    /** Whether a secret keys this chain at all. Public because the marker lifecycle turns on it. */
+    public function isKeyed(): bool
+    {
+        return $this->key() !== null;
+    }
+
+    /**
+     * Record where key-bound roots begin, the first time anyone opens a chain with a key.
+     *
+     * ⚠️ THIS DOES NOT BELONG IN THE MIGRATION, and putting it there was the first attempt.
+     * A marker stamped at migrate-time is stamped with whatever key was configured THEN — and the
+     * documented order of operations lets an operator set the secret afterwards. The marker was
+     * then born holding an unkeyed hash it could never reproduce again, so a correctly-followed
+     * setup produced a permanent, unfixable break. Stamping on first keyed use cannot drift from
+     * the key in use, because it is written by the same call that uses it.
+     *
+     * The boundary is `max(id)` as it stands BEFORE the opening row is inserted, so that row falls
+     * above its own boundary and must carry a proof — including the very first one.
+     *
+     * An attacker cannot pre-stamp a high boundary to exempt a forgery: the marker carries a MAC
+     * over the id, and producing one needs the secret. A marker with a wrong MAC is a break, so the
+     * attempt is loud rather than useful.
+     */
+    public function stampRootBoundary(): void
+    {
+        if (! Schema::hasTable('legal_ledger_markers')) {
+            return;
+        }
+
+        $exists = DB::table('legal_ledger_markers')
+            ->where('name', self::ROOT_BOUNDARY_MARKER)
+            ->exists();
+
+        if ($exists) {
+            return;
+        }
+
+        $highest = DB::table('legal_consents')->max('id');
+        $boundary = is_int($highest) || is_string($highest) ? (int) $highest : 0;
+
+        DB::table('legal_ledger_markers')->insert([
+            'name' => self::ROOT_BOUNDARY_MARKER,
+            'boundary_id' => $boundary,
+            'proof' => $this->boundaryProof($boundary),
+            'created_at' => now(),
+        ]);
+    }
+
+    /**
+     * The MAC over the boundary id, so the boundary cannot simply be raised.
+     *
+     * A boundary an attacker can move is worth nothing — they would push it past their forged row
+     * and inherit the exemption meant for history. Unkeyed it is a plain hash: inert, well-formed,
+     * and honest about proving nothing, which is the same posture the chain itself takes without a
+     * secret.
+     */
+    public function boundaryProof(int $boundaryId): string
+    {
+        $key = $this->key();
+        $payload = 'boundary|'.$boundaryId;
+
+        return $key === null ? hash('sha256', $payload) : hash_hmac('sha256', $payload, $key);
     }
 
     /**

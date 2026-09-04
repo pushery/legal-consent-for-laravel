@@ -5,8 +5,17 @@
 
         {{-- Status: an assertive live region, so a screen reader hears the result of a release (or
              why it did not happen) immediately after the action — WCAG 4.1.3. It is always present
-             in the DOM (an aria-live region added at the same time as its text is not announced). --}}
-        <p role="alert" aria-live="assertive" wire:key="legal-text-manager-status"><span wire:key="legal-text-manager-status-{{ $statusNonce }}">{{ $status }}</span></p>
+             in the DOM (an aria-live region added at the same time as its text is not announced).
+
+             tabindex="-1" + x-effect is the FOCUS half, and it is not decoration here. The release
+             is confirmed in a modal that closes itself on click; without somewhere to send focus it
+             lands on <body>, which is WCAG 2.4.3 and leaves a keyboard user at the top of the
+             document after an irreversible action. wire:key alone cannot do it: the element is
+             always present and Livewire morphs it rather than replacing it, so nothing re-runs.
+             x-effect re-runs whenever $wire.statusNonce changes — exactly when a release sets it.
+             Same pattern as consent-settings and reconsent-form; this screen was the one left out. --}}
+        <p role="alert" aria-live="assertive" tabindex="-1" wire:key="legal-text-manager-status"
+            x-effect="$wire.statusNonce > 0 && $el.focus()"><span wire:key="legal-text-manager-status-{{ $statusNonce }}">{{ $status }}</span></p>
 
         <p>{{ __('legal-consent::ui.admin_policy') }}</p>
 
@@ -34,7 +43,7 @@
                                 @if (! $cell['written'])
                                     <span>{{ __('legal-consent::ui.admin_not_written') }}</span>
                                 @else
-                                    <span>{{ $cell['review_state'] }}</span>
+                                    <span>{{ __($cell['review_state_label']) }}</span>
                                     @if ($cell['machine'])
                                         <span> · {{ __('legal-consent::ui.admin_machine') }}</span>
                                     @endif
@@ -69,11 +78,14 @@
                             @else
                                 {{-- The blocking reasons stay OUTSIDE aria-describedby on a disabled
                                      button (a disabled control is skipped, so its description is never
-                                     announced) — they are rendered as visible text below instead. --}}
+                                     announced) — they are rendered as visible text below instead.
+                                     The id below is therefore a styling hook only. It is deliberately
+                                     NOT an aria target: pointing a describedby at it would restore the
+                                     association this comment exists to prevent. --}}
                                 <button type="button" disabled aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.$key }}">{{ __('legal-consent::ui.admin_release_all') }}</button>
                                 <ul id="blocking-{{ $key }}">
                                     @foreach ($rows[$key]['_release']['blocking'] as $locale => $reason)
-                                        <li>{{ $locale }}: {{ $reason }}</li>
+                                        <li>{{ $locale }}: {{ __($reason->label()) }}</li>
                                     @endforeach
                                 </ul>
                             @endif

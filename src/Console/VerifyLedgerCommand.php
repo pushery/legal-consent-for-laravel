@@ -7,8 +7,10 @@ namespace Pushery\LegalConsent\Console;
 use Illuminate\Console\Command;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\LedgerHashChain;
+use Pushery\LegalConsent\Support\LedgerRootBoundary;
 use stdClass;
 
 /**
@@ -50,6 +52,19 @@ final class VerifyLedgerCommand extends Command
         /** @var list<string> $breaks */
         $breaks = [];
 
+        // ⚠️ THE BOUNDARY IS CHECKED BEFORE A SINGLE LEDGER ROW IS READ, and it is checked at all
+        // because a boundary an attacker can raise exempts whatever they put below it. Recomputing
+        // its MAC needs the secret, so a moved boundary is a break rather than a loophole.
+        //
+        // It doubles as the key's identity: if this fails on an untouched database, the secret this
+        // environment holds is not the one the ledger was written with. That is worth knowing
+        // FIRST, because the alternative is reading it off a break list that looks like tampering.
+        $boundary = $this->rootBoundary();
+
+        if ($boundary instanceof LedgerRootBoundary && ! hash_equals($boundary->proof, $chain->boundaryProof($boundary->id))) {
+            $breaks[] = "chain-root boundary marker #{$boundary->id}: proof does not verify — the marker was altered, or this environment holds a different tamper_evidence_key";
+        }
+
         foreach ($this->chainedRows() as $row) {
             $rows++;
 
@@ -57,6 +72,18 @@ final class VerifyLedgerCommand extends Command
                 $currentToken = $row->subject_token;
                 $expectedPrev = $genesis;
                 $subjects++;
+
+                // The row that OPENS a chain is the one the constant root cannot vouch for: it has
+                // no predecessor whose hash it must reproduce, and being potentially the only row
+                // of its chain, nothing later compares against it either. That is the whole of the
+                // forgery — one INSERT for a fresh token pointing at 64 public zeros.
+                //
+                // Only above the boundary, and only when keyed. Below it a missing proof is
+                // history and cannot be anything else; unkeyed there is no secret, so demanding a
+                // proof would fail every honest install for a guarantee it never bought.
+                foreach ($this->rootProofBreak($chain, $row, $boundary) as $break) {
+                    $breaks[] = $break;
+                }
             }
 
             $stored = is_string($row->prev_record_hash ?? null) ? $row->prev_record_hash : '';
@@ -115,6 +142,11 @@ final class VerifyLedgerCommand extends Command
             $breaks[] = $break;
         }
 
+        // Hoisted above the branch because BOTH outcomes need it. It used to be computed inside
+        // the success arm only, which is why a FAILED run said nothing about the keying mode —
+        // see below for why that silence is the expensive half.
+        $keyed = is_string(config('legal-consent.tamper_evidence_key')) && config('legal-consent.tamper_evidence_key') !== '';
+
         if ($breaks === []) {
             $this->info("Ledger chain intact: verified {$rows} chained record(s) across {$subjects} subject(s).");
 
@@ -127,7 +159,6 @@ final class VerifyLedgerCommand extends Command
             // "intact" line imply a guarantee the chain does not give.
             // Honesty, and it has to be CONDITIONAL: the old note claimed "the hash is unkeyed"
             // unconditionally, which is simply false output whenever a key is configured.
-            $keyed = is_string(config('legal-consent.tamper_evidence_key')) && config('legal-consent.tamper_evidence_key') !== '';
 
             // if/else rather than a multi-line ternary, and the reason is measurable: under
             // php-code-coverage 14 the first arm of a ternary whose arms sit on their own lines is
@@ -154,6 +185,20 @@ final class VerifyLedgerCommand extends Command
 
         if (count($breaks) > 20) {
             $this->line(sprintf('  … and %d more.', count($breaks) - 20));
+        }
+
+        // ⚠️ A KEYED RUN HAS TWO CAUSES FOR THIS OUTPUT AND THEY DEMAND OPPOSITE RESPONSES, so
+        // saying "FAILED" without naming the mode sends the operator down one of them at random.
+        // Real tampering is an incident; the wrong secret is a deployment mistake that has touched
+        // no row. They are indistinguishable from the break list alone, because a key that does not
+        // match reproduces none of the stored links — every chained row mismatches, which is also
+        // what a rewritten history looks like.
+        //
+        // The shape separates them and costs nothing to state: a wrong key breaks EVERY chained
+        // row, tampering breaks the ones that were touched. That is the first thing to look at, so
+        // it is the first thing this says.
+        if ($keyed) {
+            $this->line('The chain is HMAC-keyed, so a wrong, rotated or missing legal-consent.tamper_evidence_key produces this same output while no row has been touched. Compare the counts above: a key mismatch breaks EVERY chained record, tampering breaks only the records it reached. Confirm the secret this environment holds before treating this as an incident.');
         }
 
         return self::FAILURE;
@@ -232,6 +277,76 @@ final class VerifyLedgerCommand extends Command
             $lastToken = $last instanceof stdClass ? $last->subject_token : null;
             $lastId = $last instanceof stdClass ? $last->id : null;
         } while ($page->count() === self::PAGE);
+    }
+
+    /**
+     * The recorded boundary between chains that predate key-bound roots and chains that do not,
+     * or null when no marker exists (an installation that has not run migration 000024).
+     *
+     * A missing marker is not treated as "boundary zero". That reading would demand a root proof
+     * from every chain in a database the feature never reached, turning an un-migrated install
+     * into a wall of breaks — the shape of guard that gets switched off rather than read.
+     */
+    private function rootBoundary(): ?LedgerRootBoundary
+    {
+        if (! Schema::hasTable('legal_ledger_markers')) {
+            return null;
+        }
+
+        $marker = DB::table('legal_ledger_markers')
+            ->where('name', LedgerHashChain::ROOT_BOUNDARY_MARKER)
+            ->first();
+
+        if ($marker === null) {
+            return null;
+        }
+
+        $id = $marker->boundary_id ?? null;
+        $proof = $marker->proof ?? null;
+
+        return new LedgerRootBoundary(
+            is_int($id) || is_string($id) ? (int) $id : 0,
+            is_string($proof) ? $proof : '',
+        );
+    }
+
+    /**
+     * The break, if any, for the row that opens a chain.
+     *
+     * Returns a list rather than a nullable string so the caller reads the same whether the rule
+     * applies or not — a `foreach` over an empty list says "nothing to report here" without a
+     * second branch at the call site to get wrong.
+     *
+     * @return list<string>
+     */
+    private function rootProofBreak(LedgerHashChain $chain, stdClass $row, ?LedgerRootBoundary $boundary): array
+    {
+        $token = is_string($row->subject_token ?? null) ? $row->subject_token : '';
+        $expected = $chain->rootProof($token);
+
+        // Unkeyed, un-migrated, or a row from before the boundary: nothing is claimed and nothing
+        // is checked. Each of the three is a state an honest installation is legitimately in.
+        if ($expected === null || ! $boundary instanceof LedgerRootBoundary || $token === '') {
+            return [];
+        }
+
+        $rowId = is_int($row->id) || is_string($row->id) ? (int) $row->id : 0;
+
+        if ($rowId <= $boundary->id) {
+            return [];
+        }
+
+        $stored = is_string($row->root_proof ?? null) ? $row->root_proof : '';
+
+        if ($stored !== '' && hash_equals($expected, $stored)) {
+            return [];
+        }
+
+        $reason = $stored === ''
+            ? 'chain opened after the boundary with no root proof — written by something other than this package, or by an actor without the key'
+            : 'root proof does not verify — the opening row was not produced with this key';
+
+        return ["subject_token {$token}, row #{$rowId}: {$reason}"];
     }
 
     /**

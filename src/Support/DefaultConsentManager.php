@@ -47,15 +47,28 @@ readonly class DefaultConsentManager implements ConsentManager
     private const int MAX_CHAIN_ATTEMPTS = 5;
 
     /**
-     * @param  array<string, array<string, mixed>>  $documents  the configured registration registry;
-     *                                                          empty means "do not filter" (a bare
-     *                                                          manager built in a test or by hand)
+     * ⚠️ `$documents` IS NULLABLE BECAUSE "NOT GIVEN" AND "GIVEN AND EMPTY" ARE DIFFERENT ANSWERS,
+     * and conflating them was a defect rather than a nicety. The old signature defaulted to `[]` and
+     * read `!== []` as "a registry was configured", so an installation where EVERY document carries
+     * `ask_at_registration => false` — a real configuration, and the one that says "ask nobody at
+     * sign-up" — produced an empty registry, skipped the intersection, and put every active
+     * consent-bearing document back on the checklist. The rules and the recorder resolved the same
+     * empty set and covered none of them, so the form offered controls whose tick was validated by
+     * nothing and written nowhere. That is the exact divergence the intersection exists to prevent.
+     *
+     * `null` means no registry was supplied at all (a bare manager built in a test or by hand) and
+     * keeps the old "do not filter" behavior. `[]` now means what it says: nothing is registered for
+     * registration, so nothing belongs on the checklist.
+     *
+     * @param  array<string, array<string, mixed>>|null  $documents  the configured registration
+     *                                                               registry, or null when none was
+     *                                                               supplied
      */
     public function __construct(
         private ConsentGate $gate,
         private string $defaultLocale = 'de',
         private PublishedDocumentReader $reader = new PublishedDocumentReader,
-        private array $documents = [],
+        private ?array $documents = null,
         private bool $ageGateEnabled = false,
         private int $ageThreshold = 16,
         private DocumentUrlResolver $urls = new DocumentUrlResolver,
@@ -103,7 +116,7 @@ readonly class DefaultConsentManager implements ConsentManager
         // Intersect with the CONFIGURED registry, exactly as the rules and the recorder do. Without
         // this the checklist offered controls those two never validate or record — a published
         // document nobody registered would render a checkbox whose tick goes nowhere.
-        if ($this->documents !== []) {
+        if ($this->documents !== null) {
             // filter(), NOT only(): Eloquent\Collection::only() selects by PRIMARY KEY, not by the
             // array key — an override that silently returns an empty set here.
             $registered = $this->documents;
@@ -616,7 +629,19 @@ readonly class DefaultConsentManager implements ConsentManager
                     // tamper-evidence was enabled carry a NULL link and are skipped, so the first
                     // chained row for such a subject starts at genesis — matching the verifier's
                     // walk, which begins each subject at genesis.
-                    $attributes['prev_record_hash'] = $chain->linkFor($this->latestChainedRow($token));
+                    $previous = $this->latestChainedRow($token);
+                    $attributes['prev_record_hash'] = $chain->linkFor($previous);
+
+                    // The row that OPENS a chain carries a proof of who opened it. Every other row
+                    // is already vouched for by its predecessor's hash; the first one has nothing
+                    // behind it but a public constant, which is exactly what let a forged consent
+                    // be planted as a fresh chain and read back as intact. Null when the chain is
+                    // unkeyed — there is no secret then, so there is nothing to prove.
+                    $attributes['root_proof'] = $previous === null ? $chain->rootProof($token) : null;
+
+                    if ($attributes['root_proof'] !== null) {
+                        $chain->stampRootBoundary();
+                    }
 
                     // forceFill()+save(): the attributes are a runtime-assembled array<string, mixed>
                     // (prev_record_hash is set here), which create()'s shaped-array type would reject —
