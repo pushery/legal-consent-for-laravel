@@ -4,6 +4,50 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.21.0 → 0.22.0
+
+### Markdown tables now render as tables
+
+`RenderPipeline` registers CommonMark's `TableExtension`. Until now a Markdown table in a legal text came out as a paragraph full of pipe characters — the sanitizer had permitted `table`, `thead`, `tbody`, `tr`, `th` and `td` all along, so the allowlist was describing a capability the converter never had.
+
+**If a source of yours contains a Markdown table, its rendered HTML changes**, and that matters here more than it usually would: the HTML is hashed into the proof row. Nothing already published moves — stored rows keep the bytes and the hash they were frozen with — but `legal-consent:check-drift` will report the source as drifted, because it now renders to something different than the active version holds. Publishing a new version is the intended answer; the old rows stay valid evidence of what was actually shown.
+
+Only tables. `TableExtension` alone, not `GithubFlavoredMarkdownExtension`, so autolinking, strikethrough and task lists stay off — turning three unrelated behaviors on while fixing one is not something to do to a rendering surface whose output is frozen into append-only rows.
+
+### `blockingLocales()` returns a `BlockingReason`, not an English sentence
+
+`LegalDraftSet::blockingLocales()` and `ChangeItems::blockingLocales()` returned finished English prose, which left an application one option for translating a release screen: use the sentence itself as a lookup key. That works until the package rewords one, and then the lookup misses and the screen falls back to English — on a compliance surface, with nothing able to notice.
+
+Both now return `array<string, Pushery\LegalConsent\Enums\BlockingReason>`, and so does `LegalReleaseNotReady::$blocking`. Render one with `__($reason->label())`.
+
+**The English sentences are unchanged and still reachable** as `$reason->value` — they back the enum, so `LegalReleaseNotReady`'s message and anything logging it read exactly as before. Only the type moved, which your editor and static analysis point at rather than letting a string shift under you.
+
+If you were using the sentences as translation keys, the six keys now ship with the package in all seven locales; drop your own copies and call `label()`.
+
+### `DefaultConsentManager`'s registry argument is nullable, and `[]` changed meaning
+
+Only relevant if you construct that class yourself — resolving it from the container is unaffected.
+
+The fourth constructor argument went from `array $documents = []` to `?array $documents = null`. It intersects the published documents with the configured registration registry so the form, the rules and the recorder resolve one set, and the intersection used to be skipped whenever the array was empty — because an empty array was read as "no registry was configured".
+
+That conflated two different answers. `ask_at_registration => false` on *every* document produces an empty registry, and it is a real configuration meaning *ask nobody at sign-up*; it got the whole published set back on the checklist while the rules validated none of it and the recorder wrote none of it.
+
+**Pass `null` for the old "do not filter" behavior.** A literal `[]` now means what it says: nothing is registered for registration, so nothing belongs on the checklist.
+
+### A new chain now proves who opened it
+
+Two schema additions arrive with the migration and neither touches an existing row: `legal_consents.root_proof`, written only on the row that opens a subject's chain, and a small `legal_ledger_markers` table holding one row.
+
+The hole they close: the chain root was a public constant, so anyone able to `INSERT` could plant a consent nobody granted — one row for a fresh `subject_token` pointing at it — and `legal-consent:verify-ledger` reported the ledger intact. From now on the opening row of a chain carries an HMAC only a holder of `tamper_evidence_key` can produce.
+
+**If you do not set `tamper_evidence_key`, nothing changes.** Without a secret there is nothing to prove with, and the column stays null.
+
+**Chains you already have are exempt, by design.** The marker records the highest `legal_consents.id` at the moment the feature starts being used; below it, a missing proof is history and cannot be anything else. Requiring one there would turn every existing ledger red on upgrade.
+
+**You may set the secret before or after migrating.** If it is already configured, the migration stamps the marker. If you set it later, the first write that opens a chain stamps it instead. There is nothing to run by hand either way.
+
+**One new failure to recognize.** If `verify-ledger` reports `chain-root boundary marker … proof does not verify` on a database nobody has touched, this environment is holding a different `tamper_evidence_key` than the one the ledger was written with. That is a deployment problem, not an incident — check the secret before treating it as one. A keyed run that fails now says this in its output.
+
 ## 0.20.0 → 0.21.0
 
 ### The session-backed writes are rate-limited by default

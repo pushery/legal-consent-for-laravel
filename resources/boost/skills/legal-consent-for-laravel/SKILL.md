@@ -332,10 +332,12 @@ else. `assertAccepted` matches `granted`, `acknowledged` and `re_accepted` — n
 A minimal, complete adoption: publish the config, author `resources/legal/terms/de.md` with
 `version: 1.0.0`, run `legal-consent:publish terms de --active`, put `legal.consent` on the
 authenticated route group, render `Consent::published('terms', 'de')?->html` on the public page, and
-embed `<livewire:legal-consent.reconsent-form />` on the consent route. Schedule
-`legal-consent:dispatch-notices` so a change with a grace period actually reaches subjects, and put
-`legal-consent:publish --all --editorial` in the deploy script so a fresh database is never left
-with empty legal pages.
+embed `<livewire:legal-consent.reconsent-form />` on the consent route. Make sure `schedule:run`
+is wired up — **do NOT add a schedule entry for `legal-consent:dispatch-notices`**, the package
+registers it itself, hourly, behind `withoutOverlapping()` and `onOneServer()`. A second entry runs
+outside that mutex, and because the watermark is only stamped after a send, the result is a
+duplicate legal-change notification per server. Put `legal-consent:publish --all --editorial` in
+the deploy script so a fresh database is never left with empty legal pages.
 
 The public page renders the stored bytes **unescaped**, which is the one place in this integration
 where that is the right call:

@@ -13,8 +13,20 @@
              region is ALWAYS in the DOM so the update is spoken — a live region inserted together
              with its text is not announced. The text is a plain x-wirekit::text, NOT an
              x-wirekit::alert: the alert is itself a role="status" region, and nesting a live region
-             in this one would double-announce. --}}
-        <div role="status" aria-live="polite" wire:key="lc-status">
+             in this one would double-announce.
+
+             ⚠️ ASSERTIVE, MATCHING THE PLAIN TWIN, AND IT USED TO BE POLITE. Publishing
+             --tag=legal-consent-wirekit silently downgraded the urgency of an IRREVERSIBLE release
+             announcement, so which stub an application published decided how loudly a screen reader
+             read it. Two twins of one screen may not disagree about that, and between the two the
+             plain one is right: a release cannot be undone.
+
+             tabindex="-1" + x-effect is the focus half. The release is confirmed in a modal that
+             closes itself; with nowhere to send focus it falls to <body> (WCAG 2.4.3), leaving a
+             keyboard user at the top of the document after an irreversible action. wire:key cannot
+             do it — the element is always present and gets morphed, so nothing re-runs. --}}
+        <div role="alert" aria-live="assertive" tabindex="-1" wire:key="lc-status"
+             x-effect="$wire.statusNonce > 0 && $el.focus()">
             @if ($status !== '')
                 <div wire:key="lc-status-{{ $statusNonce }}"><x-wirekit::text>{{ $status }}</x-wirekit::text></div>
             @endif
@@ -51,7 +63,7 @@
                                 @if (! $cell['written'])
                                     <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.admin_not_written') }}</x-wirekit::badge>
                                 @else
-                                    <x-wirekit::badge :intent="$cell['publishable'] ? 'success' : 'warning'" size="sm">{{ $cell['review_state'] }}</x-wirekit::badge>
+                                    <x-wirekit::badge :intent="$cell['publishable'] ? 'success' : 'warning'" size="sm">{{ __($cell['review_state_label']) }}</x-wirekit::badge>
                                     @if ($cell['machine'])
                                         <x-wirekit::badge intent="info" size="sm">{{ __('legal-consent::ui.admin_machine') }}</x-wirekit::badge>
                                     @endif
@@ -113,11 +125,14 @@
                                      the plain stub writes out: the button renders a native `disabled`
                                      (not `aria-disabled`) plus `disabled:pointer-events-none`, so it
                                      is not focusable and a description hung on it is never announced.
-                                     They are the visible text below instead, reachable in read mode. --}}
+                                     They are the visible text below instead, reachable in read mode.
+                                     The id below is therefore a styling hook only. It is deliberately
+                                     NOT an aria target: pointing a describedby at it would restore the
+                                     association this comment exists to prevent. --}}
                                 <x-wirekit::button size="sm" disabled :aria-label="__('legal-consent::ui.admin_release_all').' — '.$key">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
                                 <x-wirekit::stack gap="xs" id="blocking-{{ $key }}">
                                     @foreach ($rows[$key]['_release']['blocking'] as $locale => $reason)
-                                        <x-wirekit::text size="sm">{{ $locale }}: {{ $reason }}</x-wirekit::text>
+                                        <x-wirekit::text size="sm">{{ $locale }}: {{ __($reason->label()) }}</x-wirekit::text>
                                     @endforeach
                                 </x-wirekit::stack>
                             @endif

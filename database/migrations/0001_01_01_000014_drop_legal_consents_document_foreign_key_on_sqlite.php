@@ -32,6 +32,20 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * replacement into place. `legal_documents` carries a DELETE guard that names `legal_consents`,
  * SQLite re-parses every trigger in the schema at that rename, and a trigger whose referenced
  * table is missing at that instant is a hard error — raised after the original has already gone.
+ *
+ * ⚠️ ON SQLITE THIS REBUILDS THE TABLE, AND A REBUILD DOES NOT CARRY YOUR OWN TRIGGERS ACROSS.
+ * SQLite cannot drop a foreign key in place, so the grammar creates a temp table, copies the rows,
+ * drops the original and renames — reconstructing columns, indexes, primary key and foreign keys
+ * from BlueprintState, and nothing else. A trigger a CONSUMER added to `legal_consents` is silently
+ * gone afterwards, and so is a CHECK constraint or a partial-index predicate.
+ *
+ * The package's own append-only triggers are unaffected, and not by luck: migration 000002 installs
+ * them only on pgsql and mysql. What is at risk is exclusively something you wrote yourself.
+ *
+ * SQLite also does not wrap migrations in a transaction (its grammar leaves `$transactions` false,
+ * unlike Postgres), so a failure part-way through leaves the rebuild half-done rather than rolled
+ * back. Take a file copy before migrating a SQLite database you care about, and re-create your own
+ * triggers afterwards.
  */
 return new class extends Migration
 {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Support\Collection;
+use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\ReviewState;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalDraft;
@@ -99,7 +100,7 @@ final readonly class LegalDraftSet
      * can say WHY instead of just refusing.
      *
      * @param  list<string>  $locales
-     * @return array<string, string>
+     * @return array<string, BlockingReason>
      */
     public function blockingLocales(array $locales): array
     {
@@ -109,7 +110,7 @@ final readonly class LegalDraftSet
             $draft = $this->draft($locale);
 
             if (! $draft instanceof LegalDraft) {
-                $blocking[$locale] = 'no draft has been written';
+                $blocking[$locale] = BlockingReason::NoDraft;
 
                 continue;
             }
@@ -118,13 +119,13 @@ final readonly class LegalDraftSet
             // source_hash is null), and reporting that as "the source changed after this was
             // reviewed" would be a lie about a text that was never reviewed at all.
             if ($draft->review_state !== ReviewState::Reviewed) {
-                $blocking[$locale] = 'not reviewed by a human yet';
+                $blocking[$locale] = BlockingReason::NotReviewed;
 
                 continue;
             }
 
             if ($this->isStale($draft)) {
-                $blocking[$locale] = 'the source text changed after this translation was reviewed';
+                $blocking[$locale] = BlockingReason::StaleTranslation;
             }
         }
 

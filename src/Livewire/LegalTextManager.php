@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Livewire;
 
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
+use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\DraftOrigin;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
@@ -51,7 +52,10 @@ final class LegalTextManager extends Component
             $this->setStatus((string) __('legal-consent::ui.admin_status_release_blocked', [
                 'key' => $key,
                 'reasons' => implode('; ', array_map(
-                    static fn (string $locale, string $reason): string => "{$locale} ({$reason})",
+                    // The reason is translated HERE, where it reaches a person. The exception keeps
+                    // the English sentence for logs; a status line spoken by a screen reader has to
+                    // be in the reader's language.
+                    static fn (string $locale, BlockingReason $reason): string => "{$locale} (".__($reason->label()).')',
                     array_keys($e->blocking),
                     array_values($e->blocking),
                 )),
@@ -97,6 +101,10 @@ final class LegalTextManager extends Component
                 $grid[$key][$locale] = [
                     'written' => $draft instanceof LegalDraft,
                     'review_state' => $draft?->review_state->value,
+                    // The raw value stays for anything that branches on state; the label is what a
+                    // screen shows. Keeping both apart is what stops a storage token reaching a
+                    // reader again the next time somebody renders the obvious field.
+                    'review_state_label' => $draft?->review_state->label(),
                     'machine' => $draft?->origin === DraftOrigin::Machine,
                     'stale' => $draft instanceof LegalDraft && $set->isStale($draft),
                     'unpublished_changes' => $draft instanceof LegalDraft && $set->hasUnpublishedChanges($draft),

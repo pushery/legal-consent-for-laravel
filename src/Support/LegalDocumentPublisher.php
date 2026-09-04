@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Cache\ArrayStore;
+use Illuminate\Cache\NullStore;
+use Illuminate\Contracts\Cache\LockProvider;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Pushery\LegalConsent\Content\Document;
 use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Content\RenderPipeline;
@@ -192,49 +197,96 @@ final readonly class LegalDocumentPublisher
 
         [$announce, $enforce] = $this->assertedSchedule($key, $locale, $mode, $regime, $rendered, $announceAt, $enforceAt, $objectionDeadline, $now);
 
-        $document = LegalDocument::query()->forceCreate([
-            'key' => $key,
-            'type' => $type,
-            'requires_explicit_optin' => $type->requiresExplicitOptin(),
-            'locale' => $locale,
-            'version' => $rendered->version,
-            'major_version' => $rendered->majorVersion,
-            'minor_version' => $rendered->minorVersion,
-            'patch_version' => $rendered->patchVersion,
-            'title' => $rendered->title,
-            'content_format' => 'html',
-            'content' => $rendered->html,
-            'content_hash' => $rendered->contentHash,
-            'ui_wording' => $rendered->uiWording,
-            'source_driver' => $this->sourceNameFor($key),
-            'source_reference' => $rendered->sourceRef,
-            'notice_mode' => $mode,
-            'requires_reconsent' => $mode->gates(),
-            'change_class' => $changeClass,
-            'regime' => $regime,
-            // Floored at zero, because this is the period that was GRANTED and a granted period is
-            // never negative. The guard above rules out an inverted timeline; what remains is the
-            // immediate publish whose effective date is already past, where the honest answer is
-            // "no grace at all" rather than a negative count of days. The column sits outside
-            // MUTABLE_AFTER_PUBLISH, so whatever lands here is frozen — and it is the number a
-            // consumer's compliance report reads back as the notice period.
-            'notice_period_days' => max(0, (int) round($announce->diffInDays($enforce))),
-            'offers_termination' => $offersTermination,
-            'keeps_unmodified_offered' => $keepsUnmodified,
-            'is_active' => false,
-            'published_at' => $now,
-            'announce_from' => $announce,
-            'enforce_from' => $enforce,
-            'objection_deadline' => $objectionDeadline,
-        ]);
+        // ⚠️ THE ROW AND ITS ACTIVATION ARE ONE ACT, AND THEY USED NOT TO BE.
+        // `forceCreate()` persisted the version and `activate()` ran after it, unwrapped. When
+        // `activate()` lost the lock race it threw LockTimeoutException — and left the row behind,
+        // persisted and inactive. That version is then unrepublishable: the next attempt meets
+        // "Version … already exists with different content — bump the version before publishing",
+        // for a version the operator never successfully published. A phantom that can only be
+        // cleared by hand, in an append-only table.
+        //
+        // The lock is taken OUTSIDE the transaction, exactly as LegalDocumentReleaser does, and the
+        // ordering is the whole point: `LegalDocument::activate()` skips its own lock when a
+        // transaction is already open (it delegates to the orchestrating caller by design), so
+        // wrapping without lifting the lock out would have removed the serialization while looking
+        // like it added safety.
+        $store = LegalDocument::activationLockStore();
 
-        // Freeze the operator's description of THIS change onto THIS version, before the row goes
-        // active. No new parameter: the freezer finds the draft by (key, locale, tenant), so the
-        // ten-argument signature stays as it is and no caller has to learn about the feature to
-        // keep working. Absence is not an error — see ChangeItemsFreezer.
-        $this->changeItems->freeze($document, $this->sources->for($key)->fingerprint($key, $locale));
+        $write = (fn (): LegalDocument => DB::transaction(function () use (
+            $key, $locale, $type, $mode, $regime, $rendered, $changeClass, $offersTermination,
+            $keepsUnmodified, $now, $announce, $enforce, $objectionDeadline
+        ): LegalDocument {
+            $document = LegalDocument::query()->forceCreate([
+                'key' => $key,
+                'type' => $type,
+                'requires_explicit_optin' => $type->requiresExplicitOptin(),
+                'locale' => $locale,
+                'version' => $rendered->version,
+                'major_version' => $rendered->majorVersion,
+                'minor_version' => $rendered->minorVersion,
+                'patch_version' => $rendered->patchVersion,
+                'title' => $rendered->title,
+                'content_format' => 'html',
+                'content' => $rendered->html,
+                'content_hash' => $rendered->contentHash,
+                'ui_wording' => $rendered->uiWording,
+                'source_driver' => $this->sourceNameFor($key),
+                'source_reference' => $rendered->sourceRef,
+                'notice_mode' => $mode,
+                'requires_reconsent' => $mode->gates(),
+                'change_class' => $changeClass,
+                'regime' => $regime,
+                // Floored at zero, because this is the period that was GRANTED and a granted period is
+                // never negative. The guard above rules out an inverted timeline; what remains is the
+                // immediate publish whose effective date is already past, where the honest answer is
+                // "no grace at all" rather than a negative count of days. The column sits outside
+                // MUTABLE_AFTER_PUBLISH, so whatever lands here is frozen — and it is the number a
+                // consumer's compliance report reads back as the notice period.
+                'notice_period_days' => max(0, (int) round($announce->diffInDays($enforce))),
+                'offers_termination' => $offersTermination,
+                'keeps_unmodified_offered' => $keepsUnmodified,
+                'is_active' => false,
+                'published_at' => $now,
+                'announce_from' => $announce,
+                'enforce_from' => $enforce,
+                'objection_deadline' => $objectionDeadline,
+            ]);
 
-        $document->activate();
+            // Freeze the operator's description of THIS change onto THIS version, before the row
+            // goes active. No new parameter: the freezer finds the draft by (key, locale,
+            // tenant), so the ten-argument signature stays as it is and no caller has to learn
+            // about the feature to keep working. Absence is not an error — see ChangeItemsFreezer.
+            $this->changeItems->freeze($document, $this->sources->for($key)->fingerprint($key, $locale));
+
+            $document->activate();
+
+            return $document;
+        }));
+
+        // Degrade and SAY so, the same way the releaser does: `array` and `null` DO implement
+        // LockProvider while serializing nothing across processes, so a lock taken on them would
+        // imply a protection it is not giving. The write still runs, and it is still ATOMIC — that
+        // is the half this change is about, and it holds on every store, locked or not.
+        //
+        // The condition is evaluated ONCE. Writing it twice — once to choose the path, once to
+        // decide whether to warn — is two places to keep in step for one question, and the pair
+        // silently disagrees the day somebody edits one.
+        $serializes = $store instanceof LockProvider && ! $store instanceof ArrayStore && ! $store instanceof NullStore;
+
+        if (! $serializes) {
+            Log::warning('legal-consent: cache store cannot serialize a publish, running unserialized', [
+                'document_key' => $key,
+                'store' => $store::class,
+            ]);
+        }
+
+        // The annotation carries what the signature cannot: `block()` returns whatever its callback
+        // returns and is typed `mixed`, while `$write` is declared `: LegalDocument`. Same shape,
+        // same reason, as LegalDocumentReleaser.
+        /** @var LegalDocument $document */
+        $document = $serializes
+            ? $store->lock(LegalDocument::activationLockName($key), 10)->block(5, $write)
+            : $write();
 
         event(new LegalDocumentPublished($document));
 

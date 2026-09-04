@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\ChangeSetState;
 use Pushery\LegalConsent\Models\LegalChangeSet;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
@@ -87,7 +88,7 @@ final readonly class ChangeItemsAuthor
      * rather than pretended away — the honest answer there is editorial process, not a predicate.
      *
      * @param  list<string>  $locales
-     * @return array<string, string> locale => reason
+     * @return array<string, BlockingReason> locale => reason
      */
     public function blockingLocales(string $key, array $locales, ?string $currentFingerprint = null): array
     {
@@ -97,13 +98,13 @@ final readonly class ChangeItemsAuthor
             $draft = $this->draft($key, $locale);
 
             if (! $draft instanceof LegalChangeSet) {
-                $blocking[$locale] = 'no change description has been written';
+                $blocking[$locale] = BlockingReason::NoChangeDescription;
 
                 continue;
             }
 
             if (! $draft->isAuthored()) {
-                $blocking[$locale] = 'the change description has no headline or no impact statement';
+                $blocking[$locale] = BlockingReason::IncompleteChangeDescription;
 
                 continue;
             }
@@ -113,7 +114,7 @@ final readonly class ChangeItemsAuthor
             if ($currentFingerprint !== null
                 && $draft->source_fingerprint !== null
                 && $draft->source_fingerprint !== $currentFingerprint) {
-                $blocking[$locale] = 'the legal text changed after this change description was written';
+                $blocking[$locale] = BlockingReason::StaleChangeDescription;
             }
         }
 

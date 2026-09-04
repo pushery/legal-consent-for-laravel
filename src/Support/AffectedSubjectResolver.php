@@ -108,7 +108,24 @@ readonly class AffectedSubjectResolver
             ->where('document_key', $version->key)
             ->where('locale', $version->locale)
             // The notice sweep crosses tenants, so scope subjects to THIS version's tenant.
-            ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id))
+            //
+            // ⚠️ `?? ''` IS THE FIX, AND THE `->when()` AROUND IT IS DELIBERATE — see below.
+            // The column is NOT NULL DEFAULT '', but a model that was just CREATED has no value
+            // loaded for it: measured, `$version->tenant_id` is null on a fresh insert and only
+            // becomes '' after a refresh. `where('tenant_id', null)` compiles to IS NULL, which
+            // matches no row of a NOT NULL column — the sweep resolves ZERO subjects and notifies
+            // nobody, silently. With tenancy ON that was one un-refreshed model away.
+            //
+            // ⚠️ AND THE GUARD STAYS. The v0.5.0 audit (MED-23) asked for this filter to become
+            // unconditional so `tenant_id` could LEAD the affected-subject index, reasoning that a
+            // NOT NULL DEFAULT '' column makes the predicate correct in both modes. Built and
+            // refuted by the suite: with tenancy OFF, a version that belongs to a tenant must still
+            // reach subjects whose consents sit in the shared bucket, because the stamping hook is
+            // inert while tenancy is off and the proof row would otherwise be invisible to the very
+            // tenant it belongs to. The dispatch suite defends exactly that. So the filter is
+            // conditional by necessity, and 000013's reason for leaving tenant_id out of the index
+            // stands — a leading column that is sometimes absent from the predicate cannot be one.
+            ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id ?? ''))
             ->when($maxConsentId !== null, fn (QueryBuilder $query): QueryBuilder => $query->where('id', '<=', $maxConsentId))
             ->when($skipNotified, fn (QueryBuilder $query): QueryBuilder => $this->withoutAlreadyNotified($query, $version))
             ->whereNotNull('subject_type')
@@ -134,6 +151,20 @@ readonly class AffectedSubjectResolver
         // forms lean on `legal_consents_affected_subject_idx` (document_key, locale, subject_type,
         // subject_id; migration 000013). Filtering those columns pre-aggregation is equivalent to
         // filtering groups — each group is one (subject_type, subject_id) pair.
+        //
+        // ⚠️ THE LINEARITY BELOW IS A SINGLE-TENANT CLAIM, and saying so is the resolution of the
+        // v0.5.0 audit's MED-23 rather than an admission left standing. With tenancy ON, `tenant_id`
+        // is a RESIDUAL filter — it is not in the index, so the seek still walks (document_key,
+        // locale) in order but reads and discards the rows of every other tenant on the way. The
+        // sweep stays linear in the row count for that (document_key, locale), not in the calling
+        // tenant's own share of it, and a page can come back short after filtering.
+        //
+        // The obvious repair — filter unconditionally so `tenant_id` can LEAD the index — was built
+        // and REFUTED by the dispatch suite, which is why the index is unchanged. See the note at
+        // the filter itself: with tenancy off, a version that belongs to a tenant must still reach
+        // subjects whose consents sit in the shared bucket, so the predicate cannot be
+        // unconditional, and a leading column that is sometimes absent from the predicate cannot
+        // lead an index.
         $driver = $this->keysetSeekDriver();
 
         return LazyCollection::make(function () use ($page, $driver, $size): Generator {
@@ -208,7 +239,8 @@ readonly class AffectedSubjectResolver
             ->select('subject_type', 'subject_id')
             ->where('document_key', $version->key)
             ->where('locale', $version->locale)
-            ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id))
+            // Guarded and null-coerced for the same reasons as the sibling above.
+            ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id ?? ''))
             ->when($maxConsentId !== null, fn (QueryBuilder $query): QueryBuilder => $query->where('id', '<=', $maxConsentId))
             ->when($skipNotified, fn (QueryBuilder $query): QueryBuilder => $this->withoutAlreadyNotified($query, $version))
             ->whereNotNull('subject_type')

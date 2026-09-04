@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Content;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Pushery\LegalConsent\Support\PublishedDocumentReader;
 use Pushery\LegalConsent\Support\TenantContext;
@@ -28,12 +29,33 @@ use Pushery\LegalConsent\Support\TenantContext;
  */
 final readonly class LegalSourceRenderer
 {
+    /**
+     * The default cache-key namespace.
+     *
+     * ⚠️ IT CARRIES NO PAYLOAD VERSION, AND THAT IS A DECISION MADE AFTER MEASURING — a `:v2` was
+     * written here and taken back out. Two reasons, either sufficient:
+     *
+     *  1. **It would not have taken effect.** The runtime value comes from
+     *     `config('legal-consent.cache.prefix')`, which SHIPS as `legal:doc`; this constant is only
+     *     the fallback. Every real installation — and every installation that published the config
+     *     — would have kept the old namespace while the changelog announced a new one.
+     *  2. **Nothing needs it.** The object→row change degrades to a cache MISS in both directions:
+     *     old code meets a row and fails its `instanceof`, new code meets an object and fails
+     *     {@see fromRow}. That is unlike the sibling cache's own versioning, which exists because
+     *     its mismatch was an uncaught TypeError on a per-request path — a crash, not a miss.
+     *
+     * Public and named so a test can derive it. A test that hardcoded the literal key stopped
+     * testing its own subject the moment this moved: the `:v2` experiment turned a
+     * locale-resolution assertion red for a reason that had nothing to do with locales.
+     */
+    public const string PREFIX = 'legal:doc';
+
     public function __construct(
         private SourceFactory $sources,
         private RenderPipeline $pipeline,
         private CacheRepository $cache,
         private int $ttl = 86400,
-        private string $prefix = 'legal:doc',
+        private string $prefix = self::PREFIX,
         private ?TenantContext $tenant = null,
     ) {}
 
@@ -48,19 +70,111 @@ final readonly class LegalSourceRenderer
 
         $cached = $this->cache->get($key);
 
-        if (is_array($cached)) {
-            $document = $cached['document'] ?? null;
+        if (is_array($cached) && ($cached['fingerprint'] ?? null) === $fingerprint) {
+            $document = $this->fromRow($cached['document'] ?? null);
 
-            if (($cached['fingerprint'] ?? null) === $fingerprint && $document instanceof Document) {
+            if ($document instanceof Document) {
                 return $document;
             }
         }
 
         $document = $this->pipeline->process($source->resolve($type, $locale));
 
-        $this->cache->put($key, ['fingerprint' => $fingerprint, 'document' => $document], $this->ttl);
+        $this->cache->put($key, ['fingerprint' => $fingerprint, 'document' => $this->toRow($document)], $this->ttl);
 
         return $document;
+    }
+
+    /**
+     * The cached shape: primitives only, never the {@see Document} itself.
+     *
+     * ⚠️ THIS USED TO CACHE THE OBJECT, and the sibling cache had already learned why that is wrong.
+     * An application running a serializing store under `cache.serializable_classes` reads a cached
+     * object back as `__PHP_Incomplete_Class`, so the `instanceof` guard on the read path failed on
+     * every single hit — and the method then re-rendered and re-wrote, forever, with nothing going
+     * red. A permanent silent cache miss is the worst shape a cache bug takes: it costs the render on
+     * every call and reports success. `EnforceableDocumentCache` moved to primitive rows for exactly
+     * this reason; this one was left behind.
+     *
+     * Both directions across the change degrade to a miss rather than a crash — old code reading a
+     * row fails its `instanceof`, new code reading an object fails {@see fromRow} — which is why
+     * this needs no key version, unlike the sibling cache whose mismatch was a TypeError. See
+     * {@see PREFIX}.
+     *
+     * @return array<string, string|int|bool|null>
+     */
+    private function toRow(Document $document): array
+    {
+        return [
+            'type' => $document->type,
+            'locale' => $document->locale,
+            'title' => $document->title,
+            'html' => $document->html,
+            'contentHash' => $document->contentHash,
+            'version' => $document->version,
+            'majorVersion' => $document->majorVersion,
+            'minorVersion' => $document->minorVersion,
+            'patchVersion' => $document->patchVersion,
+            'isMaterial' => $document->isMaterial,
+            'uiWording' => $document->uiWording,
+            'announceAt' => $document->announceAt?->toIso8601String(),
+            'enforceAt' => $document->enforceAt?->toIso8601String(),
+            'sourceRef' => $document->sourceRef,
+        ];
+    }
+
+    /**
+     * Rebuild a {@see Document} from a cached row, or null for anything that is not one.
+     *
+     * Every field is type-checked rather than cast. A cache entry is untrusted input in the only
+     * sense that matters here: it may have been written by another version of this package, and a
+     * silent coercion would hand back a Document whose contentHash is the string "0" instead of
+     * re-rendering the real one.
+     */
+    private function fromRow(mixed $row): ?Document
+    {
+        if (! is_array($row)) {
+            return null;
+        }
+
+        foreach (['type', 'locale', 'title', 'html', 'contentHash', 'version'] as $string) {
+            if (! isset($row[$string]) || ! is_string($row[$string])) {
+                return null;
+            }
+        }
+
+        foreach (['majorVersion', 'minorVersion', 'patchVersion'] as $int) {
+            if (! isset($row[$int]) || ! is_int($row[$int])) {
+                return null;
+            }
+        }
+
+        if (! isset($row['isMaterial']) || ! is_bool($row['isMaterial'])) {
+            return null;
+        }
+
+        foreach (['uiWording', 'announceAt', 'enforceAt', 'sourceRef'] as $nullable) {
+            if (! array_key_exists($nullable, $row) || (! is_string($row[$nullable]) && $row[$nullable] !== null)) {
+                return null;
+            }
+        }
+
+        return new Document(
+            type: $row['type'],
+            locale: $row['locale'],
+            title: $row['title'],
+            html: $row['html'],
+            contentHash: $row['contentHash'],
+            version: $row['version'],
+            majorVersion: $row['majorVersion'],
+            minorVersion: $row['minorVersion'],
+            patchVersion: $row['patchVersion'],
+            isMaterial: $row['isMaterial'],
+            uiWording: $row['uiWording'],
+            announceAt: $row['announceAt'] === null ? null : CarbonImmutable::parse($row['announceAt']),
+            enforceAt: $row['enforceAt'] === null ? null : CarbonImmutable::parse($row['enforceAt']),
+            sourceRef: $row['sourceRef'],
+        );
     }
 
     public function forget(string $type, string $locale): void

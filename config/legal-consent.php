@@ -646,6 +646,13 @@ return [
     | the first chained row: the rows are append-only and cannot be re-keyed, so changing the secret
     | invalidates prior links. Null keeps the legacy unkeyed hash. Rotation / KMS sourcing is the
     | app's concern — this reads whatever the env provides.
+    |
+    | Use at least 256 bits from a cryptographic random source — `openssl rand -base64 32`, or
+    | `php -r 'echo base64_encode(random_bytes(32)), PHP_EOL;'` — and never a passphrase. Every row
+    | stores its content beside a MAC over that content, so a copy of this table is an unlimited
+    | supply of known plaintext/MAC pairs: an offline guessing attack runs at the attacker's own
+    | pace and nothing here can see it. Keep the secret out of the database backup; one that ships
+    | in the same dump as the ledger protects nothing from whoever holds the dump.
     */
     'tamper_evidence_key' => env('LEGAL_CONSENT_TAMPER_KEY'),
 
