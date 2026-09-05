@@ -77,9 +77,7 @@ final class LegalNotice extends Model
     protected static function booted(): void
     {
         self::creating(function (LegalNotice $notice): void {
-            if ($notice->created_at === null) {
-                $notice->created_at = CarbonImmutable::now();
-            }
+            $notice->created_at ??= CarbonImmutable::now();
         });
 
         self::updating(function (): never {

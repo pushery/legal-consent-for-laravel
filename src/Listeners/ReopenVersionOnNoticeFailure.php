@@ -43,6 +43,18 @@ final class ReopenVersionOnNoticeFailure
 
         $version = $notification->document;
 
+        // The two halves are not the same kind of guard, and only one of them can be measured.
+        //
+        // `! $version->exists` is load-bearing: `forceFill()->saveQuietly()` on a model whose row
+        // is gone does not update nothing, it INSERTS the row back -- measured, the count returns
+        // and `exists` flips to true. Without it a refused mail transport re-creates a legal
+        // document somebody deleted.
+        //
+        // `notified_at === null` cannot be observed at all, and is kept anyway. Eloquent skips the
+        // statement when nothing is dirty -- measured: 0 UPDATEs when the watermark is already
+        // null against 1 when it was stamped -- so dropping it changes no row and no query count.
+        // It says the intent at the only place a reader looks, and it is what stops the
+        // `saveQuietly()` below from being reached on a version this listener has nothing to do.
         if (! $version->exists || $version->notified_at === null) {
             return;
         }

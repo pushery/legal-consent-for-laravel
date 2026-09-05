@@ -129,6 +129,22 @@ final readonly class ConsentPresenter
                 'key' => $document->key,
                 'title' => $document->title,
                 'version' => $document->version,
+                // ⚠️ THIS READS `true` FOR EVERYONE WHEN `major_version` IS 0, and the two lines
+                // below have the mirror of the same problem. `?? 0` cannot tell three states
+                // apart — never acted, withdrawn (the fold drops an ENDING action to 0), and
+                // genuinely holding major 0 — and at major 0 the comparison `x >= 0` is true for
+                // all of them while `x < 0` is false for all of them.
+                //
+                // A document published as `0.9.0` therefore gates NOBODY: measured, outstanding()
+                // returns an empty set for a subject with an empty ledger, while this screen tells
+                // them they hold the contract. `major_version` is an unsignedInteger with no floor
+                // at 1, and the draft writer accepts `0.9.0`, so it is reachable through the
+                // ordinary publish path rather than only by hand.
+                //
+                // NOT fixed here on purpose, and the three surviving mutants on these lines are
+                // deliberately NOT labeled equivalent: repairing it changes whether real people are
+                // blocked on an upgrade, which is a decision about enforcement rather than a
+                // refactor. It is written up for the maintainer with the measurement.
                 'held' => ($held[$document->key] ?? 0) >= $document->major_version,
                 // `held === false` covers two different positions, and only one of them asks the
                 // subject for anything: never accepted at all, versus a NEW MAJOR waiting. The

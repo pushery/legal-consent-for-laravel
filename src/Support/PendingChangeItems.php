@@ -113,7 +113,16 @@ final class PendingChangeItems
         $set->forceFill([
             'key' => $this->key,
             'locale' => $this->locale,
+            // Also an equivalent mutant, for a second reason: the model uses `BelongsToTenant`,
+            // which stamps the tenant on create. With tenancy off the column's '' default agrees
+            // as well, so its absence is unobservable in both configurations. Kept because the
+            // lookup above filters on this column and the write should say what it writes.
             'tenant_id' => $tenantId,
+            // ⚠️ EQUIVALENT MUTANT, and the schema is why: `version` DEFAULTS to '' in migration
+            // 000016 and DRAFT_VERSION is '', so removing this line stores the same value. No test
+            // can kill the nightly's RemoveArrayItem on it. It stays because the row is looked up
+            // BY this sentinel two statements above, and a default that silently agrees with a
+            // constant is a coincidence worth writing down rather than relying on.
             'version' => LegalChangeSet::DRAFT_VERSION,
             'state' => ChangeSetState::Draft,
             'headline' => $this->headline,

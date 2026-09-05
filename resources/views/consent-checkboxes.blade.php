@@ -65,7 +65,17 @@
                 @if ($hasError) aria-invalid="true" @endif
                 @if ($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
             >
-            <span>{{ $document['wording'] }}</span>
+            {{-- The document NAME inside the sentence is the link, rather than a second link
+                 repeating the name underneath. `ConsentWordingLink` finds the title inside the
+                 SNAPSHOTTED wording and hands back the three pieces; the sentence itself is never
+                 rewritten, because it is what the ledger records as the thing agreed to.
+                 Null when the title does not appear in the sentence at all (`die AGB` against
+                 `Allgemeine Geschäftsbedingungen`) — then the separate link below stays, because a
+                 text that cannot be reached breaks the clickwrap requirement (§ 305 Abs. 2 BGB). --}}
+            @php($wordingLink = ($document['url'] ?? null) !== null
+                ? \Pushery\LegalConsent\Support\ConsentWordingLink::locate($document['wording'], $document['title'] ?? '')
+                : null)
+            <span>@if ($wordingLink !== null){{ $wordingLink->before }}<a id="{{ $field }}_link" href="{{ $document['url'] }}"@if (($document['locale'] ?? '') !== '') hreflang="{{ $document['locale'] }}"@endif target="_blank" rel="noopener">{{ $wordingLink->match }}</a>{{ $wordingLink->after }}@else{{ $document['wording'] }}@endif</span>
         </label>
 
         @if ($hasError)
@@ -84,7 +94,7 @@
             <p id="{{ $field }}_error" class="legal-consent-error" role="alert">{{ $errorMessage }}</p>
         @endif
 
-        @if (($document['url'] ?? null) !== null)
+        @if (($document['url'] ?? null) !== null && $wordingLink === null)
             {{-- `hreflang` names the language of the text at the other end, which is not always
                  the language of this page: a mandatory document published only in the default
                  locale still binds, so it appears in its own language (see

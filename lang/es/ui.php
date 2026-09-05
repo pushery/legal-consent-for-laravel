@@ -111,4 +111,13 @@ return [
     'admin_status_reviewed' => 'Marcado como revisado. Este texto ya se puede publicar.',
     'admin_status_release_blocked' => '«:key» no se publicó: :reasons',
     'admin_status_released' => '«:key» publicado en :count idioma(s) — afecta a :affects persona(s).',
+    'admin_deemed_heading' => 'Publicar con plazo de oposición',
+    'admin_deemed_explainer' => 'Un cambio con consentimiento tácito vincula si el plazo de oposición termina sin oposición. El plazo debe respetar como mínimo el preaviso legal.',
+    'admin_deemed_announce' => 'Anunciar el',
+    'admin_deemed_deadline' => 'Fecha límite de oposición',
+    'admin_deemed_enforce' => 'En vigor desde',
+    'admin_deemed_offers_termination' => 'Concede un derecho de rescisión gratuito',
+    'admin_deemed_keeps_unmodified' => 'Mantiene disponible la versión sin modificar',
+    'admin_deemed_submit' => 'Publicar con plazo de oposición',
+    'admin_status_deemed_window_rejected' => 'No publicado — se rechazó el plazo de oposición: :reason',
 ];

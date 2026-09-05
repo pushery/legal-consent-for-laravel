@@ -111,4 +111,13 @@ return [
     'admin_status_reviewed' => 'Marqué comme relu. Ce texte est désormais publiable.',
     'admin_status_release_blocked' => '« :key » n\'a pas été publié : :reasons',
     'admin_status_released' => '« :key » publié dans :count langue(s) — concerne :affects personne(s).',
+    'admin_deemed_heading' => 'Publier avec un délai d’opposition',
+    'admin_deemed_explainer' => 'Une modification à consentement tacite engage si le délai d’opposition se termine sans opposition. Le délai doit respecter au minimum le préavis légal.',
+    'admin_deemed_announce' => 'Annoncer le',
+    'admin_deemed_deadline' => 'Date limite d’opposition',
+    'admin_deemed_enforce' => 'En vigueur à partir du',
+    'admin_deemed_offers_termination' => 'Accorde un droit de résiliation gratuit',
+    'admin_deemed_keeps_unmodified' => 'Garde la version inchangée disponible',
+    'admin_deemed_submit' => 'Publier avec un délai d’opposition',
+    'admin_status_deemed_window_rejected' => 'Non publié — le délai d’opposition a été refusé : :reason',
 ];

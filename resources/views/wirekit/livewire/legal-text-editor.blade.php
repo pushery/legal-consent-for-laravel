@@ -75,6 +75,26 @@
             <x-wirekit::button surface="outline" wire:click="markReviewed">{{ __('legal-consent::ui.admin_mark_reviewed') }}</x-wirekit::button>
         </x-wirekit::button.group>
 
+        {{-- RELEASE WITH AN OBJECTION WINDOW — the WireKit twin of the plain stub's form.
+             Same placement decision and the same reason: a deemed-consent release binds people by
+             their SILENCE (§ 308 Nr. 5 BGB), so it belongs where somebody has actually read the
+             text, not behind a button on an overview grid. `date-picker` and `toggle` are used
+             here because WireKit owns their keyboard and screen-reader behavior; the plain stub
+             uses native `type="date"` and checkboxes for the same reason in the other direction. --}}
+        <x-wirekit::heading :level="2">{{ __('legal-consent::ui.admin_deemed_heading') }}</x-wirekit::heading>
+        <x-wirekit::text>{{ __('legal-consent::ui.admin_deemed_explainer') }}</x-wirekit::text>
+
+        <x-wirekit::stack gap="sm">
+            <x-wirekit::date-picker wire:model="announceAt" name="announceAt" :label="__('legal-consent::ui.admin_deemed_announce')" />
+            <x-wirekit::date-picker wire:model="objectionDeadline" name="objectionDeadline" :label="__('legal-consent::ui.admin_deemed_deadline')" />
+            <x-wirekit::date-picker wire:model="enforceAt" name="enforceAt" :label="__('legal-consent::ui.admin_deemed_enforce')" />
+
+            <x-wirekit::toggle wire:model="offersTermination" :label="__('legal-consent::ui.admin_deemed_offers_termination')" />
+            <x-wirekit::toggle wire:model="keepsUnmodified" :label="__('legal-consent::ui.admin_deemed_keeps_unmodified')" />
+
+            <x-wirekit::button wire:click="releaseDeemed">{{ __('legal-consent::ui.admin_deemed_submit') }}</x-wirekit::button>
+        </x-wirekit::stack>
+
         <x-wirekit::heading :level="2">{{ __('legal-consent::ui.admin_preview') }}</x-wirekit::heading>
         {{-- The already-sanitized stored bytes — a true fixpoint of what a publish will freeze. --}}
         <x-wirekit::card aria-label="{{ __('legal-consent::ui.admin_preview') }}">{!! $preview !!}</x-wirekit::card>

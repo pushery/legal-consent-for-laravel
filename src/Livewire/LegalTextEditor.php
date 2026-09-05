@@ -4,16 +4,25 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Livewire;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Pushery\LegalConsent\Contracts\LegalTextTranslator;
+use Pushery\LegalConsent\Enums\BlockingReason;
+use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
+use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
+use Pushery\LegalConsent\Exceptions\NoticeTimelineInvertedException;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
+use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalDraft;
+use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDraftSet;
 use Pushery\LegalConsent\Support\LegalDraftWriter;
+use Pushery\LegalConsent\Support\ReleaseOptions;
 
 /**
  * Edits ONE draft — one document key, one locale.
@@ -46,6 +55,37 @@ final class LegalTextEditor extends Component
     /** Locked for the reason above: it is half of the row identity, not an input. */
     #[Locked]
     public string $locale = '';
+
+    /**
+     * The objection window a deemed-consent release binds on — announce, deadline, enforce.
+     *
+     * ⚠️ THIS SURFACE IS HERE RATHER THAN ON THE MANAGER GRID, and that placement is the finding
+     * rather than a preference. `LegalTextManager` says in its own words that the deemed and
+     * info-only modes belong to "the editor controls or the CLI, not a button on an overview
+     * grid" — a deemed release binds people by their SILENCE (§ 308 Nr. 5 BGB), and a one-click
+     * grid action is the wrong amount of friction for that.
+     *
+     * Measured 2026-09-05: of the two routes that sentence names, only the CLI existed. The
+     * editor carried nothing — zero references to a notice mode, an objection deadline or
+     * ReleaseOptions. So an application with an admin UI had no in-app path to a capability this
+     * package implements end to end, and a consuming app rebuilt the screen itself. The prose
+     * described a surface that was not there.
+     *
+     * Empty strings rather than nulls because they are bound to date inputs, which submit "".
+     */
+    public string $announceAt = '';
+
+    /** The date an objection must arrive by. See {@see $announceAt}. */
+    public string $objectionDeadline = '';
+
+    /** The date the change takes effect. See {@see $announceAt}. */
+    public string $enforceAt = '';
+
+    /** Whether the change grants a free right to terminate (§ 675g Abs. 2, P2B Art. 3). */
+    public bool $offersTermination = false;
+
+    /** Whether the unmodified version stays on offer to whoever objects. */
+    public bool $keepsUnmodified = false;
 
     /** The edited bytes. Client-writable by design — {@see LegalDraftWriter} sanitizes on the way in. */
     public string $body = '';
@@ -112,6 +152,67 @@ final class LegalTextEditor extends Component
         $this->setStatus((string) __('legal-consent::ui.admin_status_reviewed'));
     }
 
+    /**
+     * Release this document across its locales as a DEEMED-CONSENT change, on a stated objection
+     * window.
+     *
+     * Every failure here is a status message, never a fatal. Three can happen and they mean
+     * different things to the person clicking:
+     *
+     *  - the set is not ready (a locale unwritten or unreviewed) — {@see LegalReleaseNotReady}
+     *  - the window runs backwards — {@see NoticeTimelineInvertedException}
+     *  - the window is shorter than the statutory lead time — {@see LeadTimeTooShortException}
+     *
+     * The last two are the ones that make this surface worth shipping rather than leaving to the
+     * CLI: an operator picking dates in a form finds out immediately, in their own language, that
+     * a window is too short to bind. A `php artisan` invocation tells them the same thing in a
+     * stack trace, on a screen the person deciding is usually not looking at.
+     */
+    public function releaseDeemed(): void
+    {
+        try {
+            $released = app(LegalDocumentReleaser::class)->release(
+                $this->key,
+                NoticeMode::DeemedConsent,
+                $this->locales(),
+                new ReleaseOptions(
+                    announceAt: $this->date($this->announceAt),
+                    enforceAt: $this->date($this->enforceAt),
+                    objectionDeadline: $this->date($this->objectionDeadline),
+                    offersTermination: $this->offersTermination,
+                    keepsUnmodified: $this->keepsUnmodified,
+                ),
+            );
+        } catch (LegalReleaseNotReady $e) {
+            $this->setStatus((string) __('legal-consent::ui.admin_status_release_blocked', [
+                'key' => $this->key,
+                'reasons' => implode('; ', array_map(
+                    static fn (string $locale, BlockingReason $reason): string => "{$locale} (".__($reason->label()).')',
+                    array_keys($e->blocking),
+                    array_values($e->blocking),
+                )),
+            ]));
+
+            return;
+        } catch (NoticeTimelineInvertedException|LeadTimeTooShortException $e) {
+            // The message carries the package's own numbers (which minimum, which dates), so it is
+            // shown rather than replaced by a vaguer sentence of our own.
+            $this->setStatus((string) __('legal-consent::ui.admin_status_deemed_window_rejected', [
+                'reason' => $e->getMessage(),
+            ]));
+
+            return;
+        }
+
+        $first = $released->first();
+        $affects = $first instanceof LegalDocument ? app(LegalDocumentReleaser::class)->affects($first) : 0;
+        $this->setStatus((string) __('legal-consent::ui.admin_status_released', [
+            'key' => $this->key,
+            'count' => count($released),
+            'affects' => $affects,
+        ]));
+    }
+
     public function render(): View
     {
         $set = LegalDraftSet::for($this->key);
@@ -126,6 +227,31 @@ final class LegalTextEditor extends Component
             // not a re-render — so it is a true fixpoint of what the subject will see.
             'preview' => $draft instanceof LegalDraft ? $draft->body : '',
         ]);
+    }
+
+    /**
+     * A date input's value as a Carbon, or null when it was left empty.
+     *
+     * Null rather than "today": an omitted date means the operator did not state one, and the
+     * publisher's own defaults are the right answer to that. Substituting now() here would invent
+     * a window nobody chose and freeze it into a proof row.
+     */
+    private function date(string $value): ?CarbonImmutable
+    {
+        return $value === '' ? null : CarbonImmutable::parse($value);
+    }
+
+    /**
+     * The locales a release covers — the same `legal-consent.locales` the manager reads, so the
+     * two admin surfaces cannot disagree about which set a release touches.
+     *
+     * @return list<string>
+     */
+    private function locales(): array
+    {
+        $locales = config('legal-consent.locales');
+
+        return is_array($locales) ? array_values(array_filter($locales, is_string(...))) : [];
     }
 
     private function sourceLocale(): string

@@ -102,6 +102,12 @@ final readonly class RetiredHoldings
                 continue;
             }
 
+            // The `(int)` casts are equivalent mutants and stay anyway: `major_version` is cast to
+            // `integer` on the model, so no driver hands back a string here and the nightly's
+            // RemoveIntegerCast on this line cannot be killed. They are kept because the
+            // comparison is `!==`/`===` -- strict, on purpose, so that a holding of 1 never
+            // matches a version of "1" -- and a cast that documents that at the comparison is
+            // worth more than one saved character.
             if ((int) $previous->major_version !== $holding && (int) $version->major_version === $holding) {
                 // An exact match for what the fold says they hold wins: that is the text binding
                 // them right now.

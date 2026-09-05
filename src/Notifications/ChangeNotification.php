@@ -230,6 +230,9 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
     {
         $name = config('legal-consent.routes.consent_name');
 
+        // The `!== ''` is redundant against `Route::has('')`, which is false -- measured, and it
+        // is why deleting that clause changes nothing any test can see. It stays as the cheaper
+        // half of the pair: a name only reaches the router when there is a name to look up.
         if (is_string($name) && $name !== '' && Route::has($name)) {
             return route($name);
         }

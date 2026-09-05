@@ -273,6 +273,18 @@ final class VerifyLedgerCommand extends Command
                 yield $row;
             }
 
+            // ⚠️ THE TWO `instanceof` CHECKS ARE REACHABLE ONLY AT AN EXACT PAGE BOUNDARY, which
+            // is why the nightly reports InstanceOfToTrue on both as survivors. `$page->last()` is
+            // null only for an EMPTY page, and the loop below re-queries only when the previous
+            // page was exactly full -- so a null here needs a chained-row count that is an exact
+            // multiple of PAGE. Measured: on an empty ledger the generator is not entered at all,
+            // so that cheap case does not reach them either.
+            //
+            // Not tested, and that is a decision rather than a gap: the fixture would be a
+            // thousand chained rows built to hit one boundary, tied to a constant one edit away
+            // from moving. The guards stay because the boundary is real and the failure without
+            // them is a fatal in a verifier -- the one command whose whole job is to report
+            // trouble rather than become it.
             $last = $page->last();
             $lastToken = $last instanceof stdClass ? $last->subject_token : null;
             $lastId = $last instanceof stdClass ? $last->id : null;

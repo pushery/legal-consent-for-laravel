@@ -110,6 +110,10 @@ final readonly class LedgerChainRepair
             $token = $row['subject_token'] ?? null;
 
             if (is_string($token) && $token !== '') {
+                // The set is the KEYS; the value is a placeholder and nothing ever reads it, so
+                // the nightly's TrueToFalse mutant on this line is equivalent by construction and
+                // no test can kill it. Written down rather than left on the survivor list, where
+                // it would be re-investigated every time somebody works that list.
                 $tokens[$token] = true;
             }
         }
@@ -124,6 +128,46 @@ final readonly class LedgerChainRepair
                 implode(', ', array_keys($tokens)),
             ));
         }
+    }
+
+    /**
+     * The placeholder budget one multi-row INSERT is allowed to spend.
+     *
+     * Deliberately under SQLite's most conservative shipped SQLITE_MAX_VARIABLE_NUMBER (999)
+     * rather than at a modern build's 32766: exceeding it is a hard driver error in the middle of
+     * a transaction that is rewriting a ledger.
+     */
+    public const int MAX_BOUND_PARAMETERS = 900;
+
+    /**
+     * Split rewritten rows into as few INSERTs as that budget allows.
+     *
+     * Chunked by PLACEHOLDER count rather than by row count, because that is what actually has a
+     * ceiling, and a proof row is wide -- 24 columns as this is written. Deriving the chunk from
+     * the row's own width keeps it correct as columns are added, which a row-count constant does
+     * not: it is the number that silently stops meaning what it says.
+     *
+     * ⚠️ IT LIVES HERE BECAUSE BOTH REWRITERS NEED THE SAME ANSWER AND ONE OF THEM HAD A
+     * DIFFERENT ONE. The erasure derived its chunk from this budget; the retention sweep chunked
+     * at a hardcoded 500 rows, which is 12 000 placeholders -- thirteen times the erasure's answer
+     * for the identical rows, written by {@see toRow()}, into the identical table. Measured on a
+     * subject with 47 consent rows: one INSERT binding 1104 placeholders. That is not an exotic
+     * ledger, and on a 999-build it is a driver error inside the transaction that repairs a chain,
+     * reached only by the largest ledgers -- the worst way to find out. Its own comment named the
+     * ceiling correctly and then picked a number above it.
+     *
+     * This class is a pure function over rows and stays one: the callers still own their writes,
+     * because they differ (one rewrites every row, the other only the ones whose link moved). What
+     * they must not own separately is the ARITHMETIC.
+     *
+     * @param  non-empty-list<array<string, mixed>>  $rows
+     * @return list<non-empty-list<array<string, mixed>>>
+     */
+    public function batches(array $rows): array
+    {
+        $columns = max(1, count($rows[0]));
+
+        return array_chunk($rows, max(1, intdiv(self::MAX_BOUND_PARAMETERS, $columns)));
     }
 
     /**

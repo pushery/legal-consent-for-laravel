@@ -130,9 +130,21 @@ final readonly class WithdrawConsentController
             return false;
         }
 
-        // The shapes parse_url does NOT read as an authority but a browser does: a backslash
-        // (browsers treat `\` as `/`, so `/\evil` becomes `//evil`) and a protocol-relative
-        // `//host`, which has no scheme for parse_url to hang a host on.
+        // A backslash: browsers treat `\` as `/`, so `/\evil` is fetched as `//evil`, and
+        // parse_url genuinely reads no authority there. That half is load-bearing.
+        //
+        // ⚠️ THE `//` HALF IS REDUNDANT, AND THIS COMMENT USED TO GIVE IT A REASON THAT IS FALSE.
+        // It said a protocol-relative `//host` "has no scheme for parse_url to hang a host on".
+        // Measured: `parse_url('//host', PHP_URL_HOST)` returns `'host'`, and every degenerate
+        // shape (`//`, `///`, `//?x`, `///host`) returns `false` — never `null`. The final line
+        // compares strictly against `null`, so all of them fall through to the host comparison and
+        // are refused there. No `//…` input reaches a redirect through this door either way.
+        //
+        // It stays as defense in depth on a security path, where a second layer is cheap. What is
+        // not acceptable is a guard whose stated reason is wrong: it stops the next reader from
+        // seeing where the real coverage lives, and it is why the nightly reports
+        // StrStartsWithToStrEndsWith here as a survivor that cannot be killed — there is nothing
+        // behind it to catch.
         if (str_contains($target, '\\') || str_starts_with($target, '//')) {
             return false;
         }

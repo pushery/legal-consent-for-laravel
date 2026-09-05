@@ -87,9 +87,7 @@ final class LegalConsent extends Model
     protected static function booted(): void
     {
         self::creating(function (LegalConsent $consent): void {
-            if ($consent->created_at === null) {
-                $consent->created_at = CarbonImmutable::now();
-            }
+            $consent->created_at ??= CarbonImmutable::now();
         });
 
         self::updating(function (): never {

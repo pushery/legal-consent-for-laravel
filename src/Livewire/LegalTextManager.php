@@ -44,6 +44,18 @@ final class LegalTextManager extends Component
         // The manager releases the common case — an initial version or a re-consent change, both of
         // which gate. The deemed/info-only modes are a per-change legal call made from the editor
         // controls or the CLI, not a button on an overview grid.
+        //
+        // ⚠️ THAT SENTENCE NAMED TWO HOMES AND ONLY ONE OF THEM EXISTED, for as long as it has been
+        // here. Measured 2026-09-05: `LegalTextEditor` carried nothing — no notice mode, no
+        // objection deadline, no ReleaseOptions — so the only route to a deemed release was
+        // `legal-consent:publish --deemed --objection-at=`. An application with an admin UI had no
+        // in-app path to a capability this package implements end to end, and a consuming app
+        // rebuilt the screen itself rather than adopt one that could not do it.
+        //
+        // The editor has it now ({@see LegalTextEditor::releaseDeemed()}), so the routing above is
+        // true rather than aspirational. The placement stands on its own reasons: a deemed release
+        // binds people by their SILENCE, and the editor is per (key, locale) — the context of "this
+        // one change" is already there, and somebody has read the text.
         try {
             $released = app(LegalDocumentReleaser::class)->release($key, NoticeMode::ActiveReconsent, $this->locales());
         } catch (LegalReleaseNotReady $e) {

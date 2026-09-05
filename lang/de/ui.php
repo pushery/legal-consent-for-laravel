@@ -111,4 +111,13 @@ return [
     'admin_status_reviewed' => 'Als geprüft markiert. Dieser Text ist jetzt veröffentlichbar.',
     'admin_status_release_blocked' => '„:key“ wurde nicht veröffentlicht: :reasons',
     'admin_status_released' => '„:key“ in :count Sprache(n) veröffentlicht — betrifft :affects Person(en).',
+    'admin_deemed_heading' => 'Mit Widerspruchsfenster freigeben',
+    'admin_deemed_explainer' => 'Eine Änderung mit Zustimmungsfiktion bindet, wenn das Widerspruchsfenster ohne Widerspruch endet. Das Fenster muss mindestens die gesetzliche Vorlaufzeit einhalten.',
+    'admin_deemed_announce' => 'Ankündigen am',
+    'admin_deemed_deadline' => 'Widerspruchsfrist',
+    'admin_deemed_enforce' => 'Wirksam ab',
+    'admin_deemed_offers_termination' => 'Räumt ein kostenloses Kündigungsrecht ein',
+    'admin_deemed_keeps_unmodified' => 'Hält die unveränderte Fassung weiter bereit',
+    'admin_deemed_submit' => 'Mit Widerspruchsfenster freigeben',
+    'admin_status_deemed_window_rejected' => 'Nicht freigegeben — das Widerspruchsfenster wurde abgelehnt: :reason',
 ];

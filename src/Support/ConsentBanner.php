@@ -62,6 +62,18 @@ final readonly class ConsentBanner
 
             $enforce = $document->enforce_from;
 
+            // ⚠️ THE `?->` IN THIS PAYLOAD ARE EQUIVALENT MUTANTS, and the filter above is the
+            // reason: it requires `announced()` (which demands a real `announce_from`) and
+            // `enforce_from instanceof CarbonImmutable`. Both fields are therefore non-null by the
+            // time they get here, and the nightly reports their RemoveNullSafeOperator mutants as
+            // survivors that no test can kill. The same holds in informationalFor(), whose filter
+            // makes the same two demands.
+            //
+            // deemedFor() is the exception and its `?->` IS load-bearing: that filter asks about
+            // the OBJECTION DEADLINE -- the right question there, since silence binds at the
+            // deadline rather than at the effective date -- and never looks at `enforce_from`, so
+            // a row carrying a deadline and no effective date reaches its payload. That case has
+            // a test; these two cannot have one.
             $pending[] = [
                 'key' => $document->key,
                 'version' => $document->version,

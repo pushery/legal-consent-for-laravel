@@ -4,6 +4,36 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-09-05
+
+**A minor bump: two additions on the admin surface and four fixes, none of them breaking.** The install range does not move — `laravel/framework ^13.0`, `php ^8.4` — and nothing in `UPGRADE.md` applies, because no public contract changed shape. Two of the four fixes are behavior a consuming application can observe: a deleted document stayed enforceable until its cache entry expired, and a retention sweep could hit a driver error while repairing the tamper chain on a large ledger.
+
+### Added
+
+- **The legal-text editor can release with an objection window.** A deemed-consent change — one that binds if the objection window closes without an objection (§ 308 Nr. 5 BGB) — was implemented end to end: the schema carries the window, `LegalDocumentReleaser` takes it, and `legal-consent:close-objection-windows` closes it. No shipped screen could drive it. `LegalTextManager` states that the deemed and info-only modes belong to *"the editor controls or the CLI, not a button on an overview grid"*, and that sentence named two homes while only the command line had it — so an application with an admin UI had no in-app path at all, and a consuming application rebuilt the screen itself. The editor now carries three dates and the two flags, in both the plain and the WireKit stub. It stays out of the overview grid deliberately: a release that binds people by their silence is a per-change legal call, and the editor is the surface where somebody has actually read the text.
+
+  A window that runs backwards or falls short of the statutory lead time comes back as a status message naming the package's own numbers, not as an exception — which is the point of having it here rather than only on the CLI.
+
+- **`statusFor()` says WHICH version was accepted, and when.** Two keys, `accepted_version` and `accepted_at`. Until now the map carried `accepted_major`, which is a major — `2.0.0` and `2.7.3` are the same number — and no date at all, so building "what did this person agree to, and when" meant fetching `history()` as well and folding it per document key. That is not a one-liner (the history arrives ascending, `action` is a string rather than the enum, and the caller has to know `isAccepting()` is the right filter), and `history()` reads the whole append-only ledger with no limit — a cost that grows with data nobody deletes. The fold already happened inside the gate, so the values were there; they simply were not passed out.
+
+  **Both are null once the holding ends**, in step with `accepted_major` dropping to 0. Keeping the last accepted version would report a withdrawn opt-in as still standing on a text, which is the same defect one column over that the withdrawal-aware fold was built to end. The historical fact stays in `history()`, whose job it is.
+
+  `ConsentFake::statusIs()` fills the two keys when a test leaves them out, so existing fakes keep working and can never hand back a row shape the real manager would not produce.
+
+### Fixed
+
+- **Deleting a legal document no longer leaves it enforceable for the rest of the cache TTL.** The enforceable-set cache is flushed on every write to the table, and the flush finds the locales it has to clear from two places: the locales the application declares, plus the ones currently published. A DELETE removes the row that made the second half discoverable — so if `legal-consent.locales` is not declared, the locale of the document just deleted was in neither list by the time the listener ran, and its cached set survived. The gate went on enforcing a version that no longer existed until the entry expired.
+
+  It bites in exactly one configuration, and not by accident: leaving `locales` undeclared is what lets a document be published in any language, which is the same setup a sibling guard was written for. The deleted row's own locale is now cleared from the model, which still carries the attribute at that point even though the table no longer does.
+
+- **A retention sweep no longer risks a driver error while repairing a chain.** Both operations that lawfully remove ledger rows — the Art. 17 erasure and `legal-consent:prune` — rewrite the surviving rows to re-link the tamper chain, and both write them back with a multi-row INSERT. The erasure sized that write by a placeholder budget and arrived at 37 rows; the retention sweep chunked at a hardcoded 500, which at 24 columns is 12 000 placeholders. SQLite has shipped builds with `SQLITE_MAX_VARIABLE_NUMBER` at 999. A subject with 47 consent rows already produced a single statement binding 1104 of them.
+
+  Where it bites, it bites as a hard driver error inside the transaction that repairs the chain, on the largest ledgers only, in a scheduled task. The budget is now derived from the row's own width in the one place both rewriters read, so the two cannot disagree again and the number stays correct as columns are added.
+
+- **A record accepted exactly on the retention boundary is kept, not deleted.** The boundary between the two was never asserted, and it is the one this command promises: `legal-consent:prune` deletes what is *older than* the retention period, so a record at exactly the cutoff instant stays. It has always behaved this way; nothing failed if it stopped.
+
+- **A record orphaned through only one subject column is now pruned.** Eligibility reads `subject_id is null OR subject_type is null`, but every case that reached it nulled both together, because that is what the package's own erasure does. A consuming application that clears just one — a morph-map migration, a foreign-key purge — left a row that no longer belongs to anybody and that the sweep would never collect, with the IP address and user agent still in it. Both halves of that rule are now held by a test.
+
 ## [0.22.0] - 2026-09-05
 
 **A minor bump carrying two breaking changes and one security fix**, which SemVer `0.y.z` allows. The first break is a return type: `blockingLocales()` hands back a `BlockingReason` instead of an English sentence, so a release screen can be translated at all — the sentences themselves are unchanged and still reachable as `$reason->value`. The second only reaches you if you construct `DefaultConsentManager` by hand: its registry argument is nullable now, and a literal `[]` means *nothing is registered* rather than *do not filter*. The security fix closes a forged consent planted as a new chain at the public root, which `verify-ledger` reported as intact. Both are written up in `UPGRADE.md`, and the install range does not move: `laravel/framework ^13.0`, `php ^8.4`.
@@ -2293,7 +2323,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.19.0...v0.20.0

@@ -175,6 +175,9 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
             $unproved += $unprovedHere;
 
+            // A memory hint with no observable behavior, so the mutant that removes the call is
+            // equivalent and always will be. It stays because this sweep walks the ledger in
+            // chunks and the cycles it drops are real; nothing about that is assertable.
             gc_collect_cycles();
         }
 
@@ -216,6 +219,9 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
         $proved = [];
 
         foreach ($rows as $row) {
+            // The value is a placeholder: the map is read with `isset()`, which is true for `false`
+            // just as it is for `true`. The nightly's TrueToFalse on this line is therefore equivalent
+            // by construction, and labeled here rather than left on the list.
             $proved[$row->subject_type.'#'.$row->subject_id] = true;
         }
 
