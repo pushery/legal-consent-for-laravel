@@ -137,6 +137,16 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      */
     private function chainsNotStartingAtGenesis(): array
     {
+        // `min`, and `max` would pass every test in the suite — measured, not assumed. It is not
+        // a hole: a broken chain is flagged either way, because whichever chained row is picked,
+        // its link points at a hash rather than at genesis. `max` is worse for a reason no arm can
+        // assert, which is why this note exists instead of a test. It flags every INTACT chain of
+        // two or more rows as well (the last row's link is a hash by definition), so every
+        // multi-row chain in the table enters `relinkBrokenChains()` on every nightly run, loading
+        // and re-walking a subject's whole ledger to write nothing — the `$moved` filter below
+        // catches it, so the outcome stays correct and only the work is wasted. A test for that
+        // would have to assert a query count, which pins the implementation rather than the
+        // promise.
         $firstPerToken = DB::table('legal_consents')
             ->selectRaw('subject_token, min(id) as first_id')
             ->whereNotNull('prev_record_hash')
@@ -219,7 +229,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
             ));
 
             if ($moved !== []) {
-                DB::transaction(function () use ($moved): void {
+                DB::transaction(function () use ($moved, $repair): void {
                     DB::table('legal_consents')->whereIn('id', array_column($moved, 'id'))->delete();
 
                     // Chunked multi-row inserts rather than one statement per row. A subject's
@@ -234,11 +244,13 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
                     // so the unique (subject_token, prev_record_hash) index has room for the moved
                     // links whichever way the rows are grouped.
                     //
-                    // The chunk is not decoration. Every row here binds around eighteen columns, so
-                    // one unbounded statement over a long chain would run into a placeholder
-                    // ceiling — 65535 on PostgreSQL, lower still on an older SQLite build — and it
-                    // would do so on the largest ledgers only, which is the worst way to find out.
-                    foreach (array_chunk($moved, 500) as $batch) {
+                    // The chunk is not decoration, and it is not a number written down here
+                    // either. It used to be 500 rows, which at 24 columns is 12 000 placeholders —
+                    // past a 999-build's ceiling by a factor of twelve, and thirteen times what the
+                    // erasure allowed itself for the identical rows. Measured before the repair: a
+                    // subject with 47 consent rows produced ONE insert binding 1104 placeholders.
+                    // The budget is now derived per row width, in the one place both rewriters read.
+                    foreach ($repair->batches($moved) as $batch) {
                         DB::table('legal_consents')->insert($batch);
                     }
                 });
@@ -313,6 +325,13 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
                             ->whereColumn('newer.id', '>', "{$table}.id");
                     });
             })
+            // DOCUMENTATION, NOT MECHANISM — and worth keeping only because that is stated.
+            // `chunkById` pages through `forPageAfterId`, which begins by REMOVING any existing
+            // order on the chunk column and adding its own ascending one, so deleting this line
+            // changes no behavior and no test can see it go. What it says out loud is the
+            // oldest-first order the class comment above depends on twice (an interrupted sweep
+            // leaves the genesis shape; a token's oldest eligible row is its chain start), and
+            // that guarantee comes from the framework rather than from here.
             ->orderBy('id')
             ->chunkById(1000, function (Collection $rows) use ($table, $chained, &$deleted, &$brokenTokens): void {
                 $ids = $rows->pluck('id')->all();

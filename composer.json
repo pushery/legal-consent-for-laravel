@@ -21,7 +21,7 @@
         "league/commonmark": "^2.9"
     },
     "require-dev": {
-        "larastan/larastan": "3.10.0",
+        "larastan/larastan": "3.11.0",
         "laravel/pao": "^1.1",
         "laravel/pint": "^1.0",
         "livewire/livewire": "^4.3",
@@ -35,7 +35,7 @@
         "pestphp/pest-plugin-rector": "^5.0",
         "pestphp/pest-plugin-type-coverage": "^5.0",
         "pushery/wirekit": "^2.26.0",
-        "rector/rector": "2.6.3",
+        "rector/rector": "2.6.6",
         "spaze/phpstan-disallowed-calls": "4.14.0"
     },
     "suggest": {

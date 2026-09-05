@@ -56,7 +56,7 @@ final class ConsentFake implements ConsentManager
     /** @var list<RegistrationChecklistItem> */
     private array $checklist = [];
 
-    /** @var array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool}> */
+    /** @var array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool, accepted_version: string|null, accepted_at: string|null}> */
     private array $status = [];
 
     /** @var list<array<string, mixed>> */
@@ -93,11 +93,23 @@ final class ConsentFake implements ConsentManager
     }
 
     /**
-     * @param  array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool}>  $status
+     * The two version keys are OPTIONAL here and filled in when they are left out, which is the
+     * only shape that keeps this fake honest.
+     *
+     * `statusFor()` gained `accepted_version` and `accepted_at`. A fake that handed back exactly
+     * what a test wrote would then return rows production never returns — and the whole value of
+     * a fake is that code passing against it passes against the real manager. Requiring the new
+     * keys instead would break every existing `statusIs()` call for two values most tests do not
+     * care about. Filling them is the third option and the right one.
+     *
+     * @param  array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool, accepted_version?: string|null, accepted_at?: string|null}>  $status
      */
     public function statusIs(array $status): self
     {
-        $this->status = $status;
+        $this->status = array_map(
+            static fn (array $row): array => $row + ['accepted_version' => null, 'accepted_at' => null],
+            $status,
+        );
 
         return $this;
     }
@@ -323,7 +335,7 @@ final class ConsentFake implements ConsentManager
     }
 
     /**
-     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool}>
+     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool, accepted_version: string|null, accepted_at: string|null}>
      */
     public function statusFor(Model $subject, ?string $locale = null): array
     {

@@ -497,6 +497,19 @@ final readonly class LegalDocumentPublisher
             // nothing that passed before now fails for a reason nobody declared.
             $minDays = $this->minLeadDays($mode, $regime, $key);
 
+            // ⚠️ `> 0` VS `>= 0` IS UNOBSERVABLE HERE, which is why the nightly reports
+            // GreaterToGreaterOrEqual on this line as a survivor that cannot be killed. With
+            // `$minDays === 0` the comparison reduces to `announce > enforce`, and that is false
+            // in every state this branch can be reached in:
+            //
+            //   - the branch itself requires `$enforce > $now`, and
+            //   - `$announce` is either `$now` (defaulted, therefore below `$enforce`) or a date
+            //     the operator chose, which the timeline invariant above already refused if it
+            //     was after `$enforce`.
+            //
+            // The `> 0` stays because it says what it means -- a mode and regime with no floor
+            // owes no period, so no period is measured -- and reading that from the arithmetic
+            // instead would make the next reader re-derive the paragraph above.
             if ($minDays > 0 && $announce->addDays($minDays)->greaterThan($enforce)) {
                 throw LeadTimeTooShortException::for($key, $minDays, $announce, $enforce);
             }

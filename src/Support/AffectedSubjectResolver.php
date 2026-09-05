@@ -182,6 +182,12 @@ readonly class AffectedSubjectResolver
                     // comparison, MariaDB reports its own driver name, and an unknown driver may not
                     // compile whereRowValues at all — the index still cuts the constant enormously
                     // there, though that path stays super-linear. An engine-appropriate seek.
+                    // ⚠️ Inverting this branch is an EQUIVALENT mutant, and the paragraph above
+                    // says why: both seek forms resume at the same place and return the same rows.
+                    // What the branch decides is whether the sweep stays LINEAR on this engine, and
+                    // no assertion about the result can see that. The engine-shape arm covers which
+                    // driver gets which form; the paging arms cover that both forms page correctly.
+                    // Neither can kill the mutant, and a test that could would be timing the query.
                     if ($this->usesRowValueSeek($driver)) {
                         $query->whereRowValues(['subject_type', 'subject_id'], '>', [$lastType, $lastId]);
                     } else {
@@ -311,6 +317,15 @@ readonly class AffectedSubjectResolver
      */
     private function modelClass(int|string $type): ?string
     {
+        // ⚠️ EQUIVALENT MUTANT, kept for readability rather than for effect. `groupBy` coerces a
+        // numeric subject_type to an INT key, which is the case this guard names -- but the check
+        // below already answers null for it: measured, `getMorphedModel(123)` does not throw and
+        // `is_a(123, Model::class, true)` is false. So RemoveEarlyReturn here changes nothing, and
+        // the arm that covers the numeric type passes either way.
+        //
+        // It stays because "a non-string is not a morph type" is a statement about the input, and
+        // reading that out of an is_a() two lines down is work the next person should not have to
+        // do twice.
         if (! is_string($type)) {
             return null;
         }

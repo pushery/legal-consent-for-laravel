@@ -96,6 +96,14 @@ final readonly class MarkdownFilesDriver implements LegalDocumentSource
 
         foreach (explode("\n", $block) as $line) {
             $line = trim($line);
+
+            // Equivalent mutant territory, and worth saying so: changing this comparison cannot be
+            // observed, because the `strpos(..., ':') === false` check below catches every line
+            // this one does. A blank line has no colon, so it is skipped either way.
+            //
+            // Kept because it says what it means -- a blank line is not a malformed entry, and
+            // folding the two into "no colon" would make the parser's intent harder to read than
+            // the one branch costs.
             if ($line === '') {
                 continue;
             }

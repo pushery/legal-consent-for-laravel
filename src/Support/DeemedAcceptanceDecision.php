@@ -46,14 +46,29 @@ final class DeemedAcceptanceDecision
         if ($latest->action === ConsentAction::Objected || $latest->action === ConsentAction::Terminated) {
             return false;
         }
-        // They already hold this version — typically an EXPRESS acceptance that landed after the
-        // sweep took its ledger snapshot. The snapshot deliberately freezes the paged set, so this
-        // live check is the only thing that can see it; without it a real, actively-given consent
-        // would be recorded a second time as "bound by silence".
+        // Anything that is neither an answer to the notice nor an acceptance — a withdrawal, a
+        // decline, an opt-in request still awaiting confirmation. All of them leave the subject
+        // holding nothing, which is exactly who the fiction is for, so silence binds.
+        //
+        // This has to answer BEFORE the version comparison below, and at the current version the
+        // two disagree: `document_version !== $version->version` is false there, so without this
+        // return a withdrawal recorded against the current text would read as "already settled".
+        // A withdrawal is not an answer to a change that came after it.
+        //
+        // ⚠️ The paragraph that used to sit here — "they already hold this version, typically an
+        // EXPRESS acceptance that landed after the sweep's snapshot" — describes the RETURN AT THE
+        // BOTTOM, not this branch. It was one statement too high, which read as if a non-accepting
+        // action meant the subject already held the version. It means the opposite.
         if (! $latest->action->isAccepting()) {
             return true;
         }
 
+        // An ACCEPTING action, so the only question left is which version it accepted. Matching
+        // this one means an express acceptance landed after the sweep took its ledger snapshot —
+        // the snapshot deliberately freezes the paged set, so this live read is the only thing
+        // that can see it, and without the comparison a real, actively-given consent would be
+        // recorded a second time as "bound by silence".
+        //
         // Compare the VERSION, not the major. A deemed-consent change is lawful only for a minor,
         // peripheral change (BGH XI ZR 26/20), and the publisher enforces that by refusing the mode
         // on a major bump of a contract — so under a major comparison the subject's major always

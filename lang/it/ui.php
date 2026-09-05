@@ -111,4 +111,13 @@ return [
     'admin_status_reviewed' => 'Contrassegnato come revisionato. Questo testo ora è pubblicabile.',
     'admin_status_release_blocked' => '«:key» non è stato pubblicato: :reasons',
     'admin_status_released' => '«:key» pubblicato in :count lingua/e — riguarda :affects persona/e.',
+    'admin_deemed_heading' => 'Pubblica con termine di opposizione',
+    'admin_deemed_explainer' => 'Una modifica a consenso tacito vincola se il termine di opposizione si chiude senza opposizione. Il termine deve rispettare almeno il preavviso di legge.',
+    'admin_deemed_announce' => 'Annuncia il',
+    'admin_deemed_deadline' => 'Termine di opposizione',
+    'admin_deemed_enforce' => 'In vigore dal',
+    'admin_deemed_offers_termination' => 'Concede un diritto di recesso gratuito',
+    'admin_deemed_keeps_unmodified' => 'Mantiene disponibile la versione non modificata',
+    'admin_deemed_submit' => 'Pubblica con termine di opposizione',
+    'admin_status_deemed_window_rejected' => 'Non pubblicato — il termine di opposizione è stato rifiutato: :reason',
 ];

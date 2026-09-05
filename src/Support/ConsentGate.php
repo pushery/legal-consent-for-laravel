@@ -169,14 +169,20 @@ final class ConsentGate
      *
      * @param  list<string>|null  $keys  restrict the read to these document keys; null reads the
      *                                   subject's whole ledger, which is what a status screen needs
-     * @return array{held: array<string, int>, pending: list<string>}
+     *                                   `version` and `at` describe the SAME row the holding came from — the newest accepting one —
+     *                                   and they follow it exactly: an ending action clears them to null alongside dropping the
+     *                                   major to 0, a neutral action leaves them where they were. That parity is the point. A
+     *                                   screen that showed a version next to a withdrawn holding would report a text as accepted
+     *                                   that Art. 7(3) says is no longer held, which is the defect the withdrawal-aware fold was
+     *                                   built to end rather than one to reintroduce a column later.
+     * @return array{held: array<string, int>, version: array<string, string|null>, at: array<string, string|null>, pending: list<string>}
      */
     public function standingFor(Model $subject, ?array $keys = null): array
     {
         $tenant = app(TenantContext::class);
 
         $rows = DB::table('legal_consents')
-            ->select('document_key', 'document_major_version', 'action')
+            ->select('document_key', 'document_major_version', 'document_version', 'action', 'accepted_at')
             ->where('subject_type', $subject->getMorphClass())
             ->where('subject_id', SubjectKey::for($subject))
             ->when($keys !== null, fn (QueryBuilder $query): QueryBuilder => $query->whereIn('document_key', $keys ?? []))
@@ -187,12 +193,19 @@ final class ConsentGate
             ->get();
 
         $held = [];
+        $version = [];
+        $at = [];
         $latest = [];
 
         foreach ($rows as $row) {
             $key = $row->document_key;
             $actionValue = $row->action;
 
+            // Both columns are declared strings and PDO hands them back as strings, so the
+            // BooleanAndToBooleanOr mutant here is equivalent -- no row this query can return
+            // makes the two operands disagree. It stays because the fold below indexes by `$key`
+            // and matches on `$actionValue`, and a narrowing at the point of use is what lets the
+            // rest of this loop be read without checking the schema.
             if (is_string($key) && is_string($actionValue)) {
                 $action = ConsentAction::from($actionValue);
                 $major = is_numeric($row->document_major_version) ? (int) $row->document_major_version : 0;
@@ -201,16 +214,30 @@ final class ConsentGate
 
                 if ($action->isAccepting()) {
                     $held[$key] = $major;
+                    $version[$key] = is_string($row->document_version) ? $row->document_version : null;
+                    // Normalized to a string here rather than left as whatever the driver returns:
+                    // SQLite hands back a string, Postgres a string, and a consumer comparing two
+                    // of these should not have to know which engine produced them.
+                    $at[$key] = is_scalar($row->accepted_at) ? (string) $row->accepted_at : null;
                 } elseif ($action->isNeutral()) {
                     $held[$key] ??= 0; // keep the prior state; only anchor the key if it is the first row
+                    $version[$key] ??= null;
+                    $at[$key] ??= null;
                 } else {
-                    $held[$key] = 0; // withdrawn / declined / terminated end the holding
+                    // Withdrawn / declined / terminated end the holding — and the version and date
+                    // go with it. Leaving them behind would say "accepted 2.1.0 on the 3rd" about
+                    // something the subject has since revoked.
+                    $held[$key] = 0;
+                    $version[$key] = null;
+                    $at[$key] = null;
                 }
             }
         }
 
         return [
             'held' => $held,
+            'version' => $version,
+            'at' => $at,
             'pending' => array_keys(array_filter(
                 $latest,
                 static fn (ConsentAction $action): bool => $action === ConsentAction::OptInRequested,

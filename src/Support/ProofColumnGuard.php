@@ -195,6 +195,22 @@ final class ProofColumnGuard
     {
         self::drop();
 
+        // ⚠️ THESE TWO CANNOT BE KILLED BY THE MUTATION LANE, AND THE REASON IS ITS SCOPE RATHER
+        // THAN A MISSING TEST. The lane runs `--testsuite=Unit,Feature`, which is SQLite; this
+        // branch is entered only on a `pgsql` connection, so no mutant inside it is ever executed.
+        // They ARE exercised now — the PostgreSQL migration-reversibility suite rolls this
+        // migration and asserts each guard function by name — but that suite is not in the lane,
+        // so the nightly will keep reporting both RemoveMethodCall mutants as survivors.
+        //
+        // ⚠️ Until that arm was written they were executed by NOTHING, anywhere: no reversibility
+        // test named this migration, and `uninstall()` has exactly one caller. The survivor entry
+        // was therefore pointing at a real hole while looking like the usual engine-scope noise,
+        // which is the argument for reading these entries rather than dismissing them wholesale.
+        //
+        // Worth recognizing as a CLASS rather than as three lines: every engine-specific branch in
+        // this package has the same property. A survivor sitting behind a driver check is not a
+        // coverage gap and no test written in Unit or Feature can close it; the question to ask is
+        // whether `tests/Postgres` and `tests/MySql` cover the behavior, not whether a mutant died.
         if (DB::connection()->getDriverName() === 'pgsql') {
             self::execute('DROP FUNCTION IF EXISTS '.self::qualify(self::FUNCTION).'();');
             self::execute('DROP FUNCTION IF EXISTS '.self::qualify(self::DELETE_FUNCTION).'();');

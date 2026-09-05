@@ -133,7 +133,7 @@ interface ConsentManager
     /**
      * A per-document status map for the subject.
      *
-     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool}>
+     * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool, accepted_version: string|null, accepted_at: string|null}>
      */
     public function statusFor(Model $subject, ?string $locale = null): array;
 

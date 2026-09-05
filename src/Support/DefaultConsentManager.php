@@ -428,6 +428,8 @@ readonly class DefaultConsentManager implements ConsentManager
         $locale ??= $this->defaultLocale;
         $standing = $this->gate->standingFor($subject);
         $accepted = $standing['held'];
+        $acceptedVersion = $standing['version'];
+        $acceptedAt = $standing['at'];
         $pending = $standing['pending'];
 
         $documents = LegalDocument::query()
@@ -486,6 +488,22 @@ readonly class DefaultConsentManager implements ConsentManager
                 // from this map would invite the subject to enter themselves a second time and a
                 // report would count them as having declined.
                 'pending_confirmation' => in_array($document->key, $pending, true),
+                // WHICH text was accepted, and when. `accepted_major` alone cannot answer either:
+                // it is a major, so 2.0.0 and 2.7.3 are the same number, and it carries no date.
+                //
+                // The reason this is not decoration is that the two diverge exactly when something
+                // is outstanding. A screen showing only the CURRENT version renders a stale consent
+                // identically to a fresh one — and the whole question such a screen exists to answer
+                // is what the subject actually agreed to.
+                //
+                // Null once the holding ends, in step with `accepted_major` dropping to 0. The
+                // alternative — keeping the last accepted version as a historical fact — reads
+                // better on a support screen and is wrong here: this map reports what is HELD, and
+                // reporting a withdrawn opt-in as still held is the exact defect the
+                // withdrawal-aware fold was built to end. The historical answer lives in
+                // `history()`, which is the call whose job it is.
+                'accepted_version' => $acceptedVersion[$document->key] ?? null,
+                'accepted_at' => $acceptedAt[$document->key] ?? null,
             ];
         }
 

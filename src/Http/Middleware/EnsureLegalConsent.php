@@ -102,6 +102,22 @@ final readonly class EnsureLegalConsent
 
         $extraRoutes = config('legal-consent.middleware.allowlist_routes');
 
+        // ⚠️ THE NARROWING BELOW CANNOT BE KILLED BY A TEST, AND THAT IS A STATEMENT ABOUT
+        // `routeIs()`, NOT ABOUT THE NARROWING. Measured: `Request::routeIs()` is an untyped
+        // variadic (`routeIs(...$patterns)`) that hands each pattern to `Route::named()`, and a
+        // non-string there simply matches nothing. So dropping the `is_string` filter -- or the
+        // `!== ''` guard on the name above -- changes no observable behavior today, and the
+        // nightly reports both as survivors for that reason.
+        //
+        // They stay for the reason they were written: the accessors feeding this are `mixed`, the
+        // filter is what a static analyzer reads as the narrowing, and the day `routeIs()` is
+        // typed `string ...$patterns` the unfiltered form becomes a TypeError on a legal gate.
+        // A guard that is redundant against today's framework contract is not a guard that is
+        // wrong -- but it must be labeled, or the next reader deletes it to close a survivor.
+        //
+        // `array_values` is redundant for a second, independent reason: `array_merge` renumbers
+        // integer keys itself. It is kept because the intent (a positional list) is the thing
+        // being expressed, not the renumbering.
         if (is_array($extraRoutes)) {
             $names = array_merge($names, array_values(array_filter($extraRoutes, is_string(...))));
         }
@@ -158,6 +174,13 @@ final readonly class EnsureLegalConsent
         // Neither accessor declares a return type, so both are `mixed` to a static analyzer. The
         // filter is the narrowing — a non-string simply contributes no pattern, which is the same
         // outcome as an installation without Livewire.
+        //
+        // ⚠️ No test can kill the mutant that removes this filter, because no reachable Livewire
+        // configuration makes either accessor return a non-string: both are read off a registered
+        // route. It is narrowing against a `mixed` signature, not against an observed value, and
+        // it is kept for the same reason as the one in isAllowlisted() above. The RemoveArrayItem
+        // mutant on the pair IS killable and is killed -- `Livewire::setUpdateRoute()` moves the
+        // update endpoint off the prefix, which is the whole reason both are consulted.
         $endpoints = array_filter([$manager->getUriPrefix(), $manager->getUpdateUri()], is_string(...));
 
         foreach ($endpoints as $endpoint) {

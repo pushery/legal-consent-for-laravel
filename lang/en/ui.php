@@ -111,4 +111,13 @@ return [
     'admin_status_reviewed' => 'Marked reviewed. This text is now publishable.',
     'admin_status_release_blocked' => '“:key” was not released: :reasons',
     'admin_status_released' => 'Released “:key” across :count locale(s) — affects :affects subject(s).',
+    'admin_deemed_heading' => 'Release with an objection window',
+    'admin_deemed_explainer' => 'A deemed-consent change binds if the objection window closes without an objection. The window must be at least the statutory lead time.',
+    'admin_deemed_announce' => 'Announce on',
+    'admin_deemed_deadline' => 'Objection deadline',
+    'admin_deemed_enforce' => 'Enforce from',
+    'admin_deemed_offers_termination' => 'Grants a free right to terminate',
+    'admin_deemed_keeps_unmodified' => 'Keeps the unmodified version on offer',
+    'admin_deemed_submit' => 'Release with an objection window',
+    'admin_status_deemed_window_rejected' => 'Not released — the objection window was rejected: :reason',
 ];

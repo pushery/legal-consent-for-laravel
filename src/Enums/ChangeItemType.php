@@ -37,6 +37,13 @@ enum ChangeItemType: string
     case Restricted = 'restricted';
 
     /**
+     * ⚠️ THE `true` IN THE TWO `in_array()` CALLS BELOW IS UNOBSERVABLE, AND THAT IS NOT A REASON
+     * TO DROP IT. Enum cases are singletons, so a loose comparison between two of them already
+     * decides on identity -- measured: dropping the strict flag from either call leaves the whole
+     * tree green. It earns its place the moment either side stops being pure enum cases, which is
+     * a one-line edit away, and it costs nothing until then.
+     */
+    /**
      * Does this entry, on its own, make the change disadvantageous to the subject?
      *
      * Deliberately conservative. `Removed` counts even though a removal is often a gift, because

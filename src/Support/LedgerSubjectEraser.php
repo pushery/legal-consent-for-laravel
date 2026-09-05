@@ -72,13 +72,6 @@ final readonly class LedgerSubjectEraser
      */
     private const array NOTICE_PERSONAL_COLUMNS = ['subject_type', 'subject_id'];
 
-    /**
-     * The placeholder budget one multi-row INSERT is allowed to spend. Deliberately under SQLite's
-     * most conservative shipped SQLITE_MAX_VARIABLE_NUMBER (999) rather than at a modern build's
-     * 32766: exceeding it is a hard driver error in the middle of an erasure transaction.
-     */
-    private const int MAX_BOUND_PARAMETERS = 900;
-
     public function __construct(private LedgerChainRepair $repair = new LedgerChainRepair) {}
 
     public function forget(Model $subject): SubjectErasure
@@ -228,9 +221,9 @@ final readonly class LedgerSubjectEraser
      * the latency is the whole cost of an erasure. The rows are already complete, uniform attribute
      * arrays, so a multi-row INSERT needs nothing else from the caller.
      *
-     * Chunked by PLACEHOLDER count rather than by row count, because that is what actually has a
-     * ceiling: SQLite has shipped builds with SQLITE_MAX_VARIABLE_NUMBER at 999, and a proof row is
-     * wide. Deriving the chunk from the row's own width keeps this correct as columns are added.
+     * The chunk arithmetic lives on {@see LedgerChainRepair::batches()} rather than here, because
+     * the retention sweep rewrites the same rows into the same table and had a different answer
+     * for them. A budget that only one of two rewriters reads is not a budget.
      *
      * The rows are NON-EMPTY by contract rather than by a check here. Both callers return early on
      * an empty read of their own ledger long before they get this far, so an emptiness guard in
@@ -241,9 +234,7 @@ final readonly class LedgerSubjectEraser
      */
     private function insertRows(string $table, array $rows): void
     {
-        $columns = max(1, count($rows[0]));
-
-        foreach (array_chunk($rows, max(1, intdiv(self::MAX_BOUND_PARAMETERS, $columns))) as $chunk) {
+        foreach ($this->repair->batches($rows) as $chunk) {
             DB::table($table)->insert($chunk);
         }
     }

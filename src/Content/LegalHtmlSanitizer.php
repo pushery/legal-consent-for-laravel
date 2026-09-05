@@ -94,6 +94,16 @@ final class LegalHtmlSanitizer
         // Strip comments, processing instructions, and CDATA sections; keep plain text.
         // A CDATA section serializes its content VERBATIM (unescaped), so it must never
         // reach the {!! !!} sink — defense in depth on top of removing raw-text elements.
+        // ⚠️ ONLY THE COMMENT ENTRY IS REACHABLE, and the other two are equivalent mutants for that
+        // reason. Measured on the HTML path this sanitizer uses: libxml folds both a processing
+        // instruction and a CDATA section into COMMENT nodes, so no input produces an XML_PI_NODE
+        // or an XML_CDATA_SECTION_NODE, and removing either name from the list below changes
+        // nothing. The arm above that says it strips a processing instruction passes through the
+        // comment branch, not through XML_PI_NODE.
+        //
+        // Both names stay: the list describes what must never survive into shipped HTML, not what
+        // today's parser happens to emit. A processing instruction reaching a legal document is
+        // exactly the thing nobody would notice had been dropped from the list.
         if (
             in_array($node->nodeType, [XML_COMMENT_NODE, XML_PI_NODE, XML_CDATA_SECTION_NODE], true)
         ) {
@@ -103,6 +113,20 @@ final class LegalHtmlSanitizer
 
     private function cleanElement(DOMElement $element, DOMNode $parent): void
     {
+        // ⚠️ NO TEST CAN KILL THE `strtolower` HERE, and that is a fact about the PARSER, not a
+        // gap. Measured: libxml's HTML parser already lowercases `tagName`, so `<P>` arrives as
+        // `p` and the mutant that unwraps this call cannot change any outcome reachable through
+        // parse() -- the only caller.
+        //
+        // It stays because the guarantee belongs to the parser, not to this function, and the two
+        // are one edit apart: loading the same string as XML preserves case, and then every tag
+        // silently stops matching a lowercase allowlist. The nightly reports it as a survivor for
+        // as long as this comment is true.
+        //
+        // Note what this means for the arm named "matches a dangerous tag regardless of how it is
+        // capitalised": the guarantee it asserts is real and worth having, but it passes with this
+        // call removed, so it is evidence about the PARSER rather than about this line. Read as
+        // coverage of this line it would be misleading, which is why it is said here.
         $tag = strtolower($element->tagName);
 
         if (in_array($tag, self::DANGEROUS, true)) {
@@ -140,6 +164,11 @@ final class LegalHtmlSanitizer
         $allowed = self::ALLOWED_ATTRIBUTES[$tag] ?? [];
 
         foreach (iterator_to_array($element->attributes ?? []) as $attribute) {
+            // Same as the tag above, same reason: measured, libxml lowercases attribute names on
+            // the HTML path, so `HREF` arrives as `href` and unwrapping this call is an equivalent
+            // mutant. Note the failure direction if it were ever reachable -- an unrecognized name
+            // is DROPPED a few lines down, so the case would fail safe rather than open, which is
+            // why this is a robustness guard and not a security control.
             $name = strtolower($attribute->nodeName);
 
             if (! in_array($name, $allowed, true)) {
@@ -181,6 +210,15 @@ final class LegalHtmlSanitizer
         }
 
         if (preg_match('/^([a-z][a-z0-9+.-]*):/i', $probe, $matches) === 1) {
+            // The `rtrim` makes the group index unobservable: capture group 1 excludes the colon
+            // and group 0 includes it, so after trimming a trailing colon the two are IDENTICAL for
+            // every input this pattern can match -- verified across `https://a`, `MAILTO:x@y`,
+            // `javascript:alert(1)` and `h+t.t-p1:x`. That is why the nightly's DecrementInteger on
+            // the index survives, and why it always will.
+            //
+            // Both are kept rather than picking one: the group is the scheme by intent, and the
+            // rtrim makes the line correct even if the pattern is later widened to capture the
+            // delimiter. Belt and braces on a check that decides whether `javascript:` is a link.
             return in_array(strtolower(rtrim($matches[1], ':')), ['http', 'https', 'mailto'], true);
         }
 

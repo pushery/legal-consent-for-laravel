@@ -111,4 +111,13 @@ return [
     'admin_status_reviewed' => 'Als gecontroleerd gemarkeerd. Deze tekst kan nu gepubliceerd worden.',
     'admin_status_release_blocked' => '‘:key’ is niet gepubliceerd: :reasons',
     'admin_status_released' => '‘:key’ gepubliceerd in :count taal/talen — betreft :affects perso(o)n(en).',
+    'admin_deemed_heading' => 'Publiceren met bezwaartermijn',
+    'admin_deemed_explainer' => 'Een wijziging met stilzwijgende instemming bindt als de bezwaartermijn zonder bezwaar afloopt. De termijn moet minstens de wettelijke aankondigingstermijn aanhouden.',
+    'admin_deemed_announce' => 'Aankondigen op',
+    'admin_deemed_deadline' => 'Uiterste bezwaardatum',
+    'admin_deemed_enforce' => 'Van kracht vanaf',
+    'admin_deemed_offers_termination' => 'Geeft een kosteloos opzegrecht',
+    'admin_deemed_keeps_unmodified' => 'Houdt de ongewijzigde versie beschikbaar',
+    'admin_deemed_submit' => 'Publiceren met bezwaartermijn',
+    'admin_status_deemed_window_rejected' => 'Niet gepubliceerd — de bezwaartermijn is afgewezen: :reason',
 ];

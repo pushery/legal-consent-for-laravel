@@ -105,8 +105,17 @@ final readonly class PublishedDocument
     /**
      * Re-derive the hash from these exact bytes and compare it to the stored one — the row
      * proving itself. A mismatch means the stored content and its hash disagree, which the
-     * immutability trigger is there to prevent; this is how an operator can confirm that from
-     * the outside (see `legal-consent:verify-documents`).
+     * immutability trigger is there to prevent; this is how a CALLER holding a read-path document
+     * can confirm that for itself.
+     *
+     * ⚠️ `legal-consent:verify-documents` does NOT come through here, and this line used to say it
+     * did. The command sweeps `LegalDocument` rows and makes the identical comparison inline
+     * against `content`/`content_hash` — the same two values, since `fromRow()` maps `html` from
+     * `content`. So the rule is written twice, and changing it here does not move the command.
+     * They are left apart on purpose: the sweep reads whole rows in bulk and building a value
+     * object per row to ask one question is a cost with no answer attached. What is not optional
+     * is that both directions are proved, and the false one is the direction a verifier can lose
+     * without anything going red.
      */
     public function verifyIntegrity(RenderPipeline $pipeline): bool
     {

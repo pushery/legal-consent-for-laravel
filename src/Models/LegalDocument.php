@@ -142,8 +142,21 @@ final class LegalDocument extends Model
         // stale — an activate(), a seeder, a consumer inserting a row by hand — and a stale
         // enforceable set is a gate that fires late or not at all. The after-commit listener still
         // exists for the release transaction's ordering; this is the net underneath it.
-        $flush = static function (): void {
-            app(EnforceableDocumentCache::class)->flushAll();
+        $flush = static function (self $document): void {
+            $cache = app(EnforceableDocumentCache::class);
+
+            // The row's OWN locale first, and only a delete needs it: `flushAll()` discovers
+            // locales from the declared list plus the ones currently published, and a deleted row
+            // is in neither by the time the listener runs. With `legal-consent.locales` undeclared
+            // — the one configuration that lets a document be published in ANY language, which is
+            // why this file's sibling guard exists — deleting the last document of a locale left
+            // its set cached for the full TTL, so the gate kept enforcing a version that no longer
+            // existed. The model still carries the attribute here; the table no longer does.
+            if ($document->locale !== '') {
+                $cache->flush($document->locale);
+            }
+
+            $cache->flushAll();
         };
 
         self::saved($flush);

@@ -101,6 +101,9 @@ final class EnforceableDocumentCache
         $key = $this->keyFor($locale);
         $now = CarbonImmutable::now()->getTimestamp();
 
+        // The `0` is unobservable and its DecrementInteger mutant is equivalent: this default is
+        // only read when there is no memo entry, and then `$memoized` is null, so the check below
+        // fails on its FIRST operand whatever the timestamp says. It is a shape, not a value.
         [$memoized, $expiresAt] = $this->memo[$key] ?? [null, 0];
 
         if ($memoized instanceof Collection && $expiresAt > $now) {
