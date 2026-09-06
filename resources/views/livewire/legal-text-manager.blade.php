@@ -3,9 +3,9 @@
     <section aria-labelledby="legal-text-manager-heading">
         <h1 id="legal-text-manager-heading">{{ __('legal-consent::ui.admin_heading') }}</h1>
 
-        {{-- Status: an assertive live region, so a screen reader hears the result of a release (or
-             why it did not happen) immediately after the action — WCAG 4.1.3. It is always present
-             in the DOM (an aria-live region added at the same time as its text is not announced).
+        {{-- Status: a live region, so a screen reader hears the result of a release (or why it did
+             not happen) right after the action — WCAG 4.1.3. It is always present in the DOM (an
+             aria-live region added at the same time as its text is not announced).
 
              tabindex="-1" + x-effect is the FOCUS half, and it is not decoration here. The release
              is confirmed in a modal that closes itself on click; without somewhere to send focus it
@@ -14,7 +14,17 @@
              always present and Livewire morphs it rather than replacing it, so nothing re-runs.
              x-effect re-runs whenever $wire.statusNonce changes — exactly when a release sets it.
              Same pattern as consent-settings and reconsent-form; this screen was the one left out. --}}
-        <p role="alert" aria-live="assertive" tabindex="-1" wire:key="legal-text-manager-status"
+        {{-- ⚠️ `status`/`polite`, NOT `alert`/`assertive`, AND THE FOCUS MOVE IS WHY. `role="alert"`
+             implies an assertive live region, and this same element also receives focus — so
+             assistive technology says the message TWICE: once as a live-region interruption, once
+             as the name of the newly focused element. Dropping the focus move instead would send a
+             keyboard user to <body> after an irreversible action (WCAG 2.4.3), which is worse.
+             The focus move is already immediate, so politeness costs no urgency.
+             This also brings the screen in line with the other three status regions of the package,
+             which have used `status` + focus all along. The WireKit twin was raised to `assertive`
+             to match THIS one; both are lowered together, because two twins of one screen must not
+             disagree about how loudly a release is announced. --}}
+        <p role="status" aria-live="polite" tabindex="-1" wire:key="legal-text-manager-status"
             x-effect="$wire.statusNonce > 0 && $el.focus()"><span wire:key="legal-text-manager-status-{{ $statusNonce }}">{{ $status }}</span></p>
 
         <p>{{ __('legal-consent::ui.admin_policy') }}</p>
@@ -74,7 +84,7 @@
                                      "Release all locales" are indistinguishable in a screen reader's
                                      button list (WCAG 2.4.6) — the same rule this package already
                                      enforces for the withdraw control. --}}
-                                <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.$key }}" wire:click="releaseAll(@js($key))">{{ __('legal-consent::ui.admin_release_all') }}</button>
+                                <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.$key }}" wire:click="releaseAll(@js($key))" wire:loading.attr="aria-busy" wire:target="releaseAll">{{ __('legal-consent::ui.admin_release_all') }}</button>
                             @else
                                 {{-- The blocking reasons stay OUTSIDE aria-describedby on a disabled
                                      button (a disabled control is skipped, so its description is never

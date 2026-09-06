@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // UI strings for the publishable stubs (settings page + grace-period banner). The three
-// legal kinds stay separately labeled (contracts / acknowledgements / consents).
+// legal kinds stay separately labeled ('contracts' / 'acknowledgements' / 'consents').
 return [
     'settings_heading' => 'Your consents',
     'contracts_heading' => 'Contracts',
@@ -46,6 +46,9 @@ return [
     'enforced_now' => 'In effect now',
     'objection_closed' => 'Objection period closed',
     'submit' => 'Accept and continue',
+    // Shown beside the submit while the request is in flight; the button itself carries
+    // aria-busy, so this is the sighted half of the same state.
+    'working' => 'Working…',
     'all_current' => 'Everything is up to date — nothing to do.',
     // The one state a settings screen must not blur: a new major version is waiting, so
     // this is the invitation to do voluntarily what the gate will otherwise compel.
@@ -90,6 +93,8 @@ return [
     'admin_preview' => 'Preview',
     'granted_confirmation' => 'Consent given. You can withdraw it at any time.',
     'withdrawn_confirmation' => 'Consent withdrawn. It takes effect immediately.',
+    'objected_confirmation' => 'Objection recorded, with the time you sent it.',
+    'terminated_confirmation' => 'Termination recorded, with the time you sent it.',
     // The refusal a subject can actually reach — a stale page, a hand-built post or a custom
     // stub asking to withdraw something that was never a consent. It states the position
     // without the document key or the internal type: those are the operator's business, and
@@ -105,6 +110,7 @@ return [
     'admin_edit' => 'edit',
     'admin_edit_for' => 'Edit :key (:locale)',
     'admin_status_saved' => 'Saved. Review is required before this text can be published.',
+    'admin_status_not_saved' => 'Not saved — :reason',
     'admin_status_source_not_translated' => 'The source locale is authored, not translated.',
     'admin_status_no_source' => 'Write the source text first — there is nothing to translate from.',
     'admin_status_machine_translated' => 'Machine-translated. A human must review it before it can be published.',

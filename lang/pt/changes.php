@@ -18,6 +18,4 @@ return [
         'restricted' => 'Restringido',
     ],
 
-    'heading' => 'O que muda:',
-    'impact' => 'O que isto significa para ti:',
 ];

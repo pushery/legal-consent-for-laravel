@@ -420,7 +420,7 @@ readonly class DefaultConsentManager implements ConsentManager
         // subject has been a customer. The fold is per-key independent — the rows are ordered by
         // (document_key, accepted_at, id) and each key folds on its own — so filtering cannot
         // change the answer for the key that survives it.
-        return ($this->gate->heldMajorByKey($subject, [$documentKey])[$documentKey] ?? 0) >= $active->major_version;
+        return ConsentGate::holds($this->gate->currentHoldings($subject, [$documentKey]), $documentKey, $active->major_version);
     }
 
     public function statusFor(Model $subject, ?string $locale = null): array

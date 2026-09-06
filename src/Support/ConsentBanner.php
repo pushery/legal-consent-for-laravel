@@ -31,7 +31,8 @@ final readonly class ConsentBanner
      * Pending material changes the subject has not yet accepted, currently within their
      * grace window.
      *
-     * @param  array<string, int>|null  $accepted  the subject's held majors, folded here when null and
+     * @param  array<string, int>|null  $accepted  the subject's CURRENT holdings — a presence map, see
+     *                                             ConsentGate::currentHoldings() — folded here when null and
      *                                             handed back so a sibling banner can reuse it
      * @return list<array{key: string, version: string, title: string, announce_from: ?string, enforce_from: ?string, days_left: int}>
      */
@@ -52,22 +53,25 @@ final readonly class ConsentBanner
             return [];
         }
 
-        $accepted ??= $this->gate->heldMajorByKey($subject);
+        $accepted ??= $this->gate->currentHoldings($subject);
         $pending = [];
 
         foreach ($upcoming as $document) {
-            if (($accepted[$document->key] ?? 0) >= $document->major_version) {
+            // A PRESENCE check — see ConsentGate::currentHoldings(). At major 0 the old
+            // `($accepted[$key] ?? 0) >= $major` was true for everyone, so this banner stayed
+            // silent for a document nobody had accepted.
+            if (ConsentGate::holds($accepted, $document->key, $document->major_version)) {
                 continue; // subject already accepted this version
             }
 
             $enforce = $document->enforce_from;
 
-            // ⚠️ THE `?->` IN THIS PAYLOAD ARE EQUIVALENT MUTANTS, and the filter above is the
-            // reason: it requires `announced()` (which demands a real `announce_from`) and
+            // ⚠️ THE `?->` IN THIS PAYLOAD CANNOT FIRE, and the filter above is the reason: it
+            // requires `announced()` (which demands a real `announce_from`) and
             // `enforce_from instanceof CarbonImmutable`. Both fields are therefore non-null by the
-            // time they get here, and the nightly reports their RemoveNullSafeOperator mutants as
-            // survivors that no test can kill. The same holds in informationalFor(), whose filter
-            // makes the same two demands.
+            // time they get here, so dropping the null-safe operator would change no outcome and
+            // no test could tell. The same holds in informationalFor(), whose filter makes the
+            // same two demands.
             //
             // deemedFor() is the exception and its `?->` IS load-bearing: that filter asks about
             // the OBJECTION DEADLINE -- the right question there, since silence binds at the
@@ -138,7 +142,8 @@ final readonly class ConsentBanner
      * still exercise them (§ 308 Nr. 5 lit. a BGB). `days_left` counts down to the objection
      * deadline, not the effective date.
      *
-     * @param  array<string, int>|null  $accepted  the subject's held majors, folded here when null and
+     * @param  array<string, int>|null  $accepted  the subject's CURRENT holdings — a presence map, see
+     *                                             ConsentGate::currentHoldings() — folded here when null and
      *                                             handed back so a sibling banner can reuse it
      * @return list<array{key: string, version: string, title: string, objection_deadline: ?string, enforce_from: ?string, days_left: int}>
      */
@@ -158,7 +163,7 @@ final readonly class ConsentBanner
             return [];
         }
 
-        $accepted ??= $this->gate->heldMajorByKey($subject);
+        $accepted ??= $this->gate->currentHoldings($subject);
         $deemed = [];
 
         // Resolved for the WHOLE set at once, and only once the first document actually needs it.
@@ -171,7 +176,7 @@ final readonly class ConsentBanner
         $latestActions = null;
 
         foreach ($upcoming as $document) {
-            if (($accepted[$document->key] ?? 0) >= $document->major_version) {
+            if (ConsentGate::holds($accepted, $document->key, $document->major_version)) {
                 continue; // subject already holds this version
             }
 

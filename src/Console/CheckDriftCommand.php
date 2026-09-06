@@ -6,12 +6,14 @@ namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
+use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Report (never fix) any legal document whose live source text has drifted from its
  * active published version. Meant for a daily schedule + CI; a non-zero exit forces the
  * operator to publish a new, materiality-classified version before the change takes effect.
  */
+#[AsCommand(name: 'legal-consent:check-drift')]
 final class CheckDriftCommand extends Command
 {
     protected $signature = 'legal-consent:check-drift {key? : Only this document key} {locale? : Only this locale}';

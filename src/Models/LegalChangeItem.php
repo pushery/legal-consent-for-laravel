@@ -63,15 +63,51 @@ final class LegalChangeItem extends Model
             && trim((string) $this->purpose) !== '';
     }
 
+    /**
+     * The stored row as the freeze needs to see it: its state, and the columns the refusal names.
+     *
+     * ⚠️ NOT LOADED IS NOT "NOT PUBLISHED" — the same defect as on the parent set, for the same
+     * reason. `getOriginal()` reads out of `$this->original`, so a row loaded as `select(['id', …])`
+     * has no `state` there and answers null. Null is not `Published`, so the write went through on
+     * a frozen item. Partial selects are house style here, and on SQLite this hook IS the
+     * protection: the database triggers cover PostgreSQL and MySQL only.
+     *
+     * It asks the database rather than guessing, fetching what the message needs in the same read,
+     * and a row it cannot find is refused rather than waved through.
+     *
+     * Returns the MODEL whose original attributes are the stored row — this one when it loaded
+     * them, a fresh read otherwise. On a freshly fetched model nothing is dirty, so `getOriginal()`
+     * and the attribute agree and the caller needs only one accessor.
+     *
+     * @return self|null the stored row, or null when it cannot be found
+     */
+    private static function storedRow(self $item): ?self
+    {
+        if (array_key_exists('state', $item->getRawOriginal())) {
+            return $item;
+        }
+
+        return self::query()->whereKey($item->getKey())->first(['state', 'change_set_id', 'position']);
+    }
+
     #[Override]
     protected static function booted(): void
     {
         self::updating(function (self $item): void {
-            $original = $item->getOriginal('state');
+            $stored = self::storedRow($item);
 
-            if ($original === ChangeSetState::Published->value || $original === ChangeSetState::Published) {
-                throw LegalDocumentFrozenException::forChangeItem($item->change_set_id, $item->position);
+            // A row that cannot be found is REFUSED, not waved through.
+            if ($stored instanceof LegalChangeItem && $stored->getOriginal('state') !== ChangeSetState::Published) {
+                return;
             }
+
+            $changeSetId = $stored?->getOriginal('change_set_id');
+            $position = $stored?->getOriginal('position');
+
+            throw LegalDocumentFrozenException::forChangeItem(
+                is_int($changeSetId) ? $changeSetId : 0,
+                is_int($position) ? $position : 0,
+            );
         });
 
         self::deleting(function (self $item): void {

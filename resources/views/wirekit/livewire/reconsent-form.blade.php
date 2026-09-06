@@ -29,7 +29,14 @@
         <form wire:submit="submit">
             <x-wirekit::stack gap="md">
                 @foreach ($pending as $document)
-                    <x-wirekit::stack gap="xs">
+                    {{-- `lang` on the field, because the wording reaches the checkbox as a prop and
+                         everything inside is that document's text anyway. See the plain gate. --}}
+                    @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document->locale))
+                    {{-- `wire:key` for the same reason as the plain gate: this loop SHRINKS, so a
+                         keyless morph reuses the node at index 0 for a different document, and a
+                         ticked box lives only as a DOM property because no `checked` attribute is
+                         rendered. Keyed on the document, not the index. --}}
+                    <x-wirekit::stack gap="xs" wire:key="lc-pending-{{ $document->key }}" :lang="$lang">
                         <x-wirekit::checkbox
                             :name="'legal_'.$document->key"
                             :id="'legal_'.$document->key"
@@ -49,9 +56,22 @@
                     </x-wirekit::stack>
                 @endforeach
 
-                <x-wirekit::button type="submit" intent="primary" loading-target="submit">
+                {{-- ⚠️ `loading-target` ALONE RENDERS NOTHING, AND THAT IS WHAT STOOD HERE. Read in
+                     x-wirekit::button: the spinner sits behind `@if($declarativeLoading) … @elseif($loading)`
+                     and `wire:loading.attr="disabled"` behind `@if($loading && …)`. Both gate on `loading`,
+                     which this call never set — `loading-target` only SCOPES a spinner that was switched on
+                     elsewhere. So the twin looked like it had a busy state and had none.
+
+                     Not repaired by adding `loading`, because the kit's busy state disables the button, and
+                     `disabled` blurs the control the subject just activated: focus falls to <body> for the
+                     whole in-flight window, on the one screen a subject cannot leave (WCAG 2.4.3). Instead
+                     the same contract as the plain twin — `aria-busy` through the attribute bag, which
+                     x-wirekit::button renders verbatim (`$attributes->except('rel')`), plus a visible label
+                     beside it. Twins must not disagree about how a wait is reported. --}}
+                <x-wirekit::button type="submit" intent="primary" wire:loading.attr="aria-busy" wire:target="submit">
                     {{ __('legal-consent::ui.submit') }}
                 </x-wirekit::button>
+                <x-wirekit::text wire:loading wire:target="submit" class="legal-consent-busy">{{ __('legal-consent::ui.working') }}</x-wirekit::text>
             </x-wirekit::stack>
         </form>
     @endif

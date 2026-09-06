@@ -32,8 +32,9 @@ return new class extends Migration
             // A STRING key, not an integer one, and 64 rather than 36. The ledger has to hold
             // whatever the consuming app keys its subjects by: an auto-increment id survives as
             // its own decimal text, a UUID is 36 characters, a ULID 26. 64 matches the width this
-            // table already gives `document_key`, `request_id` and `tenant_id`, and leaves room
-            // for a prefixed or composite key without touching the schema again.
+            // table already gives `document_key` and `tenant_id`, and leaves room for a prefixed
+            // or composite key without touching the schema again. (The ledger's own copy of this
+            // comment names `request_id` as well; that column is on `legal_consents`, not here.)
             $table->string('subject_id', 64)->nullable();
             $table->uuid('subject_token')->nullable();
 
@@ -151,8 +152,9 @@ return new class extends Migration
      *
      * `Schema::create()` and `DB::table()` apply the prefix transparently, so raw DDL is the one
      * place it is forgotten — and it is forgotten by naming a table the schema does not have,
-     * half-way through a migration chain that has already created four tables. Trigger and
-     * function names take it too: both live in the schema namespace, not under the table.
+     * half-way through a migration chain (two tables exist by the time this one runs, seven when
+     * it ends). Trigger and function names take it too: both live in the schema namespace, not
+     * under the table.
      *
      * The prefix is configuration rather than input, but it lands in a statement either way, and
      * "it cannot be hostile" is an assumption rather than a guard.

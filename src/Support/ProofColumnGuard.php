@@ -144,7 +144,10 @@ final class ProofColumnGuard
      * it.
      *
      * So ANY migration that rebuilds `legal_consents` or `legal_documents` runs its schema work
-     * inside this call. The two that already do (000014, 000018) are the working examples.
+     * inside this call. The four that already do (000014, 000018, 000022, 000028) are the working
+     * examples. That list is derived from the migration directory by a guard rather than trusted
+     * here: it said "two" while three did it, and it is the sentence the author of the next one
+     * reads before deciding whether they need the wrapper.
      *
      * The re-install sits in `finally` deliberately: a schema change that throws must not also
      * leave the proof table unguarded, and an unguarded `legal_documents` is a state with no
@@ -195,22 +198,20 @@ final class ProofColumnGuard
     {
         self::drop();
 
-        // ⚠️ THESE TWO CANNOT BE KILLED BY THE MUTATION LANE, AND THE REASON IS ITS SCOPE RATHER
-        // THAN A MISSING TEST. The lane runs `--testsuite=Unit,Feature`, which is SQLite; this
-        // branch is entered only on a `pgsql` connection, so no mutant inside it is ever executed.
-        // They ARE exercised now — the PostgreSQL migration-reversibility suite rolls this
-        // migration and asserts each guard function by name — but that suite is not in the lane,
-        // so the nightly will keep reporting both RemoveMethodCall mutants as survivors.
+        // ⚠️ A RUN THAT ONLY SEES SQLITE CANNOT REACH THESE TWO, AND THE REASON IS THE DRIVER
+        // CHECK RATHER THAN A MISSING TEST. This branch is entered only on a `pgsql` connection,
+        // so nothing inside it executes anywhere else. They ARE exercised — the PostgreSQL
+        // reversibility arm rolls this migration and asserts each guard function by name.
         //
         // ⚠️ Until that arm was written they were executed by NOTHING, anywhere: no reversibility
-        // test named this migration, and `uninstall()` has exactly one caller. The survivor entry
-        // was therefore pointing at a real hole while looking like the usual engine-scope noise,
-        // which is the argument for reading these entries rather than dismissing them wholesale.
+        // test named this migration, and `uninstall()` has exactly one caller. So the gap was real
+        // while looking like ordinary engine-scope noise — which is the argument for reading such
+        // cases rather than dismissing them wholesale.
         //
         // Worth recognizing as a CLASS rather than as three lines: every engine-specific branch in
-        // this package has the same property. A survivor sitting behind a driver check is not a
-        // coverage gap and no test written in Unit or Feature can close it; the question to ask is
-        // whether `tests/Postgres` and `tests/MySql` cover the behavior, not whether a mutant died.
+        // this package has the same property. A branch behind a driver check is not a coverage gap,
+        // and nothing written against SQLite can close it; the question to ask is whether the
+        // engine suites cover the behavior.
         if (DB::connection()->getDriverName() === 'pgsql') {
             self::execute('DROP FUNCTION IF EXISTS '.self::qualify(self::FUNCTION).'();');
             self::execute('DROP FUNCTION IF EXISTS '.self::qualify(self::DELETE_FUNCTION).'();');
@@ -266,7 +267,8 @@ final class ProofColumnGuard
     }
 
     /**
-     * The proof columns present now — every column except the operational allowlist.
+     * The proof columns present now — every column except the operational allowlist and the
+     * columns the database DERIVES for itself.
      *
      * These names are interpolated into the MySQL and SQLite trigger bodies below, so this is
      * the one place where the safety of that interpolation is decided. The source is the
@@ -281,6 +283,7 @@ final class ProofColumnGuard
         $columns = array_values(array_diff(
             array_filter(Schema::getColumnListing('legal_documents'), is_string(...)),
             LegalDocument::MUTABLE_AFTER_PUBLISH,
+            self::generatedColumns(),
         ));
 
         foreach ($columns as $column) {
@@ -292,6 +295,43 @@ final class ProofColumnGuard
         }
 
         return $columns;
+    }
+
+    /**
+     * The columns the database computes for itself, which are never proof.
+     *
+     * A generated column cannot be written directly — the engine rejects the attempt — so
+     * freezing it protects nothing. It does the opposite: MySQL has no partial index, so
+     * migration 000025 enforces the one-active-version invariant with a STORED column derived
+     * from `is_active`, and `is_active` is deliberately mutable. Enumerated into the trigger,
+     * that column turns every legitimate activation into a frozen-proof violation, and a fresh
+     * MySQL installation can never publish a second version at all.
+     *
+     * Nothing is given up by the exclusion, and that is what makes it safe rather than
+     * convenient: a derived value cannot be tampered with on its own, only through its inputs,
+     * and every input of that expression — `key`, `locale`, `tenant_id` — stays protected here.
+     * The one input that is not, `is_active`, is on the allowlist because activation is the
+     * change this table exists to permit.
+     *
+     * The default-deny shape of {@see self::protectedColumns()} is kept intact: a column added
+     * later is still protected without an edit. Only a column the database itself computes is
+     * subtracted, and only because the catalog says so.
+     *
+     * @return list<string>
+     */
+    private static function generatedColumns(): array
+    {
+        // The schema BUILDER rather than the Schema facade. The facade's `@method` annotation
+        // erases the return to a bare `array`, so every name read out of it is `mixed` and the
+        // filter below would be an assumption dressed as a check. The builder declares
+        // `list<array{name: string, …, generation: array{…}|null}>`, which is the shape this
+        // method depends on.
+        $columns = DB::connection()->getSchemaBuilder()->getColumns('legal_documents');
+
+        return array_values(array_map(
+            static fn (array $column): string => $column['name'],
+            array_filter($columns, static fn (array $column): bool => $column['generation'] !== null),
+        ));
     }
 
     private static function installPostgres(): void

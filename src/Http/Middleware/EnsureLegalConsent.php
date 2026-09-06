@@ -106,14 +106,14 @@ final readonly class EnsureLegalConsent
         // `routeIs()`, NOT ABOUT THE NARROWING. Measured: `Request::routeIs()` is an untyped
         // variadic (`routeIs(...$patterns)`) that hands each pattern to `Route::named()`, and a
         // non-string there simply matches nothing. So dropping the `is_string` filter -- or the
-        // `!== ''` guard on the name above -- changes no observable behavior today, and the
-        // nightly reports both as survivors for that reason.
+        // `!== ''` guard on the name above -- changes no observable behavior today, which is
+        // exactly why no test can hold them.
         //
         // They stay for the reason they were written: the accessors feeding this are `mixed`, the
         // filter is what a static analyzer reads as the narrowing, and the day `routeIs()` is
         // typed `string ...$patterns` the unfiltered form becomes a TypeError on a legal gate.
         // A guard that is redundant against today's framework contract is not a guard that is
-        // wrong -- but it must be labeled, or the next reader deletes it to close a survivor.
+        // wrong -- but it must be labeled, or the next reader deletes it as dead weight.
         //
         // `array_values` is redundant for a second, independent reason: `array_merge` renumbers
         // integer keys itself. It is kept because the intent (a positional list) is the thing
@@ -175,11 +175,11 @@ final readonly class EnsureLegalConsent
         // filter is the narrowing — a non-string simply contributes no pattern, which is the same
         // outcome as an installation without Livewire.
         //
-        // ⚠️ No test can kill the mutant that removes this filter, because no reachable Livewire
+        // ⚠️ Removing this filter would change no outcome, because no reachable Livewire
         // configuration makes either accessor return a non-string: both are read off a registered
         // route. It is narrowing against a `mixed` signature, not against an observed value, and
-        // it is kept for the same reason as the one in isAllowlisted() above. The RemoveArrayItem
-        // mutant on the pair IS killable and is killed -- `Livewire::setUpdateRoute()` moves the
+        // it is kept for the same reason as the one in isAllowlisted() above. Dropping either
+        // ENDPOINT is a different matter and is covered -- `Livewire::setUpdateRoute()` moves the
         // update endpoint off the prefix, which is the whole reason both are consulted.
         $endpoints = array_filter([$manager->getUriPrefix(), $manager->getUpdateUri()], is_string(...));
 
@@ -235,6 +235,11 @@ final readonly class EnsureLegalConsent
     {
         $filter = config('legal-consent.gate.subject_filter');
 
+        // The early return is for the reader, not for the outcome: null falls through
+        // `is_string()` and `is_callable()` to the same `true` at the bottom. Said out loud because
+        // the opposite reading is the dangerous one — a later edit that makes the tail default to
+        // `false` would turn "no filter configured" from "gate everyone" into "gate nobody", and
+        // this line would look like the guard against that while no longer being it.
         if ($filter === null) {
             return true;
         }

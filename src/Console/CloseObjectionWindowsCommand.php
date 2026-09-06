@@ -26,6 +26,7 @@ use Pushery\LegalConsent\Support\ConsentGate;
 use Pushery\LegalConsent\Support\DeemedAcceptanceDecision;
 use Pushery\LegalConsent\Support\SubjectKey;
 use Pushery\LegalConsent\Support\TenantContext;
+use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Closes the objection window of a deemed-consent (Zustimmungsfiktion) change: for every
@@ -57,6 +58,7 @@ use Pushery\LegalConsent\Support\TenantContext;
  * than deem an entire population against no evidence — and says so, instead of leaving an operator
  * to discover it from an empty ledger.
  */
+#[AsCommand(name: 'legal-consent:close-objection-windows')]
 final class CloseObjectionWindowsCommand extends Command implements Isolatable
 {
     use SkipsWhenTablesAreMissing;
@@ -175,8 +177,8 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
             $unproved += $unprovedHere;
 
-            // A memory hint with no observable behavior, so the mutant that removes the call is
-            // equivalent and always will be. It stays because this sweep walks the ledger in
+            // A memory hint with no observable behavior, so removing the call would read as a
+            // no-op and always will. It stays because this sweep walks the ledger in
             // chunks and the cycles it drops are real; nothing about that is assertable.
             gc_collect_cycles();
         }
@@ -213,15 +215,18 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
             ->where('document_id', $version->getKey())
             ->where('mandatory_content_ok', true)
             ->whereIn('subject_id', $subjects->map(fn (Model $subject): ?string => SubjectKey::for($subject))->all())
-            ->whereIn('subject_type', $subjects->map(fn (Model $subject): string => $subject->getMorphClass())->unique()->values()->all())
+            // Cast for the reason SubjectToken carries the same one: a morph ALIAS written as a
+            // number comes back as the int PHP made of that array key, and the closure would then
+            // violate its own return type — a fatal sweep, on a configuration Laravel allows.
+            ->whereIn('subject_type', $subjects->map(fn (Model $subject): string => (string) $subject->getMorphClass())->unique()->values()->all())
             ->get(['subject_type', 'subject_id']);
 
         $proved = [];
 
         foreach ($rows as $row) {
             // The value is a placeholder: the map is read with `isset()`, which is true for `false`
-            // just as it is for `true`. The nightly's TrueToFalse on this line is therefore equivalent
-            // by construction, and labeled here rather than left on the list.
+            // just as it is for `true`. So `false` here would behave identically — said out loud,
+            // because a value that could be anything invites somebody to conclude it matters.
             $proved[$row->subject_type.'#'.$row->subject_id] = true;
         }
 

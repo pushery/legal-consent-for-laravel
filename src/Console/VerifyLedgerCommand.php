@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -12,6 +13,7 @@ use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\LedgerRootBoundary;
 use stdClass;
+use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Verify the optional tamper-evidence hash chain (config `tamper_evidence`). Streams the
@@ -23,6 +25,7 @@ use stdClass;
  * Reads raw rows (DB::table, not the Eloquent model) so the canonical form matches exactly
  * what the writer hashed — casts would change the representation and yield false breaks.
  */
+#[AsCommand(name: 'legal-consent:verify-ledger')]
 final class VerifyLedgerCommand extends Command
 {
     /** Chained rows per keyset page. */
@@ -146,6 +149,25 @@ final class VerifyLedgerCommand extends Command
         // the success arm only, which is why a FAILED run said nothing about the keying mode —
         // see below for why that silence is the expensive half.
         $keyed = is_string(config('legal-consent.tamper_evidence_key')) && config('legal-consent.tamper_evidence_key') !== '';
+
+        // ⚠️ A CHECK THAT DID NOT RUN MUST NOT PASS SILENTLY, and this is the one that can.
+        //
+        // rootBoundary() returns null when the marker is absent — an installation that never ran
+        // migration 000024. Treating that as "boundary zero" would be worse (see rootBoundary():
+        // it would demand a proof from every chain in a database the feature never reached), so
+        // the null is right. What was wrong is that nothing said it.
+        //
+        // Measured: with legal_ledger_markers dropped, a fully fabricated chain — fresh token,
+        // genesis link, no root proof, for a subject who never consented — verified as "intact"
+        // and exited 0, under a note promising that editing history requires the secret. The
+        // identical INSERT with the table present is caught. The only difference was the table.
+        //
+        // Said on BOTH outcomes, because a break list is exactly where an operator would otherwise
+        // read the absence of this class as its absence in the data. Only when keyed: unkeyed the
+        // check would not run anyway, and the note below already says that guarantee is weaker.
+        if ($keyed && ! $boundary instanceof LedgerRootBoundary) {
+            $this->warn('The chain-root boundary is NOT stamped, so the root-proof check did not run: a chain opened by a direct insert cannot be detected here. Run the package migrations — 000024 stamps the boundary.');
+        }
 
         if ($breaks === []) {
             $this->info("Ledger chain intact: verified {$rows} chained record(s) across {$subjects} subject(s).");
@@ -273,8 +295,8 @@ final class VerifyLedgerCommand extends Command
                 yield $row;
             }
 
-            // ⚠️ THE TWO `instanceof` CHECKS ARE REACHABLE ONLY AT AN EXACT PAGE BOUNDARY, which
-            // is why the nightly reports InstanceOfToTrue on both as survivors. `$page->last()` is
+            // ⚠️ THE TWO `instanceof` CHECKS ARE REACHABLE ONLY AT AN EXACT PAGE BOUNDARY, so a
+            // run that never lands on one cannot tell them from `true`. `$page->last()` is
             // null only for an EMPTY page, and the loop below re-queries only when the previous
             // page was exactly full -- so a null here needs a chained-row count that is an exact
             // multiple of PAGE. Measured: on an empty ledger the generator is not entered at all,
@@ -380,38 +402,106 @@ final class VerifyLedgerCommand extends Command
     {
         $breaks = [];
 
-        // One subject, several tokens — the shape a fabricated chain creates.
-        $multiToken = DB::table('legal_consents')
-            ->selectRaw('subject_type, subject_id, COUNT(DISTINCT subject_token) AS tokens')
+        // The distinct (identity, token) pairs, folded in PHP rather than counted in SQL.
+        //
+        // `COUNT(DISTINCT a, b)` has no portable spelling — MySQL takes a column list, PostgreSQL
+        // wants a row constructor, and SQLite takes neither — and BOTH counts below need more than
+        // one column to be right. Reading the pairs and folding them here is the one shape that
+        // says the same thing on all three engines.
+        //
+        // ⚠️ AND THE GROUPING IS COMPARED AS BYTES, because on MySQL it otherwise is not.
+        //
+        // GROUP BY follows the column's collation, and every collation Laravel configures by
+        // default (utf8mb4_unicode_ci, utf8mb4_0900_ai_ci) is case- and accent-insensitive and
+        // PAD SPACE. Measured against a real MySQL 8.4: two tokens differing only in case, and
+        // `subject_id` '5' against '5 ', each collapse into ONE group — so the fabricated second
+        // chain and the stolen token, the two shapes this whole method exists to find, arrive in
+        // PHP already merged and are never reported. PHP compares bytes; the two layers disagreed,
+        // and the database's answer was the one that reached the fold.
+        //
+        // CAST(… AS BINARY) restores byte grouping. It is the same repair, for the same reason,
+        // that ProofColumnGuard::installMysql() already carries — that one is about `<=>` on a
+        // trigger, this one about GROUP BY on a verifier, and both are the collation reading two
+        // different values as one.
+        //
+        // Only MySQL needs it. PostgreSQL's default collation is deterministic, so equality there
+        // is byte-wise already, and SQLite compares BINARY unless a column declares otherwise —
+        // which is why the defect was invisible in a suite that runs on SQLite.
+        $binaryGrouping = DB::connection()->getDriverName() === 'mysql';
+        $columns = ['subject_type', 'subject_id', 'tenant_id', 'subject_token'];
+
+        $selected = $binaryGrouping
+            ? array_map(
+                static fn (string $column): Expression => DB::raw("CAST(`{$column}` AS BINARY) as `{$column}`"),
+                $columns,
+            )
+            : $columns;
+
+        $grouped = $binaryGrouping
+            ? array_map(static fn (string $column): Expression => DB::raw("CAST(`{$column}` AS BINARY)"), $columns)
+            : $columns;
+
+        $pairs = DB::table('legal_consents')
+            ->select($selected)
             ->whereNotNull('subject_id')
             ->whereNotNull('subject_token')
-            ->groupBy('subject_type', 'subject_id')
-            ->havingRaw('COUNT(DISTINCT subject_token) > 1')
+            ->groupBy($grouped)
             ->get();
 
-        foreach ($multiToken as $row) {
-            $breaks[] = sprintf(
-                'subject %s#%s carries %s distinct subject_tokens — one subject has exactly one token, so a second chain was fabricated for them (the chain walk verifies each token separately and cannot see this)',
-                is_string($row->subject_type) ? $row->subject_type : '?',
-                is_scalar($row->subject_id) ? (string) $row->subject_id : '?',
-                is_scalar($row->tokens) ? (string) $row->tokens : '?',
-            );
+        /** @var array<string, array{type: string, id: string, tokens: list<string>}> $tokensPerSubject */
+        $tokensPerSubject = [];
+
+        /** @var array<string, list<string>> $subjectsPerToken */
+        $subjectsPerToken = [];
+
+        foreach ($pairs as $pair) {
+            $type = is_string($pair->subject_type) ? $pair->subject_type : '?';
+            $id = is_scalar($pair->subject_id) ? (string) $pair->subject_id : '?';
+            $tenant = is_scalar($pair->tenant_id) ? (string) $pair->tenant_id : '';
+            $token = is_string($pair->subject_token) ? $pair->subject_token : '?';
+
+            // The TENANT belongs in the identity, and leaving it out was the defect. SubjectToken
+            // mints per tenant, so the same person legitimately carries a different token in each
+            // one — while this query reads through DB::table(), which the tenant scope never
+            // touches. A perfectly clean two-tenant ledger therefore reported a fabricated chain,
+            // and a multi-tenant installation could never verify green.
+            $identity = $type."\0".$id."\0".$tenant;
+
+            $tokensPerSubject[$identity] ??= ['type' => $type, 'id' => $id, 'tokens' => []];
+            $tokensPerSubject[$identity]['tokens'][] = $token;
+
+            // The TYPE belongs in the subject, and leaving it out was the other half. A token on
+            // App\Models\User#5 and on App\Models\Admin#5 counted as one subject, which is
+            // precisely the theft this check names in its own message.
+            $subjectsPerToken[$token][] = $type."\0".$id;
+        }
+
+        // One subject, several tokens — the shape a fabricated chain creates.
+        foreach ($tokensPerSubject as $subject) {
+            $distinct = count(array_unique($subject['tokens']));
+
+            if ($distinct > 1) {
+                $breaks[] = sprintf(
+                    'subject %s#%s carries %d distinct subject_tokens — one subject has exactly one token, so a second chain was fabricated for them (the chain walk verifies each token separately and cannot see this)',
+                    $subject['type'],
+                    $subject['id'],
+                    $distinct,
+                );
+            }
         }
 
         // One token, several subjects — a token stolen onto another subject's rows.
-        $sharedToken = DB::table('legal_consents')
-            ->selectRaw('subject_token, COUNT(DISTINCT subject_id) AS subjects')
-            ->whereNotNull('subject_id')
-            ->whereNotNull('subject_token')
-            ->groupBy('subject_token')
-            ->havingRaw('COUNT(DISTINCT subject_id) > 1')
-            ->get();
+        foreach ($subjectsPerToken as $token => $subjects) {
+            $distinct = count(array_unique($subjects));
 
-        foreach ($sharedToken as $row) {
+            if ($distinct <= 1) {
+                continue;
+            }
+
             $breaks[] = sprintf(
-                'subject_token %s is shared by %s subjects — a token belongs to exactly one subject',
-                is_string($row->subject_token) ? substr($row->subject_token, 0, 12).'…' : '?',
-                is_scalar($row->subjects) ? (string) $row->subjects : '?',
+                'subject_token %s is shared by %d subjects — a token belongs to exactly one subject',
+                substr($token, 0, 12).'…',
+                $distinct,
             );
         }
 

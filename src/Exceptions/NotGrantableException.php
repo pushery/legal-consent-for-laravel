@@ -13,7 +13,7 @@ use RuntimeException;
  * Granting is the one direction on that screen which WRITES an assertion that the subject agreed,
  * and the surface it belongs on follows from the legal class, not from convenience:
  *
- *  - a CONTRACT and an ACKNOWLEDGEMENT are mandatory. They are accepted where they are presented
+ *  - a CONTRACT and an ACKNOWLEDGMENT are mandatory. They are accepted where they are presented
  *    in full — a registration form, the re-consent gate, a first-use interstitial — because the
  *    acceptance has to be informed (Art. 7(1)), and a toggle beside a title is not a presentation
  *    of a contract. Accepting one from a settings list would freeze a version the subject was

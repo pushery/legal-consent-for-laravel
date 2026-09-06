@@ -4,6 +4,69 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.23.0 → 0.24.0
+
+### Run migration 000027 — the retention sweep gets its own index
+
+**Nothing is required of you beyond `migrate`.** It adds `(accepted_at, id)` on `legal_consents` and `(sent_at, id)` on `legal_notices`, which is what `legal-consent:prune` filters on. No data changes and no behavior changes; it is named here only because `migrate` will report it, and an unexplained migration is the kind of thing an operator stops for.
+
+Worth knowing if your ledger is large: the run that deletes **nothing** — the normal case for a scheduled sweep — used to be a full scan of the table, and that was the entire cost of the run. Measured on PostgreSQL 18 over 50 000 rows: 1 471 shared buffers and 4.684 ms before, 11 buffers and 0.029 ms after, as an index-only scan.
+
+### `ignoreMigrations()` no longer switches off the three scheduled sweeps
+
+**If you published the package's migrations and then called `ignoreMigrations()` — the path the property's own docblock offers — this release turns three commands back on for you:** `legal-consent:dispatch-notices`, `legal-consent:close-objection-windows` and `legal-consent:prune`.
+
+They were registered behind that flag, and the flag carries two meanings. Its docblock offers it for *"publish and manage them in the host app instead"* — the tables then exist. `UPGRADE.md` for 0.16.1 read it as declining the tables altogether. The schedule believed the second reading, so following the documented publish path silently lost the change notices owed under § 308 Nr. 5 lit. b, the closing of every objection window (silence never bound), and the retention sweep under Art. 5(1)(e). No error, no warning, tables present.
+
+The registration now asks whether the tables are **there**, which is the fact the commands depend on. Nothing changes for an installation that genuinely has no tables: nothing registers, exactly as before. `ignoreMigrations()` keeps its documented meaning and no new configuration appears.
+
+**If you turned the `schedule.*` flags off to silence nightly failures, look at them again** — they are the switch for whether you want each sweep, and they are the only switch now.
+
+### One active version is enforced by the database on MySQL and SQLite too
+
+**Run the new migration (000025).** It adds the guarantee PostgreSQL has had since 000001: on SQLite the identical partial unique index, on MySQL a stored generated column plus a plain unique index over it, which is the standard equivalent because MySQL has no partial index.
+
+**Before you migrate, check that you do not already hold two active versions of the same document.** On MySQL and SQLite nothing prevented it until now, so an installation that lost a lock race at some point may be carrying one — and the migration will refuse to create the index while it is there. `select key, locale, tenant_id, count(*) from legal_documents where is_active = 1 group by 1,2,3 having count(*) > 1` names them; retire all but the version that should be in force.
+
+**Run the second migration (000026) as well.** It appends `tenant_id` to the affected-subject index the notice sweep walks. Nothing about your data changes and nothing is required of you — it is named here only because `migrate` will report two migrations rather than one, and a second unexplained migration is the kind of thing an operator stops for.
+
+**Nothing else changes.** The activation lock behaves exactly as before, including its warning when the configured cache store cannot serialize. It simply is no longer the only thing holding the invariant.
+
+### Run migration 000028 — `locale` and `version` get the widths their formats need
+
+**Run it; nothing else is required of you.** `legal_documents.locale` was `varchar(10)` and `version` was `varchar(20)`, and both are narrower than values that are perfectly well-formed: `ca-ES-valencia` is a valid BCP 47 tag at fourteen characters, `1.0.0-alpha.1+build.123` valid SemVer at twenty-three. They become 35 and 64 on MySQL and PostgreSQL.
+
+**Where the old width bites:** `zh-Hant-TW`, `zh-Hans-CN` and `sr-Latn-RS` are each exactly ten characters, so a document in one of those locales sat on the limit and any variant subtag went over it. The failure is also invisible where people develop — SQLite ignores a `varchar` length completely, so the value round-trips at full length there, while MySQL 8.4 in strict mode refuses the row with `1406 Data too long`.
+
+**On MySQL, look at the size of `legal_documents` first.** Changing a column type copies the table, so the run is proportional to the row count rather than instant. PostgreSQL widens in place. SQLite is skipped deliberately: there is nothing to widen, and an `ALTER` there would rebuild the table and drop the proof triggers with it.
+
+### A `0.x` legal document is now enforced
+
+**If you publish a legal document at a `0.x` version, this release starts gating on it.** Until now it gated nobody: the held-major fold uses `0` as its sentinel for *holds nothing*, so `held >= major_version` was `0 >= 0` — true for every subject, including one with an empty ledger. The settings screen told those people they held a contract they had never seen, and never offered it to them, because `outstanding` is the mirror of the same comparison.
+
+**Who is affected:** only installations that published a document whose `major_version` is `0` — that is, any version numbered `0.x.y`. `LegalDraftWriter::setVersion('terms', '0.9.0')` accepts it and `RenderPipeline` derives `majorVersion: 0`, so it is reachable through the ordinary path rather than only by hand.
+
+**What changes for them:** subjects who have not accepted that document are now gated, shown it, and asked. That is the point of the fix, and it is a behavior change rather than a repair of something invisible — people who pass today will be stopped after the upgrade.
+
+**If you do not want that**, publish the document at `1.0.0` or above before upgrading. There is no configuration switch: a document that gates nobody is not a legal document, and a flag to keep it that way would be a way to ship the defect on purpose.
+
+**Withdrawal now works at `0.x` too.** An ending action dropped the holding to the same `0`, so a withdrawn `0.x` document went on reading as held. A holding is a presence now, so a withdrawal is visible.
+
+## 0.22.0 → 0.23.0
+
+**Nothing to do**, and the changelog says so in its own words: *"nothing in `UPGRADE.md` applies,
+because no public contract changed shape."* Measured rather than taken on trust — `git diff v0.22.0
+v0.23.0` touches neither `database/migrations/` nor `config/`, and the one new file under `src/` is
+an internal helper.
+
+Two of that release's fixes are behavior a consuming application can observe — a deleted document
+stayed enforceable until its cache entry expired, and a retention sweep could hit a driver error
+while repairing the tamper chain on a large ledger — but both are repairs, so there is nothing to
+change on your side.
+
+This section exists because the step had no entry at all for a while, and an omission reads exactly
+like an oversight. The reader should not have to work out which one it was.
+
 ## 0.21.0 → 0.22.0
 
 ### Markdown tables now render as tables
@@ -1166,6 +1229,17 @@ merge means keys added inside a block your file already declares never reach you
 php artisan legal-consent:doctor
 ```
 
+## 0.6.0 → 0.7.0
+
+**Nothing to do.** This release adds `legal-consent:doctor` and changes nothing you have to act on:
+no migrations, no configuration keys, no signature that moved. Measured rather than assumed —
+`git diff v0.6.0 v0.7.0` touches neither `database/migrations/` nor `config/`, and the only new file
+under `src/` is the command itself.
+
+It is written down because an omission and an oversight look identical from the outside. Every other
+step from 0.3.x onward has a section; this one had a hole, and a reader hitting it could not tell
+whether the upgrade was free or whether somebody forgot to describe it.
+
 ## 0.5.0 → 0.6.0
 
 `0.6.0` is deep-audit hardening. It is a **minor** bump but carries one breaking change to the
@@ -1208,8 +1282,11 @@ re-consent form already has. It is **opt-in** and off by default:
 
 ## 0.4.0 → 0.5.0
 
-`0.5.0` is a **minor** bump with two changes that alter existing behavior. **No new migrations
-ship** — nothing in your schema changes.
+`0.5.0` is a **minor** bump with two changes that alter existing behavior.
+
+> ⚠️ **Correction (2026-09-05).** This paragraph said *"No new migrations ship — nothing in your schema changes"*, and that was wrong: `0.5.0` shipped **two** migrations, `…000013_add_affected_subject_index_to_legal_consents_table` and `…000014_drop_legal_consents_document_foreign_key_on_sqlite`. Anyone following this guide across `0.4.0 → 0.5.0` was told not to migrate. Run `php artisan migrate` for this step. The sentence is corrected rather than deleted, so that a reader who acted on the old one can see what changed.
+
+**On SQLite, migration 000014 rebuilds the `legal_consents` table.** That is how SQLite drops a foreign key — the table is copied, and anything attached to the old one goes with it. The package's own append-only triggers are not affected (they are created on PostgreSQL and MySQL only), but **a trigger you wrote yourself on `legal_consents` is dropped and not restored**, and the migration does not run inside a transaction because SQLite's schema grammar is not transactional. Re-create your own triggers after this step.
 
 ### 1. The ledger models are no longer mass-assignable
 

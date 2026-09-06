@@ -68,7 +68,11 @@ final class SubjectToken
         // Consent tokens first (forSubject's precedence), then notice tokens for whoever is still
         // unresolved. `??=` keeps the first (consent) hit, so a later notice row never overrides it.
         foreach ([LegalConsent::class, LegalNotice::class] as $model) {
-            foreach ($subjects->groupBy(static fn (Model $subject): string => $subject->getMorphClass()) as $type => $group) {
+            // The cast is on the closure's own result, not decoration: a morph ALIAS may be
+            // written as a number, and `getMorphClass()` then returns the int PHP made of that
+            // array key. Without it the closure violates its own return type and the batch resolve
+            // is fatal — before the line below, which exists for the same reason, is ever reached.
+            foreach ($subjects->groupBy(static fn (Model $subject): string => (string) $subject->getMorphClass()) as $type => $group) {
                 $type = (string) $type;
                 $ids = $group->map(static fn (Model $subject): ?string => SubjectKey::for($subject))->all();
 
@@ -99,7 +103,7 @@ final class SubjectToken
      */
     public function mapKey(Model $subject): string
     {
-        return $this->pairKey($subject->getMorphClass(), $subject->getKey());
+        return $this->pairKey((string) $subject->getMorphClass(), $subject->getKey());
     }
 
     /**

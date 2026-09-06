@@ -39,16 +39,17 @@ tested against a real PostgreSQL and a real MySQL, not just SQLite.
 
 ## What it does
 
-- **Append-only audit ledger** — every acceptance, acknowledgement, and withdrawal is one
+- **Append-only audit ledger** — every acceptance, acknowledgment, and withdrawal is one
   immutable row with denormalized proof, hardened by a database trigger and an app-layer guard.
 - **Versioned documents** — a SHA-256 hash detects a change; you classify how it must be
   communicated; only a core contract change forces active re-consent.
 - **Four notice modes** — silent editorial, announced-but-never-blocking, deemed consent with an
-  objection window (§ 308 Nr. 5 BGB), and a hard re-consent gate — each with delivery proof.
+  objection window (§ 308 Nr. 5 BGB), and a hard re-consent gate. The three that announce carry
+  delivery proof; the silent one announces nothing, so there is nothing to prove.
 - **Interchangeable content sources** — Markdown files, or an admin-maintained draft store
   reviewed per locale before a publish freezes it.
-- **Fortify-optional** — record consent three ways: a trait, an event listener, or a headless
-  JSON API. `laravel/fortify` is never required.
+- **Fortify-optional** — three of the four ways to record consent replace Fortify's own flow: a
+  trait, an event listener, or a headless JSON API. `laravel/fortify` is never required.
 - **Optional, off by default** — a tamper-evidence hash chain, an Art. 8 age gate, and
   multi-tenancy scoping, each a single config switch.
 - **Optional reactive UI** — plain Blade stubs by default; opt-in Livewire components and a
@@ -66,7 +67,8 @@ tested against a real PostgreSQL and a real MySQL, not just SQLite.
 - [Recording consent](https://docs.pushery.com/legal-consent-for-laravel/recording-consent) — the
   four ways to write the ledger, the registration checklist, and the accept-time hash guard.
 - [The four notice modes](https://docs.pushery.com/legal-consent-for-laravel/notice-modes/overview)
-  — how a change is classified, announced, and only sometimes enforced, with a worked example each.
+  — how a change is classified, announced, and only sometimes enforced, with a worked example for
+  each of the three that announce.
 - [Configuration reference](https://docs.pushery.com/legal-consent-for-laravel/reference/configuration)
   — every key, its default, and what it decides.
 - [Testing your integration](https://docs.pushery.com/legal-consent-for-laravel/testing) —
@@ -75,9 +77,10 @@ tested against a real PostgreSQL and a real MySQL, not just SQLite.
 ## Quality bar
 
 Every change is held to Laravel Pint, Larastan at `max`, Rector, and a test suite at 100% line
-and type coverage, plus mutation testing, a real-browser end-to-end suite, and cross-engine tests
-against a real PostgreSQL and MySQL 8.4 — the engines it runs on in production. The full gate runs
-before every release.
+and type coverage, plus a real-browser end-to-end suite and cross-engine tests against a real
+PostgreSQL and MySQL 8.4 — the engines it runs on in production. That gate runs before every
+release. Mutation testing runs on its own schedule and never gates a release: a score is a
+measurement to act on, not a number to hold a version behind.
 
 The suite is not part of the published package: the tests and their PHPUnit configuration stay in
 the development repository, so `composer test` has nothing to run from an installed copy. See

@@ -13,6 +13,7 @@ use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 use Override;
@@ -64,6 +65,7 @@ use Pushery\LegalConsent\Support\RegistrationRules;
 use Pushery\LegalConsent\Support\TenantContext;
 use Pushery\LegalConsent\Support\UnavailableTranslator;
 use Pushery\WireKit\WireKitServiceProvider;
+use Throwable;
 
 final class LegalConsentServiceProvider extends ServiceProvider
 {
@@ -84,6 +86,14 @@ final class LegalConsentServiceProvider extends ServiceProvider
     /**
      * Whether the bundled migrations are registered automatically. Disable with
      * self::ignoreMigrations() to publish and manage them in the host app instead.
+     *
+     * ⚠️ IT SAYS NOTHING ABOUT WHETHER THE TABLES EXIST, and reading it as if it did cost three
+     * scheduled sweeps. The documented use is to publish the migrations and run them yourself —
+     * the tables are then present — while `UPGRADE.md` for 0.16.1 read the same flag as declining
+     * them. The schedule believed the second reading and gated on this flag, so a consumer taking
+     * the documented path silently lost `dispatch-notices`, `close-objection-windows` and `prune`.
+     * Anything that needs to know whether the tables are there asks
+     * {@see self::ledgerTablesExist()} instead.
      */
     public static bool $runsMigrations = true;
 
@@ -246,52 +256,86 @@ final class LegalConsentServiceProvider extends ServiceProvider
             Event::listen(Registered::class, RecordConsentOnRegistration::class);
         }
 
-        // A scheduled command that touches this package's tables cannot run for a consumer who
-        // declined them with ignoreMigrations(). The config flag beside each registration below
-        // answers whether the consumer WANTS that sweep; this one answers whether it CAN run here
-        // at all, and nothing connected the two — so a consumer that declined the tables still got
-        // three commands a night against relations that do not exist.
+        // A scheduled command that touches this package's tables cannot run where those tables do
+        // not exist. The config flag beside each registration below answers whether the consumer
+        // WANTS that sweep; this asks whether it CAN run here at all, and nothing connected the two
+        // — so a consumer without the tables got three commands a night against missing relations.
         //
-        // Read at boot, outside the closure: a registration that only fails later is still a
-        // registration, and with schedule monitoring it is one tracker entry per run, forever.
-        if (self::$runsMigrations) {
-            $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
-                if ((bool) config('legal-consent.schedule.dispatch_notices', true)) {
-                    $schedule->command('legal-consent:dispatch-notices')
-                        ->hourly()
-                        // Cap the overlap lock at 2h, not the 24h default: a hung hourly run should
-                        // self-clear well before the next legally time-boxed sweep, so a stuck lock
-                        // cannot silence the sweep — and its heartbeat — for a whole day.
-                        ->withoutOverlapping(120)
-                        ->onOneServer();
-                }
+        // ⚠️ IT USED TO ASK `self::$runsMigrations`, AND THAT FLAG DOES NOT MEAN WHAT THE GATE
+        // NEEDED. Its own docblock offers it for publishing the migrations and running them from
+        // the host app instead — the tables then EXIST — while `UPGRADE.md` reads it as declining
+        // the tables altogether. The schedule believed the second reading and the documentation
+        // advertised the first, so a consumer following the documented publish path silently lost
+        // `dispatch-notices` (the change notices owed under § 308 Nr. 5 lit. b never go out),
+        // `close-objection-windows` (no objection window ever closes, so silence never binds) and
+        // `prune` (retention under Art. 5(1)(e) never runs). No error, no warning, tables present.
+        //
+        // So the gate asks the question it actually has: are the tables here? A flag is a statement
+        // of intent about migrations; presence is the fact the commands depend on. That is
+        // deliberately the repair that changes no public contract — splitting the flag in two would
+        // add a public surface, and narrowing its documented meaning would make the published
+        // publish path unusable. Both of those are the owner's call; this one is not.
+        //
+        // Moved INSIDE the closure, which is where it costs nothing: `callAfterResolving` fires
+        // only when something resolves a Schedule, so a web request never reaches this. And a fresh
+        // install that has not migrated yet self-heals — `schedule:run` boots the application anew
+        // every minute, so the first boot after `migrate` registers.
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
+            if (! $this->ledgerTablesExist()) {
+                return;
+            }
 
-                if ((bool) config('legal-consent.schedule.close_objection_windows', true)) {
-                    $schedule->command('legal-consent:close-objection-windows')
-                        ->hourly()
-                        // See dispatch-notices above: a 2h overlap cap, not the 24h default.
-                        ->withoutOverlapping(120)
-                        ->onOneServer();
-                }
+            if ((bool) config('legal-consent.schedule.dispatch_notices', true)) {
+                $schedule->command('legal-consent:dispatch-notices')
+                    ->hourly()
+                    // Cap the overlap lock at 2h, not the 24h default: a hung hourly run should
+                    // self-clear well before the next legally time-boxed sweep, so a stuck lock
+                    // cannot silence the sweep — and its heartbeat — for a whole day.
+                    ->withoutOverlapping(120)
+                    ->onOneServer();
+            }
 
-                // Opt-IN, unlike its two siblings: this sweep DELETES. An app upgrading into this
-                // version must not silently start erasing records it has been accumulating — that
-                // decision belongs to the consumer, once, deliberately. Daily is enough for a
-                // period measured in years, and it keeps the nightly window small.
-                if ((bool) config('legal-consent.schedule.prune', false)) {
-                    $schedule->command('legal-consent:prune')
-                        ->daily()
-                        // Capped like its two siblings, and here the bare default is worse than
-                        // anywhere else: 1440 minutes is exactly the interval `daily()` repeats on,
-                        // so a hard-killed run (SIGKILL or an OOM — neither is released by
-                        // `releaseOnTerminationSignals`) holds the lock right up to the next due
-                        // moment and can swallow a whole day's sweep. Laravel does not report a
-                        // skipped overlapping event, so the only sign would be a missing heartbeat.
-                        ->withoutOverlapping(120)
-                        ->onOneServer();
-                }
-            });
-        }
+            if ((bool) config('legal-consent.schedule.close_objection_windows', true)) {
+                $schedule->command('legal-consent:close-objection-windows')
+                    ->hourly()
+                    // See dispatch-notices above: a 2h overlap cap, not the 24h default.
+                    ->withoutOverlapping(120)
+                    ->onOneServer();
+            }
+
+            // Opt-IN, unlike its two siblings: this sweep DELETES. An app upgrading into this
+            // version must not silently start erasing records it has been accumulating — that
+            // decision belongs to the consumer, once, deliberately. Daily is enough for a
+            // period measured in years, and it keeps the nightly window small.
+            if ((bool) config('legal-consent.schedule.prune', false)) {
+                $schedule->command('legal-consent:prune')
+                    ->daily()
+                    // Capped like its two siblings, and here the bare default is worse than
+                    // anywhere else: 1440 minutes is exactly the interval `daily()` repeats on,
+                    // so a hard-killed run (SIGKILL or an OOM — neither is released by
+                    // `releaseOnTerminationSignals`) holds the lock right up to the next due
+                    // moment and can swallow a whole day's sweep. Laravel does not report a
+                    // skipped overlapping event, so the only sign would be a missing heartbeat.
+                    ->withoutOverlapping(120)
+                    ->onOneServer();
+            }
+        });
+
+        // ⚠️ WITHOUT THIS, `optimize:clear` LEAVES THE RENDERED DOCUMENTS BEHIND — for up to
+        // `cache.ttl` seconds, 86 400 by default. The operator runs the command whose whole job is
+        // making a stale cache go away, and keeps being served the old legal text. It only bites
+        // where the consumer configured `legal-consent.cache.store`, which is exactly the
+        // installation that cares about its cache.
+        //
+        // `clear` only, no `optimize`: there is nothing to warm here. The rendered set is built on
+        // demand and invalidated by a publish, so an eager pass would populate a cache from a
+        // process that is not serving anyone.
+        //
+        // ⚠️ It is a method to CALL, not one to override — `ServiceProvider::optimizes()` registers
+        // into two static maps. Declaring it as a return-an-array hook reads plausible and is
+        // silently inert; PHPStan catches it as a signature mismatch, which is the only reason it
+        // did not ship that way.
+        $this->optimizes(clear: 'legal-consent:cache-flush', key: 'legal-consent');
 
         if ($this->app->runningInConsole()) {
             $this->registerPublishing();
@@ -409,6 +453,36 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * value follows an application that has moved its config or lang directory. The global helpers
      * read the same container and add a layer that hides where the answer came from.
      */
+    /**
+     * Are the tables the scheduled sweeps read actually here?
+     *
+     * The three commands touch `legal_documents`, `legal_consents` and `legal_notices`, and all
+     * three are asked: a partial publish is a real state (the migrations ship as separate files and
+     * a host that manages them itself can run a subset), and a sweep against two of three tables
+     * fails exactly as loudly as one against none.
+     *
+     * ⚠️ AN UNREACHABLE DATABASE REGISTERS, and that direction is chosen rather than defaulted to.
+     * A connection that cannot be opened is not a consumer who declined the tables — it is an
+     * outage. Registering means the command fails loudly for as long as it lasts; NOT registering
+     * means three legally owed sweeps disappear silently and come back only when somebody notices.
+     * A loud failure during an outage is the cheaper of the two, and it is the one an operator can
+     * see.
+     */
+    private function ledgerTablesExist(): bool
+    {
+        try {
+            foreach (['legal_documents', 'legal_consents', 'legal_notices'] as $table) {
+                if (! Schema::hasTable($table)) {
+                    return false;
+                }
+            }
+        } catch (Throwable) {
+            return true;
+        }
+
+        return true;
+    }
+
     private function registerPublishing(): void
     {
         // Each standard group carries the umbrella tag `legal-consent` as well, so
@@ -455,8 +529,8 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // than a tidy-up. `publishes()` merges into `static::$publishes[static::class]` whatever
         // tag it is given, so `vendor:publish --provider="…\LegalConsentServiceProvider"` — an
         // interactive first-class choice, and the obvious thing to type — published the three
-        // groups the tag design deliberately withholds, two of which write to the host `users`
-        // table. Tags are global and keep working exactly as documented.
+        // groups the tag design deliberately withholds, one of which DROPS columns from the host
+        // `users` table. Tags are global and keep working exactly as documented.
         $this->app->register(LegalConsentOptInPublishing::class);
 
         $this->publishes([

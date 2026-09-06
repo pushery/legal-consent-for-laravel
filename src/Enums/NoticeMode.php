@@ -54,7 +54,7 @@ enum NoticeMode: string
     /**
      * Only an active re-consent hard-blocks access via the enforcement middleware.
      * Info-only and deemed-consent changes are announced but NEVER gate (blocking a
-     * privacy notice to force acknowledgement is unlawful pressure — WP260 rev.01
+     * privacy notice to force acknowledgment is unlawful pressure — WP260 rev.01
      * Rz. 30-31), and an editorial change is not enforceable at all.
      */
     public function gates(): bool

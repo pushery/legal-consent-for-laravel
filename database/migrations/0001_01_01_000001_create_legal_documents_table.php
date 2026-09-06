@@ -53,8 +53,9 @@ return new class extends Migration
             $table->boolean('requires_reconsent')->default(false);
             $table->string('change_summary')->nullable();
 
-            // Exactly one active version per (key, locale). Enforced portably in the
-            // app layer; on Postgres additionally by a partial unique index below.
+            // Exactly one active version per (key, locale). Enforced portably in the app layer,
+            // by the partial unique index below on Postgres, and — since migration 000025 — by the
+            // database on SQLite and MySQL too.
             $table->boolean('is_active')->default(false);
 
             // The delayed-notice timeline: published_at < announce_from < enforce_from.
@@ -71,9 +72,9 @@ return new class extends Migration
             $table->index(['key', 'content_hash']);
         });
 
-        // Postgres can guarantee "one active version per (key, locale)" at the DB
-        // level with a partial unique index; MySQL/SQLite rely on the app-layer
-        // guard in LegalDocument::activate().
+        // Postgres guarantees "one active version per (key, locale)" at the DB level with a
+        // partial unique index. SQLite takes the identical index and MySQL the generated-column
+        // equivalent — both in migration 000025, which is where to look for the other two arms.
         //
         // Hand-written SQL, so the table prefix has to be applied by hand — the schema builder
         // does it everywhere else, which is precisely why a literal name here goes unnoticed until

@@ -101,9 +101,9 @@ final class EnforceableDocumentCache
         $key = $this->keyFor($locale);
         $now = CarbonImmutable::now()->getTimestamp();
 
-        // The `0` is unobservable and its DecrementInteger mutant is equivalent: this default is
-        // only read when there is no memo entry, and then `$memoized` is null, so the check below
-        // fails on its FIRST operand whatever the timestamp says. It is a shape, not a value.
+        // The `0` is unobservable, and any other number would be too: this default is only read
+        // when there is no memo entry, and then `$memoized` is null, so the check below fails on
+        // its FIRST operand whatever the timestamp says. It is a shape, not a value.
         [$memoized, $expiresAt] = $this->memo[$key] ?? [null, 0];
 
         if ($memoized instanceof Collection && $expiresAt > $now) {
@@ -155,6 +155,17 @@ final class EnforceableDocumentCache
             ])
             ->where('locale', $locale)
             ->where('is_active', true)
+            // ⚠️ ORDERED, BECAUSE EVERYTHING DOWNSTREAM RENDERS THIS SET IN THIS ORDER. Without it
+            // the engine decides: the banner listed pending changes in whatever sequence the
+            // storage layer happened to return, so the same two documents came out in one order on
+            // PostgreSQL and another on SQLite — and changed order again the moment an index was
+            // added. Found exactly that way: a partial unique index on `legal_documents` flipped a
+            // two-item list, and the arm that caught it was asserting a sequence nothing promised.
+            //
+            // `key` is the stable identity a reader recognizes; `id` breaks the tie for a document
+            // published in several locales that reaches one list.
+            ->orderBy('key')
+            ->orderBy('id')
             ->get()
             ->map(static fn (LegalDocument $document): array => $document->getAttributes())
             ->all();

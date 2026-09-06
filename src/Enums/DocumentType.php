@@ -64,7 +64,7 @@ enum DocumentType: string
 
     /**
      * Does this document ask the subject for ANYTHING — an acceptance, an
-     * acknowledgement, or a consent?
+     * acknowledgment, or a consent?
      *
      * This is the predicate that keeps an informational page out of the registration
      * form, the gate, and the notice sweeps. It is deliberately NOT expressible as

@@ -142,9 +142,9 @@ final readonly class WithdrawConsentController
         //
         // It stays as defense in depth on a security path, where a second layer is cheap. What is
         // not acceptable is a guard whose stated reason is wrong: it stops the next reader from
-        // seeing where the real coverage lives, and it is why the nightly reports
-        // StrStartsWithToStrEndsWith here as a survivor that cannot be killed — there is nothing
-        // behind it to catch.
+        // seeing where the real refusal happens. Nothing reaches this line that the host
+        // comparison would not already refuse, so no test can distinguish it from its own
+        // absence — there is nothing behind it to catch.
         if (str_contains($target, '\\') || str_starts_with($target, '//')) {
             return false;
         }

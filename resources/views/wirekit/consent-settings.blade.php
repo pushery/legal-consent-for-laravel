@@ -29,9 +29,14 @@
 <x-wirekit::stack gap="lg" class="legal-consent-settings">
     <x-wirekit::heading :level="2">{{ __('legal-consent::ui.settings_heading') }}</x-wirekit::heading>
 
-    {{-- The result of the redirect the withdrawal route answers with. ALWAYS in the DOM: a live
-         region inserted together with its text is not announced, which is why the Livewire twin
-         keeps its region present too. --}}
+    {{-- The result of the redirect the withdrawal route answers with.
+
+         ⚠️ THE REGION IS INERT ON THIS PATH, and this comment used to claim the reverse. The
+         withdrawal route answers POST with a redirect, so the message and the region carrying it
+         arrive in the same fresh document — and a live region present at page load has no
+         mutation to announce. That rationale belongs to the Livewire twin, which morphs its
+         region in place. Kept because the roles still name the message in reading order, where it
+         sits right after the heading. --}}
     <div role="status" aria-live="polite">
         @if (session('legal-consent.status'))
             <x-wirekit::text>{{ session('legal-consent.status') }}</x-wirekit::text>
@@ -55,11 +60,17 @@
         <x-wirekit::heading :level="3" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</x-wirekit::heading>
         <x-wirekit::stack gap="xs">
             @forelse ($contracts as $item)
+                {{-- The title can be in a language this page is not in — a document published
+                     only in the default locale still binds, and a RETIRED row is deliberately shown
+                     in the language the subject read it in. Without `lang` a screen reader speaks it
+                     with the page's phonetics (WCAG 3.1.2). See the plain stub, and
+                     ContentLanguage for the rule. --}}
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
                 <x-wirekit::text>
                     @if (($item['url'] ?? null) !== null)
-                        <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                        <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
                     @else
-                        {{ $item['title'] }}
+                        <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                     @endif
                     <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                 </x-wirekit::text>
@@ -73,11 +84,17 @@
         <x-wirekit::heading :level="3" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</x-wirekit::heading>
         <x-wirekit::stack gap="xs">
             @forelse ($acknowledgements as $item)
+                {{-- The title can be in a language this page is not in — a document published
+                     only in the default locale still binds, and a RETIRED row is deliberately shown
+                     in the language the subject read it in. Without `lang` a screen reader speaks it
+                     with the page's phonetics (WCAG 3.1.2). See the plain stub, and
+                     ContentLanguage for the rule. --}}
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
                 <x-wirekit::text>
                     @if (($item['url'] ?? null) !== null)
-                        <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                        <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
                     @else
-                        {{ $item['title'] }}
+                        <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                     @endif
                     <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                 </x-wirekit::text>
@@ -91,12 +108,15 @@
         <x-wirekit::heading :level="3" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</x-wirekit::heading>
         <x-wirekit::stack gap="xs">
             @forelse ($consents as $item)
+                {{-- Same as the two blocks above: the title's own language, declared only where it
+                     differs from the page. See ContentLanguage. --}}
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
                 <x-wirekit::stack gap="sm" :wrap="true" class="legal-consent-settings__consent">
                     <x-wirekit::text>
                         @if (($item['url'] ?? null) !== null)
-                            <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                            <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
                         @else
-                            {{ $item['title'] }}
+                            <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                         @endif
                     </x-wirekit::text>
 

@@ -80,14 +80,36 @@ final class LegalChangeSet extends Model
     }
 
     /**
-     * Was this row already frozen before the write being attempted? The stored value may arrive as
-     * the enum or as its backing string depending on how the row was loaded, so both are accepted.
+     * The stored row as the freeze needs to see it: its state, and the columns the refusal names.
+     *
+     * ⚠️ NOT LOADED IS NOT "NOT PUBLISHED", and reading it that way opened the freeze on exactly
+     * the rows it exists to protect. `getOriginal()` is `Arr::get($this->original, $key, $default)`
+     * — on a partially hydrated row, `select(['id', …])`, the key is simply absent and the answer
+     * is null. Null is not `Published`, so the write went through. Partial selects are house style
+     * here, and on SQLite this hook IS the protection: the database triggers cover PostgreSQL and
+     * MySQL only.
+     *
+     * So it asks the database rather than guessing — one read, only on the path that was wrong,
+     * and it fetches what the MESSAGE needs too. Refusing without being able to say which document
+     * was refused is its own kind of unhelpful.
+     *
+     * The comparison at the call site is against the enum alone: both branches here run the value
+     * through the cast, so the backing string never arrives and a second arm for it would be a
+     * branch no run can enter.
+     *
+     * Returns the MODEL whose original attributes are the stored row — this one when it loaded
+     * them, a fresh read otherwise. Uniform on purpose: on a freshly fetched model nothing is
+     * dirty, so `getOriginal()` and the attribute agree, and the caller needs only one accessor.
+     *
+     * @return self|null the stored row, or null when it cannot be found
      */
-    private static function wasPublished(self $set): bool
+    private static function storedRow(self $set): ?self
     {
-        $original = $set->getOriginal('state');
+        if (array_key_exists('state', $set->getRawOriginal())) {
+            return $set;
+        }
 
-        return $original === ChangeSetState::Published || $original === ChangeSetState::Published->value;
+        return self::query()->whereKey($set->getKey())->first(['state', 'key', 'locale', 'version']);
     }
 
     #[Override]
@@ -100,13 +122,23 @@ final class LegalChangeSet extends Model
             // getOriginal(), not the current attribute: the question is whether the row WAS frozen,
             // and reading the incoming value would let an update that also rewrites `state` walk
             // straight past the guard. The database triggers ask OLD.state for the same reason.
-            if (! self::wasPublished($set)) {
+            $stored = self::storedRow($set);
+
+            // A row that cannot be found is REFUSED, not waved through: a guard that cannot decide
+            // must not decide in favor of the write.
+            if ($stored instanceof LegalChangeSet && $stored->getOriginal('state') !== ChangeSetState::Published) {
                 return;
             }
 
-            $version = $set->getOriginal('version');
+            $key = $stored?->getOriginal('key');
+            $locale = $stored?->getOriginal('locale');
+            $version = $stored?->getOriginal('version');
 
-            throw LegalDocumentFrozenException::forChangeSet($set->key, $set->locale, is_string($version) ? $version : '');
+            throw LegalDocumentFrozenException::forChangeSet(
+                is_string($key) ? $key : '?',
+                is_string($locale) ? $locale : '?',
+                is_string($version) ? $version : '',
+            );
         });
 
         self::deleting(function (self $set): void {

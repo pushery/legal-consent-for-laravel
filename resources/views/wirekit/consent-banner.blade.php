@@ -1,8 +1,12 @@
 {{--
     WireKit-native variant of the change banners. Publish with `--tag=legal-consent-wirekit`.
 
-    Built from real `x-wirekit::*` components — needs `pushery/wirekit` >= 2.13 (the `countdown`
-    component landed in 2.13.0) and `@wirekitScripts` in the layout for the live countdown. The
+    Built from real `x-wirekit::*` components — needs `pushery/wirekit` >= 2.26.0, the floor the
+    provider itself applies (`LegalConsentServiceProvider::WIREKIT_MINIMUM`), and `@wirekitScripts`
+    in the layout for the live countdown. The `countdown` component itself landed in 2.13.0, and
+    that is the number this comment used to name — but below 2.26.0 WireKit announces its own
+    screen-reader strings in English whatever locale the page is in, which on a legal deadline is
+    not a cosmetic difference. The
     package's own test suite renders these views against the installed WireKit and fails on any
     component the release lacks, so this never reaches for one the app cannot resolve.
 
@@ -43,9 +47,22 @@
                     </x-wirekit::text>
 
                     @if (! empty($item['enforce_from']))
+                        {{-- ⚠️ `show-seconds="false"`, AND THE DEFAULT IS `true`. The threshold two
+                             lines up is a WEEK and the value on screen is "N days left", so a
+                             seconds place would render a digit nobody reads while re-rendering the
+                             element once a second — a DOM write and a CSS transition per tick, per
+                             open change, on every authenticated page. It is the only continuous
+                             client work this package ships, and it buys nothing here.
+
+                             ⚠️ It does NOT stop the timer, and saying so matters: `countdown.js`
+                             calls `setInterval(…, 1000)` in `init()` unconditionally, whatever this
+                             prop says. What goes away is the rendered change per tick — the string
+                             stops moving, so Alpine writes the same value and the DOM stays put.
+                             The interval itself is upstream's to narrow, and it is filed there. --}}
                         <x-wirekit::countdown
                             :until="$item['enforce_from']"
                             :warn-threshold="$lcWarn"
+                            :show-seconds="false"
                             :expired-text="__('legal-consent::ui.enforced_now')"
                         />
                     @endif
@@ -90,9 +107,13 @@
                     </x-wirekit::text>
 
                     @if (! empty($item['objection_deadline']))
+                        {{-- Same reasoning as the re-consent countdown above, same reason it is
+                             restated rather than referenced: these two blocks are legally distinct
+                             and a reader arriving at one should not have to find the other. --}}
                         <x-wirekit::countdown
                             :until="$item['objection_deadline']"
                             :warn-threshold="$lcWarn"
+                            :show-seconds="false"
                             :expired-text="__('legal-consent::ui.objection_closed')"
                         />
                     @endif

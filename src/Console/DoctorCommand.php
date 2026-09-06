@@ -6,14 +6,18 @@ namespace Pushery\LegalConsent\Console;
 
 use Closure;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\DocumentMatrix;
+use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
 use Pushery\WireKit\WireKitServiceProvider;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
 
 /**
@@ -50,6 +54,7 @@ use Throwable;
  * reverse: an escape hatch over the failing class would hollow this out, and the case that
  * needed one was a false positive, which is fixed rather than made suppressible.
  */
+#[AsCommand(name: 'legal-consent:doctor')]
 final class DoctorCommand extends Command
 {
     protected $signature = 'legal-consent:doctor';
@@ -308,6 +313,73 @@ final class DoctorCommand extends Command
      * operator who wrote `refuse` with a typo believes they are refusing, and the one state they
      * were guarding against goes on being recorded, in an append-only table.
      */
+    /**
+     * The tamper-evidence posture, when it is weaker than the operator is likely to believe.
+     *
+     * Two states, and the second is the one nothing else reports. `verify-ledger` says on every
+     * run what an intact chain does and does not prove — but somebody only reads that after
+     * choosing to run it, and this command is where a posture question belongs.
+     *
+     * @return list<array{0: string, 1: list<string>}> headline plus explanation, per finding
+     */
+    private function tamperEvidenceFindings(): array
+    {
+        // Gated on the FEATURE being on, not on the key being absent. Tamper evidence is opt-in
+        // and off by default, so an unkeyed default installation is a choice rather than a gap —
+        // warning there would fire on every consumer who never asked for the feature, and a
+        // warning that always fires is one nobody reads.
+        //
+        // Switched ON without a key is the state worth naming: the operator asked for the
+        // guarantee and has the weaker half of it.
+        if (! filter_var(config('legal-consent.tamper_evidence', false), FILTER_VALIDATE_BOOL)) {
+            return [];
+        }
+
+        $key = config('legal-consent.tamper_evidence_key');
+        $keyed = is_string($key) && $key !== '';
+        $findings = [];
+
+        if (! $keyed) {
+            $findings[] = [
+                'Tamper evidence is ON, but legal-consent.tamper_evidence_key is not set.',
+                [
+                    '  An actor with table-write access can alter a row and re-chain its successors',
+                    '  into a chain that verifies. Keying the hash closes that path; it does not close',
+                    '  a tail truncation, which needs the head notarized somewhere else.',
+                    '  This is a posture, not a defect — say so deliberately rather than by omission.',
+                ],
+            ];
+        }
+
+        // Only when keyed: unkeyed the root-proof check would not run anyway, and the finding
+        // above already covers that ground. Two warnings for one posture is noise.
+        if ($keyed && ! $this->rootBoundaryStamped()) {
+            $findings[] = [
+                'The chain-root boundary is not stamped, so the root-proof check cannot run.',
+                [
+                    '  A chain opened by a direct INSERT — fresh token, genesis link, no root proof —',
+                    '  is what that check catches, and without the marker `verify-ledger` reports such',
+                    '  a ledger as intact. Measured: the identical row is caught once the marker exists.',
+                    '  Run the package migrations; 000024 stamps the boundary.',
+                ],
+            ];
+        }
+
+        return $findings;
+    }
+
+    /** Whether migration 000024 has stamped the chain-root boundary in this database. */
+    private function rootBoundaryStamped(): bool
+    {
+        if (! Schema::hasTable('legal_ledger_markers')) {
+            return false;
+        }
+
+        return DB::table('legal_ledger_markers')
+            ->where('name', LedgerHashChain::ROOT_BOUNDARY_MARKER)
+            ->exists();
+    }
+
     private function unknownRegistrationMode(): ?string
     {
         // The literal, for the same reason the provider uses one: the config-drift test reads
@@ -328,6 +400,44 @@ final class DoctorCommand extends Command
         return is_scalar($value) ? (string) $value : get_debug_type($value);
     }
 
+    /**
+     * The store the document cache actually reads from, when that store is the database.
+     *
+     * ⚠️ THE ADVICE EXISTED AND ONLY A DOCBLOCK CARRIED IT. `EnforceableDocumentCache` explains
+     * that the enforceable set is asked for four times per request and that on Laravel's default
+     * `database` store each of those is a SELECT against the cache table — so the per-request memo
+     * hands part of its saving straight back. A consumer on a default install is in exactly that
+     * state, has done nothing wrong, and nothing anywhere tells them.
+     *
+     * Reported, never enforced: `database` is a legitimate choice on a small install and on a host
+     * with no Redis, and a doctor that refuses a working configuration is a doctor people stop
+     * running. What it removes is the silence.
+     *
+     * @return array{0: string, 1: string}|null the resolved store name and where it came from
+     */
+    private function databaseBackedDocumentCache(): ?array
+    {
+        $configured = config('legal-consent.cache.store');
+        $store = is_string($configured) && $configured !== '' ? $configured : null;
+        $origin = $store === null ? 'cache.default' : 'legal-consent.cache.store';
+
+        if ($store === null) {
+            $default = config('cache.default');
+            $store = is_string($default) ? $default : null;
+        }
+
+        if ($store === null) {
+            return null;
+        }
+
+        // The DRIVER, not the store name. A store called `database` may be backed by anything, and
+        // a store called `documents` may be backed by the database — reading the name would be a
+        // guess in both directions.
+        $driver = config("cache.stores.{$store}.driver");
+
+        return $driver === 'database' ? [$store, $origin] : null;
+    }
+
     public function handle(): int
     {
         $variantFinding = $this->uiVariantFinding();
@@ -336,6 +446,8 @@ final class DoctorCommand extends Command
         $incoherent = $this->deemedConsentWithoutProof();
         $unpublished = $this->unpublishedCombinations();
         $uncacheable = $this->uncacheableKeys();
+        $tamperFindings = $this->tamperEvidenceFindings();
+        $databaseCache = $this->databaseBackedDocumentCache();
 
         if ($variantFinding !== null) {
             [$headline, $explanation] = $variantFinding;
@@ -363,12 +475,39 @@ final class DoctorCommand extends Command
             $this->newLine();
         }
 
+        foreach ($tamperFindings as [$headline, $explanation]) {
+            $this->newLine();
+            $this->warn($headline);
+
+            foreach ($explanation as $line) {
+                $this->line($line);
+            }
+
+            $this->newLine();
+        }
+
         if ($unknownMode !== null) {
             $this->newLine();
             $this->warn("legal-consent.registration.without_form_fields is '{$unknownMode}', which is not 'warn' or 'refuse'.");
             $this->line('  It falls back to `warn`, so registrations keep working — and that is why this is');
             $this->line('  worth saying: if you meant `refuse`, the one state you were guarding against is');
             $this->line('  still being recorded, into a table nothing can correct afterwards.');
+            $this->newLine();
+        }
+
+        if ($databaseCache !== null) {
+            [$store, $origin] = $databaseCache;
+
+            $this->newLine();
+            $this->warn("The document cache resolves to '{$store}', which is a database-backed store ({$origin}).");
+            $this->line('  The enforceable set is asked for four times in a documented request — once from the');
+            $this->line('  gate middleware, three times from the banner — so on this store that is four SELECTs');
+            $this->line('  against the cache table for one global fact. The per-request memo removes the repeats');
+            $this->line('  within a request and cannot remove the first read.');
+            $this->line('  Point LEGAL_CONSENT_CACHE_STORE at a store that is not the database (redis, memcached,');
+            $this->line('  an in-memory octane store) and the read stops touching it at all.');
+            $this->line('  This is a note, not a fault: `database` works, and on a small install it is a reasonable');
+            $this->line('  choice. It is here because nothing else says it.');
             $this->newLine();
         }
 

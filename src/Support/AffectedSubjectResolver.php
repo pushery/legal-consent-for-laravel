@@ -116,10 +116,10 @@ readonly class AffectedSubjectResolver
             // matches no row of a NOT NULL column — the sweep resolves ZERO subjects and notifies
             // nobody, silently. With tenancy ON that was one un-refreshed model away.
             //
-            // ⚠️ AND THE GUARD STAYS. The v0.5.0 audit (MED-23) asked for this filter to become
-            // unconditional so `tenant_id` could LEAD the affected-subject index, reasoning that a
-            // NOT NULL DEFAULT '' column makes the predicate correct in both modes. Built and
-            // refuted by the suite: with tenancy OFF, a version that belongs to a tenant must still
+            // ⚠️ AND THE GUARD STAYS. Making this filter unconditional so `tenant_id` could LEAD
+            // the affected-subject index looks correct — a NOT NULL DEFAULT '' column makes the
+            // predicate hold in both modes — and it was built that way once. The suite refuted it:
+            // with tenancy OFF, a version that belongs to a tenant must still
             // reach subjects whose consents sit in the shared bucket, because the stamping hook is
             // inert while tenancy is off and the proof row would otherwise be invisible to the very
             // tenant it belongs to. The dispatch suite defends exactly that. So the filter is
@@ -152,8 +152,8 @@ readonly class AffectedSubjectResolver
         // subject_id; migration 000013). Filtering those columns pre-aggregation is equivalent to
         // filtering groups — each group is one (subject_type, subject_id) pair.
         //
-        // ⚠️ THE LINEARITY BELOW IS A SINGLE-TENANT CLAIM, and saying so is the resolution of the
-        // v0.5.0 audit's MED-23 rather than an admission left standing. With tenancy ON, `tenant_id`
+        // ⚠️ THE LINEARITY BELOW IS A SINGLE-TENANT CLAIM, and it is stated rather than left for a
+        // reader to discover from a slow sweep. With tenancy ON, `tenant_id`
         // is a RESIDUAL filter — it is not in the index, so the seek still walks (document_key,
         // locale) in order but reads and discards the rows of every other tenant on the way. The
         // sweep stays linear in the row count for that (document_key, locale), not in the calling
@@ -182,12 +182,12 @@ readonly class AffectedSubjectResolver
                     // comparison, MariaDB reports its own driver name, and an unknown driver may not
                     // compile whereRowValues at all — the index still cuts the constant enormously
                     // there, though that path stays super-linear. An engine-appropriate seek.
-                    // ⚠️ Inverting this branch is an EQUIVALENT mutant, and the paragraph above
-                    // says why: both seek forms resume at the same place and return the same rows.
+                    // ⚠️ INVERTING THIS BRANCH CHANGES NO RESULT, and the paragraph above says
+                    // why: both seek forms resume at the same place and return the same rows.
                     // What the branch decides is whether the sweep stays LINEAR on this engine, and
                     // no assertion about the result can see that. The engine-shape arm covers which
                     // driver gets which form; the paging arms cover that both forms page correctly.
-                    // Neither can kill the mutant, and a test that could would be timing the query.
+                    // Neither can see the difference, and a test that could would be timing the query.
                     if ($this->usesRowValueSeek($driver)) {
                         $query->whereRowValues(['subject_type', 'subject_id'], '>', [$lastType, $lastId]);
                     } else {
@@ -317,7 +317,7 @@ readonly class AffectedSubjectResolver
      */
     private function modelClass(int|string $type): ?string
     {
-        // ⚠️ EQUIVALENT MUTANT, kept for readability rather than for effect. `groupBy` coerces a
+        // ⚠️ NO OUTCOME DEPENDS ON THIS, kept for readability rather than effect. `groupBy` coerces a
         // numeric subject_type to an INT key, which is the case this guard names -- but the check
         // below already answers null for it: measured, `getMorphedModel(123)` does not throw and
         // `is_a(123, Model::class, true)` is false. So RemoveEarlyReturn here changes nothing, and

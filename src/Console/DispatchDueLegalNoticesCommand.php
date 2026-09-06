@@ -25,6 +25,7 @@ use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\NoticeMailConfig;
+use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Version-level sweep: for every active version that owes a notice (active re-consent,
@@ -56,6 +57,7 @@ use Pushery\LegalConsent\Support\NoticeMailConfig;
  * is acceptable, a missed notice is not). A channel that FAILS re-opens the version rather than
  * leaving it stamped — see {@see ReopenVersionOnNoticeFailure}.
  */
+#[AsCommand(name: 'legal-consent:dispatch-notices')]
 final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
 {
     use SkipsWhenTablesAreMissing;

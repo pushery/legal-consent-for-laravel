@@ -41,11 +41,16 @@
             <x-wirekit::heading :level="3" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</x-wirekit::heading>
             <x-wirekit::stack gap="xs">
                 @forelse ($contracts as $item)
+                    {{-- The title's own language, declared only where it differs from the page. A
+                         document published only in the default locale still binds, and a RETIRED
+                         row is deliberately shown in the language the subject read it in
+                         (WCAG 3.1.2). See ContentLanguage. --}}
+                    @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
                     <x-wirekit::text>
                         @if (($item['url'] ?? null) !== null)
-                            <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                            <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
                         @else
-                            {{ $item['title'] }}
+                            <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                         @endif
                         <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                     </x-wirekit::text>
@@ -59,11 +64,16 @@
             <x-wirekit::heading :level="3" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</x-wirekit::heading>
             <x-wirekit::stack gap="xs">
                 @forelse ($acknowledgements as $item)
+                    {{-- The title's own language, declared only where it differs from the page. A
+                         document published only in the default locale still binds, and a RETIRED
+                         row is deliberately shown in the language the subject read it in
+                         (WCAG 3.1.2). See ContentLanguage. --}}
+                    @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
                     <x-wirekit::text>
                         @if (($item['url'] ?? null) !== null)
-                            <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                            <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
                         @else
-                            {{ $item['title'] }}
+                            <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                         @endif
                         <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                     </x-wirekit::text>
@@ -77,12 +87,14 @@
             <x-wirekit::heading :level="3" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</x-wirekit::heading>
             <x-wirekit::stack gap="xs">
                 @forelse ($consents as $item)
+                    {{-- Same rule as the two blocks above. See ContentLanguage. --}}
+                    @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
                     <x-wirekit::stack gap="sm" :wrap="true" class="legal-consent-settings__consent">
                         <x-wirekit::text>
                             @if (($item['url'] ?? null) !== null)
-                                <x-wirekit::link :href="$item['url']" external>{{ $item['title'] }}</x-wirekit::link>
+                                <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
                             @else
-                                {{ $item['title'] }}
+                                <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                             @endif
                         </x-wirekit::text>
 
@@ -119,7 +131,7 @@
                                          control that must not be decorative. An echo IS compiled in
                                          that position and emits what `@js()` emits on a plain
                                          element, which is the form the plain stub uses. --}}
-                                    <x-wirekit::button intent="danger" wire:click="withdraw({{ \Illuminate\Support\Js::from($item['key']) }})">
+                                    <x-wirekit::button intent="danger" wire:click="withdraw({{ \Illuminate\Support\Js::from($item['key']) }})" wire:loading.attr="aria-busy" wire:target="withdraw">
                                         {{ __('legal-consent::ui.withdraw') }}
                                     </x-wirekit::button>
                                 </x-wirekit::alert-dialog.actions>
@@ -144,7 +156,7 @@
                         @elseif (! $item['held'] && $this->allowGrant)
                             {{-- An echo, not `@js()` — see the withdraw button above for why the
                                  directive never compiles in a component tag attribute. --}}
-                            <x-wirekit::button surface="outline" wire:click="grant({{ \Illuminate\Support\Js::from($item['key']) }})" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
+                            <x-wirekit::button surface="outline" wire:click="grant({{ \Illuminate\Support\Js::from($item['key']) }})" wire:loading.attr="aria-busy" wire:target="grant" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
                                 {{ __('legal-consent::ui.grant') }}
                             </x-wirekit::button>
                         @endif

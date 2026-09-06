@@ -15,17 +15,20 @@
              x-wirekit::alert: the alert is itself a role="status" region, and nesting a live region
              in this one would double-announce.
 
-             ⚠️ ASSERTIVE, MATCHING THE PLAIN TWIN, AND IT USED TO BE POLITE. Publishing
-             --tag=legal-consent-wirekit silently downgraded the urgency of an IRREVERSIBLE release
-             announcement, so which stub an application published decided how loudly a screen reader
-             read it. Two twins of one screen may not disagree about that, and between the two the
-             plain one is right: a release cannot be undone.
+             ⚠️ POLITE, MATCHING THE PLAIN TWIN — and this comment used to say the opposite, having
+             raised it to `assertive` so the two would agree. The agreement was right and the
+             direction was wrong: `role="alert"` implies assertive, and this same element also
+             receives focus, so assistive technology says the message twice — once as a live-region
+             interruption, once as the name of the newly focused element. Dropping the focus move
+             instead would send a keyboard user to <body> after an irreversible action (WCAG 2.4.3).
+             The focus move is already immediate, so politeness costs no urgency, and it is what the
+             package's three other status regions have used all along.
 
              tabindex="-1" + x-effect is the focus half. The release is confirmed in a modal that
              closes itself; with nowhere to send focus it falls to <body> (WCAG 2.4.3), leaving a
              keyboard user at the top of the document after an irreversible action. wire:key cannot
              do it — the element is always present and gets morphed, so nothing re-runs. --}}
-        <div role="alert" aria-live="assertive" tabindex="-1" wire:key="lc-status"
+        <div role="status" aria-live="polite" tabindex="-1" wire:key="lc-status"
              x-effect="$wire.statusNonce > 0 && $el.focus()">
             @if ($status !== '')
                 <div wire:key="lc-status-{{ $statusNonce }}"><x-wirekit::text>{{ $status }}</x-wirekit::text></div>
@@ -36,7 +39,7 @@
 
         {{-- tableLabel names the always-focusable responsive scroll region (else it falls back to a
              generic "Scrollable table"). The document cell below is a real row header
-             (header-scope="row", WireKit v2.17.1+) — WCAG 1.3.1: it is what associates every status
+             (header-scope="row") — WCAG 1.3.1: it is what associates every status
              cell in the row with the document it describes, so a screen reader announces "terms" with
              the cell instead of leaving a bare "not written" adrift in a grid.
 
@@ -77,7 +80,7 @@
                         @endforeach
                         <x-wirekit::table.td>
                             @if ($rows[$key]['_release']['ready'])
-                                {{-- The installed alert-dialog (WireKit >= 2.13) exposes a `trigger` slot
+                                {{-- The installed alert-dialog exposes a `trigger` slot
                                      plus a default-slot panel body built from alert-dialog.title /
                                      .description / .actions sub-components — NOT named title/description/
                                      confirm slots, which it silently drops (leaving an empty dialog with no
@@ -115,6 +118,13 @@
                                              compiled in that position and emits exactly what `@js()`
                                              emits on a plain element. The plain stub, whose button is
                                              a real `<button>`, uses the directive. --}}
+                                        {{-- No busy state here, unlike every other action in these stubs:
+                                             `x-on:click="close()"` tears the dialog down in the same click, so
+                                             this button is out of the DOM before the response arrives. An
+                                             `aria-busy` on it would flip on an element nobody can reach. The
+                                             wait is reported by the status region the close reveals, which is
+                                             what the close exists for. The plain twin's release button is not
+                                             in a dialog, stays put, and does carry the pair. --}}
                                         <x-wirekit::button x-on:click="close()" wire:click="releaseAll({{ \Illuminate\Support\Js::from($key) }})">
                                             {{ __('legal-consent::ui.admin_release_all') }}
                                         </x-wirekit::button>

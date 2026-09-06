@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Console;
 use Illuminate\Console\Command;
 use Pushery\LegalConsent\Models\LegalChangeSet;
 use Pushery\LegalConsent\Support\ChangeItemsAuthor;
+use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Read, print or discard the change description for a pending version — the headless path for an
@@ -17,6 +18,7 @@ use Pushery\LegalConsent\Support\ChangeItemsAuthor;
  * something that should be reviewed before it exists. Authoring goes through the facade, where it
  * can live in a migration, a seeder or a release script and be read in a diff.
  */
+#[AsCommand(name: 'legal-consent:changes')]
 final class DescribeChangeCommand extends Command
 {
     protected $signature = 'legal-consent:changes

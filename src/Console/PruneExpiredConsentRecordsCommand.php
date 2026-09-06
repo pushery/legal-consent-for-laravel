@@ -19,6 +19,7 @@ use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\LedgerChainRepair;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use stdClass;
+use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Delete consent records past the retention period (default 3 years, § 31 Abs. 2 OWiG /
@@ -49,6 +50,7 @@ use stdClass;
  * behind the subject's current standing was lawfully announced, which for a deemed acceptance
  * is what makes silence binding at all (§ 308 Nr. 5 lit. b).
  */
+#[AsCommand(name: 'legal-consent:prune')]
 final class PruneExpiredConsentRecordsCommand extends Command implements Isolatable
 {
     use SkipsWhenTablesAreMissing;

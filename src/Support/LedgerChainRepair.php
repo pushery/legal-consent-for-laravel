@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use InvalidArgumentException;
+use stdClass;
 
 /**
  * Re-link a subject's chain after a LAWFUL removal, so the verifier stops reporting one.
@@ -73,6 +74,7 @@ final readonly class LedgerChainRepair
     {
         $this->assertOneToken($rows);
 
+        $token = $this->tokenOf($rows);
         $previousChained = null;
 
         foreach ($rows as $index => $row) {
@@ -85,6 +87,30 @@ final readonly class LedgerChainRepair
             }
 
             $row['prev_record_hash'] = $this->chain->linkFor($previousChained);
+
+            // ⚠️ THE ROW THAT BECOMES THE OPENER NEEDS THE OPENER'S PROOF.
+            //
+            // The writer sets `root_proof` only on the row that opened a chain. A prune that
+            // removes that row makes THIS one the opener — and without the proof the verifier
+            // reports "chain opened after the boundary with no root proof", which is its wording
+            // for a fabricated chain. On a lawful Art. 5(1)(e) deletion.
+            //
+            // It does not heal: the next prune no longer collects this token, because its first
+            // link already points at genesis. Measured before this — the prune printed "re-linked
+            // the tamper chain … so a lawful removal does not read as tampering" and the very next
+            // verify-ledger exited 1, permanently.
+            //
+            // Writing it is not a new kind of write. `root_proof` sits in UNHASHED_COLUMNS beside
+            // `prev_record_hash`, so it changes no row hash, and this method already writes its
+            // sibling. Unkeyed, rootProof() is null and the verifier demands nothing — so the
+            // whole thing is a no-op on an unkeyed ledger rather than a special case.
+            //
+            // Only when absent: the row that was ALWAYS the opener keeps the proof it was written
+            // with, so a repair never rewrites a value it did not have to.
+            if (! $previousChained instanceof stdClass && $token !== null && ($row['root_proof'] ?? null) === null) {
+                $row['root_proof'] = $this->chain->rootProof($token);
+            }
+
             $rows[$index] = $row;
 
             // The hash of the row AS IT WILL BE STORED — taken from the corrected array rather
@@ -95,6 +121,29 @@ final readonly class LedgerChainRepair
         }
 
         return $rows;
+    }
+
+    /**
+     * The one token these rows belong to, or null when none of them names one.
+     *
+     * Read once rather than per row: {@see assertOneToken} has already established there is at
+     * most one, and a row that carries no token is tolerated on purpose (a pre-feature row asserts
+     * nothing). Null therefore means "these rows make no claim about a subject", which is exactly
+     * the case where a root proof would be inventing one.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function tokenOf(array $rows): ?string
+    {
+        foreach ($rows as $row) {
+            $token = $row['subject_token'] ?? null;
+
+            if (is_string($token) && $token !== '') {
+                return $token;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -111,9 +160,8 @@ final readonly class LedgerChainRepair
 
             if (is_string($token) && $token !== '') {
                 // The set is the KEYS; the value is a placeholder and nothing ever reads it, so
-                // the nightly's TrueToFalse mutant on this line is equivalent by construction and
-                // no test can kill it. Written down rather than left on the survivor list, where
-                // it would be re-investigated every time somebody works that list.
+                // `false` here would behave identically. Written down because a value that could
+                // be anything invites somebody to conclude it matters.
                 $tokens[$token] = true;
             }
         }

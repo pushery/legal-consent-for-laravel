@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Append-only consent ledger. One row per acceptance / acknowledgement /
+ * Append-only consent ledger. One row per acceptance / acknowledgment /
  * re-acceptance / withdrawal, carrying DENORMALIZED snapshots so each row proves
  * itself even if the document or the subject is later gone (Art. 5(2), Art. 7(1),
  * EDPB 05/2020 Rz. 108). No updated_at, no UPDATE in the app layer; DELETE stays

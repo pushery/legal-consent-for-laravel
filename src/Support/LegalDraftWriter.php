@@ -25,7 +25,7 @@ use Pushery\LegalConsent\Models\LegalDraft;
  * A second sanitizer anywhere would mean two allowlists — the ledger hashing one form while the
  * page renders another.
  *
- * Exactly three writers of `source_hash`, and the split is deliberate:
+ * Exactly two writers of `source_hash`, and the third method's ABSTENTION is the deliberate part:
  *
  *  - save()             a human typed → review resets to Draft. `source_hash` is NOT touched, so
  *                       editing the SOURCE locale stales every translation by derivation, with

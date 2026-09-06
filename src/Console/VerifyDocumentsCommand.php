@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
+use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Verify the published documents themselves — the companion to `legal-consent:verify-ledger`
@@ -32,6 +33,7 @@ use Pushery\LegalConsent\Models\Scopes\TenantScope;
  *    consent row's `ui_wording_snapshot`. Those rows are append-only and unfixable — surfaced so an
  *    operator knows, never touched.
  */
+#[AsCommand(name: 'legal-consent:verify-documents')]
 final class VerifyDocumentsCommand extends Command
 {
     protected $signature = 'legal-consent:verify-documents';

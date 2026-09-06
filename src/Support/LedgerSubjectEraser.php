@@ -63,12 +63,20 @@ final readonly class LedgerSubjectEraser
      * write columns the table does not have.
      *
      * ⚠️ `notice_body` STAYS, and it is the one that looks like it should go. It holds the exact
-     * message served, which reads like per-person data — it is not: the dispatch renders the proof
-     * ONCE PER VERSION and hands the same text to everyone who received it (`renderProof()` takes
-     * a version and no subject). Clearing it would destroy the durable-medium proof of what was
-     * communicated — the thing that makes a deemed acceptance binding at all (§ 308 Nr. 5 lit. b) —
-     * and remove nothing about the person. If a consumer ever renders that body per subject, this
-     * list is what has to change with it.
+     * message served, which reads like per-person data. It is not — but the reason is narrower than
+     * it used to say here, and the old wording pointed at a method that does not exist.
+     *
+     * `WriteNoticeDeliveryProof::render()` IS handed the subject, and passes it to
+     * `toMail($notifiable)`. What makes the body the same for everyone is that the three shipped
+     * notifications build it from the DOCUMENT alone — title, dates, change items, the § 308 Nr. 5
+     * lit. b warning — and never read the notifiable. So the guarantee lives in those classes, not
+     * in a signature, and a consumer who subclasses `ChangeNotification` and renders per subject
+     * breaks it. That is the case this list has to change for, and it is a seam a consumer is
+     * invited to use.
+     *
+     * Clearing it would destroy the durable-medium proof of what was communicated — the thing that
+     * makes a deemed acceptance binding at all (§ 308 Nr. 5 lit. b) — and, as the code stands,
+     * remove nothing about the person.
      */
     private const array NOTICE_PERSONAL_COLUMNS = ['subject_type', 'subject_id'];
 

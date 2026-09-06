@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Livewire;
 
 use Carbon\CarbonImmutable;
+use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -12,6 +13,8 @@ use Pushery\LegalConsent\Contracts\LegalTextTranslator;
 use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
+use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
+use Pushery\LegalConsent\Exceptions\LegalDocumentUnparsable;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Exceptions\NoticeTimelineInvertedException;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
@@ -99,6 +102,23 @@ final class LegalTextEditor extends Component
      */
     public function mount(string $documentKey, string $locale): void
     {
+        // The same refusal the manager makes at the top of releaseAll(), and for the same reason.
+        // These are mount parameters rather than action arguments, so Livewire does not rewrite
+        // them between requests — but the documentation says to mount this component inside your
+        // own admin routing, and a consumer filling them from a route parameter has made them
+        // client input without being told they had.
+        //
+        // Unchecked, an unknown key reaches the source factory, which has nothing to resolve for
+        // it and raises: a 500 on an admin screen for a request that is simply not a thing.
+        abort_unless(in_array($documentKey, $this->documentKeys(), true), 404);
+
+        // ⚠️ AND THE LOCALE, WHICH IS THE ONE THAT FAILS QUIETLY. releaseDeemed() releases the
+        // locales from the configuration, never the one this screen is editing. Measured: an
+        // editor mounted on `fr` with `locales => ['de']` accepts the text, reports it reviewed,
+        // and then publishes `de` — while telling the operator that »terms« was released. The
+        // text the person just wrote and released is not published, and nothing says so.
+        abort_unless(in_array($locale, $this->locales(), true), 404);
+
         $this->key = $documentKey;
         $this->locale = $locale;
 
@@ -108,7 +128,17 @@ final class LegalTextEditor extends Component
 
     public function save(): void
     {
-        app(LegalDraftWriter::class)->save($this->key, $this->locale, $this->body, $this->actor());
+        try {
+            app(LegalDraftWriter::class)->save($this->key, $this->locale, $this->body, $this->actor());
+        } catch (LegalDocumentTooLarge|LegalDocumentUnparsable $e) {
+            // Both refusals come from the render pipeline and both are the operator's input, so
+            // they belong on the screen rather than in a 500. The unparsable one is the sharper
+            // case: it means the HTML parser stopped part-way, and the alternative to refusing is
+            // freezing a hash over the fragment.
+            $this->setStatus((string) __('legal-consent::ui.admin_status_not_saved', ['reason' => $e->getMessage()]));
+
+            return;
+        }
 
         // A status message after a save, and after the two acts below — WCAG 4.1.3: an action that
         // changes the record must announce its result, not leave a screen reader in silence.
@@ -141,7 +171,16 @@ final class LegalTextEditor extends Component
             return;
         }
 
-        $draft = app(LegalDraftWriter::class)->applyTranslation($this->key, $this->locale, $translated, $source->content_hash, $this->actor());
+        try {
+            $draft = app(LegalDraftWriter::class)->applyTranslation($this->key, $this->locale, $translated, $source->content_hash, $this->actor());
+        } catch (LegalDocumentTooLarge|LegalDocumentUnparsable $e) {
+            // The translator's output travels the same pipeline and is not privileged — a service
+            // that returns something the parser gives up on must not freeze a fragment either.
+            $this->setStatus((string) __('legal-consent::ui.admin_status_not_saved', ['reason' => $e->getMessage()]));
+
+            return;
+        }
+
         $this->body = $draft->body;
         $this->setStatus((string) __('legal-consent::ui.admin_status_machine_translated'));
     }
@@ -170,6 +209,16 @@ final class LegalTextEditor extends Component
      */
     public function releaseDeemed(): void
     {
+        $unreadable = $this->unreadableDates();
+
+        if ($unreadable !== []) {
+            $this->setStatus((string) __('legal-consent::ui.admin_status_deemed_window_rejected', [
+                'reason' => 'unreadable date in '.implode(', ', $unreadable).' — expected YYYY-MM-DD',
+            ]));
+
+            return;
+        }
+
         try {
             $released = app(LegalDocumentReleaser::class)->release(
                 $this->key,
@@ -238,7 +287,85 @@ final class LegalTextEditor extends Component
      */
     private function date(string $value): ?CarbonImmutable
     {
-        return $value === '' ? null : CarbonImmutable::parse($value);
+        return $value === '' ? null : $this->parseDate($value);
+    }
+
+    /**
+     * One date-input value, or null when this screen cannot read it as the date it claims to be.
+     *
+     * ⚠️ NOT CarbonImmutable::parse(), AND NOT createFromFormat ALONE — measured, both let a wrong
+     * date through, in different ways:
+     *
+     * - `parse()` never refuses. 'x' becomes TODAY and '31.02.2026' becomes 2026-03-03, silently.
+     *   And when it does refuse, it throws InvalidFormatException, which extends
+     *   InvalidArgumentException — no catch in releaseDeemed() takes it, so the operator gets a
+     *   500 from a method whose own docblock promises never a fatal.
+     * - `createFromFormat('!Y-m-d', …)` refuses 'x' and '31.02.2026' (by throwing, in Carbon's
+     *   default strict mode) but STILL ROLLS OVER a well-formed impossible date: '2026-02-31'
+     *   comes back as 2026-03-03 and '2026-13-01' as 2027-01-01. Both were measured here, and
+     *   both are the shape a date field actually receives when someone types a day too far.
+     *
+     * So the format parse is the first half and the round-trip is the second: a date that does not
+     * print back as what was typed is a date the input did not mean. The leading `!` resets the
+     * time so two dates written the same way compare the same way.
+     *
+     * This matters because the value is the objection deadline of a deemed-consent release — the
+     * moment silence starts binding people — frozen into an append-only proof row. A wrong one
+     * cannot be corrected, only superseded by a new version.
+     */
+    private function parseDate(string $value): ?CarbonImmutable
+    {
+        try {
+            $date = CarbonImmutable::createFromFormat('!Y-m-d', $value);
+        } catch (InvalidFormatException) {
+            return null;
+        }
+
+        if (! $date instanceof CarbonImmutable || $date->format('Y-m-d') !== $value) {
+            return null;
+        }
+
+        return $date;
+    }
+
+    /**
+     * The date fields carrying something this screen cannot read.
+     *
+     * Returned rather than thrown: the caller turns them into the same status line the package
+     * already uses for a rejected window, so an operator who mistyped a date sees WHICH field —
+     * not a 500, and not a silently dropped value that releases with no deadline at all.
+     *
+     * @return list<string>
+     */
+    private function unreadableDates(): array
+    {
+        $fields = [
+            'announce date' => $this->announceAt,
+            'objection deadline' => $this->objectionDeadline,
+            'effective date' => $this->enforceAt,
+        ];
+
+        $unreadable = [];
+
+        foreach ($fields as $label => $value) {
+            if ($value !== '' && ! $this->parseDate($value) instanceof CarbonImmutable) {
+                $unreadable[] = $label;
+            }
+        }
+
+        return $unreadable;
+    }
+
+    /**
+     * The document keys this instance has, as the manager derives them.
+     *
+     * @return list<string>
+     */
+    private function documentKeys(): array
+    {
+        $documents = config('legal-consent.documents');
+
+        return is_array($documents) ? array_map(strval(...), array_keys($documents)) : [];
     }
 
     /**

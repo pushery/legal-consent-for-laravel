@@ -91,13 +91,6 @@ final class LegalDocument extends Model
     protected $hidden = ['content'];
 
     /**
-     * Keep the legacy boolean `requires_reconsent` and the first-class `notice_mode`
-     * consistent on every insert, whichever the caller sets. `notice_mode` is the source
-     * of truth; a caller that still sets only the boolean (pre-v0.3.0 code) gets the
-     * mapped mode, and a caller that sets only the mode gets the derived boolean — so a
-     * notice-mode query and a legacy `requires_reconsent` query can never disagree.
-     */
-    /**
      * The columns that may legitimately change after a version is published: activation
      * (`is_active`) plus the operational stamps written by the notice/objection sweeps.
      * Everything else on a published row is frozen proof.
@@ -109,6 +102,16 @@ final class LegalDocument extends Model
     #[Override]
     protected static function booted(): void
     {
+        // Keep the legacy boolean `requires_reconsent` and the first-class `notice_mode`
+        // consistent on every insert, whichever the caller sets. `notice_mode` is the source of
+        // truth; a caller that still sets only the boolean (pre-v0.3.0 code) gets the mapped mode,
+        // and a caller that sets only the mode gets the derived boolean — so a notice-mode query
+        // and a legacy `requires_reconsent` query can never disagree.
+        //
+        // ⚠️ This paragraph used to sit ABOVE `MUTABLE_AFTER_PUBLISH`, stacked on a second
+        // docblock. PHP attaches only the LAST one to a declaration, so it was invisible to
+        // reflection and to every editor — describing this hook from a place nothing connects to
+        // it, while the constant it appeared to document said something else entirely.
         self::creating(function (self $document): void {
             $mode = $document->notice_mode;
 

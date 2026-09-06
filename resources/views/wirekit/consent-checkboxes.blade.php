@@ -26,24 +26,46 @@
 <x-wirekit::stack gap="md" class="legal-consent-fields">
     @foreach ($documents as $document)
         @php($field = $document['field'] ?? 'legal_'.$document['key'])
-        <x-wirekit::stack gap="xs" class="legal-consent-field">
+        {{-- Same resolution as the plain stub, and it has to happen here for the same reason: the
+             shape this field takes decides whether `aria-describedby` may point at the link. Where
+             the title appears INSIDE the wording the link sits in the label and is already part of
+             the accessible name, so describing the field by it reads the title twice. --}}
+        @php($wordingLink = ($document['url'] ?? null) !== null
+            ? \Pushery\LegalConsent\Support\ConsentWordingLink::locate($document['wording'], $document['title'] ?? '')
+            : null)
+        {{-- `lang` on the FIELD rather than on the label, because the wording reaches the checkbox
+             as a component prop and there is nowhere else to hang it — and everything inside this
+             wrapper is the document's text anyway: the snapshotted wording and the title link.
+             `hreflang` below is a different statement (the language at the far end of the link)
+             and does not replace it; assistive technology does not switch its voice on `hreflang`.
+             Set only when it differs from the page. See the plain stub, and ContentLanguage. --}}
+        @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document['locale'] ?? null))
+        <x-wirekit::stack gap="xs" class="legal-consent-field" :lang="$lang">
             {{-- The wording is the SNAPSHOTTED consent text — it is what gets recorded in the
                  ledger as what the subject agreed to, so it renders verbatim as the label. --}}
             <x-wirekit::checkbox
                 :name="$field"
                 :id="$field"
                 value="1"
+                {{-- The label prop stays unconditionally: the component renders its SLOT when one
+                     is given and falls back to this otherwise, so the linked form and the plain
+                     form are the same call with and without a slot. --}}
                 :label="$document['wording']"
                 :required="$document['required']"
-                :aria-describedby="($document['url'] ?? null) !== null ? $field.'_link' : null"
+                :aria-describedby="($document['url'] ?? null) !== null && $wordingLink === null ? $field.'_link' : null"
                 {{-- RESTORED from the visitor's own previous submit, never preset by us — see the
                      plain stub for why that distinction is the whole of Planet49 (C-673/17).
                      Passed as null rather than false when there is nothing to restore, so the
                      attribute is dropped instead of rendering as a value. --}}
                 :checked="old($field) ? true : null"
-            />
+            >@if ($wordingLink !== null){{ $wordingLink->before }}<x-wirekit::link
+                    :id="$field.'_link'"
+                    :href="$document['url']"
+                    :hreflang="($document['locale'] ?? '') !== '' ? $document['locale'] : null"
+                    external
+                >{{ $wordingLink->match }}</x-wirekit::link>{{ $wordingLink->after }}@endif</x-wirekit::checkbox>
 
-            @if (($document['url'] ?? null) !== null)
+            @if (($document['url'] ?? null) !== null && $wordingLink === null)
                 {{-- `hreflang` names the language of the linked text, which is not always this
                      page's — a mandatory document published only in the default locale still
                      binds and appears in its own language. See the plain stub. --}}
