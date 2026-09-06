@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // UI strings for the publishable stubs (settings page + grace-period banner). The three legal
-// types stay separately named (contracts / acknowledgements / consents). Informal tone (per Du).
+// types stay separately named ('contracts' / 'acknowledgements' / 'consents'). Informal tone (per Du).
 return [
     'settings_heading' => 'Deine Zustimmungen',
     'contracts_heading' => 'Verträge',
@@ -46,6 +46,9 @@ return [
     'enforced_now' => 'Ab jetzt wirksam',
     'objection_closed' => 'Widerspruchsfrist abgelaufen',
     'submit' => 'Zustimmen und fortfahren',
+    // Shown beside the submit while the request is in flight; the button itself carries
+    // aria-busy, so this is the sighted half of the same state.
+    'working' => 'Einen Moment…',
     'all_current' => 'Alles aktuell — nichts zu tun.',
     // The one state a settings screen must not blur: a new major version is waiting, so
     // this is the invitation to do voluntarily what the gate will otherwise compel.
@@ -90,6 +93,8 @@ return [
     'admin_preview' => 'Vorschau',
     'granted_confirmation' => 'Einwilligung erteilt. Du kannst sie jederzeit widerrufen.',
     'withdrawn_confirmation' => 'Einwilligung widerrufen. Der Widerruf wirkt ab sofort.',
+    'objected_confirmation' => 'Widerspruch erfasst — mit dem Zeitpunkt, zu dem du ihn abgeschickt hast.',
+    'terminated_confirmation' => 'Kündigung erfasst — mit dem Zeitpunkt, zu dem du sie abgeschickt hast.',
     // The refusal a subject can actually reach — a stale page, a hand-built post or a custom
     // stub asking to withdraw something that was never a consent. It states the position
     // without the document key or the internal type: those are the operator's business, and
@@ -105,6 +110,7 @@ return [
     'admin_edit' => 'bearbeiten',
     'admin_edit_for' => ':key bearbeiten (:locale)',
     'admin_status_saved' => 'Gespeichert. Vor der Veröffentlichung ist eine Prüfung erforderlich.',
+    'admin_status_not_saved' => 'Nicht gespeichert — :reason',
     'admin_status_source_not_translated' => 'Die Quellsprache wird verfasst, nicht übersetzt.',
     'admin_status_no_source' => 'Schreibe zuerst den Quelltext — es gibt nichts, wovon übersetzt werden könnte.',
     'admin_status_machine_translated' => 'Maschinell übersetzt. Ein Mensch muss den Text prüfen, bevor er veröffentlicht werden kann.',

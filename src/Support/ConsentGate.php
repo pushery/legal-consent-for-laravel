@@ -26,7 +26,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * Only an ACTIVE re-consent (NoticeMode::ActiveReconsent) hard-blocks. An info-only change
  * takes effect regardless and a deemed-consent change binds by silence (via the objection
  * window, not an access block) — neither gates. This is what keeps a privacy notice, which
- * is info-only, from ever blocking access (WP260 rev.01 Rz. 30-31): forcing acknowledgement
+ * is info-only, from ever blocking access (WP260 rev.01 Rz. 30-31): forcing acknowledgment
  * to regain access would be unlawful pressure.
  */
 final class ConsentGate
@@ -66,10 +66,10 @@ final class ConsentGate
         // append-only and grows for the life of the account, while the enforceable set is a
         // handful of documents — without the filter the per-request cost rises with how long the
         // subject has been a customer, for rows the fold then discards.
-        $held = $this->heldMajorByKey($subject, array_values($enforceable->map(fn (LegalDocument $document): string => $document->key)->all()));
+        $held = $this->currentHoldings($subject, array_values($enforceable->map(fn (LegalDocument $document): string => $document->key)->all()));
 
         return $enforceable
-            ->filter(fn (LegalDocument $document): bool => ($held[$document->key] ?? 0) < $document->major_version)
+            ->filter(fn (LegalDocument $document): bool => ! self::holds($held, $document->key, $document->major_version))
             ->values();
     }
 
@@ -116,10 +116,12 @@ final class ConsentGate
             return $mandatory;
         }
 
-        $held = $this->heldMajorByKey($subject, array_values($mandatory->map(fn (LegalDocument $document): string => $document->key)->all()));
+        $held = $this->currentHoldings($subject, array_values($mandatory->map(fn (LegalDocument $document): string => $document->key)->all()));
 
+        // `! isset` rather than `=== 0`: at major 0 the old spelling called an ACCEPTED document
+        // unaccepted, because the fold stores that holding as the same 0 it uses for "none".
         return $mandatory
-            ->filter(fn (LegalDocument $document): bool => ($held[$document->key] ?? 0) === 0)
+            ->filter(fn (LegalDocument $document): bool => ! isset($held[$document->key]))
             ->values();
     }
 
@@ -138,6 +140,51 @@ final class ConsentGate
     public function heldMajorByKey(Model $subject, ?array $keys = null): array
     {
         return $this->standingFor($subject, $keys)['held'];
+    }
+
+    /**
+     * The majors the subject CURRENTLY holds, keyed by document — a PRESENCE, not a number.
+     *
+     * ⚠️ THE DIFFERENCE TO {@see heldMajorByKey()} ONLY BECOMES VISIBLE AT MAJOR 0, AND THERE IT IS
+     * TOTAL. That map uses 0 as its sentinel for "holds nothing", so a document published as
+     * `0.9.0` folds to the same 0 as a withdrawal and as a key nobody ever touched. Every
+     * comparison of the form `($held[$key] ?? 0) >= $document->major_version` is then true for
+     * EVERYONE — the gate for that document is off, the settings screen tells a person they hold a
+     * contract they never saw, and `outstanding` is false so it is never offered to them either.
+     * Measured before this existed: a subject with an empty ledger read as `held`.
+     *
+     * A holding is a presence. This map carries a key only while an ACCEPTING row is the subject's
+     * latest state for it. The discriminator is `standingFor()['version']`, which the fold clears
+     * to null on an ending action and which is NOT NULL in the schema (`document_version` is
+     * `string(20)`) — so null there means "no live accepting row" and can mean nothing else.
+     *
+     * `heldMajorByKey()` keeps its published contract (0 on ending) because consumers read it; the
+     * two derive from the same single fold, so they cannot drift.
+     *
+     * @param  list<string>|null  $keys  restrict the read to these document keys
+     * @return array<string, int>
+     */
+    public function currentHoldings(Model $subject, ?array $keys = null): array
+    {
+        $standing = $this->standingFor($subject, $keys);
+
+        return array_intersect_key(
+            $standing['held'],
+            array_filter($standing['version'], static fn (?string $version): bool => $version !== null),
+        );
+    }
+
+    /**
+     * Whether the subject currently holds $key at or above $major.
+     *
+     * The one place the comparison lives. Nine call sites used to spell it out with `?? 0`, and
+     * every one of them was wrong for a `0.x` document in the same way.
+     *
+     * @param  array<string, int>  $holdings  from {@see currentHoldings()}
+     */
+    public static function holds(array $holdings, string $key, int $major): bool
+    {
+        return isset($holdings[$key]) && $holdings[$key] >= $major;
     }
 
     /**
@@ -201,9 +248,9 @@ final class ConsentGate
             $key = $row->document_key;
             $actionValue = $row->action;
 
-            // Both columns are declared strings and PDO hands them back as strings, so the
-            // BooleanAndToBooleanOr mutant here is equivalent -- no row this query can return
-            // makes the two operands disagree. It stays because the fold below indexes by `$key`
+            // Both columns are declared strings and PDO hands them back as strings, so `&&` and
+            // `||` would behave identically here -- no row this query can return makes the two
+            // operands disagree. It stays because the fold below indexes by `$key`
             // and matches on `$actionValue`, and a narrowing at the point of use is what lets the
             // rest of this loop be read without checking the schema.
             if (is_string($key) && is_string($actionValue)) {

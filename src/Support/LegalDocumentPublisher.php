@@ -497,8 +497,7 @@ final readonly class LegalDocumentPublisher
             // nothing that passed before now fails for a reason nobody declared.
             $minDays = $this->minLeadDays($mode, $regime, $key);
 
-            // ⚠️ `> 0` VS `>= 0` IS UNOBSERVABLE HERE, which is why the nightly reports
-            // GreaterToGreaterOrEqual on this line as a survivor that cannot be killed. With
+            // ⚠️ `> 0` VS `>= 0` IS UNOBSERVABLE HERE, so no test can tell the two apart. With
             // `$minDays === 0` the comparison reduces to `announce > enforce`, and that is false
             // in every state this branch can be reached in:
             //
@@ -555,6 +554,12 @@ final readonly class LegalDocumentPublisher
 
         // PHP compares equal-length lists element by element, so this is a (major, minor,
         // patch) tuple comparison: true only when the incoming version is strictly lower.
+        //
+        // The casts cannot change a value today — the model casts all three columns to `integer`,
+        // so they arrive as ints whatever the driver returned. They are kept as the local statement
+        // of what this comparison requires, because the alternative reads as "these are already
+        // ints" and that is a fact about a `casts()` entry three files away. Drop one there and the
+        // tuple silently starts comparing a string against an int.
         $current = [(int) $active->major_version, (int) $active->minor_version, (int) $active->patch_version];
         $incoming = [$rendered->majorVersion, $rendered->minorVersion, $rendered->patchVersion];
 
@@ -622,7 +627,7 @@ final readonly class LegalDocumentPublisher
         }
 
         // A privacy notice is information: it is acknowledged, never gated. Blocking access
-        // to force acknowledgement is unlawful pressure (WP260 rev.01 Rz. 30-31); a material
+        // to force acknowledgment is unlawful pressure (WP260 rev.01 Rz. 30-31); a material
         // privacy change is info-only.
         if ($mode === NoticeMode::ActiveReconsent && $type === DocumentType::PrivacyNotice) {
             throw new RuntimeException(

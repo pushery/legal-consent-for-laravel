@@ -1,7 +1,7 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
     "name": "pushery/legal-consent-for-laravel",
-    "description": "Court-proof, versioned legal consent for Laravel — GDPR-correct separation of contract acceptance, notice acknowledgement, and consent, with an append-only audit trail.",
+    "description": "Court-proof, versioned legal consent for Laravel — GDPR-correct separation of contract acceptance, notice acknowledgment, and consent, with an append-only audit trail.",
     "keywords": [
         "laravel"
     ],
@@ -40,7 +40,7 @@
     },
     "suggest": {
         "laravel/fortify": "Record registration consent inside the account-creating request (Way A).",
-        "livewire/livewire": "Opt-in reactive UI: the ReConsentForm and ConsentSettings inline components (publish the plain or WireKit-flavored views).",
+        "livewire/livewire": "Opt-in reactive UI: the ReConsentForm, ConsentSettings, LegalTextManager and LegalTextEditor components (publish the plain or WireKit-flavored views). The last two are the only in-app way to author and release a legal text.",
         "phpunit/phpunit": "Assertions for Consent::fake(): the in-memory double calls PHPUnit\\Framework\\Assert, so every assert*() method needs PHPUnit on the class path. Any Pest or PHPUnit test toolchain already brings it.",
         "pushery/wirekit": "WireKit-native view variant, 2.26.0 or newer: publish --tag=legal-consent-wirekit, or leave ui.variant on its 'auto' default and the themed views are served as soon as the package is installed."
     },

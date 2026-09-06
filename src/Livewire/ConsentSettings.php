@@ -121,7 +121,7 @@ final class ConsentSettings extends Component
      * place.
      *
      * It refuses anything that is not a voluntary consent, and that refusal is the point rather
-     * than a safety net: a contract or an acknowledgement is accepted where its full text is
+     * than a safety net: a contract or an acknowledgment is accepted where its full text is
      * presented, because the acceptance must be informed (Art. 7(1)), and a toggle beside a title
      * is not a presentation of a contract.
      */
@@ -190,6 +190,14 @@ final class ConsentSettings extends Component
                 ConsentContext::fromRequest(request(), ConsentMethod::SettingsToggle),
                 $this->locale,
             ));
+
+            // The status is not decoration on this action. It writes an APPEND-ONLY ledger row, and
+            // the control that triggered it is usually gone from the next render — so with nothing
+            // announced, the honest reading of the screen is that nothing happened. The natural
+            // response is a second click, and a second click writes a second row that cannot be
+            // taken back. WCAG 4.1.3 is the same requirement from the other side.
+
+            $this->setStatus((string) __('legal-consent::ui.objected_confirmation'));
         }
     }
 
@@ -206,6 +214,9 @@ final class ConsentSettings extends Component
                 ConsentContext::fromRequest(request(), ConsentMethod::SettingsToggle),
                 $this->locale,
             ));
+
+            // Same reason as object() above: an irreversible write nobody is told about.
+            $this->setStatus((string) __('legal-consent::ui.terminated_confirmation'));
         }
     }
 

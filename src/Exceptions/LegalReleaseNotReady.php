@@ -23,11 +23,11 @@ final class LegalReleaseNotReady extends RuntimeException
         public readonly array $blocking,
     ) {
         // No array_values() on the second argument: with MORE THAN ONE array, array_map ignores
-        // every key and walks the arrays positionally, so wrapping it changes nothing. Keeping the
-        // call made an equivalent mutant — one no test can ever kill, because removing it is
-        // indistinguishable from leaving it. Deleting the dead call removes the mutant instead of
-        // fighting it. Verified across associative, reordered, numeric-string-keyed, empty and
-        // single-entry arrays: identical in all five.
+        // every key and walks the arrays positionally, so wrapping it changes nothing. The call
+        // was therefore dead — removing it is indistinguishable from leaving it, so no test could
+        // ever have told the difference — and it was deleted rather than kept as decoration.
+        // Verified across associative, reordered, numeric-string-keyed, empty and single-entry
+        // arrays: identical in all five.
         $detail = implode('; ', array_map(
             // ->value, not ->label(): this message is for a developer reading a log or a stack
             // trace, and the backing value is the same English sentence it always was. The

@@ -19,9 +19,10 @@ use Illuminate\Support\ServiceProvider;
  *
  * What that withholds is not cosmetic:
  *
- *  - `legal-consent-backfill` writes into the host `users` table. Its no-op guard does not help the
- *    people it needs to: an installation WITHOUT `terms_accepted_at` is exactly the one the
- *    migration skips, and one WITH those columns — a v1 app — is the case the scenario is about.
+ *  - `legal-consent-backfill` READS the host `users` table and writes what it finds into
+ *    `legal_consents`. Its no-op guard does not help the people it needs to: an installation
+ *    WITHOUT `terms_accepted_at` is exactly the one the migration skips, and one WITH those
+ *    columns — a v1 app — is the case the scenario is about.
  *  - `legal-consent-users-cache` DROPS columns from `users`.
  *  - `legal-consent-wirekit` maps component-based twins onto the plain stubs' own destinations,
  *    which is wrong for an application that does not have the component library installed. (It

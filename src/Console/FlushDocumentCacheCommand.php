@@ -7,11 +7,13 @@ namespace Pushery\LegalConsent\Console;
 use Illuminate\Console\Command;
 use Pushery\LegalConsent\Content\LegalSourceRenderer;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
+use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Flush the cached, rendered legal documents. Rarely needed (the cache
  * self-invalidates on a content change), but useful after a config or driver change.
  */
+#[AsCommand(name: 'legal-consent:cache-flush')]
 final class FlushDocumentCacheCommand extends Command
 {
     protected $signature = 'legal-consent:cache-flush {key? : Only this document key} {locale? : Only this locale}';

@@ -73,7 +73,7 @@ class LegalChangeInformational extends ChangeNotification
     }
 
     /**
-     * A privacy notice uses the acknowledgement wording (zur Kenntnis nehmen, never zustimmen);
+     * A privacy notice uses the acknowledgment wording (zur Kenntnis nehmen, never zustimmen);
      * a contract (or any other type routed here) uses the contract wording.
      */
     private function basis(): string

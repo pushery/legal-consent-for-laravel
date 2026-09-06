@@ -273,7 +273,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         // customer, for rows it then threw away.
         $held = new ConsentGate()->heldMajorByKey($notifiable, [$this->document->key]);
 
-        return ($held[$this->document->key] ?? 0) < $this->document->major_version;
+        return ! ConsentGate::holds($held, $this->document->key, $this->document->major_version);
     }
 
     /**

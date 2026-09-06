@@ -4,7 +4,7 @@
 
       1. Verträge (contracts)          — read-only; you end them by canceling the account,
                                          not by "withdrawing" (Art. 6(1)(b)).
-      2. Zur Kenntnis genommen         — read-only acknowledgements (Art. 13).
+      2. Zur Kenntnis genommen         — read-only acknowledgments (Art. 13).
       3. Einwilligungen (consents)     — each withdrawable in one click, as easily as it was
                                          given (Art. 7(3)).
 
@@ -31,9 +31,21 @@
 <section class="legal-consent-settings">
     <h2>{{ __('legal-consent::ui.settings_heading') }}</h2>
 
-    {{-- The result of the redirect the bundled withdrawal route answers with. Both regions are
-         ALWAYS in the DOM: a live region inserted together with its text is not announced, which
-         is the whole reason the Livewire views keep theirs present too. --}}
+    {{-- The result of the redirect the bundled withdrawal route answers with.
+
+         ⚠️ ON THIS PATH THE LIVE REGION ANNOUNCES NOTHING, and the comment here used to claim the
+         opposite. Withdrawal is POST -> Redirect -> GET, so the message arrives in a FRESH
+         document together with the region that carries it — and a live region present at page
+         load never announces, because there is no mutation for it to report. The "always in the
+         DOM" reasoning is true of the Livewire twins, where the component morphs the region in
+         place, and it does not transfer here. The banner stub already says this correctly about
+         itself; these two lines were the copy that did not.
+
+         What the roles still buy is the reading order: the message sits directly after the
+         heading, and `status` / `alert` name it when the subject reaches or navigates to it. That
+         is what a JS-free stub can promise; moving focus would need a script this stub has by
+         design. Both are rendered even when empty rather than wrapped in an `@if`, which costs an
+         empty element and keeps this stub a single unconditional shape. --}}
     <p role="status" aria-live="polite">{{ session('legal-consent.status') }}</p>
     <p role="alert">{{ session('legal-consent.error') }}</p>
 
@@ -49,11 +61,19 @@
         <h3 id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h3>
         <ul>
             @forelse ($contracts as $contract)
+                {{-- The title can be in a language this page is not in: a mandatory document
+                     published only in the default locale still binds, and a RETIRED row is shown in
+                     the language the subject read it in — deliberately, see RetiredHoldings. Without
+                     `lang` a screen reader speaks it with the page's phonetics (WCAG 3.1.2).
+                     `hreflang` says the same thing about the far end of the link and does not
+                     replace it: assistive technology does not switch its voice on `hreflang`.
+                     Both omitted rather than emptied when the entry carries no locale. --}}
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($contract['locale'] ?? null))
                 <li>
                     @if (($contract['url'] ?? null) !== null)
-                        <a href="{{ $contract['url'] }}" target="_blank" rel="noopener noreferrer">{{ $contract['title'] }}</a>
+                        <a href="{{ $contract['url'] }}"@if ($lang !== null) hreflang="{{ $lang }}" lang="{{ $lang }}"@endif target="_blank" rel="noopener noreferrer">{{ $contract['title'] }}</a>
                     @else
-                        {{ $contract['title'] }}
+                        <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $contract['title'] }}</span>
                     @endif
                     (v{{ $contract['version'] }}) @if (($contract['outstanding'] ?? false)) <strong>{{ __('legal-consent::ui.action_required') }}</strong> @endif</li>
             @empty
@@ -66,11 +86,19 @@
         <h3 id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</h3>
         <ul>
             @forelse ($acknowledgements as $acknowledgement)
+                {{-- The title can be in a language this page is not in: a mandatory document
+                     published only in the default locale still binds, and a RETIRED row is shown in
+                     the language the subject read it in — deliberately, see RetiredHoldings. Without
+                     `lang` a screen reader speaks it with the page's phonetics (WCAG 3.1.2).
+                     `hreflang` says the same thing about the far end of the link and does not
+                     replace it: assistive technology does not switch its voice on `hreflang`.
+                     Both omitted rather than emptied when the entry carries no locale. --}}
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($acknowledgement['locale'] ?? null))
                 <li>
                     @if (($acknowledgement['url'] ?? null) !== null)
-                        <a href="{{ $acknowledgement['url'] }}" target="_blank" rel="noopener noreferrer">{{ $acknowledgement['title'] }}</a>
+                        <a href="{{ $acknowledgement['url'] }}"@if ($lang !== null) hreflang="{{ $lang }}" lang="{{ $lang }}"@endif target="_blank" rel="noopener noreferrer">{{ $acknowledgement['title'] }}</a>
                     @else
-                        {{ $acknowledgement['title'] }}
+                        <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $acknowledgement['title'] }}</span>
                     @endif
                     (v{{ $acknowledgement['version'] }}) @if (($acknowledgement['outstanding'] ?? false)) <strong>{{ __('legal-consent::ui.action_required') }}</strong> @endif</li>
             @empty
@@ -83,11 +111,19 @@
         <h3 id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</h3>
         <ul>
             @forelse ($consents as $consent)
+                {{-- The title can be in a language this page is not in: a mandatory document
+                     published only in the default locale still binds, and a RETIRED row is shown in
+                     the language the subject read it in — deliberately, see RetiredHoldings. Without
+                     `lang` a screen reader speaks it with the page's phonetics (WCAG 3.1.2).
+                     `hreflang` says the same thing about the far end of the link and does not
+                     replace it: assistive technology does not switch its voice on `hreflang`.
+                     Both omitted rather than emptied when the entry carries no locale. --}}
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($consent['locale'] ?? null))
                 <li>
                     @if (($consent['url'] ?? null) !== null)
-                        <a href="{{ $consent['url'] }}" target="_blank" rel="noopener noreferrer">{{ $consent['title'] }}</a>
+                        <a href="{{ $consent['url'] }}"@if ($lang !== null) hreflang="{{ $lang }}" lang="{{ $lang }}"@endif target="_blank" rel="noopener noreferrer">{{ $consent['title'] }}</a>
                     @else
-                        <span>{{ $consent['title'] }}</span>
+                        <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $consent['title'] }}</span>
                     @endif
                     {{-- The double opt-in's middle state: entered but not yet confirmed reads as
                          never entered otherwise, and the screen would say nothing at all. --}}

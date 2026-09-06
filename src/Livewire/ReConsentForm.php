@@ -277,6 +277,14 @@ final class ReConsentForm extends Component
 
         if ($subject instanceof Model) {
             $this->guardedTransition(fn () => app(ConsentManager::class)->object($subject, $key, ConsentContext::fromRequest(request(), $this->method), $this->locale));
+
+            // The status is not decoration on this action. It writes an APPEND-ONLY ledger row, and
+            // the control that triggered it is usually gone from the next render — so with nothing
+            // announced, the honest reading of the screen is that nothing happened. The natural
+            // response is a second click, and a second click writes a second row that cannot be
+            // taken back. WCAG 4.1.3 is the same requirement from the other side.
+
+            $this->setStatus((string) __('legal-consent::ui.objected_confirmation'));
         }
     }
 
@@ -288,6 +296,9 @@ final class ReConsentForm extends Component
 
         if ($subject instanceof Model) {
             $this->guardedTransition(fn () => app(ConsentManager::class)->terminate($subject, $key, ConsentContext::fromRequest(request(), $this->method), $this->locale));
+
+            // Same reason as object() above: an irreversible write nobody is told about.
+            $this->setStatus((string) __('legal-consent::ui.terminated_confirmation'));
         }
     }
 

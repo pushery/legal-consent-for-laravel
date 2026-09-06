@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // UI strings for the publishable stubs (settings page + grace-period banner). The three
-// legal kinds stay separately labeled (contracts / acknowledgements / consents). Informal (je).
+// legal kinds stay separately labeled ('contracts' / 'acknowledgements' / 'consents'). Informal (je).
 return [
     'settings_heading' => 'Jouw toestemmingen',
     'contracts_heading' => 'Contracten',
@@ -46,6 +46,9 @@ return [
     'enforced_now' => 'Nu van kracht',
     'objection_closed' => 'Bezwaartermijn verstreken',
     'submit' => 'Accepteren en doorgaan',
+    // Shown beside the submit while the request is in flight; the button itself carries
+    // aria-busy, so this is the sighted half of the same state.
+    'working' => 'Even geduld…',
     'all_current' => 'Alles is up-to-date — niets te doen.',
     // The one state a settings screen must not blur: a new major version is waiting, so
     // this is the invitation to do voluntarily what the gate will otherwise compel.
@@ -90,6 +93,8 @@ return [
     'admin_preview' => 'Voorbeeld',
     'granted_confirmation' => 'Toestemming gegeven. Je kunt die op elk moment intrekken.',
     'withdrawn_confirmation' => 'Toestemming ingetrokken. Het gaat direct in.',
+    'objected_confirmation' => 'Bezwaar vastgelegd, met het tijdstip waarop je het hebt verstuurd.',
+    'terminated_confirmation' => 'Opzegging vastgelegd, met het tijdstip waarop je die hebt verstuurd.',
     // The refusal a subject can actually reach — a stale page, a hand-built post or a custom
     // stub asking to withdraw something that was never a consent. It states the position
     // without the document key or the internal type: those are the operator's business, and
@@ -105,6 +110,7 @@ return [
     'admin_edit' => 'bewerken',
     'admin_edit_for' => ':key bewerken (:locale)',
     'admin_status_saved' => 'Opgeslagen. Voor publicatie is een controle vereist.',
+    'admin_status_not_saved' => 'Niet opgeslagen — :reason',
     'admin_status_source_not_translated' => 'De brontaal wordt geschreven, niet vertaald.',
     'admin_status_no_source' => 'Schrijf eerst de brontekst — er is niets om uit te vertalen.',
     'admin_status_machine_translated' => 'Machinaal vertaald. Iemand moet de tekst controleren voordat die gepubliceerd kan worden.',

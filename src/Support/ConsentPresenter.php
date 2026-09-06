@@ -123,12 +123,18 @@ final readonly class ConsentPresenter
             // `held` / `outstanding`.
             $offersWithdrawal = $withdrawUrl !== null
                 && $document->type->isWithdrawable()
-                && ($held[$document->key] ?? 0) > 0;
+                && isset($held[$document->key]);
 
             $entry = [
                 'key' => $document->key,
                 'title' => $document->title,
                 'version' => $document->version,
+                // The column was already selected and then dropped here, so no settings view could
+                // declare the language of a row it renders. It is not a formality: RetiredHoldings
+                // orders by locale precisely so a retired row appears in the language the subject
+                // read it in, which puts a German title on an English page BY DESIGN. See
+                // {@see ContentLanguage} for what the views do with it.
+                'locale' => $document->locale,
                 // ⚠️ THIS READS `true` FOR EVERYONE WHEN `major_version` IS 0, and the two lines
                 // below have the mirror of the same problem. `?? 0` cannot tell three states
                 // apart — never acted, withdrawn (the fold drops an ENDING action to 0), and
@@ -141,11 +147,11 @@ final readonly class ConsentPresenter
                 // at 1, and the draft writer accepts `0.9.0`, so it is reachable through the
                 // ordinary publish path rather than only by hand.
                 //
-                // NOT fixed here on purpose, and the three surviving mutants on these lines are
-                // deliberately NOT labeled equivalent: repairing it changes whether real people are
+                // NOT fixed here on purpose, and the three lines below are deliberately NOT
+                // written off as unobservable: repairing this changes whether real people are
                 // blocked on an upgrade, which is a decision about enforcement rather than a
                 // refactor. It is written up for the maintainer with the measurement.
-                'held' => ($held[$document->key] ?? 0) >= $document->major_version,
+                'held' => ConsentGate::holds($held, $document->key, $document->major_version),
                 // `held === false` covers two different positions, and only one of them asks the
                 // subject for anything: never accepted at all, versus a NEW MAJOR waiting. The
                 // second one ends at the gate — the screen where it could have been done
@@ -163,7 +169,7 @@ final readonly class ConsentPresenter
                 // a holding, not to start one.
                 'outstanding' => ! $isRetired
                     && ! $document->requires_explicit_optin
-                    && ($held[$document->key] ?? 0) < $document->major_version,
+                    && ! ConsentGate::holds($held, $document->key, $document->major_version),
                 'retired' => $isRetired,
                 'withdrawable' => $document->type->isWithdrawable(),
                 // Null unless the host configured `document_url`. A settings screen on which the

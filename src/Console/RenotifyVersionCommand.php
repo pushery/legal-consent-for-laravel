@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
+use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Clear a version's dispatch watermark so the next sweep considers it again.
@@ -27,6 +28,7 @@ use Pushery\LegalConsent\Models\Scopes\TenantScope;
  * framework prints its own version instead and exits successfully, which makes the mistake look
  * like a command that ran and did nothing.
  */
+#[AsCommand(name: 'legal-consent:renotify')]
 final class RenotifyVersionCommand extends Command
 {
     protected $signature = 'legal-consent:renotify

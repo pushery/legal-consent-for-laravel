@@ -30,11 +30,17 @@
         <h3 id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h3>
         <ul>
             @forelse ($contracts as $item)
+                {{-- The title's own language, declared only where it differs from the page: a
+                     document published only in the default locale still binds, and a RETIRED row is
+                     deliberately shown in the language the subject read it in. Without `lang` a
+                     screen reader speaks it with the page's phonetics (WCAG 3.1.2). `hreflang` is a
+                     statement about the far end of the link and does not replace it. --}}
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
                 <li>
                     @if (($item['url'] ?? null) !== null)
-                        <a href="{{ $item['url'] }}" target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
+                        <a href="{{ $item['url'] }}"@if ($lang !== null) hreflang="{{ $lang }}" lang="{{ $lang }}"@endif target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
                     @else
-                        {{ $item['title'] }}
+                        <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $item['title'] }}</span>
                     @endif
                     (v{{ $item['version'] }}) @if (($item['outstanding'] ?? false)) <strong class="legal-consent-action-required">{{ __('legal-consent::ui.action_required') }}</strong> @endif
                 </li>
@@ -48,11 +54,17 @@
         <h3 id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</h3>
         <ul>
             @forelse ($acknowledgements as $item)
+                {{-- The title's own language, declared only where it differs from the page: a
+                     document published only in the default locale still binds, and a RETIRED row is
+                     deliberately shown in the language the subject read it in. Without `lang` a
+                     screen reader speaks it with the page's phonetics (WCAG 3.1.2). `hreflang` is a
+                     statement about the far end of the link and does not replace it. --}}
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
                 <li>
                     @if (($item['url'] ?? null) !== null)
-                        <a href="{{ $item['url'] }}" target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
+                        <a href="{{ $item['url'] }}"@if ($lang !== null) hreflang="{{ $lang }}" lang="{{ $lang }}"@endif target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
                     @else
-                        {{ $item['title'] }}
+                        <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $item['title'] }}</span>
                     @endif
                     (v{{ $item['version'] }}) @if (($item['outstanding'] ?? false)) <strong class="legal-consent-action-required">{{ __('legal-consent::ui.action_required') }}</strong> @endif
                 </li>
@@ -66,14 +78,20 @@
         <h3 id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</h3>
         <ul>
             @forelse ($consents as $item)
+                {{-- The title's own language, declared only where it differs from the page: a
+                     document published only in the default locale still binds, and a RETIRED row is
+                     deliberately shown in the language the subject read it in. Without `lang` a
+                     screen reader speaks it with the page's phonetics (WCAG 3.1.2). `hreflang` is a
+                     statement about the far end of the link and does not replace it. --}}
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
                 <li>
                     @if (($item['url'] ?? null) !== null)
-                        <a href="{{ $item['url'] }}" target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
+                        <a href="{{ $item['url'] }}"@if ($lang !== null) hreflang="{{ $lang }}" lang="{{ $lang }}"@endif target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
                     @else
-                        <span>{{ $item['title'] }}</span>
+                        <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $item['title'] }}</span>
                     @endif
                     @if ($item['held'] && $item['withdrawable'])
-                        <button type="button" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $item['title']]) }}" wire:click="withdraw(@js($item['key']))">
+                        <button type="button" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $item['title']]) }}" wire:click="withdraw(@js($item['key']))" wire:loading.attr="aria-busy" wire:target="withdraw">
                             {{ __('legal-consent::ui.withdraw') }}
                         </button>
                     {{-- A document retired out from under a holding: `is_active = false` does not
@@ -93,7 +111,7 @@
                          a screen reader's button list of five identical "Give" entries names
                          nothing. --}}
                     @elseif (! $item['held'] && $this->allowGrant)
-                        <button type="button" aria-label="{{ __('legal-consent::ui.grant_for', ['title' => $item['title']]) }}" wire:click="grant(@js($item['key']))">
+                        <button type="button" aria-label="{{ __('legal-consent::ui.grant_for', ['title' => $item['title']]) }}" wire:click="grant(@js($item['key']))" wire:loading.attr="aria-busy" wire:target="grant">
                             {{ __('legal-consent::ui.grant') }}
                         </button>
                     @endif

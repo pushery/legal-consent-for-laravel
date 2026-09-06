@@ -121,8 +121,9 @@ fall back to the source — so every legal page renders empty with no error and 
 registered document with no published version.
 
 **When the application deletes an account, call `Consent::forget($user)`.** It strips
-`subject_type`, `subject_id`, `ip_address`, `user_agent` and `request_id` from both ledgers and
-keeps everything that proves the consent, including the `subject_token` pseudonym that still ties
+`subject_type`, `subject_id`, `ip_address`, `user_agent` and `request_id` from the consent ledger,
+and `subject_type` and `subject_id` from the notice ledger — the other three are not columns there.
+It keeps everything that proves the consent, including the `subject_token` pseudonym that still ties
 the two together (Art. 17(3)(b)/(e)). It returns counts per ledger.
 
 Do NOT write this by hand and do NOT try to clear those columns with an update — both ledgers
@@ -144,9 +145,9 @@ Do NOT add a flag for this; it follows from the source.
 `--all` changes nothing only while the sources are unchanged. Once a text is edited and its version
 bumped, the next deploy publishes it as `editorial` — the one notice mode that tells nobody, chosen
 by a script instead of a person. `--only-missing` never reads a combination that already has an
-active version, so it cannot classify a change. It also treats a source with no text yet as a named
-skip rather than a failure, which is what a draft-backed document looks like before an editor has
-written it.
+active version, so it cannot classify a change. That is the whole of the difference — a source with
+no text yet is a named skip in both invocations, because whether an empty source is a defect is a
+property of the source and not of the flag.
 
 **Enforce re-consent.** Add the middleware to the routes that require an accepted contract:
 
@@ -212,9 +213,9 @@ acceptance in an interstitial shown after authentication and before first use, a
 
 **Drop in the optional UI** (needs `livewire/livewire`. The WireKit-native views are served
 automatically when `pushery/wirekit` ≥ 2.26.0 is installed — `legal-consent.ui.variant` defaults to
-`auto`; publish `legal-consent-wirekit` only to customize them. Below 2.17.1 the admin editor loses
-everything typed into it, and below 2.26.0 WireKit's own screen-reader strings are announced in
-English on a German consent surface, which is why the floor is part of the automatic choice):
+`auto`; publish `legal-consent-wirekit` only to customize them. Below 2.26.0 WireKit announces its
+own screen-reader strings in English on a German consent surface, which is why that floor is part
+of the automatic choice rather than advice):
 
 ```blade
 <livewire:legal-consent.reconsent-form />
@@ -296,12 +297,18 @@ $held = $user->hasAcceptedCurrentLegalMany(['terms', 'privacy']);
 **Alert on the scheduled sweeps.** Bind `Pushery\LegalConsent\Contracts\LegalConsentMonitor` (the
 default binding discards everything) and each sweep calls `heartbeat(string $task, int $processed)`.
 Three task names are the ordinary beat — `legal-consent:prune`, `legal-consent:dispatch-notices`,
-`legal-consent:close-objection-windows` — and two are sent ONLY when a run failed:
-`legal-consent:dispatch-notices.held`, a notice still owed because the audience exceeded
-`notifications.max_recipients_per_run`, and `legal-consent:close-objection-windows.unproved`,
-subjects that could not be deemed for want of a delivered § 308 Nr. 5 lit. b warning. **Alert on
-those two by name.** The ordinary heartbeat is sent BEFORE the failure branch, so a run that held a
-legally required notice back still beats as usual with the count it managed.
+`legal-consent:close-objection-windows` — and three are sent ONLY when a run failed:
+
+- `legal-consent:dispatch-notices.deficient` — a version went out WITHOUT its mandatory notice
+  content. § 308 Nr. 5 lit. b makes the silence warning a validity condition, so silence cannot bind
+  against those notices at all: the wording has to be fixed and the notice re-sent.
+- `legal-consent:dispatch-notices.held` — a notice still owed because the audience exceeded
+  `notifications.max_recipients_per_run`.
+- `legal-consent:close-objection-windows.unproved` — subjects that could not be deemed for want of a
+  delivered § 308 Nr. 5 lit. b warning.
+
+**Alert on those three by name.** The ordinary heartbeat is sent BEFORE the failure branch, so a run
+that held a legally required notice back still beats as usual with the count it managed.
 
 ## Testing your own app against it
 

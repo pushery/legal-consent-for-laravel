@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Illuminate\Support\Str;
 use Pushery\LegalConsent\Enums\ChangeItemType;
 use Pushery\LegalConsent\Enums\ChangeSetState;
 use Pushery\LegalConsent\Models\LegalChangeItem;
@@ -113,14 +114,14 @@ final class PendingChangeItems
         $set->forceFill([
             'key' => $this->key,
             'locale' => $this->locale,
-            // Also an equivalent mutant, for a second reason: the model uses `BelongsToTenant`,
+            // Also unobservable, for a second reason: the model uses `BelongsToTenant`,
             // which stamps the tenant on create. With tenancy off the column's '' default agrees
             // as well, so its absence is unobservable in both configurations. Kept because the
             // lookup above filters on this column and the write should say what it writes.
             'tenant_id' => $tenantId,
-            // ⚠️ EQUIVALENT MUTANT, and the schema is why: `version` DEFAULTS to '' in migration
-            // 000016 and DRAFT_VERSION is '', so removing this line stores the same value. No test
-            // can kill the nightly's RemoveArrayItem on it. It stays because the row is looked up
+            // ⚠️ THIS LINE CHANGES NOTHING TODAY, and the schema is why: `version` DEFAULTS to ''
+            // in migration 000016 and DRAFT_VERSION is '', so removing it stores the same value.
+            // It stays because the row is looked up
             // BY this sentinel two statements above, and a default that silently agrees with a
             // constant is a coincidence worth writing down rather than relying on.
             'version' => LegalChangeSet::DRAFT_VERSION,
@@ -171,7 +172,15 @@ final class PendingChangeItems
      */
     private function plain(string $value): string
     {
-        return trim((string) preg_replace('/\s+/u', ' ', strip_tags($value)));
+        // ⚠️ `Str::squish`, NOT a hand-rolled `\s+` collapse — the difference is a class of
+        // character `\s` does not cover. Measured: a zero-width space survives the hand-rolled
+        // form and leaves a line that is non-empty and INVISIBLE; `Str::squish` also strips it,
+        // along with the soft hyphen and the byte-order mark (`Str::INVISIBLE_CHARACTERS`).
+        //
+        // It matters here more than in ordinary prose: this text goes into a change notice whose
+        // body is HASHED into an append-only proof row. A line nobody can see, certified as what
+        // was communicated, is the failure this package exists to prevent.
+        return Str::squish(strip_tags($value));
     }
 
     private function plainOrNull(?string $value): ?string

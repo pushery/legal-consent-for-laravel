@@ -24,7 +24,7 @@ return [
     | The documents this app manages. Each has a source (see `sources` below) and
     | a legal_basis — the load-bearing distinction:
     |   - contract        Art. 6(1)(b): mandatory, blocking, NOT withdrawable.
-    |   - acknowledgement  Art. 13:      mandatory, "zur Kenntnis genommen", never
+    |   - 'acknowledgement'  Art. 13:    mandatory, "zur Kenntnis genommen", never
     |                                    "ich willige ein".
     |   - consent          Art. 6(1)(a): a real consent — voluntary, NEVER required
     |                                    (Kopplungsverbot Art. 7(4)), withdrawable.
@@ -489,7 +489,7 @@ return [
     | Warning: this default is safe only because a registration form validated the tick.
     |
     | For a CONSENT document the recorder checks the submitted field itself and
-    | skips the key when it is absent. For a CONTRACT or an ACKNOWLEDGEMENT it
+    | skips the key when it is absent. For a CONTRACT or an ACKNOWLEDGMENT it
     | does not: those are mandatory, RegistrationRules makes them required, and
     | re-checking here would be a second truth about the same thing. So the
     | recorder accepts them unconditionally and relies on the form.
@@ -543,7 +543,7 @@ return [
         'close_objection_windows' => true,
 
         // OFF by default, unlike its two siblings: this sweep DELETES. Turning it on is how the
-        // `retention_after_end` period above stops being a statement and starts being enforced —
+        // `retention_after_end` period stops being a statement and starts being enforced —
         // until then nothing ever removes an expired record. Opt in deliberately, once.
         'prune' => false,
     ],

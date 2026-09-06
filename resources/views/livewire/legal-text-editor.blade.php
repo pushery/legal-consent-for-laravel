@@ -19,13 +19,13 @@
         <textarea id="legal-text-body" wire:model="body" rows="20"></textarea>
 
         <div>
-            <button type="button" wire:click="save">{{ __('legal-consent::ui.admin_save') }}</button>
+            <button type="button" wire:click="save" wire:loading.attr="aria-busy" wire:target="save">{{ __('legal-consent::ui.admin_save') }}</button>
 
             @unless ($isSource)
-                <button type="button" wire:click="translate">{{ __('legal-consent::ui.admin_translate', ['locale' => $sourceLocale]) }}</button>
+                <button type="button" wire:click="translate" wire:loading.attr="aria-busy" wire:target="translate">{{ __('legal-consent::ui.admin_translate', ['locale' => $sourceLocale]) }}</button>
             @endunless
 
-            <button type="button" wire:click="markReviewed">{{ __('legal-consent::ui.admin_mark_reviewed') }}</button>
+            <button type="button" wire:click="markReviewed" wire:loading.attr="aria-busy" wire:target="markReviewed">{{ __('legal-consent::ui.admin_mark_reviewed') }}</button>
         </div>
 
         {{-- RELEASE WITH AN OBJECTION WINDOW — a deemed-consent change (§ 308 Nr. 5 BGB).
@@ -60,12 +60,17 @@
                 {{ __('legal-consent::ui.admin_deemed_keeps_unmodified') }}
             </label>
 
-            <button type="button" wire:click="releaseDeemed">{{ __('legal-consent::ui.admin_deemed_submit') }}</button>
+            <button type="button" wire:click="releaseDeemed" wire:loading.attr="aria-busy" wire:target="releaseDeemed">{{ __('legal-consent::ui.admin_deemed_submit') }}</button>
         </div>
 
         <h2>{{ __('legal-consent::ui.admin_preview') }}</h2>
         {{-- The preview renders the already-sanitized stored body — the exact bytes a publish freezes,
              so what you see here is what the subject will see and the ledger will prove. --}}
-        <div aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">{!! $preview !!}</div>
+        {{-- ⚠️ `role="region"`, BECAUSE A BARE `<div>` CANNOT BE NAMED. A div with no role maps to
+             `generic`, and ARIA forbids naming a generic element — so browsers and assistive
+             technology DISCARD the label, and `admin_preview_label` reached nobody in any of the
+             seven locales it is translated into. The preview is a block of rendered legal HTML
+             with headings of its own; without a landmark there is nothing to say where it starts. --}}
+        <div role="region" aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">{!! $preview !!}</div>
     </section>
 </div>

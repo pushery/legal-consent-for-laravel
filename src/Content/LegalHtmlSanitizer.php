@@ -7,6 +7,8 @@ namespace Pushery\LegalConsent\Content;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
+use LibXMLError;
+use Pushery\LegalConsent\Exceptions\LegalDocumentUnparsable;
 
 /**
  * DOM-based HTML sanitizer for legal text destined for a `{!! !!}` sink.
@@ -47,6 +49,11 @@ final class LegalHtmlSanitizer
 
     public function sanitize(string $html): string
     {
+        // A short-circuit, not a correctness guard, and worth the distinction: measured, the parse
+        // path answers `''` for empty and for whitespace-only input too, so removing this changes
+        // no output — it only builds a DOMDocument to arrive at the same string. Nothing can hold
+        // it from outside, and nothing should try; what must not happen is someone reading it as
+        // THE empty-input contract and moving the behavior here.
         if (trim($html) === '') {
             return '';
         }
@@ -58,8 +65,27 @@ final class LegalHtmlSanitizer
             '<?xml encoding="utf-8"?><body>'.$html.'</body>',
             LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
         );
+        $errors = libxml_get_errors();
         libxml_clear_errors();
         libxml_use_internal_errors($previous);
+
+        // ⚠️ THE ERRORS USED TO BE THROWN AWAY UNREAD, AND ONE CLASS OF THEM MEANS LOST CONTENT.
+        //
+        // Measured: 260 nested elements hit libxml's hard depth limit of 256 and the parser STOPS.
+        // 500 004 bytes of input came back as 6 375 — no error, no warning, no log — and
+        // `content_hash` is taken over the sanitizer's output, so the append-only row then claims
+        // that fragment is the text somebody agreed to. The operator published something else.
+        //
+        // Clearing them is right for the rest, and that is why this keys on the LEVEL rather than
+        // on a message: unclosed tags, stray closing tags, unquoted attributes, entity smuggling,
+        // CDATA, processing instructions and NUL bytes each produce either nothing or a RECOVERABLE
+        // error and still parse in full — measured, all of them. Recovering from messy HTML is what
+        // this parser is for. A FATAL error is the one that says it gave up.
+        $fatal = array_find($errors, static fn (LibXMLError $error): bool => $error->level === LIBXML_ERR_FATAL);
+
+        if ($fatal instanceof LibXMLError) {
+            throw LegalDocumentUnparsable::because(trim($fatal->message));
+        }
 
         // The wrapper guarantees a body; the fallback only satisfies the type checker.
         $found = $dom->getElementsByTagName('body')->item(0);
@@ -94,8 +120,8 @@ final class LegalHtmlSanitizer
         // Strip comments, processing instructions, and CDATA sections; keep plain text.
         // A CDATA section serializes its content VERBATIM (unescaped), so it must never
         // reach the {!! !!} sink — defense in depth on top of removing raw-text elements.
-        // ⚠️ ONLY THE COMMENT ENTRY IS REACHABLE, and the other two are equivalent mutants for that
-        // reason. Measured on the HTML path this sanitizer uses: libxml folds both a processing
+        // ⚠️ ONLY THE COMMENT ENTRY IS REACHABLE, so removing either of the other two would change
+        // nothing. Measured on the HTML path this sanitizer uses: libxml folds both a processing
         // instruction and a CDATA section into COMMENT nodes, so no input produces an XML_PI_NODE
         // or an XML_CDATA_SECTION_NODE, and removing either name from the list below changes
         // nothing. The arm above that says it strips a processing instruction passes through the
@@ -115,13 +141,13 @@ final class LegalHtmlSanitizer
     {
         // ⚠️ NO TEST CAN KILL THE `strtolower` HERE, and that is a fact about the PARSER, not a
         // gap. Measured: libxml's HTML parser already lowercases `tagName`, so `<P>` arrives as
-        // `p` and the mutant that unwraps this call cannot change any outcome reachable through
-        // parse() -- the only caller.
+        // `p` and unwrapping this call cannot change any outcome reachable through
+        // sanitize() -- the only caller.
         //
         // It stays because the guarantee belongs to the parser, not to this function, and the two
         // are one edit apart: loading the same string as XML preserves case, and then every tag
-        // silently stops matching a lowercase allowlist. The nightly reports it as a survivor for
-        // as long as this comment is true.
+        // silently stops matching a lowercase allowlist. So removing this call changes nothing
+        // observable -- for exactly as long as that stays true, and not one edit longer.
         //
         // Note what this means for the arm named "matches a dangerous tag regardless of how it is
         // capitalised": the guarantee it asserts is real and worth having, but it passes with this
@@ -165,8 +191,8 @@ final class LegalHtmlSanitizer
 
         foreach (iterator_to_array($element->attributes ?? []) as $attribute) {
             // Same as the tag above, same reason: measured, libxml lowercases attribute names on
-            // the HTML path, so `HREF` arrives as `href` and unwrapping this call is an equivalent
-            // mutant. Note the failure direction if it were ever reachable -- an unrecognized name
+            // the HTML path, so `HREF` arrives as `href` and unwrapping this call would change
+            // nothing. Note the failure direction if it were ever reachable -- an unrecognized name
             // is DROPPED a few lines down, so the case would fail safe rather than open, which is
             // why this is a robustness guard and not a security control.
             $name = strtolower($attribute->nodeName);
@@ -213,8 +239,8 @@ final class LegalHtmlSanitizer
             // The `rtrim` makes the group index unobservable: capture group 1 excludes the colon
             // and group 0 includes it, so after trimming a trailing colon the two are IDENTICAL for
             // every input this pattern can match -- verified across `https://a`, `MAILTO:x@y`,
-            // `javascript:alert(1)` and `h+t.t-p1:x`. That is why the nightly's DecrementInteger on
-            // the index survives, and why it always will.
+            // `javascript:alert(1)` and `h+t.t-p1:x`. Which index is read is therefore not
+            // observable from outside this function, and will not become observable.
             //
             // Both are kept rather than picking one: the group is the scheme by intent, and the
             // rtrim makes the line correct even if the pattern is later widened to capture the

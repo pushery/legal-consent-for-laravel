@@ -17,7 +17,23 @@
     @else
         <form wire:submit="submit">
             @foreach ($pending as $document)
-                <div class="legal-consent-field">
+                {{-- The wording can be in a language this page is not in: the resolver falls back
+                     to `fallback_locale` and then `default_locale`, so a mandatory document a
+                     visitor's language does not have appears in its own. Without `lang` a screen
+                     reader speaks it with the page's phonetics — on the one screen the subject
+                     cannot leave without agreeing (Art. 7(1)/(2), WCAG 3.1.2). See
+                     ContentLanguage; null when it matches the page, and nothing is emitted. --}}
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document->locale))
+                {{-- ⚠️ `wire:key` ON THE ONE LOOP THAT SHRINKS AND CARRIES STATE. Measured: `pending`
+                     goes [marketing, privacy, terms] → [privacy, terms] after a submit, so the node
+                     at index 0 changes identity from `legal_marketing` to `legal_privacy`. And the
+                     server renders NO `checked` attribute — a ticked box lives only as a DOM
+                     property, so there is nothing in the markup for a keyless morph to reset it
+                     with. A box that stayed ticked across that swap is a pre-ticked checkbox the
+                     subject did not tick in this round, which is the Planet49 condition (C-673/17)
+                     this file's own header cites.
+                     Keyed on the document, not on the index — the index is precisely what moves. --}}
+                <div class="legal-consent-field" wire:key="lc-pending-{{ $document->key }}"@if ($lang !== null) lang="{{ $lang }}"@endif>
                     <label for="legal_{{ $document->key }}">
                         <input
                             type="checkbox"
@@ -40,7 +56,17 @@
                 </div>
             @endforeach
 
-            <button type="submit">{{ __('legal-consent::ui.submit') }}</button>
+            {{-- ⚠️ `aria-busy`, NOT `disabled`, AND THE FOCUS IS WHY. `wire:loading.attr="disabled"` is the
+                 common idiom, but it blurs the very button the subject just activated, so focus falls to
+                 <body> for the whole in-flight window — the same WCAG 2.4.3 failure the status region's
+                 focus move exists to prevent, except here it would happen on EVERY request rather than
+                 in one edge case. `aria-busy="true"` keeps the control focusable and in the tab order and
+                 still reports the wait. The WireKit twins carry the identical pair, passed through
+                 x-wirekit::button's attribute bag, so a publish flag cannot change how a wait is reported. --}}
+            <button type="submit" wire:loading.attr="aria-busy" wire:target="submit">{{ __('legal-consent::ui.submit') }}</button>
+            {{-- The sighted half of the same state. It is on this screen and no other because this is
+                 the one a subject cannot leave without acting, so an unexplained pause is worst here. --}}
+            <span wire:loading wire:target="submit" class="legal-consent-busy">{{ __('legal-consent::ui.working') }}</span>
         </form>
     @endif
 </div>

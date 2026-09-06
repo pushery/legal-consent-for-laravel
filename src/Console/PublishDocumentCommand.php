@@ -13,6 +13,7 @@ use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
 
 /**
@@ -40,6 +41,7 @@ use Throwable;
  * at all. Use it wherever the caller is a script; keep the bare `--all` for a human who has looked
  * at the diff.
  */
+#[AsCommand(name: 'legal-consent:publish')]
 final class PublishDocumentCommand extends Command
 {
     protected $signature = 'legal-consent:publish
@@ -176,7 +178,7 @@ final class PublishDocumentCommand extends Command
                 try {
                     $document = $this->publish($publisher, $mode, $key, $locale);
                 } catch (LegalDocumentNotFound $e) {
-                    if ($onlyMissing && $this->awaitsAuthoring($publisher, $key)) {
+                    if ($this->awaitsAuthoring($publisher, $key)) {
                         $textless[] = "{$key} ({$locale}): {$e->getMessage()}";
 
                         continue;
@@ -203,12 +205,12 @@ final class PublishDocumentCommand extends Command
         // Name the unchanged count rather than printing a line per combination. On the second run
         // — the normal case in a deploy — every combination is unchanged, and a wall of "nothing
         // happened" lines trains people to stop reading the ones that matter.
-        // The "without text" segment appears only where it can be non-zero. Under the bare --all a
-        // textless source is a failure, so printing a permanently-zero count would be noise — and
-        // it would change a line that deploy logs are grepped for, for no information.
-        $this->line($onlyMissing
-            ? "{$published} published, {$unchanged} already current, ".count($textless).' without text, '.count($failures).' failed.'
-            : "{$published} published, {$unchanged} already current, ".count($failures).' failed.');
+        // ⚠️ THE "WITHOUT TEXT" SEGMENT IS UNCONDITIONAL, AND IT USED TO DEPEND ON THE FLAG.
+        // The reasoning for that was sound while a textless source was a failure under the bare
+        // --all: a permanently-zero count is noise, and it would move a line deploy logs are
+        // grepped for. Both halves of the premise are gone — the count can be non-zero here now,
+        // and a summary whose SHAPE depends on a modifier is the harder thing to grep anyway.
+        $this->line("{$published} published, {$unchanged} already current, ".count($textless).' without text, '.count($failures).' failed.');
 
         // Skipped is not silent. A count alone would let a document sit unpublished for months
         // behind a green deploy — the same shape as the empty legal page this command exists to
@@ -264,7 +266,7 @@ final class PublishDocumentCommand extends Command
                 try {
                     $rendered = $this->preview($publisher, $mode, $key, $locale);
                 } catch (LegalDocumentNotFound $e) {
-                    if ($onlyMissing && $this->awaitsAuthoring($publisher, $key)) {
+                    if ($this->awaitsAuthoring($publisher, $key)) {
                         $textless++;
                         $this->warn("  ? {$key} ({$locale}) — no text yet: {$e->getMessage()}");
 

@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // UI strings for the publishable stubs (settings page + grace-period banner). The three
-// legal kinds stay separately labeled (contracts / acknowledgements / consents). Informal (tu).
+// legal kinds stay separately labeled ('contracts' / 'acknowledgements' / 'consents'). Informal (tu).
 return [
     'settings_heading' => 'Tes consentements',
     'contracts_heading' => 'Contrats',
@@ -46,6 +46,9 @@ return [
     'enforced_now' => 'En vigueur maintenant',
     'objection_closed' => "Délai d'opposition expiré",
     'submit' => 'Accepter et continuer',
+    // Shown beside the submit while the request is in flight; the button itself carries
+    // aria-busy, so this is the sighted half of the same state.
+    'working' => 'Un instant…',
     'all_current' => 'Tout est à jour — rien à faire.',
     // The one state a settings screen must not blur: a new major version is waiting, so
     // this is the invitation to do voluntarily what the gate will otherwise compel.
@@ -90,6 +93,8 @@ return [
     'admin_preview' => 'Aperçu',
     'granted_confirmation' => 'Consentement donné. Tu peux le retirer à tout moment.',
     'withdrawn_confirmation' => 'Consentement retiré. Il prend effet immédiatement.',
+    'objected_confirmation' => 'Opposition enregistrée, avec l\'heure à laquelle tu l\'as envoyée.',
+    'terminated_confirmation' => 'Résiliation enregistrée, avec l\'heure à laquelle tu l\'as envoyée.',
     // The refusal a subject can actually reach — a stale page, a hand-built post or a custom
     // stub asking to withdraw something that was never a consent. It states the position
     // without the document key or the internal type: those are the operator's business, and
@@ -105,6 +110,7 @@ return [
     'admin_edit' => 'modifier',
     'admin_edit_for' => 'Modifier :key (:locale)',
     'admin_status_saved' => 'Enregistré. Une relecture est nécessaire avant de pouvoir publier ce texte.',
+    'admin_status_not_saved' => 'Non enregistré — :reason',
     'admin_status_source_not_translated' => 'La langue source est rédigée, pas traduite.',
     'admin_status_no_source' => 'Écris d\'abord le texte source — il n\'y a rien à traduire.',
     'admin_status_machine_translated' => 'Traduit automatiquement. Une personne doit le relire avant toute publication.',

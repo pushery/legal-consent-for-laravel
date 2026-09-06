@@ -12,7 +12,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * Builds registration validation rules + messages for the documents that are ACTUALLY PUBLISHED.
  * Each becomes a `legal_{key}` field. Mandatory documents (contract/notice) must be `accepted`; a
  * real consent is NEVER required (Kopplungsverbot Art. 7(4)) — it is `nullable|boolean`.
- * Acknowledgement messages say "zur Kenntnis genommen", never "eingewilligt" (EDPB 05/2020 Rz. 122).
+ * Acknowledgment messages say "zur Kenntnis genommen", never "eingewilligt" (EDPB 05/2020 Rz. 122).
  *
  * The resolution deliberately MIRRORS {@see RegistrationConsentRecorder}: the configured keys
  * intersected with the active rows, falling back to the default-locale version for a MANDATORY

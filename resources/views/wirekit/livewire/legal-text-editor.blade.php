@@ -4,7 +4,7 @@
 
     Single root element. Needs `pushery/wirekit` + `@wirekitScripts` in the layout.
 
-    The editor binds with a plain `wire:model` (WireKit v2.17.1+ routes it to the inner textarea).
+    The editor binds with a plain `wire:model`, which WireKit routes to the inner textarea.
     It still lives behind `wire:ignore` — that is WireKit's documented integration for this
     component, not a leftover of the old binding workaround.
 --}}
@@ -66,13 +66,13 @@
         </div>
 
         <x-wirekit::button.group>
-            <x-wirekit::button wire:click="save">{{ __('legal-consent::ui.admin_save') }}</x-wirekit::button>
+            <x-wirekit::button wire:click="save" wire:loading.attr="aria-busy" wire:target="save">{{ __('legal-consent::ui.admin_save') }}</x-wirekit::button>
 
             @unless ($isSource)
-                <x-wirekit::button surface="outline" wire:click="translate">{{ __('legal-consent::ui.admin_translate', ['locale' => $sourceLocale]) }}</x-wirekit::button>
+                <x-wirekit::button surface="outline" wire:click="translate" wire:loading.attr="aria-busy" wire:target="translate">{{ __('legal-consent::ui.admin_translate', ['locale' => $sourceLocale]) }}</x-wirekit::button>
             @endunless
 
-            <x-wirekit::button surface="outline" wire:click="markReviewed">{{ __('legal-consent::ui.admin_mark_reviewed') }}</x-wirekit::button>
+            <x-wirekit::button surface="outline" wire:click="markReviewed" wire:loading.attr="aria-busy" wire:target="markReviewed">{{ __('legal-consent::ui.admin_mark_reviewed') }}</x-wirekit::button>
         </x-wirekit::button.group>
 
         {{-- RELEASE WITH AN OBJECTION WINDOW — the WireKit twin of the plain stub's form.
@@ -92,11 +92,16 @@
             <x-wirekit::toggle wire:model="offersTermination" :label="__('legal-consent::ui.admin_deemed_offers_termination')" />
             <x-wirekit::toggle wire:model="keepsUnmodified" :label="__('legal-consent::ui.admin_deemed_keeps_unmodified')" />
 
-            <x-wirekit::button wire:click="releaseDeemed">{{ __('legal-consent::ui.admin_deemed_submit') }}</x-wirekit::button>
+            <x-wirekit::button wire:click="releaseDeemed" wire:loading.attr="aria-busy" wire:target="releaseDeemed">{{ __('legal-consent::ui.admin_deemed_submit') }}</x-wirekit::button>
         </x-wirekit::stack>
 
         <x-wirekit::heading :level="2">{{ __('legal-consent::ui.admin_preview') }}</x-wirekit::heading>
         {{-- The already-sanitized stored bytes — a true fixpoint of what a publish will freeze. --}}
-        <x-wirekit::card aria-label="{{ __('legal-consent::ui.admin_preview') }}">{!! $preview !!}</x-wirekit::card>
+        {{-- `as="section"` for the same reason as the plain twin: `x-wirekit::card` renders a
+             `<div>` by default, a div with no role maps to `generic`, and ARIA forbids naming a
+             generic element — the label was discarded. And the label key is the one the plain twin
+             uses: this said `admin_preview`, the heading's own text, so the region would have
+             announced the same words as the heading right above it. --}}
+        <x-wirekit::card as="section" aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">{!! $preview !!}</x-wirekit::card>
     </x-wirekit::stack>
 </div>

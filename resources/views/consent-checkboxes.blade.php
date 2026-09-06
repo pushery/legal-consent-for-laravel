@@ -35,16 +35,52 @@
         $errorMessage = ($errors ?? null)?->first($field);
         $hasError = ($errorMessage ?? '') !== '';
 
+        // The document NAME inside the sentence becomes the link where it appears there; the
+        // separate link below is the fallback for a wording the title is not part of. Resolved
+        // HERE rather than at the markup, because `aria-describedby` has to know which of the two
+        // shapes this field takes — see below.
+        $wordingLink = ($document['url'] ?? null) !== null
+            ? \Pushery\LegalConsent\Support\ConsentWordingLink::locate($document['wording'], $document['title'] ?? '')
+            : null;
+
         // ONE `aria-describedby`, assembled here rather than written twice. Two of them on the
         // same element are not two descriptions: the browser keeps the first and drops the rest,
         // so an error target appended next to the document link would silently take the link away.
         // The error comes first — why the field is flagged is said before what it points at.
+        //
+        // ⚠️ AND THE LINK IS ONLY A DESCRIPTION WHEN IT SITS OUTSIDE THE LABEL. Where the title
+        // appears inside the wording, the link is INSIDE the `<label>` and therefore already part
+        // of the accessible NAME — measured: name "Ich akzeptiere die Allgemeinen
+        // Geschäftsbedingungen.", description "Allgemeine Geschäftsbedingungen", a substring of the
+        // name. A screen reader then says the document title twice in a row, on every checkbox of
+        // a registration page. The fallback branch below renders the link as a sibling, and there
+        // it is a real description; the WireKit twin has always had it that way.
         $describedBy = trim(
             ($hasError ? $field.'_error' : '')
             .' '
-            .(($document['url'] ?? null) !== null ? $field.'_link' : '')
+            .(($document['url'] ?? null) !== null && $wordingLink === null ? $field.'_link' : '')
         );
     @endphp
+    {{-- ⚠️ THIS STUB SHIPS NO CSS, AND THIS IS THE SCREEN WHERE THAT COSTS THE MOST. Every class
+         here is a BEM hook with no declarations behind it, so whether these controls are usable on
+         a phone is the host's decision — and the box below is a NATIVE checkbox. Measured in a real
+         browser with no CSS applied: the input is 13 px and the `<label>` wrapping it is 18 px.
+         BOTH are under the 24x24 CSS-pixel minimum (WCAG 2.5.8 AA), on the one screen a visitor
+         cannot get past without hitting it.
+
+         ⚠️ SO THE LABEL DOES NOT RESCUE THIS ON ITS OWN, and an earlier draft of this note assumed
+         it did. The standard's "enclosed" exception is about the label's box — and by default that
+         box is 18 px, not 24. The padding below is required, not merely convenient.
+
+         When you skin these fields: give the interactive control a >= 24px hit target — the
+         easiest route is padding on the `<label>`, which already wraps the input and so extends
+         the target rather than adding a second one — and any text input a font-size >= 16px,
+         because iOS zooms the page on focus below that and a zoomed registration form loses the
+         submit button off-screen.
+
+         ⚠️ THE SAME PARAGRAPH LIVED ONLY IN THE ADMIN EDITOR STUB, which has one textarea and two
+         buttons and is seen by an operator on a desk. Here there is one touch target per document,
+         it is the first view most consumers publish, and it had no guidance at all. --}}
     <div class="legal-consent-field">
         <label for="{{ $field }}">
             <input
@@ -72,10 +108,15 @@
                  Null when the title does not appear in the sentence at all (`die AGB` against
                  `Allgemeine Geschäftsbedingungen`) — then the separate link below stays, because a
                  text that cannot be reached breaks the clickwrap requirement (§ 305 Abs. 2 BGB). --}}
-            @php($wordingLink = ($document['url'] ?? null) !== null
-                ? \Pushery\LegalConsent\Support\ConsentWordingLink::locate($document['wording'], $document['title'] ?? '')
-                : null)
-            <span>@if ($wordingLink !== null){{ $wordingLink->before }}<a id="{{ $field }}_link" href="{{ $document['url'] }}"@if (($document['locale'] ?? '') !== '') hreflang="{{ $document['locale'] }}"@endif target="_blank" rel="noopener">{{ $wordingLink->match }}</a>{{ $wordingLink->after }}@else{{ $document['wording'] }}@endif</span>
+            {{-- ⚠️ `lang` ON THE SPAN, NOT ONLY `hreflang` ON THE LINK. `hreflang` names the
+                 language at the far end of the link; assistive technology does not switch its
+                 voice on it. The WORDING is the passage a screen reader has to pronounce, and it
+                 is the sentence the entire consent rests on — spoken with the page's phonetics it
+                 is not something a subject can be said to have understood (Art. 7(1), WCAG 3.1.2).
+                 Set only when it differs from the page, and omitted rather than emptied when the
+                 item carries no locale: `lang=""` is itself a claim. --}}
+            @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document['locale'] ?? null))
+            <span @if ($lang !== null) lang="{{ $lang }}"@endif>@if ($wordingLink !== null){{ $wordingLink->before }}<a id="{{ $field }}_link" href="{{ $document['url'] }}"@if (($document['locale'] ?? '') !== '') hreflang="{{ $document['locale'] }}"@endif target="_blank" rel="noopener">{{ $wordingLink->match }}</a>{{ $wordingLink->after }}@else{{ $document['wording'] }}@endif</span>
         </label>
 
         @if ($hasError)
@@ -104,6 +145,7 @@
                  carries no locale — `hreflang=""` is itself a claim. --}}
             <a id="{{ $field }}_link" href="{{ $document['url'] }}"
                @if (($document['locale'] ?? '') !== '') hreflang="{{ $document['locale'] }}" @endif
+               @if ($lang !== null) lang="{{ $lang }}" @endif
                target="_blank" rel="noopener noreferrer">
                 {{ $document['title'] }}
             </a>

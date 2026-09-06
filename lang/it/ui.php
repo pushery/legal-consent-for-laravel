@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // UI strings for the publishable stubs (settings page + grace-period banner). The three
-// legal kinds stay separately labeled (contracts / acknowledgements / consents). Informal (tu).
+// legal kinds stay separately labeled ('contracts' / 'acknowledgements' / 'consents'). Informal (tu).
 return [
     'settings_heading' => 'I tuoi consensi',
     'contracts_heading' => 'Contratti',
@@ -46,6 +46,9 @@ return [
     'enforced_now' => 'In vigore da ora',
     'objection_closed' => 'Termine di opposizione scaduto',
     'submit' => 'Accetta e continua',
+    // Shown beside the submit while the request is in flight; the button itself carries
+    // aria-busy, so this is the sighted half of the same state.
+    'working' => 'Un momento…',
     'all_current' => 'Tutto è aggiornato — niente da fare.',
     // The one state a settings screen must not blur: a new major version is waiting, so
     // this is the invitation to do voluntarily what the gate will otherwise compel.
@@ -90,6 +93,8 @@ return [
     'admin_preview' => 'Anteprima',
     'granted_confirmation' => 'Consenso concesso. Puoi revocarlo quando vuoi.',
     'withdrawn_confirmation' => 'Consenso revocato. Ha effetto immediato.',
+    'objected_confirmation' => 'Opposizione registrata, con l\'ora in cui l\'hai inviata.',
+    'terminated_confirmation' => 'Recesso registrato, con l\'ora in cui l\'hai inviato.',
     // The refusal a subject can actually reach — a stale page, a hand-built post or a custom
     // stub asking to withdraw something that was never a consent. It states the position
     // without the document key or the internal type: those are the operator's business, and
@@ -105,6 +110,7 @@ return [
     'admin_edit' => 'modifica',
     'admin_edit_for' => 'Modifica :key (:locale)',
     'admin_status_saved' => 'Salvato. Prima della pubblicazione è necessaria una revisione.',
+    'admin_status_not_saved' => 'Non salvato — :reason',
     'admin_status_source_not_translated' => 'La lingua di origine viene redatta, non tradotta.',
     'admin_status_no_source' => 'Scrivi prima il testo di origine — non c\'è nulla da cui tradurre.',
     'admin_status_machine_translated' => 'Tradotto automaticamente. Una persona deve revisionarlo prima della pubblicazione.',
