@@ -20,12 +20,42 @@
     $documents: list{key, title, wording, url, required} — `url` may be null.
     A checklist item's ->toArray() adds 'field', 'contentHash' and 'hashField' on top of that.
 
+    $bind (optional): the name of a Livewire property holding one entry per FIELD. Given, each
+    control binds to `{$bind}.{$field}` and the `old()` restore is dropped. Keyed by field rather
+    than by key, the Planet49 invariant moves to the host's initial value, and the accept-time
+    hash goes inert — the plain stub carries the full reasoning for all three.
+
     `field` is the input name and comes from the item, never from this template — see the plain
     stub for why building it as `legal_{key}` broke the age attestation.
 --}}
+{{-- ⚠️ BLOCK form on purpose. The inline one-line form strips its expression with
+     `trim('()')`, which removes EVERY leading and trailing parenthesis rather than the one pair
+     it wrapped — so an expression that itself opens with a bracket loses that bracket and the
+     view dies with `unexpected token "@"` pointing at the line below. Measured on this line.
+
+     And the first attempt to say so here broke the view a second way: the raw-block scanner runs
+     before comments are stripped and is non-greedy from the FIRST match, so spelling the inline
+     directive out inside this comment opened a block that closed at the real `@endphp` and
+     swallowed everything between. Describe it, do not spell it. --}}
+@php
+    $bindTo = ($bind ?? '') !== '' ? $bind : null;
+@endphp
 <x-wirekit::stack gap="md" class="legal-consent-fields">
     @foreach ($documents as $document)
         @php($field = $document['field'] ?? 'legal_'.$document['key'])
+        {{-- Resolved to a bag BEFORE the tag, because Blade's component-tag compiler parses the
+             attribute list itself and runs no directives inside it — a conditional written there
+             would land in the markup as text.
+
+             ⚠️ And it is handed over as `:attributes`, not echoed into the tag. The compiler
+             recognizes an echoed bag only when the variable is literally named `$attributes`
+             (`parseAttributeBag` matches that name and nothing else); any other name survives
+             into the attribute string as garbage and the view dies at the next `@endif`.
+             `:attributes` is the form that regex rewrites to, so it is the same thing said
+             directly. An empty bag renders nothing. --}}
+        @php($binding = new \Illuminate\View\ComponentAttributeBag(
+            $bindTo !== null ? ['wire:model' => $bindTo.'.'.$field] : []
+        ))
         {{-- Same resolution as the plain stub, and it has to happen here for the same reason: the
              shape this field takes decides whether `aria-describedby` may point at the link. Where
              the title appears INSIDE the wording the link sits in the label and is already part of
@@ -56,8 +86,11 @@
                 {{-- RESTORED from the visitor's own previous submit, never preset by us — see the
                      plain stub for why that distinction is the whole of Planet49 (C-673/17).
                      Passed as null rather than false when there is nothing to restore, so the
-                     attribute is dropped instead of rendering as a value. --}}
-                :checked="old($field) ? true : null"
+                     attribute is dropped instead of rendering as a value. Null under a binding
+                     too, for the reason the plain stub spells out: the bound property owns the
+                     state, and a `checked` beside it fights every re-render. --}}
+                :checked="$bindTo === null && old($field) ? true : null"
+                :attributes="$binding"
             >@if ($wordingLink !== null){{ $wordingLink->before }}<x-wirekit::link
                     :id="$field.'_link'"
                     :href="$document['url']"

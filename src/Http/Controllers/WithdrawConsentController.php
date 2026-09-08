@@ -108,6 +108,17 @@ final readonly class WithdrawConsentController
     private function backToOwnOrigin(Request $request): RedirectResponse
     {
         $home = config('legal-consent.routes.home', '/');
+        // ⚠️ THE `!== ''` HALF IS DEFENSIVE AND CANNOT BE OBSERVED FROM OUTSIDE — measured, so that
+        // nobody writes the test it invites. The URL generator normalizes an empty target and a
+        // bare slash to the same place: `url()->previous('')` and `url()->previous('/')` both
+        // answer the application root, and so do both `redirect()->to()` calls, with a foreign
+        // Referer as well as without one. Removing this half therefore changes no response
+        // anywhere, and an arm asserting "an empty home redirects to /" passes with the half
+        // deleted. The `is_string()` half is different and IS held — a non-string home is a
+        // configuration a consumer really writes, and it has an arm.
+        //
+        // It stays because it costs nothing and states the intent at the point of use, not
+        // because a test could fail without it.
         $fallback = is_string($home) && $home !== '' ? $home : '/';
 
         $previous = url()->previous($fallback);

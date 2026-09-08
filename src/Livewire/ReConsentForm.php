@@ -82,9 +82,50 @@ final class ReConsentForm extends Component
      *
      * #[Locked] for exactly that reason: this is PROOF, and proof the client can rewrite is not
      * proof. It is set once at mount by the embedding screen.
+     *
+     * Mounting with `answersGateQuestion` asks for the third behavior — the gate's own question
+     * — and leaves this at `ReConsentGate`, which is then only a fallback: see
+     * {@see $answersGateQuestion} and {@see questionFor()}.
      */
     #[Locked]
     public ConsentMethod $method = ConsentMethod::ReConsentGate;
+
+    /**
+     * Whether this mount answers the question the GATE asks, rather than one of the two halves.
+     *
+     * `EnsureLegalConsent` holds on the UNION of `outstanding()` and `firstAcceptance()` once
+     * `gate.first_use` is on, while a mount that names a method answers one of the two. A host
+     * mounting the consent route once — the shape `routes.consent_name` describes, one name and
+     * one route — therefore sent every first-use subject to a form rendering zero documents while
+     * the gate kept holding the next request. The doctor already named the outcome: a dead end,
+     * not a loop.
+     *
+     * ⚠️ THIS IS A BOOLEAN, AND A NULLABLE `$method` WAS TRIED FIRST AND IS BROKEN TWICE OVER.
+     * Measured on this component: a `#[Locked]` typed property mounted as null reads back as null
+     * on the mount request and as the property's own PHP default on EVERY request after it — so
+     * the form rendered the union, the subject ticked both boxes, and `submit()`, a later
+     * request, was back at `ReConsentGate` and iterated only the changed half. One acceptance
+     * dropped, success message on screen. And it cannot even be mounted: Livewire assigns a mount
+     * argument onto the public property of the same name, so `['method' => null]` is a TypeError
+     * against a non-nullable enum. A boolean round-trips, and it keeps `$method` non-nullable so
+     * nothing downstream has to ask whether the provenance exists.
+     *
+     * `#[Locked]` for the same reason as `$method`: it decides what goes into an append-only
+     * ledger row, so it is not something a browser may send back.
+     */
+    #[Locked]
+    public bool $answersGateQuestion = false;
+
+    /**
+     * Which question each pending key came from, for THIS request only.
+     *
+     * Private, so Livewire never serializes it and no client can send one back — the value it
+     * decides is the ledger's `method` column. Rebuilt by {@see pendingFor()} on every request,
+     * which both `render()` and `submit()` call, so it is never read across a hydration.
+     *
+     * @var array<string, ConsentMethod>
+     */
+    private array $questionByKey = [];
 
     /**
      * ⚠️ THE INITIALIZERS BELOW ARE NOT THE POLICY, AND EDITING ONE CHANGES NOTHING.
@@ -111,13 +152,26 @@ final class ReConsentForm extends Component
     #[Locked]
     public bool $allowTermination = true;
 
+    /**
+     * `$answersGateQuestion` is last on purpose: appending it leaves every existing positional
+     * call untouched. It is also a parameter of its own rather than a null `$method`, and that is
+     * forced rather than chosen — Livewire assigns a mount argument straight onto the public
+     * property of the same name, so `['method' => null]` is a TypeError against a non-nullable
+     * enum before `mount()` ever runs. Making the property nullable to accept it is the trap the
+     * property's own docblock records.
+     */
     public function mount(
         ?string $locale = null,
         ConsentMethod $method = ConsentMethod::ReConsentGate,
         bool $allowObjection = true,
         bool $allowTermination = true,
+        bool $answersGateQuestion = false,
     ): void {
         $this->locale = $locale ?? app()->getLocale();
+        // The gate question keeps a concrete `$method` anyway, so every path that only needs A
+        // provenance — the intended-return check, a transition on a holding the subject already
+        // has — carries on reading it without a null test.
+        $this->answersGateQuestion = $answersGateQuestion;
         $this->method = $method;
         $this->allowObjection = $allowObjection;
         $this->allowTermination = $allowTermination;
@@ -151,7 +205,7 @@ final class ReConsentForm extends Component
                 try {
                     // Pass the hash captured at RENDER, not the live one: a version released between
                     // render and this submit must be caught, not silently frozen (Art. 7(1)).
-                    $manager->accept($subject, $document->key, ConsentContext::fromRequest(request(), $this->method), $this->locale, $this->hashes[$document->key]);
+                    $manager->accept($subject, $document->key, ConsentContext::fromRequest(request(), $this->questionFor($document->key)), $this->locale, $this->hashes[$document->key]);
                     $recorded++;
                 } catch (DocumentChangedException|LegalDocumentNotFound) {
                     // The subject would freeze text they never saw. Clear the stale ticks and ask them
@@ -225,6 +279,9 @@ final class ReConsentForm extends Component
         // every OAuth application, which is the defect this seam was built to fix in the first
         // place. A settings toggle is deliberately not on this list: nobody was on their way
         // anywhere when they opened their own settings page.
+        // A gate-question mount needs no entry of its own: it keeps `$method` at `ReConsentGate`,
+        // which is already on this list, and by construction that subject was stopped on their way
+        // somewhere.
         return in_array($this->method, [ConsentMethod::ReConsentGate, ConsentMethod::FirstUseGate], true)
             && config('legal-consent.routes.return_to_intended', false) === true;
     }
@@ -276,7 +333,7 @@ final class ReConsentForm extends Component
         $subject = $this->subject();
 
         if ($subject instanceof Model) {
-            $this->guardedTransition(fn () => app(ConsentManager::class)->object($subject, $key, ConsentContext::fromRequest(request(), $this->method), $this->locale));
+            $this->guardedTransition(fn () => app(ConsentManager::class)->object($subject, $key, ConsentContext::fromRequest(request(), $this->questionFor($key)), $this->locale));
 
             // The status is not decoration on this action. It writes an APPEND-ONLY ledger row, and
             // the control that triggered it is usually gone from the next render — so with nothing
@@ -295,7 +352,7 @@ final class ReConsentForm extends Component
         $subject = $this->subject();
 
         if ($subject instanceof Model) {
-            $this->guardedTransition(fn () => app(ConsentManager::class)->terminate($subject, $key, ConsentContext::fromRequest(request(), $this->method), $this->locale));
+            $this->guardedTransition(fn () => app(ConsentManager::class)->terminate($subject, $key, ConsentContext::fromRequest(request(), $this->questionFor($key)), $this->locale));
 
             // Same reason as object() above: an irreversible write nobody is told about.
             $this->setStatus((string) __('legal-consent::ui.terminated_confirmation'));
@@ -318,15 +375,72 @@ final class ReConsentForm extends Component
      *
      * `$method` is `#[Locked]`, so the choice is the embedding application's and not the browser's.
      *
+     * A gate-question mount asks both and returns the union — the same set `EnsureLegalConsent`
+     * counts when `gate.first_use` is on. It is not a convenience: the branch a host would
+     * otherwise write inverts what the middleware computed two lines earlier, so every one with
+     * OAuth, magic links or invitations wrote the identical one, and a subject who owed BOTH a
+     * first acceptance and a re-consent still saw two screens in sequence with nothing explaining
+     * why the second looked like the first.
+     *
+     * The union carries its own provenance. `$questionByKey` records which of the two sets each
+     * key came from, because the answer lands in an append-only ledger row: a first acceptance
+     * filed as `re_consent_gate` asserts a change that never happened, which is the failure
+     * `ConsentMethod::FirstUseGate` exists to prevent and describes in its own docblock. A mount
+     * that names a method keeps writing that method for every key, unchanged.
+     *
+     * Ordering puts `outstanding()` first and appends only the first-acceptance keys it does not
+     * already hold. A key can legitimately be in both — never accepted AND materially changed
+     * since publication — and the change question is the stricter of the two, so it wins.
+     *
      * @return Collection<int, LegalDocument>
      */
     private function pendingFor(Model $subject): Collection
     {
         $manager = app(ConsentManager::class);
 
-        return $this->method === ConsentMethod::FirstUseGate
-            ? $manager->firstAcceptance($subject, $this->locale)
-            : $manager->outstanding($subject, $this->locale);
+        if (! $this->answersGateQuestion) {
+            $pending = $this->method === ConsentMethod::FirstUseGate
+                ? $manager->firstAcceptance($subject, $this->locale)
+                : $manager->outstanding($subject, $this->locale);
+
+            $this->questionByKey = $pending
+                ->mapWithKeys(fn (LegalDocument $document): array => [$document->key => $this->method])
+                ->all();
+
+            return $pending;
+        }
+
+        $changed = $manager->outstanding($subject, $this->locale);
+        $changedKeys = $changed->pluck('key')->all();
+
+        $first = $manager->firstAcceptance($subject, $this->locale)
+            ->reject(fn (LegalDocument $document): bool => in_array($document->key, $changedKeys, true))
+            ->values();
+
+        $this->questionByKey = array_merge(
+            $changed->mapWithKeys(fn (LegalDocument $d): array => [$d->key => ConsentMethod::ReConsentGate])->all(),
+            $first->mapWithKeys(fn (LegalDocument $d): array => [$d->key => ConsentMethod::FirstUseGate])->all(),
+        );
+
+        return $changed->concat($first)->values();
+    }
+
+    /**
+     * The provenance to write for one key.
+     *
+     * A named mount answers with itself. Under a null mount the answer comes from the set the key
+     * was rendered from; a key that is in neither set is not on this screen, and `ReConsentGate`
+     * is the honest fallback there because the only actions that can reach it — objection and
+     * termination — act on a holding the subject already has, which is by definition not a first
+     * acceptance.
+     */
+    private function questionFor(string $key): ConsentMethod
+    {
+        if (! $this->answersGateQuestion) {
+            return $this->method;
+        }
+
+        return $this->questionByKey[$key] ?? ConsentMethod::ReConsentGate;
     }
 
     public function render(): View

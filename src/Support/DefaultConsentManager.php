@@ -432,11 +432,25 @@ readonly class DefaultConsentManager implements ConsentManager
         $acceptedAt = $standing['at'];
         $pending = $standing['pending'];
 
-        $documents = LegalDocument::query()
-            ->select(['key', 'type', 'major_version', 'requires_explicit_optin'])
-            ->where('locale', $locale)
-            ->where('is_active', true)
-            ->get()
+        // The active set comes from the SAME cached, publish-invalidated fact the gate reads on
+        // every authenticated request — the seam `hasCurrent()` above already sits on, and the one
+        // the banner moved onto. This method is the sibling that was left behind, and it is the
+        // one that hurts most: a consuming application renders a consent banner out of every
+        // layout, so this ran on every full page view of a signed-in member and paid an uncached
+        // query for a fact that changes a few times a year.
+        //
+        // ⚠️ THE LEDGER FOLD ABOVE STAYS UNCACHED, AND THAT IS THE POINT OF DOING ONLY HALF. It is
+        // per-subject state, and a stale answer either strands somebody at a consent gate or waves
+        // them past it. The global half is the half that is safe, and it needs no new invalidation
+        // to reason about: publishing already flushes this cache, and its payload is plain
+        // attribute arrays rather than serialized models — so it does not carry the trap that
+        // caching an Eloquent object would under `serializable_classes: false`.
+        //
+        // The cache selects a superset of the four columns this method read, and its predicate is
+        // the same (`locale`, `is_active`). It also orders by (key, id), where the private query
+        // left the order to the engine.
+        $documents = app(EnforceableDocumentCache::class)
+            ->activeFor($locale)
             // An informational page has no standing to report: nobody accepts it, so
             // `accepted_major` would sit at 0 forever and `outstanding` — computed from
             // `! requires_explicit_optin`, the same false a contract carries — would be
