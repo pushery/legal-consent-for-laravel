@@ -4,6 +4,69 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.24.0 → 0.25.0
+
+Nothing here is required. Both entries are additive and opt-in: an application that
+changes nothing keeps exactly the behavior it has today. They are written down because
+each replaces a workaround a consuming application was carrying, and the workaround is
+what you delete.
+
+### The bundled consent checkboxes can bind to a Livewire property
+
+The shipped checkbox stubs restore their state with `old()`, which is right for a POST
+form and does nothing on a Livewire screen — `old()` is empty across a commit, so the
+component never learns the box was ticked. If that is why you kept your own copy of the
+markup, pass `bind` instead:
+
+```blade
+@include('legal-consent::consent-checkboxes', [
+    'documents' => $documents,
+    'bind' => 'accept',
+])
+```
+
+```php
+/** @var array<string, bool> */
+public array $accept = [];
+```
+
+Each control then carries `wire:model="{bind}.{field}"` and no `checked` attribute beside
+it. Three things to know before you switch:
+
+- **The array is keyed by FIELD, not by document key.** For a document that is
+  `legal_terms`; the Art. 8 age attestation is named by its bare key. `field` is what the
+  id, the `name`, the error bag and `RegistrationRules` already use.
+- **The never-pre-checked guarantee becomes yours.** Without `bind` the stub can promise
+  that nothing but the visitor's own previous submit ticks a box. Under a binding the stub
+  contributes nothing, so the bound value decides — initialize it to `false`. A pre-ticked
+  box is not consent (CJEU C-673/17).
+- **The opt-in accept-time hash goes inert.** Livewire submits no form, so the hidden
+  fingerprint input is never sent. Carry `contentHash` in your own state and hand it to the
+  recorder yourself, or leave it out and keep the prior no-guard path.
+
+### One consent route can answer the question the gate is actually asking
+
+Only relevant if you have `legal-consent.gate.first_use` turned on.
+
+The middleware holds a subject on the **union** of what changed and what was never
+accepted. `ReConsentForm` answered one of the two, chosen by the `method` you mounted it
+with — so a single consent route, which is the shape `routes.consent_name` describes, sent
+every first-use subject to a form rendering zero documents while the gate kept holding the
+next request. If you wrote a branch in front of the mount to pick the method, this is the
+thing it was working around:
+
+```blade
+<livewire:legal-consent.reconsent-form :answers-gate-question="true" />
+```
+
+It renders both sets on one screen and records each document with the provenance its own
+question implies — `first_use_gate` for one never accepted, `re_consent_gate` for one that
+changed since — inside the same submit. A document in both sets is recorded as a
+re-consent, the stricter of the two statements.
+
+Keep an explicit `:method` if you mount two separate routes and want each to stay one
+question. A mount that names a method is unchanged in every respect.
+
 ## 0.23.0 → 0.24.0
 
 ### Run migration 000027 — the retention sweep gets its own index

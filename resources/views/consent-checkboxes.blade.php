@@ -19,6 +19,23 @@
     $documents: list of ['key', 'title', 'wording', 'url', 'required'] — `url` may be null.
     A checklist item's ->toArray() adds 'field', 'contentHash' and 'hashField' on top of that.
 
+    $bind (optional): the name of a Livewire property holding one entry per FIELD. Given, each
+    control binds to `{$bind}.{$field}` and the `old()` restore below is dropped — a `checked`
+    next to `wire:model` fights the bound value on every re-render, which is the whole of the
+    report this seam answers. Omitted (the default), nothing about this template changes.
+
+      - Keyed by FIELD, not by key. `field` is what the id, the name, the error bag and
+        RegistrationRules already use, and the one control that is NOT a document — the Art. 8
+        age attestation — is named by its bare key. Keying by `key` would hand that control a
+        property no rule validates, which is the bug the `field` fallback above exists for.
+      - The Planet49 invariant holds differently, not less: under a binding this template
+        contributes NO tick at all, so the only thing that can pre-tick a box is the host's own
+        initial value — and it has to be false. Nothing here can enforce that, and pretending
+        otherwise would be the more dangerous of the two statements.
+      - The accept-time hash below is inert under a binding: Livewire submits no form, so a
+        hidden input is never sent. A bound host carries the fingerprint in its own state and
+        hands it to the recorder itself.
+
     `field` is the input name, and it comes from the item rather than from this template. A
     checklist item's `->toArray()` carries it, and RegistrationRules validates exactly that name.
     Building it here as `legal_{key}` was wrong for the one control that is NOT a document: the
@@ -26,6 +43,18 @@
     box the visitor could tick and never satisfy. The fallback below keeps the minimal shape above
     working — that shape lists documents only, and a document IS `legal_{key}`.
 --}}
+{{-- ⚠️ BLOCK form on purpose. The inline one-line form strips its expression with
+     `trim('()')`, which removes EVERY leading and trailing parenthesis rather than the one pair
+     it wrapped — so an expression that itself opens with a bracket loses that bracket and the
+     view dies with `unexpected token "@"` pointing at the line below. Measured on this line.
+
+     And the first attempt to say so here broke the view a second way: the raw-block scanner runs
+     before comments are stripped and is non-greedy from the FIRST match, so spelling the inline
+     directive out inside this comment opened a block that closed at the real `@endphp` and
+     swallowed everything between. Describe it, do not spell it. --}}
+@php
+    $bindTo = ($bind ?? '') !== '' ? $bind : null;
+@endphp
 @foreach ($documents as $document)
     @php
         $field = $document['field'] ?? 'legal_'.$document['key'];
@@ -95,8 +124,12 @@
                      key and comes back empty. Without this, one mistyped e-mail wipes every
                      consent already given and the visitor re-ticks the same boxes, which is how a
                      consent screen stops being read. `old()` returns the default when there is no
-                     session, so a view rendered outside a web request is unaffected. --}}
-                @checked(old($field))
+                     session, so a view rendered outside a web request is unaffected.
+
+                     Dropped entirely when `$bind` names a Livewire property: there `old()` is
+                     empty across a commit anyway, and the attribute would re-assert a stale
+                     value against the bound one on every render. --}}
+                @if ($bindTo === null)@checked(old($field))@else wire:model="{{ $bindTo }}.{{ $field }}"@endif
                 @if ($document['required']) required @endif
                 @if ($hasError) aria-invalid="true" @endif
                 @if ($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
