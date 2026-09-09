@@ -4,6 +4,12 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.2] - 2026-09-10
+
+### Added
+
+- The notice-modes documentation now carries the admissibility matrix: which `NoticeMode` each `DocumentType` admits, and which three combinations the publisher refuses outright with the reasoning kept apart, since they rest on different law. It sits before the section on what a major bump forces rather than after it, because that is where the decision is made -- the rules were previously discoverable only from the refusal, by which time the mode is picked and the text is written. A contract test holds the table to the two predicates in the source, so it cannot drift from what is enforced.
+
 ## [0.25.1] - 2026-09-09
 
 **A patch, and it unblocks a release of a legal text.** Nothing is required of you and there is no migration; if you held a document back from your publish step because releasing it failed, this is the version that lets you stop.
@@ -2471,7 +2477,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.1...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.2...HEAD
+[0.25.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.23.0...v0.24.0
