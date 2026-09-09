@@ -4,6 +4,20 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.1] - 2026-09-09
+
+**A patch, and it unblocks a release of a legal text.** Nothing is required of you and there is no migration; if you held a document back from your publish step because releasing it failed, this is the version that lets you stop.
+
+### Fixed
+
+- **A multi-locale release no longer deadlocks against its own lock.** `LegalDocumentReleaser::release()` takes the activation lock and then publishes each locale inside one transaction — and the publisher took the *same* lock name again, once per locale. A Laravel lock is not reentrant: the inner instance carries a different owner token, so it could only wait out its five seconds and throw `LockTimeoutException`. Every release failed on its own serialization, mid-transaction. Reported from a consuming application's production error tracker.
+
+  **It survived to production because both lock sites are guarded by the same condition** — a cache store that provides locks and is neither `array` nor `null`. On the stores a test suite runs on, *neither* side locks, so the whole path is invisible to a suite configured that way; on `redis`, `memcached`, `database` or `file` both sides lock and the release cannot complete. Configuring `legal-consent.cache.store` for production, which the package recommends, is what turned it on.
+
+  The rule that resolves it was already written down for `LegalDocument::activate()`, which has skipped its own lock inside a caller's transaction since the day it was written: **whoever opens the transaction owns the lock.** A lock taken inside somebody else's transaction is released before that caller's commit, so it never spans the write it appears to protect — false comfort, not serialization. The publisher now follows the same rule; the releaser, being the outermost writer, still always takes the lock, and a direct `legal-consent:publish` is unchanged in every respect.
+
+  The store condition, the shared lock name and the two timeouts had three copies between them, one per caller — spelled `! LockProvider || Array || Null` in one place and `LockProvider && ! Array && ! Null` in another. They now live in one place, so a reader who checks one is no longer believing all three. That place is a new `Support\ActivationLock`, and it is marked `@internal` on purpose: it is an extraction of code that already ran in those three callers, it offers a consuming application nothing it can use, and it carries no backward-compatibility promise. A new type in the dist is the reason this is a patch rather than a minor, so it is worth saying which one it is.
+
 ## [0.25.0] - 2026-09-08
 
 **A minor bump, and every entry answers a report from an application that installs this package.** Nothing here requires you to change anything: all three additions are opt-in, and an application that ignores them behaves exactly as it does on 0.24.0. What they have in common is that each replaces a workaround a consuming project was carrying — so if you are carrying one of these, this is the release that lets you delete it. `UPGRADE.md` walks the two that need a line of code.
@@ -2457,7 +2471,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.1...HEAD
+[0.25.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.22.0...v0.23.0

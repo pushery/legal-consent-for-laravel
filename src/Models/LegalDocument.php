@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Models;
 
 use Carbon\CarbonImmutable;
-use Illuminate\Cache\ArrayStore;
-use Illuminate\Cache\NullStore;
-use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Contracts\Cache\Store;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -15,13 +12,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Override;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentInEvidenceException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Support\ActivationLock;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\TenantContext;
@@ -272,7 +269,7 @@ final class LegalDocument extends Model
         // lock taken here would be released when this method returns, BEFORE that commit. That is
         // false comfort, not serialization, and re-taking the shared name would self-deadlock. The
         // rule is therefore explicit: whoever opens the transaction owns the lock.
-        if (DB::transactionLevel() > 0) {
+        if (ActivationLock::ownedByCaller()) {
             $this->activateNow();
 
             return;
@@ -288,28 +285,10 @@ final class LegalDocument extends Model
      */
     public function activateSerialized(): void
     {
-        $store = self::activationLockStore();
-
-        // Two different failure shapes, and only the first is obvious:
-        //  - a store with no LockProvider at all (session, storage, apc, a custom one) would make
-        //    publishing FATAL, so degrade instead of throwing;
-        //  - `array` and `null` DO implement LockProvider, but their locks do not serialize across
-        //    processes (array is process-local; a null lock always succeeds). Those are the stores
-        //    that look protected and are not, so they get the same warning.
-        // Either way the activation still runs, and on PostgreSQL the partial unique index remains
-        // the real guarantee. Say it rather than let the lock imply a protection it does not give.
-        if (! $store instanceof LockProvider || $store instanceof ArrayStore || $store instanceof NullStore) {
-            Log::warning('legal-consent: cache store cannot serialize activation, running unserialized', [
-                'document_key' => $this->key,
-                'store' => $store::class,
-            ]);
-
-            $this->activateNow();
-
-            return;
-        }
-
-        $store->lock($this->activationLockKey(), 10)->block(5, function (): void {
+        // Which stores cannot serialize, what happens when they cannot, and the two timeouts all
+        // live in ActivationLock — the same lock the releaser and the publisher take, resolved and
+        // degraded once rather than once per caller.
+        ActivationLock::serialize($this->key, 'activation', function (): void {
             $this->activateNow();
         });
     }

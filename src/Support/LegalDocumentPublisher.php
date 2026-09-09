@@ -5,11 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Carbon\CarbonImmutable;
-use Illuminate\Cache\ArrayStore;
-use Illuminate\Cache\NullStore;
-use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Pushery\LegalConsent\Content\Document;
 use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Content\RenderPipeline;
@@ -210,8 +206,6 @@ final readonly class LegalDocumentPublisher
         // transaction is already open (it delegates to the orchestrating caller by design), so
         // wrapping without lifting the lock out would have removed the serialization while looking
         // like it added safety.
-        $store = LegalDocument::activationLockStore();
-
         $write = (fn (): LegalDocument => DB::transaction(function () use (
             $key, $locale, $type, $mode, $regime, $rendered, $changeClass, $offersTermination,
             $keepsUnmodified, $now, $announce, $enforce, $objectionDeadline
@@ -263,30 +257,21 @@ final readonly class LegalDocumentPublisher
             return $document;
         }));
 
-        // Degrade and SAY so, the same way the releaser does: `array` and `null` DO implement
-        // LockProvider while serializing nothing across processes, so a lock taken on them would
-        // imply a protection it is not giving. The write still runs, and it is still ATOMIC — that
-        // is the half this change is about, and it holds on every store, locked or not.
+        // ⚠️ ASK WHETHER THE LOCK IS ALREADY HELD BEFORE TAKING IT. REPORTED FROM PRODUCTION.
+        // This line used to take the activation lock unconditionally, and a multi-locale release
+        // reaches it while holding that very name: LegalDocumentReleaser takes it, opens its
+        // transaction, and calls this method once per locale. A Laravel lock is not reentrant, so
+        // the second instance — a different owner token — could only wait out its five seconds and
+        // throw, and every release on a store that really locks failed on its own serialization.
         //
-        // The condition is evaluated ONCE. Writing it twice — once to choose the path, once to
-        // decide whether to warn — is two places to keep in step for one question, and the pair
-        // silently disagrees the day somebody edits one.
-        $serializes = $store instanceof LockProvider && ! $store instanceof ArrayStore && ! $store instanceof NullStore;
-
-        if (! $serializes) {
-            Log::warning('legal-consent: cache store cannot serialize a publish, running unserialized', [
-                'document_key' => $key,
-                'store' => $store::class,
-            ]);
-        }
-
-        // The annotation carries what the signature cannot: `block()` returns whatever its callback
-        // returns and is typed `mixed`, while `$write` is declared `: LegalDocument`. Same shape,
-        // same reason, as LegalDocumentReleaser.
+        // It survived to a consumer's production because both sites guard the take with the same
+        // predicate: on `array` and `null` NEITHER locks, and that is what a test suite runs on.
+        //
+        // Degrading on a store that cannot serialize, the shared name and the two timeouts all live
+        // in ActivationLock now. The annotation carries what its signature cannot: `block()` returns
+        // whatever its callback returns and is typed `mixed`, while `$write` is `: LegalDocument`.
         /** @var LegalDocument $document */
-        $document = $serializes
-            ? $store->lock(LegalDocument::activationLockName($key), 10)->block(5, $write)
-            : $write();
+        $document = ActivationLock::serializeUnlessOwned($key, 'a publish', $write);
 
         event(new LegalDocumentPublished($document));
 
