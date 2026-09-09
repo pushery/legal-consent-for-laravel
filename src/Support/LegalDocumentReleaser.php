@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
-use Illuminate\Cache\ArrayStore;
-use Illuminate\Cache\NullStore;
-use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -48,8 +44,15 @@ final readonly class LegalDocumentReleaser
         // Serialize concurrent releases of the same text: two admins pressing "Release" at once
         // would otherwise race on the one-active-version guard and leave a half-applied set. The
         // SAME lock name LegalDocument::activate() uses, so a direct `legal-consent:publish` cannot
-        // interleave with a release — this lock is the one that spans the outer transaction, while
-        // activate()'s own is a savepoint inside it and would be released before the commit.
+        // interleave with a release — this lock is the one that spans the outer transaction, and an
+        // inner writer skips its own rather than re-taking this name.
+        //
+        // ⚠️ THIS PARAGRAPH USED TO CALL THE INNER LOCK "A SAVEPOINT INSIDE IT", AND THAT SENTENCE
+        // IS HOW THE DEADLOCK GOT WRITTEN. A savepoint is a database construct that nests; this
+        // lock lives in the cache store and knows nothing about the transaction it is taken in. It
+        // does not nest, it CONTENDS — the inner instance is a different owner, so it waits out its
+        // timeout and throws. Reported by a consumer who read this sentence, disbelieved it, and
+        // was right. Whoever opens the transaction owns the lock, and nobody below re-takes it.
         //
         // The same name on a DIFFERENT store is no lock at all, and that is what this line used to
         // be: `Cache::lock(...)` resolves the app default, while the model resolves the package's
@@ -57,25 +60,17 @@ final readonly class LegalDocumentReleaser
         // which the model's own docblock recommends — and then the two writers of a document's
         // active version queue on two separate locks and interleave freely. One resolver, called
         // from both sides, is the only shape that cannot drift again.
-        $store = LegalDocument::activationLockStore();
-        $release = fn (): Collection => $this->releaseNow($key, $mode, $locales, $options);
 
-        // Mirrors LegalDocument::activateSerialized(): a store with no LockProvider would make a
-        // release FATAL, and `array` and `null` DO implement it while serializing nothing across
-        // processes. Degrade and SAY so, rather than let a lock imply a protection it is not
-        // giving — the release itself still runs, and on PostgreSQL the partial unique index
-        // remains the real guarantee.
-        if (! $store instanceof LockProvider || $store instanceof ArrayStore || $store instanceof NullStore) {
-            Log::warning('legal-consent: cache store cannot serialize a release, running unserialized', [
-                'document_key' => $key,
-                'store' => $store::class,
-            ]);
-
-            return $release();
-        }
-
+        // A release is the OUTERMOST writer of a document's active version, so it always takes the
+        // lock — it never asks ActivationLock::ownedByCaller(), because there is nobody above it to
+        // own it. The publisher it then calls once per locale asks exactly that question, and this
+        // is the lock it finds already held.
         /** @var Collection<int, LegalDocument> $released */
-        $released = $store->lock(LegalDocument::activationLockName($key), 10)->block(5, $release);
+        $released = ActivationLock::serialize(
+            $key,
+            'a release',
+            fn (): Collection => $this->releaseNow($key, $mode, $locales, $options),
+        );
 
         return $released;
     }

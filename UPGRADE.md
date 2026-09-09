@@ -4,6 +4,31 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.25.0 → 0.25.1
+
+**Nothing is required of you, and there is no migration.** This release fixes a defect
+that made a release of a legal text fail, so what you may have to undo is a workaround
+you put in place against it.
+
+### Releasing a legal text no longer deadlocks against its own lock
+
+On 0.25.0, `Consent::release()` — and the `legal-consent:publish` path that goes through
+it — took the activation lock and then took the same lock again for each locale, inside
+its own transaction. A Laravel lock is not reentrant, so the inner attempt waited five
+seconds and threw `LockTimeoutException`. The release failed mid-transaction, wrote
+nothing, and left the text unpublished.
+
+**It only showed on a cache store whose locks are real.** The guard in front of both lock
+sites excludes `array` and `null`, which serialize nothing across processes, so on those
+stores neither side locked and a release completed normally. If you set
+`legal-consent.cache.store` (or `CACHE_STORE`) to `redis`, `memcached`, `database` or
+`file` — which this package recommends for production — every release hit it.
+
+If you worked around this by holding a document back from your publish step, or by
+pinning to 0.24.0, that is what you can now undo. A first publication of a newly
+registered document is the case that hit it hardest, because a document that already has
+an active version is usually skipped before the lock is ever taken.
+
 ## 0.24.0 → 0.25.0
 
 Nothing here is required. Both entries are additive and opt-in: an application that
