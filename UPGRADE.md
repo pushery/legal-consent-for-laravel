@@ -4,6 +4,21 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.25.1 → 0.25.2
+
+**Nothing is required of you, and there is no migration.** The release changes documentation
+only: no code, no schema, no configuration key. It is written up because a missing section and
+a free upgrade look identical from the outside, and only the section tells them apart.
+
+### The notice-modes documentation now states which combinations the publisher refuses
+
+[Notice modes](https://docs.pushery.com/legal-consent-for-laravel/notice-modes/overview) gained
+the admissibility matrix — which `NoticeMode` each `DocumentType` admits, and the three
+combinations the publisher rejects outright. The rules did not change; they were previously
+discoverable only by hitting the refusal, at which point the mode is already picked and the
+text already written. A contract test holds the table to the two predicates in the source, so
+the page cannot drift from what is enforced.
+
 ## 0.25.0 → 0.25.1
 
 **Nothing is required of you, and there is no migration.** This release fixes a defect
