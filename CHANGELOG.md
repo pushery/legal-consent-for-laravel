@@ -4,6 +4,12 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-09-10
+
+### Changed
+
+- **The WireKit view variant now needs `pushery/wirekit` 2.47.0 or newer** — it needed 2.26.0. Nothing breaks if you are below that: the package serves its plain views instead, which are the same screens without the WireKit theming, and it has always chosen between the two on exactly this floor. If you use `ui.variant => 'wirekit'` explicitly, or leave it on `auto` and want the themed views back, raise your own `pushery/wirekit` constraint. The floor moved because the WireKit stubs stopped hand-rolling their busy state: every control that waits on the server now passes the component's own `loading-target` and `:disable-on-loading="false"`, which arrived in WireKit 2.47.0. The behavior a subject sees is unchanged — the control still announces `aria-busy` and still keeps its focus, which is the whole reason the hand-rolled version existed — but it is now the component's promise rather than seven copies of an attribute pair, and the component is what gets fixed when it is wrong. The re-consent screen keeps its visible, localized "working" label: the component's spinner carries no text, and that screen is the one a subject cannot leave.
+
 ## [0.25.3] - 2026-09-10
 
 ### Changed
@@ -2484,6 +2490,7 @@ its recorded row from the same resolution, so the consent section stays dormant 
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
 [Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.2...HEAD
+[0.26.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.3...v0.26.0
 [0.25.3]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.0...v0.25.1

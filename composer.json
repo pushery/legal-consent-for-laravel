@@ -38,7 +38,7 @@
         "pestphp/pest-plugin-phpstan": "5.2.1",
         "pestphp/pest-plugin-rector": "^5.0",
         "pestphp/pest-plugin-type-coverage": "^5.0",
-        "pushery/wirekit": "^2.26.0",
+        "pushery/wirekit": "^2.47.0",
         "rector/rector": "2.6.6",
         "spaze/phpstan-disallowed-calls": "4.14.0"
     },
@@ -46,7 +46,7 @@
         "laravel/fortify": "Record registration consent inside the account-creating request (Way A).",
         "livewire/livewire": "Opt-in reactive UI: the ReConsentForm, ConsentSettings, LegalTextManager and LegalTextEditor components (publish the plain or WireKit-flavored views). The last two are the only in-app way to author and release a legal text.",
         "phpunit/phpunit": "Assertions for Consent::fake(): the in-memory double calls PHPUnit\\Framework\\Assert, so every assert*() method needs PHPUnit on the class path. Any Pest or PHPUnit test toolchain already brings it.",
-        "pushery/wirekit": "WireKit-native view variant, 2.26.0 or newer: publish --tag=legal-consent-wirekit, or leave ui.variant on its 'auto' default and the themed views are served as soon as the package is installed."
+        "pushery/wirekit": "WireKit-native view variant, 2.47.0 or newer: publish --tag=legal-consent-wirekit, or leave ui.variant on its 'auto' default and the themed views are served as soon as the package is installed."
     },
     "autoload": {
         "psr-4": {

@@ -4,6 +4,20 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.25.3 → 0.26.0
+
+**Nothing is required of you unless you use the WireKit view variant AND your WireKit is older than 2.47.0.** No code, schema or configuration key changed, and nothing throws.
+
+### The WireKit view variant now needs `pushery/wirekit` 2.47.0
+
+It needed 2.26.0. The package has always chosen between two view sets on exactly this floor — the WireKit-native views when a new enough WireKit is installed, the plain views otherwise — so a WireKit below the new floor does not error: you get the plain views, which are the same screens without the WireKit theming.
+
+**How to tell whether this affects you:** if `legal-consent.ui.variant` is `plain`, nothing changes. If it is `wirekit` or the default `auto` and `composer show pushery/wirekit` reports 2.26.0 to 2.46.x, you are on the plain views until you raise your own constraint to `^2.47.0`.
+
+**Why the floor moved.** The WireKit stubs used to set their busy state by hand, writing `aria-busy` through the attribute bag, because the component could not: `loading-target` alone rendered nothing, and the component's own busy state was `disabled` — which blurs the control the subject just activated and drops focus to `<body>` for the whole in-flight window. WireKit 2.47.0 shipped both halves, so the stubs now pass `loading-target` and `:disable-on-loading="false"` and the component carries the wait. What a subject experiences is unchanged; what changed is that one component promises it instead of seven copies of an attribute pair.
+
+The floor is deliberately not a hard `require`: raising it would force every consumer to a WireKit they may not want. It gates the automatic view choice, which is what it has always done.
+
 ## 0.25.2 → 0.25.3
 
 **Almost certainly nothing is required of you.** No code, schema or configuration key changed. One thing can stop a `composer update`, and only on a PHP build that could not have run this package anyway.
