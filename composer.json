@@ -15,7 +15,11 @@
     "require": {
         "php": "^8.4",
         "ext-dom": "*",
+        "ext-ctype": "*",
+        "ext-filter": "*",
+        "ext-hash": "*",
         "ext-json": "*",
+        "ext-mbstring": "*",
         "ext-libxml": "*",
         "laravel/framework": "^13.0",
         "league/commonmark": "^2.9"

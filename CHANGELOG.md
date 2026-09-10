@@ -4,6 +4,12 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.3] - 2026-09-10
+
+### Changed
+
+- **The manifest now declares the PHP extensions this package's code actually calls** — `ext-ctype`, `ext-filter`, `ext-hash` and `ext-mbstring`. No code changed. What changed is that Composer says so at install time instead of letting the package install onto a PHP that cannot run it. The gap had a single root cause: the `illuminate/*` split packages declare no extensions at all — only the `laravel/framework` metapackage names them — so a package built against the splits inherits none. `hash` is the one worth naming: it carries the audit trail's fingerprint chain, which is exactly where a missing extension must not first surface as a runtime error. A contract test now holds both directions, so an extension the shipped code calls must be declared and a declared extension must have a call site.
+
 ## [0.25.2] - 2026-09-10
 
 ### Added
@@ -2478,6 +2484,7 @@ its recorded row from the same resolution, so the consent section stays dormant 
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
 [Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.2...HEAD
+[0.25.3]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.24.0...v0.25.0
