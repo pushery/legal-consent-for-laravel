@@ -68,7 +68,7 @@
                      the same contract as the plain twin — `aria-busy` through the attribute bag, which
                      x-wirekit::button renders verbatim (`$attributes->except('rel')`), plus a visible label
                      beside it. Twins must not disagree about how a wait is reported. --}}
-                <x-wirekit::button type="submit" intent="primary" wire:loading.attr="aria-busy" wire:target="submit">
+                <x-wirekit::button type="submit" intent="primary" loading-target="submit" :disable-on-loading="false">
                     {{ __('legal-consent::ui.submit') }}
                 </x-wirekit::button>
                 <x-wirekit::text wire:loading wire:target="submit" class="legal-consent-busy">{{ __('legal-consent::ui.working') }}</x-wirekit::text>

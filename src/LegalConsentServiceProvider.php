@@ -80,8 +80,17 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * problem into a hard exception — on the re-consent gate, at the moment a legal change lands.
      * That has happened once already (a banner rendered `<x-wirekit::countdown>`, which existed
      * only on WireKit's develop branch), which is why presence alone is not the test.
+     *
+     * Raised 2.26.0 -> 2.47.0 when two local workarounds were retired against upstream components:
+     * the release dialog now renders `<x-wirekit::alert-dialog.confirm>` (first shipped in 2.41.0)
+     * and the busy controls pass `:disable-on-loading="false"` (first shipped in 2.47.0). Both
+     * first-shipped versions were read off the tags themselves rather than from a changelog.
+     *
+     * A consumer on 2.26.0-2.46.x therefore stops receiving the WireKit variant and receives the
+     * plain views, which is this constant working rather than failing: the alternative is a Blade
+     * tag compiling against a component that is not there.
      */
-    public const string WIREKIT_MINIMUM = '2.26.0';
+    public const string WIREKIT_MINIMUM = '2.47.0';
 
     /**
      * Whether the bundled migrations are registered automatically. Disable with

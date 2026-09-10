@@ -66,13 +66,13 @@
         </div>
 
         <x-wirekit::button.group>
-            <x-wirekit::button wire:click="save" wire:loading.attr="aria-busy" wire:target="save">{{ __('legal-consent::ui.admin_save') }}</x-wirekit::button>
+            <x-wirekit::button wire:click="save" loading-target="save" :disable-on-loading="false">{{ __('legal-consent::ui.admin_save') }}</x-wirekit::button>
 
             @unless ($isSource)
-                <x-wirekit::button surface="outline" wire:click="translate" wire:loading.attr="aria-busy" wire:target="translate">{{ __('legal-consent::ui.admin_translate', ['locale' => $sourceLocale]) }}</x-wirekit::button>
+                <x-wirekit::button surface="outline" wire:click="translate" loading-target="translate" :disable-on-loading="false">{{ __('legal-consent::ui.admin_translate', ['locale' => $sourceLocale]) }}</x-wirekit::button>
             @endunless
 
-            <x-wirekit::button surface="outline" wire:click="markReviewed" wire:loading.attr="aria-busy" wire:target="markReviewed">{{ __('legal-consent::ui.admin_mark_reviewed') }}</x-wirekit::button>
+            <x-wirekit::button surface="outline" wire:click="markReviewed" loading-target="markReviewed" :disable-on-loading="false">{{ __('legal-consent::ui.admin_mark_reviewed') }}</x-wirekit::button>
         </x-wirekit::button.group>
 
         {{-- RELEASE WITH AN OBJECTION WINDOW — the WireKit twin of the plain stub's form.
@@ -92,7 +92,7 @@
             <x-wirekit::toggle wire:model="offersTermination" :label="__('legal-consent::ui.admin_deemed_offers_termination')" />
             <x-wirekit::toggle wire:model="keepsUnmodified" :label="__('legal-consent::ui.admin_deemed_keeps_unmodified')" />
 
-            <x-wirekit::button wire:click="releaseDeemed" wire:loading.attr="aria-busy" wire:target="releaseDeemed">{{ __('legal-consent::ui.admin_deemed_submit') }}</x-wirekit::button>
+            <x-wirekit::button wire:click="releaseDeemed" loading-target="releaseDeemed" :disable-on-loading="false">{{ __('legal-consent::ui.admin_deemed_submit') }}</x-wirekit::button>
         </x-wirekit::stack>
 
         <x-wirekit::heading :level="2">{{ __('legal-consent::ui.admin_preview') }}</x-wirekit::heading>

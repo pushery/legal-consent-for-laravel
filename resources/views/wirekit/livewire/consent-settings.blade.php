@@ -131,7 +131,7 @@
                                          control that must not be decorative. An echo IS compiled in
                                          that position and emits what `@js()` emits on a plain
                                          element, which is the form the plain stub uses. --}}
-                                    <x-wirekit::button intent="danger" wire:click="withdraw({{ \Illuminate\Support\Js::from($item['key']) }})" wire:loading.attr="aria-busy" wire:target="withdraw">
+                                    <x-wirekit::button intent="danger" wire:click="withdraw({{ \Illuminate\Support\Js::from($item['key']) }})" loading-target="withdraw" :disable-on-loading="false">
                                         {{ __('legal-consent::ui.withdraw') }}
                                     </x-wirekit::button>
                                 </x-wirekit::alert-dialog.actions>
@@ -156,7 +156,7 @@
                         @elseif (! $item['held'] && $this->allowGrant)
                             {{-- An echo, not `@js()` — see the withdraw button above for why the
                                  directive never compiles in a component tag attribute. --}}
-                            <x-wirekit::button surface="outline" wire:click="grant({{ \Illuminate\Support\Js::from($item['key']) }})" wire:loading.attr="aria-busy" wire:target="grant" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
+                            <x-wirekit::button surface="outline" wire:click="grant({{ \Illuminate\Support\Js::from($item['key']) }})" loading-target="grant" :disable-on-loading="false" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
                                 {{ __('legal-consent::ui.grant') }}
                             </x-wirekit::button>
                         @endif
