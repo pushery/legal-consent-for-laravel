@@ -4,6 +4,18 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.25.2 → 0.25.3
+
+**Almost certainly nothing is required of you.** No code, schema or configuration key changed. One thing can stop a `composer update`, and only on a PHP build that could not have run this package anyway.
+
+### The manifest now names the PHP extensions the code already used
+
+`ext-ctype`, `ext-filter`, `ext-hash` and `ext-mbstring` are now declared in `require`. They were always needed — the shipped code calls into all four — and nothing declared them, because the `illuminate/*` split packages this package builds against declare no extensions at all. Only the `laravel/framework` metapackage names them, and a package that depends on the splits inherits nothing.
+
+**What this can do to you, and it is one thing:** if your PHP was built without one of the four, Composer will now refuse the install instead of accepting it. That is the intended direction. The same PHP already could not run this package — a missing `mbstring` surfaced as a fatal deep inside a normalization call rather than as a sentence naming the extension.
+
+In practice only `mbstring` is a live concern: `hash` has been compiled in and not disableable since PHP 7.4, while `ctype` and `filter` are on by default and have to be switched off deliberately. If Composer names one of them, install it — `php -m` lists what your build has.
+
 ## 0.25.1 → 0.25.2
 
 **Nothing is required of you, and there is no migration.** The release changes documentation
