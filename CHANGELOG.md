@@ -4,6 +4,12 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.1] - 2026-09-11
+
+### Fixed
+
+- **The six trigger functions this package installs on PostgreSQL now carry a fixed `search_path`.** Without one, a function resolves its names through the search path of whoever calls it, and SQLens reported all six (`PGLS.functionSearchPathMutable`) in every consumer's audit and release report. A new migration pins them with `SET search_path FROM CURRENT`, the path the migration runs under, which is the one the functions were created in: an install whose tables live in another schema keeps resolving them there, and the delete guard, the one body that names a table, still finds `legal_consents`. The two guards that can create their functions again carry the same clause. All six run as `SECURITY INVOKER`, so the exposure was small. Run `php artisan migrate` after updating; nothing else changes.
+
 ## [0.26.0] - 2026-09-10
 
 ### Changed
@@ -2489,7 +2495,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.2...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.1...HEAD
+[0.26.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.3...v0.26.0
 [0.25.3]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.1...v0.25.2

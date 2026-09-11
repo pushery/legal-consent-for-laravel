@@ -130,6 +130,8 @@ final class LegalDocument extends Model
         // this hook cannot see: the two sweeps write via saveQuietly() (which bypasses events),
         // and raw DB::table()/psql updates never reach a model at all.
         self::updating(function (self $document): void {
+            // array_values changes nothing observable: LegalDocumentFrozenException::for() sorts
+            // the list, which re-indexes it, and only ever implodes it into its message.
             $forbidden = array_values(array_diff(array_keys($document->getDirty()), self::MUTABLE_AFTER_PUBLISH));
 
             if ($forbidden !== []) {
@@ -178,6 +180,8 @@ final class LegalDocument extends Model
             $consents = $document->consentsInEvidence();
 
             if ($consents > 0) {
+                // The three casts are for the declared string parameters and change no value: key,
+                // version and locale are NOT NULL string columns, and this model casts none of them.
                 throw LegalDocumentInEvidenceException::for(
                     (string) $document->key,
                     (string) $document->version,

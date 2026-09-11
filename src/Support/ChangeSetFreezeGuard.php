@@ -195,7 +195,7 @@ final class ChangeSetFreezeGuard
         // OLD.state, never NEW.state: the question is whether the row WAS frozen, and reading the
         // incoming value would let an update that also rewrites `state` walk straight past the guard.
         self::execute(<<<SQL
-            CREATE OR REPLACE FUNCTION {$function}() RETURNS trigger AS \$\$
+            CREATE OR REPLACE FUNCTION {$function}() RETURNS trigger SET search_path FROM CURRENT AS \$\$
             BEGIN
                 IF OLD.state = 'published' THEN
                     RAISE EXCEPTION '{$message}';

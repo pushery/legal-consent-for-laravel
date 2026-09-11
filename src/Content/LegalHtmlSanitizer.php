@@ -60,6 +60,12 @@ final class LegalHtmlSanitizer
 
         $dom = new DOMDocument;
 
+        // The closing `</body>` and the two flags are EQUIVALENT under mutation, measured rather
+        // than assumed (2026-09-11, 30 inputs including stray and nested body tags, a head, CDATA, a
+        // processing instruction and 30 levels of nesting; no output differed). libxml closes the
+        // body at the end of the input by itself, and without the flags it adds the doctype and
+        // html wrapper it otherwise omits, while the body lookup below still finds the same body.
+        // Both stay because they say what is being parsed.
         $previous = libxml_use_internal_errors(true);
         $dom->loadHTML(
             '<?xml encoding="utf-8"?><body>'.$html.'</body>',

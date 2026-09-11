@@ -4,6 +4,18 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.26.0 → 0.26.1
+
+**Run `php artisan migrate` after updating, and that is the whole of it.** No code, no configuration key and no table changed. One migration alters six existing trigger functions, and only on PostgreSQL.
+
+### The trigger functions this package installs now carry a fixed `search_path`
+
+A function without one resolves its names through the search path of whoever calls it. All six run as `SECURITY INVOKER`, so the exposure was small — but SQLens reports every one of them (`PGLS.functionSearchPathMutable`, severity medium) in every consumer's audit, and with the release audit now sitting in front of a release, in every report before every release.
+
+The migration pins them with `SET search_path FROM CURRENT`: it stores the search path the migration itself runs under, which is the one the functions were created in and resolve their names through today. An install whose tables live in another schema keeps resolving them there, and `legal_documents_guard_delete` — the one body that names a table — still finds `legal_consents`. A literal `public` would have broken the first case, and an empty path the second.
+
+**On MySQL and SQLite the migration does nothing**, because these six are PostgreSQL trigger functions. A function that a consumer dropped on purpose is skipped rather than failing the migration chain over it. `php artisan migrate:rollback` restores the previous state with `RESET search_path`.
+
 ## 0.25.3 → 0.26.0
 
 **Nothing is required of you unless you use the WireKit view variant AND your WireKit is older than 2.47.0.** No code, schema or configuration key changed, and nothing throws.
