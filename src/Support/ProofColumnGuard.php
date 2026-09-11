@@ -352,7 +352,7 @@ final class ProofColumnGuard
         $deleteMessage = self::DELETE_MESSAGE;
 
         self::execute(<<<SQL
-            CREATE OR REPLACE FUNCTION {$updateFunction}() RETURNS trigger AS \$\$
+            CREATE OR REPLACE FUNCTION {$updateFunction}() RETURNS trigger SET search_path FROM CURRENT AS \$\$
             BEGIN
                 IF to_jsonb(NEW){$strip} IS DISTINCT FROM to_jsonb(OLD){$strip} THEN
                     RAISE EXCEPTION 'legal_documents rows are frozen proof — publish a new version instead (EDPB 05/2020 Rz. 108)';
@@ -365,7 +365,7 @@ final class ProofColumnGuard
                 BEFORE UPDATE ON {$documents}
                 FOR EACH ROW EXECUTE FUNCTION {$updateFunction}();
 
-            CREATE OR REPLACE FUNCTION {$deleteFunction}() RETURNS trigger AS \$\$
+            CREATE OR REPLACE FUNCTION {$deleteFunction}() RETURNS trigger SET search_path FROM CURRENT AS \$\$
             BEGIN
                 IF EXISTS (SELECT 1 FROM {$consents} WHERE document_id = OLD.id) THEN
                     RAISE EXCEPTION '{$deleteMessage}';
