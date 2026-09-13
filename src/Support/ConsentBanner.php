@@ -41,7 +41,7 @@ final readonly class ConsentBanner
         $now ??= CarbonImmutable::now();
         $locale ??= $this->defaultLocale;
 
-        $upcoming = $this->activeFor($locale)->filter(
+        $upcoming = $this->resolvedFor($locale)->filter(
             fn (LegalDocument $document): bool => ! $document->requires_explicit_optin
                 && $document->requires_reconsent
                 && $this->announced($document, $now)
@@ -104,7 +104,7 @@ final readonly class ConsentBanner
         $now ??= CarbonImmutable::now();
         $locale ??= $this->defaultLocale;
 
-        $active = $this->activeFor($locale)->filter(
+        $active = $this->resolvedFor($locale)->filter(
             // The stored column, not noticeMode(): a null notice_mode is NOT an info push (the
             // accessor would derive one from requires_reconsent), matching the previous SQL filter.
             //
@@ -152,7 +152,7 @@ final readonly class ConsentBanner
         $now ??= CarbonImmutable::now();
         $locale ??= $this->defaultLocale;
 
-        $upcoming = $this->activeFor($locale)->filter(
+        $upcoming = $this->resolvedFor($locale)->filter(
             fn (LegalDocument $document): bool => $document->notice_mode === NoticeMode::DeemedConsent
                 && $this->announced($document, $now)
                 && $document->objection_deadline instanceof CarbonImmutable
@@ -226,8 +226,9 @@ final readonly class ConsentBanner
     }
 
     /**
-     * The active document set for a locale, taken from the publish-invalidated cache the package
-     * already maintains — so the banner's three global lookups cost ZERO database queries on a warm
+     * The document set a subject reading this locale is held to — the request locale, plus every
+     * mandatory document resolved through the locale chain ({@see EnforceableDocumentCache::resolvedFor()})
+     * — taken from the publish-invalidated cache the package already maintains — so the banner's three global lookups cost ZERO database queries on a warm
      * cache, on a NON-DB cache store (redis/memcached/file/array), instead of three uncached
      * legal_documents reads on every authenticated render. On the framework-default `database` cache
      * store each lookup is itself a cache-table SELECT, so the reads move to the cache table rather
@@ -237,9 +238,9 @@ final readonly class ConsentBanner
      *
      * @return Collection<int, LegalDocument>
      */
-    private function activeFor(string $locale): Collection
+    private function resolvedFor(string $locale): Collection
     {
-        return app(EnforceableDocumentCache::class)->activeFor($locale);
+        return app(EnforceableDocumentCache::class)->resolvedFor($locale);
     }
 
     /**

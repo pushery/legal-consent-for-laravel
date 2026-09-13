@@ -221,6 +221,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->cacheStore(),
             $this->app->make(TenantContext::class),
             $this->intConfig('legal-consent.cache.enforceable_ttl', 60),
+            $this->defaultLocale(),
         ));
 
         $this->app->singleton(LegalDocumentReleaser::class, fn (): LegalDocumentReleaser => new LegalDocumentReleaser(

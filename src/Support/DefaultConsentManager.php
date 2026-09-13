@@ -399,7 +399,7 @@ readonly class DefaultConsentManager implements ConsentManager
         // lookups for a fact that does not vary between them. Sharing the cache also serves the
         // agreement below: the two methods now read the same active set, not two reads of it.
         $active = app(EnforceableDocumentCache::class)
-            ->activeFor($locale)
+            ->resolvedFor($locale)
             ->first(static fn (LegalDocument $document): bool => $document->key === $documentKey);
 
         if (! $active instanceof LegalDocument) {
@@ -450,7 +450,7 @@ readonly class DefaultConsentManager implements ConsentManager
         // the same (`locale`, `is_active`). It also orders by (key, id), where the private query
         // left the order to the engine.
         $documents = app(EnforceableDocumentCache::class)
-            ->activeFor($locale)
+            ->resolvedFor($locale)
             // An informational page has no standing to report: nobody accepts it, so
             // `accepted_major` would sit at 0 forever and `outstanding` — computed from
             // `! requires_explicit_optin`, the same false a contract carries — would be
@@ -821,8 +821,8 @@ readonly class DefaultConsentManager implements ConsentManager
     /**
      * The active version for (key, locale), falling back to the configured fallback locale when
      * the document is not published in the requested one (config `fallback_locale`) — a graceful
-     * default for multilingual apps rather than a hard failure. The recorded row carries the
-     * fallback's locale.
+     * default for multilingual apps rather than a hard failure — and, for a mandatory document,
+     * to the default locale after that. The recorded row carries the locale that was found.
      */
     private function publishedDocument(string $documentKey, string $locale): ?LegalDocument
     {
@@ -835,7 +835,21 @@ readonly class DefaultConsentManager implements ConsentManager
         $fallback = $this->fallbackLocale();
 
         if ($fallback !== '' && $fallback !== $locale) {
-            return $this->activeDocumentIn($documentKey, $fallback);
+            $document = $this->activeDocumentIn($documentKey, $fallback);
+
+            if ($document instanceof LegalDocument) {
+                return $document;
+            }
+        }
+
+        // The default locale too, for a MANDATORY document: the gate resolves the set a subject owes
+        // through the whole chain (EnforceableDocumentCache::resolvedFor()), so a subject in an
+        // untranslated locale is stopped for the default-locale terms. Accepting them has to find the
+        // same version, or the gate would stop somebody and then refuse the acceptance it asked for.
+        if ($this->defaultLocale !== $locale && $this->defaultLocale !== $fallback) {
+            $document = $this->activeDocumentIn($documentKey, $this->defaultLocale);
+
+            return $document instanceof LegalDocument && $document->type->isMandatory() ? $document : null;
         }
 
         return null;

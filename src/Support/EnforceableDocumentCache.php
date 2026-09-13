@@ -72,7 +72,62 @@ final class EnforceableDocumentCache
         private readonly CacheRepository $cache,
         private readonly TenantContext $tenant,
         private readonly int $ttl = 60,
+        private readonly string $defaultLocale = 'de',
     ) {}
+
+    /**
+     * Every active document a subject reading this locale is held to.
+     *
+     * Per document key, the version published in the requested locale. A MANDATORY document that is
+     * not published in it resolves through the same chain registration walks, fallback_locale and then
+     * default_locale ({@see RegistrationLocaleChain}), and the first version found stands in.
+     *
+     * ⚠️ {@see activeFor()} ALONE FAILED OPEN FOR EVERY UNTRANSLATED LOCALE. The gate read the strict
+     * per-locale set, so a subject browsing in a language the terms were never translated into owed
+     * nothing: measured in a consumer with terms in `de` and `en`, `outstanding()` answered empty for
+     * `fr`, `es`, `it`, `nl` and `pt`, and a subject in `it` who had accepted nothing reached the
+     * dashboard. Holdings were already cross-locale; only the enforceable set was not.
+     *
+     * Mandatory only, as registration does. A voluntary consent in another language is not one to ask
+     * for, and an informational page binds nobody; both stay strictly per locale.
+     *
+     * The order is the per-locale order whenever nothing had to be resolved, so every existing list
+     * renders as before. A resolved set is ordered by key, byte for byte.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    public function resolvedFor(string $locale): Collection
+    {
+        $documents = $this->activeFor($locale);
+        $resolved = [];
+
+        foreach ($documents as $document) {
+            $resolved[$document->key] = $document;
+        }
+
+        $added = false;
+
+        foreach (RegistrationLocaleChain::resolve($locale, $this->defaultLocale) as $candidate) {
+            if ($candidate === $locale) {
+                continue;
+            }
+
+            foreach ($this->activeFor($candidate) as $document) {
+                if (! isset($resolved[$document->key]) && $document->type->isMandatory()) {
+                    $resolved[$document->key] = $document;
+                    $added = true;
+                }
+            }
+        }
+
+        if (! $added) {
+            return $documents;
+        }
+
+        ksort($resolved, SORT_STRING);
+
+        return new Collection(array_values($resolved));
+    }
 
     /**
      * Every active document for a locale, cached. The caller filters by time and mode: the

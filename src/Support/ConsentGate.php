@@ -45,7 +45,7 @@ final class ConsentGate
         // because those windows move on a clock. A dormant install now pays no query at all — it
         // used to run this on every authenticated request just to be told nothing is published.
         $enforceable = app(EnforceableDocumentCache::class)
-            ->activeFor($locale)
+            ->resolvedFor($locale)
             ->filter(fn (LegalDocument $document): bool => $document->type->isConsentBearing()
                 // Informational is checked FIRST and separately, because the opt-in flag cannot
                 // express it: an informational page has `requires_explicit_optin = false`, which
@@ -107,7 +107,7 @@ final class ConsentGate
         // Same cache and same short-circuit as outstandingFor(): an install that has published
         // nothing must not pay a ledger read on a path a consumer may put on every request.
         $mandatory = app(EnforceableDocumentCache::class)
-            ->activeFor($locale)
+            ->resolvedFor($locale)
             ->filter(fn (LegalDocument $document): bool => $document->type->isMandatory()
                 && ! $document->requires_explicit_optin)
             ->values();
