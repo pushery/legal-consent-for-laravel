@@ -4,7 +4,12 @@
     (withdrawable) shows a one-click withdraw control (Art. 7(3)). Style freely.
 --}}
 <div class="legal-consent-settings">
-    <h2>{{ __('legal-consent::ui.settings_heading') }}</h2>
+    {{-- Left out where the embedding page titles itself (`:heading="false"`); the group headings then
+         take the level it leaves free. `?? true` for a render outside the component. --}}
+    @php($groupLevel = ($heading ?? true) ? 3 : 2)
+    @if ($heading ?? true)
+        <h2>{{ __('legal-consent::ui.settings_heading') }}</h2>
+    @endif
 
     {{-- WCAG 4.1.3 + 2.4.3: after a withdrawal the row's button is gone, so the result is announced
          here (a polite live region, always present so the update is spoken) and focus moves to it so
@@ -18,6 +23,7 @@
          edge case it looks like: the groups are built from the `legal_documents` table, which is
          empty until `legal-consent:publish` runs — so this is what every consumer sees between
          `composer require` and their first publish, and three bare headings read as broken. --}}
+    @php($hideEmpty = $hideEmptyGroups ?? false)
     @if (count($contracts) === 0 && count($acknowledgements) === 0 && count($consents) === 0)
         <p class="legal-consent-empty">{{ __('legal-consent::ui.nothing_published') }}</p>
     @else
@@ -26,8 +32,11 @@
          and renders as plain text otherwise. Deciding to withdraw a consent without being able to
          re-read what was consented to is the one thing this screen must not ask of anyone
          (Art. 7(3): as easy to withdraw as to give). --}}
+    {{-- `:hide-empty-groups="true"` leaves out a group with nothing in it, for a deployment that never
+         publishes that kind of document and would otherwise show it empty to every subject. --}}
+    @if (! $hideEmpty || count($contracts) > 0)
     <section aria-labelledby="lc-contracts">
-        <h3 id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h3>
+        <h{{ $groupLevel }} id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h{{ $groupLevel }}>
         <ul>
             @forelse ($contracts as $item)
                 {{-- The title's own language, declared only where it differs from the page: a
@@ -49,9 +58,11 @@
             @endforelse
         </ul>
     </section>
+    @endif
 
+    @if (! $hideEmpty || count($acknowledgements) > 0)
     <section aria-labelledby="lc-acknowledgements">
-        <h3 id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</h3>
+        <h{{ $groupLevel }} id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</h{{ $groupLevel }}>
         <ul>
             @forelse ($acknowledgements as $item)
                 {{-- The title's own language, declared only where it differs from the page: a
@@ -73,9 +84,11 @@
             @endforelse
         </ul>
     </section>
+    @endif
 
+    @if (! $hideEmpty || count($consents) > 0)
     <section aria-labelledby="lc-consents">
-        <h3 id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</h3>
+        <h{{ $groupLevel }} id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</h{{ $groupLevel }}>
         <ul>
             @forelse ($consents as $item)
                 {{-- The title's own language, declared only where it differs from the page: a
@@ -90,6 +103,9 @@
                     @else
                         <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $item['title'] }}</span>
                     @endif
+                    {{-- The state in words, independent of the action beside it: without it a screen that
+                         offers no Give button shows a consent that is not given as a bare title. --}}
+                    <span class="legal-consent-state">{{ $item['held'] ? __('legal-consent::ui.consent_given') : __('legal-consent::ui.consent_not_given') }}</span>
                     @if ($item['held'] && $item['withdrawable'])
                         <button type="button" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $item['title']]) }}" wire:click="withdraw(@js($item['key']))" wire:loading.attr="aria-busy" wire:target="withdraw">
                             {{ __('legal-consent::ui.withdraw') }}
@@ -121,5 +137,6 @@
             @endforelse
         </ul>
     </section>
+    @endif
     @endif
 </div>

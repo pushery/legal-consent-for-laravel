@@ -17,6 +17,9 @@ return [
     // broken rather than as "nothing yet". `nothing_published` covers all three being empty at
     // once, where one sentence says more than three.
     'nothing_published' => 'Nothing here yet — no legal documents have been published.',
+    // The WireKit panel shows the all-empty case as an empty state: a title, and what will appear there.
+    'nothing_published_title' => 'No legal documents yet',
+    'nothing_published_description' => 'Your contracts, the documents you acknowledged and your consents will appear here once legal documents are published.',
     'contracts_empty' => 'No contracts.',
     'acknowledgements_empty' => 'Nothing acknowledged.',
     'consents_empty' => 'No consents.',
@@ -54,6 +57,10 @@ return [
     // this is the invitation to do voluntarily what the gate will otherwise compel.
     'action_required' => 'Action required',
     'retired' => 'No longer offered',
+    // Whether a voluntary consent is given, said in words beside its title. A screen that offers no
+    // Give button otherwise shows a consent that is not given as a bare title.
+    'consent_given' => 'Given',
+    'consent_not_given' => 'Not given',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}Effective today|{1}:count day left|[2,*]:count days left',

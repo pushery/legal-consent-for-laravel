@@ -4,6 +4,30 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0] - 2026-09-13
+
+### Added
+
+- **The consent settings screen says whether each voluntary consent is given.** Unless the embedding page asks for a Give button, which it does not by default, a consent that was not given showed as its bare title, and one that was given differed from it only by the Withdraw button beside it. Every consent row now carries its state in words, *"Given"* or *"Not given"*, in the plain and the WireKit view and in all seven bundled languages. A view published before this release shows no state until it is published again.
+
+- **The consent settings screen can leave its heading out.** It opened with *"Your consents"* and offered no way to drop it, so a page that titled itself showed the same words twice, once as its own heading and again as the panel's. `<livewire:legal-consent.consent-settings :heading="false" />` omits it, and the three group headings then move up from `h3` to `h2`, so the outline keeps no gap. Both views follow the flag. A view published before this release always shows the heading until it is published again.
+
+- **The WireKit consent settings panel can put an icon on its Withdraw and Give buttons.** An application that gives every action button an icon had no way to give these two one, so Withdraw was the only action on its screen without. `legal-consent.ui.icons.withdraw` and `legal-consent.ui.icons.grant` take a WireKit icon name; `null`, the default, renders the buttons as before. The plain views have no icon component and ignore both keys.
+
+- **The consent settings screen can leave out a group with nothing in it.** `<livewire:legal-consent.consent-settings :hide-empty-groups="true" />` omits the contracts, the acknowledged documents or the consents while the subject has none, in the plain and the WireKit view. A deployment that never publishes one kind of document showed that group empty to every subject, under its heading, with nothing anyone could do about it. The default keeps all three groups, and a screen with every group empty still says that nothing is published.
+
+### Fixed
+
+- **The WireKit consent settings panel shows an empty state when nothing is published.** It showed one muted line alone in the panel, which read like something that had failed to load. It now uses `x-wirekit::empty-state`, with a title at the level the groups would have and a description of what will appear there, in all seven bundled languages. The plain view keeps its sentence.
+
+- **The info-only banner no longer asks for an action it says is not needed.** Its link carried the re-consent label, so the banner read *"Updated — no action required. Review now"*, with the same words the countdown uses where acting is required. The link now names the document it opens, *"Read Acceptable-use"*, in both the plain and the WireKit view. A view published before this release keeps the old label until it is published again.
+
+- **The deemed-consent banner says that silence binds.** During an objection window it showed the title, a countdown and *"Review or object"*, which read like a second deadline to agree by, and the § 308 Nr. 5 lit. b warning reached the subject only through the notice. Both views now repeat that warning, word for word from the notice, with the date the window closes: *"If you do not object by 2026-07-01, this will be treated as your agreement to the changes."* `ConsentBanner::deemedFor()` hands the date over as `objection_date`. A view published before this release shows no warning until it is published again.
+
+- **The WireKit consent settings screen no longer doubles the space under its heading.** Its status region stays in the page at all times, because a live region inserted together with its text announces nothing, and while empty it still counted as a child of the spaced stack, so two gaps separated the heading from the first group. The empty region is now visually hidden, which keeps it in the accessibility tree and out of the layout, and it takes its place in the stack as soon as a status appears. A view published before this release keeps the double gap until it is published again.
+
+- **A WireKit consent checkbox rendered inside a Livewire form shows its wording.** When the wording does not name the document's title, or the document has no URL, there is no link to set into the sentence, and the WireKit view left the checkbox slot empty, counting on the component to fall back to its label. Inside a Livewire render it never did: Livewire wraps the view's conditional in morph markers, the slot is no longer empty, and the checkbox rendered with no visible text and no accessible name, so a registration form showed an empty box beside a link. The slot now carries the wording itself in that case, as the plain view already did. A view published before this release keeps the empty slot until it is published again.
+
 ## [0.26.2] - 2026-09-13
 
 ### Fixed
@@ -2503,7 +2527,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.2...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.2...v0.27.0
 [0.26.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.1...v0.26.2
 [0.26.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.3...v0.26.0

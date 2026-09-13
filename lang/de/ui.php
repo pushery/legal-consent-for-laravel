@@ -17,6 +17,8 @@ return [
     // broken rather than as "nothing yet". `nothing_published` covers all three being empty at
     // once, where one sentence says more than three.
     'nothing_published' => 'Hier ist noch nichts — es sind keine Rechtstexte veröffentlicht.',
+    'nothing_published_title' => 'Noch keine Rechtstexte',
+    'nothing_published_description' => 'Deine Verträge, die zur Kenntnis genommenen Dokumente und deine Einwilligungen erscheinen hier, sobald Rechtstexte veröffentlicht sind.',
     'contracts_empty' => 'Keine Verträge.',
     'acknowledgements_empty' => 'Nichts zur Kenntnis genommen.',
     'consents_empty' => 'Keine Einwilligungen.',
@@ -54,6 +56,8 @@ return [
     // this is the invitation to do voluntarily what the gate will otherwise compel.
     'action_required' => 'Aktion erforderlich',
     'retired' => 'Nicht mehr angeboten',
+    'consent_given' => 'Erteilt',
+    'consent_not_given' => 'Nicht erteilt',
 
     // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
     'days_left' => '{0}Ab heute wirksam|{1}Noch :count Tag|[2,*]Noch :count Tage',
