@@ -233,6 +233,14 @@ return [
     */
     'ui' => [
         'variant' => 'auto',
+
+        // Icons for the buttons of the consent settings panel in the WireKit views, as WireKit icon
+        // names ('undo', 'check'). Null leaves a button without an icon, which is how the panel has
+        // always rendered. The plain views have no icon component and ignore both.
+        'icons' => [
+            'withdraw' => null,
+            'grant' => null,
+        ],
     ],
 
     /*

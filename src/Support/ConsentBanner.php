@@ -145,7 +145,7 @@ final readonly class ConsentBanner
      * @param  array<string, int>|null  $accepted  the subject's CURRENT holdings — a presence map, see
      *                                             ConsentGate::currentHoldings() — folded here when null and
      *                                             handed back so a sibling banner can reuse it
-     * @return list<array{key: string, version: string, title: string, objection_deadline: ?string, enforce_from: ?string, days_left: int}>
+     * @return list<array{key: string, version: string, title: string, objection_deadline: ?string, objection_date: ?string, enforce_from: ?string, days_left: int}>
      */
     public function deemedFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array &$accepted = null): array
     {
@@ -196,6 +196,10 @@ final readonly class ConsentBanner
                 'version' => $document->version,
                 'title' => $document->title,
                 'objection_deadline' => $deadline?->toIso8601String(),
+                // The calendar date the § 308 Nr. 5 lit. b warning names, in the format the durable
+                // notice prints it in, so the banner repeats the notice's sentence rather than a second
+                // rendering of the same instant.
+                'objection_date' => $deadline?->toDateString(),
                 'enforce_from' => $document->enforce_from?->toIso8601String(),
                 'days_left' => $deadline instanceof CarbonImmutable ? max(0, (int) $now->diffInDays($deadline)) : 0,
             ];

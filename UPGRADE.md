@@ -4,6 +4,24 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.26.2 → 0.27.0
+
+**Nothing is required of you.** No migration, no renamed key and no removed option. The settings screen gains three things you can switch on and says one thing it did not say before; publish the views again only if you published them.
+
+### Every consent row says whether it is given
+
+The settings screen shows *Given* or *Not given* beside the title of each voluntary consent, in the plain and the WireKit view and in all seven bundled languages. Without the grant button, which stays off by default, a consent the subject never gave used to show as its bare title. A screen you built on `ConsentPresenter::settingsFor()` is unaffected; `held` is the key the views read.
+
+### Three options for the settings screen
+
+* `<livewire:legal-consent.consent-settings :heading="false" />` leaves out the screen's own heading, for a page that titles itself. The group headings then move up from `h3` to `h2`.
+* `<livewire:legal-consent.consent-settings :hide-empty-groups="true" />` leaves out a group while the subject has nothing in it, for a deployment that never publishes one kind of document. With every group empty the screen still says that nothing is published.
+* `legal-consent.ui.icons.withdraw` and `legal-consent.ui.icons.grant` put a WireKit icon on the WireKit panel's buttons. Both default to `null`, which renders the buttons as before; a config you published earlier needs the `icons` block only if you want them.
+
+### Published views keep their old markup
+
+The WireKit consent checkbox now shows its wording inside a Livewire form, the empty status region no longer doubles the gap under the settings heading, the WireKit panel shows an empty state when nothing is published, and both banners changed their wording (the info-only link names the document, the deemed-consent banner repeats the objection warning with its date). A view you published into `resources/views/vendor/legal-consent` keeps the previous markup until you publish it again with `php artisan vendor:publish --tag=legal-consent-views --force` or `--tag=legal-consent-wirekit --force`.
+
 ## 0.26.1 → 0.26.2
 
 **Nothing is required of you, and one behavior changes on purpose.** No configuration key and no table changed. Subjects browsing in a language your legal texts are not translated into now meet the consent gate, and on PostgreSQL the ledger relation answers eager loads and existence queries for integer and uuid subject keys.

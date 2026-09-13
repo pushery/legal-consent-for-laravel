@@ -100,16 +100,37 @@ final class ConsentSettings extends Component
     #[Locked]
     public bool $allowGrant = false;
 
+    /**
+     * Whether the screen opens with its own heading. A page that already titles itself turns it off,
+     * and the group headings then take the level the heading leaves free. Locked like the flags above,
+     * though nothing but the page outline depends on it: it is the embedding page's decision.
+     */
+    #[Locked]
+    public bool $heading = true;
+
+    /**
+     * Whether a group with nothing in it is left out. A deployment that never publishes one kind of document,
+     * voluntary consents for instance, otherwise shows that group empty for every subject, with nothing the
+     * subject can do about it. Off by default, so an existing page keeps all three groups. When every group is
+     * empty the screen still says that nothing is published: leaving out all three would leave nothing at all.
+     */
+    #[Locked]
+    public bool $hideEmptyGroups = false;
+
     public function mount(
         ?string $locale = null,
         bool $allowObjection = true,
         bool $allowTermination = true,
         bool $allowGrant = false,
+        bool $heading = true,
+        bool $hideEmptyGroups = false,
     ): void {
         $this->locale = $locale ?? app()->getLocale();
         $this->allowObjection = $allowObjection;
         $this->allowTermination = $allowTermination;
         $this->allowGrant = $allowGrant;
+        $this->heading = $heading;
+        $this->hideEmptyGroups = $hideEmptyGroups;
     }
 
     /**

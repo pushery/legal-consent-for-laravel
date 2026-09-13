@@ -8,7 +8,7 @@
 
     a named `region` landmark (an aria-live region present at page load never announces,
     so it would be inert here; the landmark makes the banner discoverable in landmark navigation).
-    Publishable, framework-agnostic stub. $consentUrl: where "review" links to.
+    Publishable, framework-agnostic stub. $consentUrl: where the banner's links point.
 --}}
 @php
     $pending ??= [];
@@ -46,8 +46,9 @@
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>
                         <span>{{ __('legal-consent::ui.updated_note') }}</span>
+                        {{-- The document's name, never the re-consent label: nothing is asked here. --}}
                         @if ($consentUrl !== null)
-                            <a href="{{ $consentUrl }}">{{ __('legal-consent::ui.review') }}</a>
+                            <a href="{{ $consentUrl }}">{{ __('legal-consent::ui.read_document', ['title' => $item['title']]) }}</a>
                         @endif
                     </li>
                 @endforeach
@@ -60,6 +61,10 @@
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>
                         <span>{{ trans_choice('legal-consent::ui.days_left', $item['days_left'], ['count' => $item['days_left']]) }}</span>
+                        @if (! empty($item['objection_date']))
+                            {{-- The notice's § 308 Nr. 5 lit. b warning, word for word: here silence binds. --}}
+                            <span>{{ __('legal-consent::notifications.deemed.warning', ['deadline' => $item['objection_date']]) }}</span>
+                        @endif
                         @if ($consentUrl !== null)
                             <a href="{{ $consentUrl }}">{{ __('legal-consent::ui.object_review') }}</a>
                         @endif

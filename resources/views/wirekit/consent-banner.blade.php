@@ -19,7 +19,7 @@
 
     $pending:       list{key, title, version, enforce_from, days_left}  — re-consent countdown
     $informational: list{key, title, version, effective_from, offers_termination} — info-only
-    $deemed:        list{key, title, version, objection_deadline, enforce_from, days_left}
+    $deemed:        list{key, title, version, objection_deadline, objection_date, enforce_from, days_left}
     $consentUrl:    where the subject acts.
 
     The countdown carries its OWN `role="timer"` (an implicit aria-live=off), so its ticking value
@@ -79,7 +79,10 @@
 
 @if (! empty($informational))
     {{-- Info-only: announced, never gated. `intent="info"` and no CTA — the wording must not
-         imply an action the subject does not have to take (WP260 rev.01 Rz. 30-31). --}}
+         imply an action the subject does not have to take (WP260 rev.01 Rz. 30-31). So the link
+         names the document it opens and nothing else: it used to carry the re-consent label,
+         and "Review now" directly after "no action required" asked for the very action this
+         banner exists not to ask for. --}}
     <x-wirekit::callout intent="info" role="region" :aria-label="__('legal-consent::ui.banner_label')" class="legal-consent-banner legal-consent-banner--info">
         <x-wirekit::stack gap="sm">
             @foreach ($informational as $item)
@@ -88,7 +91,7 @@
                     <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
                     — {{ __('legal-consent::ui.updated_note') }}
                     @if ($consentUrl !== null)
-                        <x-wirekit::link :href="$consentUrl">{{ __('legal-consent::ui.review') }}</x-wirekit::link>
+                        <x-wirekit::link :href="$consentUrl">{{ __('legal-consent::ui.read_document', ['title' => $item['title']]) }}</x-wirekit::link>
                     @endif
                 </x-wirekit::text>
             @endforeach
@@ -106,6 +109,13 @@
                     <x-wirekit::text>
                         {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
                     </x-wirekit::text>
+
+                    @if (! empty($item['objection_date']))
+                        {{-- The § 308 Nr. 5 lit. b warning the durable notice carries, word for word. Without
+                             it the countdown below reads like a second deadline to agree by, when here it is
+                             silence that binds. --}}
+                        <x-wirekit::text>{{ __('legal-consent::notifications.deemed.warning', ['deadline' => $item['objection_date']]) }}</x-wirekit::text>
+                    @endif
 
                     @if (! empty($item['objection_deadline']))
                         {{-- Same reasoning as the re-consent countdown above, same reason it is

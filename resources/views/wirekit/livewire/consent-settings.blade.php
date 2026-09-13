@@ -14,31 +14,51 @@
              and renders as plain text otherwise. Deciding to withdraw a consent without being able
              to re-read what was consented to is the one thing this screen must not ask of anyone
              (Art. 7(3): as easy to withdraw as to give). --}}
-        <x-wirekit::heading :level="2">{{ __('legal-consent::ui.settings_heading') }}</x-wirekit::heading>
+        {{-- Left out where the embedding page titles itself (`:heading="false"`), and the group headings
+             below then move up to the level it leaves free, so the outline keeps no gap under the page's
+             own heading. `?? true` for a render outside the component, which passes no such flag. --}}
+        @php($groupLevel = ($heading ?? true) ? 3 : 2)
+        @if ($heading ?? true)
+            <x-wirekit::heading :level="2">{{ __('legal-consent::ui.settings_heading') }}</x-wirekit::heading>
+        @endif
 
         {{-- WCAG 4.1.3 + 2.4.3: the withdrawal result is announced here — the region is ALWAYS in the
              DOM (a live region inserted together with its text is not announced) and role="status"
              carries the announcement, so focus lands on the live region itself, exactly as in the
              plain view. The text is a plain x-wirekit::text, NOT an x-wirekit::alert (the alert is
              itself a role="status" region — nesting would double-announce). Focus is driven by
-             x-effect, not x-init: x-init runs once and does not re-run on a Livewire morph. --}}
+             x-effect, not x-init: x-init runs once and does not re-run on a Livewire morph.
+
+             `sr-only` while it is EMPTY, and only then. An empty region has no height but is still a
+             child of the stack, so it added a second `lg` gap under the heading. Visually hidden it
+             stays in the DOM and in the accessibility tree, which is what the announcement needs, but
+             it is positioned out of the stack's flow and takes no gap; with a status in it, it is an
+             ordinary child again. --}}
         <div role="status" aria-live="polite" tabindex="-1" wire:key="lc-settings-status"
+            @class(['sr-only' => ($status ?? '') === ''])
             x-effect="$wire.statusNonce > 0 && $el.focus()">
             @if (($status ?? '') !== '')
                 <div wire:key="lc-settings-status-{{ $statusNonce }}"><x-wirekit::text>{{ $status }}</x-wirekit::text></div>
             @endif
         </div>
 
-        {{-- The all-empty case gets ONE sentence instead of three headings over nothing. It is not
+        {{-- The all-empty case gets one empty state instead of three headings over nothing. It is not
              the edge case it looks like: the groups are built from the `legal_documents` table,
              which is empty until `legal-consent:publish` runs — so this is what every consumer sees
-             between `composer require` and their first publish. --}}
+             between `composer require` and their first publish. An empty state rather than a muted
+             line, because a line alone in the panel reads as something that failed to load, and the
+             description says what will appear here. Its title takes the level the groups would have. --}}
+        @php($hideEmpty = $hideEmptyGroups ?? false)
         @if (count($contracts) === 0 && count($acknowledgements) === 0 && count($consents) === 0)
-            <x-wirekit::text intent="muted">{{ __('legal-consent::ui.nothing_published') }}</x-wirekit::text>
+            <x-wirekit::empty-state :level="$groupLevel" :title="__('legal-consent::ui.nothing_published_title')" :description="__('legal-consent::ui.nothing_published_description')" />
         @else
 
+        {{-- `:hide-empty-groups="true"` leaves out a group with nothing in it, for a deployment that never
+             publishes that kind of document and would otherwise show it empty to every subject. --}}
+        @if (! $hideEmpty || count($contracts) > 0)
+
         <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-contracts">
-            <x-wirekit::heading :level="3" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</x-wirekit::heading>
+            <x-wirekit::heading :level="$groupLevel" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</x-wirekit::heading>
             <x-wirekit::stack gap="xs">
                 @forelse ($contracts as $item)
                     {{-- The title's own language, declared only where it differs from the page. A
@@ -59,9 +79,11 @@
                 @endforelse
             </x-wirekit::stack>
         </x-wirekit::stack>
+        @endif
 
+        @if (! $hideEmpty || count($acknowledgements) > 0)
         <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-acknowledgements">
-            <x-wirekit::heading :level="3" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</x-wirekit::heading>
+            <x-wirekit::heading :level="$groupLevel" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</x-wirekit::heading>
             <x-wirekit::stack gap="xs">
                 @forelse ($acknowledgements as $item)
                     {{-- The title's own language, declared only where it differs from the page. A
@@ -82,9 +104,15 @@
                 @endforelse
             </x-wirekit::stack>
         </x-wirekit::stack>
+        @endif
 
+        {{-- Icons for the panel's buttons, from `legal-consent.ui.icons`. Unset, a button carries none. An
+             application that gives every action an icon had no way to give these two one. --}}
+        @php($icons = ['withdraw' => config('legal-consent.ui.icons.withdraw'), 'grant' => config('legal-consent.ui.icons.grant')])
+
+        @if (! $hideEmpty || count($consents) > 0)
         <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-consents">
-            <x-wirekit::heading :level="3" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</x-wirekit::heading>
+            <x-wirekit::heading :level="$groupLevel" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</x-wirekit::heading>
             <x-wirekit::stack gap="xs">
                 @forelse ($consents as $item)
                     {{-- Same rule as the two blocks above. See ContentLanguage. --}}
@@ -96,6 +124,11 @@
                             @else
                                 <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                             @endif
+                            {{-- The state in words, beside the title and whatever the action next to it is.
+                                 A screen that offers no Give button showed a consent that is not given as a
+                                 bare title, and one that is given only through the Withdraw button beside it.
+                                 Neutral for both: the screen reports a position, it does not steer one. --}}
+                            <x-wirekit::badge intent="neutral" size="sm" class="legal-consent-settings__state">{{ $item['held'] ? __('legal-consent::ui.consent_given') : __('legal-consent::ui.consent_not_given') }}</x-wirekit::badge>
                         </x-wirekit::text>
 
                         @if ($item['held'] && $item['withdrawable'])
@@ -105,6 +138,9 @@
                             <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']">
                                 <x-slot:trigger>
                                     <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
+                                        @if (filled($icons['withdraw']))
+                                            <x-slot:iconLeft><x-wirekit::icon :name="$icons['withdraw']" /></x-slot:iconLeft>
+                                        @endif
                                         {{ __('legal-consent::ui.withdraw') }}
                                     </x-wirekit::button>
                                 </x-slot:trigger>
@@ -132,6 +168,9 @@
                                          that position and emits what `@js()` emits on a plain
                                          element, which is the form the plain stub uses. --}}
                                     <x-wirekit::button intent="danger" wire:click="withdraw({{ \Illuminate\Support\Js::from($item['key']) }})" loading-target="withdraw" :disable-on-loading="false">
+                                        @if (filled($icons['withdraw']))
+                                            <x-slot:iconLeft><x-wirekit::icon :name="$icons['withdraw']" /></x-slot:iconLeft>
+                                        @endif
                                         {{ __('legal-consent::ui.withdraw') }}
                                     </x-wirekit::button>
                                 </x-wirekit::alert-dialog.actions>
@@ -157,6 +196,9 @@
                             {{-- An echo, not `@js()` — see the withdraw button above for why the
                                  directive never compiles in a component tag attribute. --}}
                             <x-wirekit::button surface="outline" wire:click="grant({{ \Illuminate\Support\Js::from($item['key']) }})" loading-target="grant" :disable-on-loading="false" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
+                                @if (filled($icons['grant']))
+                                    <x-slot:iconLeft><x-wirekit::icon :name="$icons['grant']" /></x-slot:iconLeft>
+                                @endif
                                 {{ __('legal-consent::ui.grant') }}
                             </x-wirekit::button>
                         @endif
@@ -166,6 +208,7 @@
                 @endforelse
             </x-wirekit::stack>
         </x-wirekit::stack>
+        @endif
         @endif
     </x-wirekit::stack>
 </div>

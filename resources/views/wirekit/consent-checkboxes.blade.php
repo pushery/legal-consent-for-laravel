@@ -77,9 +77,11 @@
                 :name="$field"
                 :id="$field"
                 value="1"
-                {{-- The label prop stays unconditionally: the component renders its SLOT when one
-                     is given and falls back to this otherwise, so the linked form and the plain
-                     form are the same call with and without a slot. --}}
+                {{-- The SLOT below always carries the text: the linked sentence, or the wording itself.
+                     The component falls back to this prop only for an EMPTY slot, and inside a
+                     Livewire render the slot is never empty: Livewire wraps the `@if` in morph markers,
+                     so a branch that rendered nothing left the checkbox with no text and no accessible
+                     name. The prop stays as the same wording for a render outside Livewire. --}}
                 :label="$document['wording']"
                 :required="$document['required']"
                 :aria-describedby="($document['url'] ?? null) !== null && $wordingLink === null ? $field.'_link' : null"
@@ -96,7 +98,7 @@
                     :href="$document['url']"
                     :hreflang="($document['locale'] ?? '') !== '' ? $document['locale'] : null"
                     external
-                >{{ $wordingLink->match }}</x-wirekit::link>{{ $wordingLink->after }}@endif</x-wirekit::checkbox>
+                >{{ $wordingLink->match }}</x-wirekit::link>{{ $wordingLink->after }}@else{{ $document['wording'] }}@endif</x-wirekit::checkbox>
 
             @if (($document['url'] ?? null) !== null && $wordingLink === null)
                 {{-- `hreflang` names the language of the linked text, which is not always this
