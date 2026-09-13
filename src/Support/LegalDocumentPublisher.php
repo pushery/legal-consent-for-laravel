@@ -165,10 +165,16 @@ final readonly class LegalDocumentPublisher
         ?CarbonImmutable $objectionDeadline = null,
         bool $offersTermination = false,
         bool $keepsUnmodified = false,
+        ?Document $prerendered = null,
     ): LegalDocument {
         $this->assertRequestCoherent($key, $locale, $mode, $regime);
 
-        $rendered = $this->preview($key, $locale);
+        // The presentation re-render is the one caller that hands a document in, and it has to:
+        // it publishes the ACTIVE version's text under the next PATCH, so the version it freezes is
+        // one the source does not declare. It renders through this publisher's own preview() and
+        // changes nothing but the number, which is what keeps "the dry run reads the same source as
+        // the real run" true. Every guard below runs over it unchanged.
+        $rendered = $prerendered ?? $this->preview($key, $locale);
         $type = $this->typeFor($key);
 
         $this->assertVersionPublishable($key, $locale, $mode, $type, $rendered);
@@ -191,6 +197,12 @@ final readonly class LegalDocumentPublisher
 
         $now = CarbonImmutable::now();
 
+        // ⚠️ A RE-FREEZE MUST NOT CONSUME THE DRAFT THAT DESCRIBES THE NEXT CHANGE. The freezer
+        // TRANSITIONS the working row onto the version it publishes — it does not copy it — so a
+        // presentation re-render would carry away the description an operator wrote for the text
+        // change they have not published yet, and that publish would then go out with none.
+        $describesNoChange = $this->describesNoChange($mode, $key, $locale, $rendered);
+
         [$announce, $enforce] = $this->assertedSchedule($key, $locale, $mode, $regime, $rendered, $announceAt, $enforceAt, $objectionDeadline, $now);
 
         // ⚠️ THE ROW AND ITS ACTIVATION ARE ONE ACT, AND THEY USED NOT TO BE.
@@ -208,7 +220,7 @@ final readonly class LegalDocumentPublisher
         // like it added safety.
         $write = (fn (): LegalDocument => DB::transaction(function () use (
             $key, $locale, $type, $mode, $regime, $rendered, $changeClass, $offersTermination,
-            $keepsUnmodified, $now, $announce, $enforce, $objectionDeadline
+            $keepsUnmodified, $now, $announce, $enforce, $objectionDeadline, $describesNoChange
         ): LegalDocument {
             $document = LegalDocument::query()->forceCreate([
                 'key' => $key,
@@ -223,6 +235,11 @@ final readonly class LegalDocumentPublisher
                 'content_format' => 'html',
                 'content' => $rendered->html,
                 'content_hash' => $rendered->contentHash,
+                // What this HTML was made FROM, and what made it. A later run compares both
+                // against the live source to say whether the TEXT moved or only its rendering;
+                // see LegalDriftChecker. Both are proof columns and frozen from here on.
+                'source_hash' => $rendered->sourceHash,
+                'render_fingerprint' => $rendered->renderFingerprint,
                 'ui_wording' => $rendered->uiWording,
                 'source_driver' => $this->sourceNameFor($key),
                 'source_reference' => $rendered->sourceRef,
@@ -250,7 +267,9 @@ final readonly class LegalDocumentPublisher
             // goes active. No new parameter: the freezer finds the draft by (key, locale,
             // tenant), so the ten-argument signature stays as it is and no caller has to learn
             // about the feature to keep working. Absence is not an error — see ChangeItemsFreezer.
-            $this->changeItems->freeze($document, $this->sources->for($key)->fingerprint($key, $locale));
+            if (! $describesNoChange) {
+                $this->changeItems->freeze($document, $this->sources->for($key)->fingerprint($key, $locale));
+            }
 
             $document->activate();
 
@@ -362,7 +381,7 @@ final readonly class LegalDocumentPublisher
     private function assertVersionPublishable(string $key, string $locale, NoticeMode $mode, DocumentType $type, Document $rendered): void
     {
         $this->assertModeAllowedForType($mode, $type, $key);
-        $this->assertModeConsistentAcrossLocales($mode, $key, $locale, $rendered->majorVersion);
+        $this->assertModeConsistentAcrossLocales($mode, $key, $locale, $rendered);
         $this->assertNotDowngrade($key, $locale, $rendered);
     }
 
@@ -565,12 +584,27 @@ final readonly class LegalDocumentPublisher
      * atomic releaser makes this unreachable by construction; this guard covers the per-locale CLI
      * escape hatch, which cannot see its sibling locales.
      */
-    private function assertModeConsistentAcrossLocales(NoticeMode $mode, string $key, string $locale, int $major): void
+    private function assertModeConsistentAcrossLocales(NoticeMode $mode, string $key, string $locale, Document $rendered): void
     {
+        // ⚠️ A VERSION THAT CARRIES EXACTLY THE ACTIVE VERSION'S TEXT IS NOT A CHANGE, SO IT HAS
+        // NOTHING TO BE CONSISTENT WITH. The presentation re-render publishes the identical source
+        // — proven by the hash, not by a flag a caller could assert — under the next patch and the
+        // silent mode: no gate, no notice, nothing announced. Without this the fix would be
+        // unreachable exactly where it is needed most, because a `terms` major that went out as
+        // ActiveReconsent in every locale refuses a silent patch in any single one of them.
+        //
+        // Both halves are load-bearing. SilentEditorial alone would let an operator re-classify a
+        // major one locale at a time; the hash alone would let an identical text go out as
+        // DeemedConsent beside an ActiveReconsent sibling, which is the vector this guard exists
+        // for. Together they describe a publish that changes nothing anybody could be bound by.
+        if ($this->describesNoChange($mode, $key, $locale, $rendered)) {
+            return;
+        }
+
         $siblings = LegalDocument::query()
             ->select(['locale', 'notice_mode', 'requires_reconsent'])
             ->where('key', $key)
-            ->where('major_version', $major)
+            ->where('major_version', $rendered->majorVersion)
             ->where('locale', '!=', $locale)
             ->where('is_active', true)
             ->get();
@@ -578,10 +612,40 @@ final readonly class LegalDocumentPublisher
         foreach ($siblings as $sibling) {
             if ($sibling->noticeMode() !== $mode) {
                 throw new RuntimeException(
-                    "'{$key}' major {$major} is already active in '{$sibling->locale}' as {$sibling->noticeMode()->value}; publishing '{$locale}' as {$mode->value} would make one change bind by two different standards. Acceptance is identity-keyed, so the weaker one would satisfy the stronger one's gate — release every locale of a version with the same notice mode."
+                    "'{$key}' major {$rendered->majorVersion} is already active in '{$sibling->locale}' as {$sibling->noticeMode()->value}; publishing '{$locale}' as {$mode->value} would make one change bind by two different standards. Acceptance is identity-keyed, so the weaker one would satisfy the stronger one's gate — release every locale of a version with the same notice mode."
                 );
             }
         }
+    }
+
+    /**
+     * Whether this publish carries no change at all: the active version's text, re-frozen under a
+     * silent mode because its RENDERING moved.
+     *
+     * Both halves are load-bearing, and the proof is a hash rather than anything a caller asserts.
+     * The mode alone would let an operator re-classify one locale of a major at a time; the hash
+     * alone would let an identical text go out as DeemedConsent beside an ActiveReconsent sibling.
+     * Together they describe a version nobody can be bound by differently than they already are.
+     *
+     * The comparison is between SOURCE hashes, never HTML — the re-render exists precisely because
+     * the HTML differs. A row published before the package recorded a source hash answers false: it
+     * cannot prove anything about its own text, and an unprovable claim must not open a guard.
+     */
+    private function describesNoChange(NoticeMode $mode, string $key, string $locale, Document $rendered): bool
+    {
+        return $mode === NoticeMode::SilentEditorial && $this->refreezesActiveText($key, $locale, $rendered);
+    }
+
+    /** Whether the live source is byte-for-byte the text the active version was rendered from. */
+    private function refreezesActiveText(string $key, string $locale, Document $rendered): bool
+    {
+        $published = LegalDocument::query()
+            ->where('key', $key)
+            ->where('locale', $locale)
+            ->where('is_active', true)
+            ->value('source_hash');
+
+        return $rendered->sourceHash !== null && is_string($published) && $published === $rendered->sourceHash;
     }
 
     /**

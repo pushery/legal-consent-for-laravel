@@ -25,6 +25,7 @@
         "league/commonmark": "^2.9"
     },
     "require-dev": {
+        "cweagans/composer-patches": "^2.0",
         "larastan/larastan": "3.11.0",
         "laravel/pao": "^1.1",
         "laravel/pint": "^1.0",

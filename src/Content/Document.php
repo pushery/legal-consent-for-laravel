@@ -38,7 +38,50 @@ final readonly class Document
         public ?CarbonImmutable $announceAt = null,
         public ?CarbonImmutable $enforceAt = null,
         public ?string $sourceRef = null,
+        /**
+         * The hash of the SOURCE text this HTML was rendered from, and a fingerprint of the
+         * renderer that produced it. Both are frozen onto the published row, and together they are
+         * what `legal-consent:check-drift` reads to tell a changed text from a changed rendering.
+         *
+         * NULL only where a Document is rebuilt from stored bytes instead of rendered — the cached
+         * display document {@see LegalSourceRenderer} hydrates
+         * needs neither, and inventing a value there would put a hash on a row nobody hashed.
+         */
+        public ?string $sourceHash = null,
+        public ?string $renderFingerprint = null,
     ) {}
+
+    /**
+     * The same document under a different version number.
+     *
+     * The one case that needs it is the presentation re-render: the table an untouched text
+     * suddenly renders as has to be frozen into a NEW row, because the published one is append-only
+     * proof — and the version the source declares is the one already on file. So the re-render
+     * publishes the next PATCH, carrying the identical text under a version the source never
+     * mentions. Composed from the three parts rather than parsed from a string, so there is no
+     * second place where a version format could be decided.
+     */
+    public function withVersion(int $major, int $minor, int $patch): self
+    {
+        return new self(
+            type: $this->type,
+            locale: $this->locale,
+            title: $this->title,
+            html: $this->html,
+            contentHash: $this->contentHash,
+            version: "{$major}.{$minor}.{$patch}",
+            majorVersion: $major,
+            minorVersion: $minor,
+            patchVersion: $patch,
+            isMaterial: $this->isMaterial,
+            uiWording: $this->uiWording,
+            announceAt: $this->announceAt,
+            enforceAt: $this->enforceAt,
+            sourceRef: $this->sourceRef,
+            sourceHash: $this->sourceHash,
+            renderFingerprint: $this->renderFingerprint,
+        );
+    }
 
     /**
      * Whether this document's enforcement window has opened at $now.

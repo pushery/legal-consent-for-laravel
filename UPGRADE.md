@@ -4,6 +4,26 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.27.0 → 0.28.0
+
+**Run the migration.** `php artisan migrate` adds two nullable columns to `legal_documents`, and nothing else is required of you: no renamed key, no removed option, no published view or config that has to change.
+
+### A published version records what it was rendered from
+
+`source_hash` holds the hash of the source text a version was rendered from, taken before any rendering decision touches it; `render_fingerprint` holds a fingerprint of the renderer that produced its HTML — the markdown options in effect, the extension list, the sanitizer allowlists and the installed CommonMark version. Both are proof columns, frozen after publish like every other one.
+
+**Rows published before the migration keep `NULL` in both, and that cannot be repaired.** The bytes that produced them are gone, and hashing today's source would claim the text was unchanged at publish time with nothing having checked it. `legal-consent:check-drift` reports such a version as undecidable rather than guessing, and the next ordinary publish fills the columns in.
+
+### `legal-consent:check-drift` says WHAT changed
+
+It used to answer every difference with *"source differs from published vX — publish a new version and set its materiality"*, whether the text had moved or only the way it is rendered. It now separates the cases: the text changed; the text and the renderer changed, named apart; only the presentation changed; or the version predates the columns above. A script that greps its output for the old sentence needs the new wording — the exit code is unchanged, non-zero on any drift.
+
+### `legal-consent:rerender {key?} {locale?}` is new
+
+For the presentation-only case. It freezes the identical text again under the next **patch** version and the silent notice mode: nobody is re-asked, no notice goes out, and no materiality decision is owed. The proof that the text is identical is the source hash, so a document whose text really changed is refused, as is one whose active version predates the column. Without arguments it walks every configured key and locale.
+
+It writes a new row rather than correcting the old one — every consent in the ledger names the content hash it was given against — so expect a `X.Y.Z+1` version to appear where you run it. The gate compares major versions, so nobody is gated by it.
+
 ## 0.26.2 → 0.27.0
 
 **Nothing is required of you.** No migration, no renamed key and no removed option. The settings screen gains three things you can switch on and says one thing it did not say before; publish the views again only if you published them.

@@ -4,6 +4,13 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2026-09-13
+
+### Added
+
+- **`legal-consent:check-drift` says whether the text changed or only the way it is rendered.** A published version now records the hash of the source it was rendered from and a fingerprint of the renderer that rendered it, so a differing document is reported as one of four cases instead of always as *"source differs — publish a new version and set its materiality"*: the text changed, only the presentation changed, both changed, or the version predates these columns and cannot say. The case that made this necessary is the table fix: registering CommonMark's table extension changed the HTML of every published text holding a table, and every one of them was reported as an edit nobody had made. Migration `0001_01_01_000030` adds the two columns; both are nullable and neither can be filled for a version published earlier, because the bytes that produced it are gone.
+- **`legal-consent:rerender {key?} {locale?}` re-freezes a version whose rendering moved and whose text did not.** It publishes the identical text again under the next patch version and the silent notice mode — no re-consent, no notice, no materiality decision, because nothing anybody can be bound by has changed — and it refuses any document whose text really did change, or whose active version is too old to prove that it did not. Without arguments it walks the whole configured matrix, which replaces editing a version number into every source file by hand, per key and per locale. The published row keeps its own bytes: the new version is a new row, because every consent in the ledger names the content hash it was given against.
+
 ## [0.27.0] - 2026-09-13
 
 ### Added
@@ -2527,7 +2534,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.2...v0.27.0
 [0.26.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.1...v0.26.2
 [0.26.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.0...v0.26.1
