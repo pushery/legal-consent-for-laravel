@@ -11,6 +11,7 @@ use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
+use Pushery\LegalConsent\Relations\StringKeyedMorphMany;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\ConsentGate;
 
@@ -38,7 +39,25 @@ trait HasLegalConsents
      */
     public function legalConsents(): MorphMany
     {
-        return $this->morphMany(LegalConsent::class, 'subject')->latest('accepted_at')->latest('id');
+        // Deliberately NOT `$this->morphMany(...)`, which hands back a plain MorphMany: its eager
+        // constraint and its existence query both compare the varchar `subject_id` against the
+        // subject's own key type, and PostgreSQL refuses that for an integer or a uuid key. See
+        // StringKeyedMorphMany.
+        //
+        // Built here rather than by overriding `newMorphMany()`, because that hook is shared: it would
+        // silently change every OTHER morphMany on a consumer's model too. The column names are
+        // written out, because this package ships the migration that creates them.
+        $instance = $this->newRelatedInstance(LegalConsent::class);
+
+        $relation = new StringKeyedMorphMany(
+            $instance->newQuery(),
+            $this,
+            $instance->qualifyColumn('subject_type'),
+            $instance->qualifyColumn('subject_id'),
+            $this->getKeyName(),
+        );
+
+        return $relation->latest('accepted_at')->latest('id');
     }
 
     public function recordConsent(string $documentKey, ConsentAction $action, ConsentContext $context, ?string $locale = null): LegalConsent

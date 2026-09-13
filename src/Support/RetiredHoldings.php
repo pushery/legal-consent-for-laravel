@@ -60,11 +60,11 @@ final readonly class RetiredHoldings
             ->select(['id', 'key', 'title', 'version', 'major_version', 'type', 'locale', 'requires_explicit_optin'])
             ->whereIn('key', $keys)
             // RETIRED means no active version ANYWHERE, not merely none in the locale on screen.
-            // A document published in `de` and not (yet) in `en` is not retired, and the rest of
-            // the package already answers that way: the gate does not enforce it on the `en`
-            // screen and `hasCurrent()` reports false for it. Without this arm a partially
-            // published document would appear on the other locale's screen labeled as withdrawn
-            // from service — a claim about the operator's registry that is simply untrue.
+            // A document published in `de` and not (yet) in `en` is not retired: a mandatory one
+            // reaches the `en` screen as ACTIVE through the locale chain, and a voluntary one is
+            // simply not offered there. Without this arm a partially published document would
+            // appear on the other locale's screen labeled as withdrawn from service — a claim about
+            // the operator's registry that is simply untrue.
             ->whereNotExists(fn (QueryBuilder $live): QueryBuilder => $live->from('legal_documents as live')
                 ->whereColumn('live.key', 'legal_documents.key')
                 ->where('live.is_active', true)

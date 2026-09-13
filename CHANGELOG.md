@@ -4,6 +4,14 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.2] - 2026-09-13
+
+### Fixed
+
+- **The consent gate now stops a subject browsing in a language your legal texts are not translated into.** It read the documents a subject owes in the request locale and nowhere else, so an application with terms in `de` and `en` let everybody using it in Italian through: `Consent::outstanding()` answered empty, `EnsureLegalConsent` passed the request, and a new major version of the terms would never have reached them. Reported from a consuming application that offers seven interface languages. A mandatory document with no version in the request locale now resolves through the chain registration already walks, `fallback_locale` and then `default_locale`, and the first version found is the one the subject is held to. The gate shows it in the language it was published in, and accepting it records that locale. A version in the request locale still wins wherever one exists, and a voluntary consent is not resolved this way, because it is never owed. The banner, `statusFor()`, `hasCurrent()` and the settings screen read the same set. **Expect subjects in untranslated locales to meet the gate after updating**: they are the ones who were being let through.
+
+- **`with('legalConsents')`, `whereHas('legalConsents')` and the other relation queries now work on PostgreSQL for a subject keyed by an integer or a native `uuid`.** Since `subject_id` became a string column for UUID and ULID subjects, the eager load and every existence query compared it against the subject's own key inside the SQL text, and PostgreSQL has no operator for `character varying = integer`, `bigint = character varying` or `uuid = character varying`: `User::with('legalConsents')` and `User::whereHas('legalConsents')` ended in `SQLSTATE[42883]`, while `$user->legalConsents` kept working. Reported from a consuming application on 0.26.1. The eager load now binds the keys, and on PostgreSQL the existence query behind `has()`, `whereHas()`, `whereDoesntHave()` and `withCount()` casts the subject's key to text, so `subject_id` stays bare for the index that serves the lookup. MySQL and SQLite convert on their own, and nothing changes there.
+
 ## [0.26.1] - 2026-09-11
 
 ### Fixed
@@ -2495,7 +2503,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.1...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.2...HEAD
+[0.26.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.1...v0.26.2
 [0.26.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.3...v0.26.0
 [0.25.3]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.25.2...v0.25.3

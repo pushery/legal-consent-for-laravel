@@ -6,7 +6,6 @@ namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
-use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
@@ -54,34 +53,28 @@ final readonly class ConsentPresenter
         // first — so the confirmation link already in their inbox would stop working.
         $pendingConfirmation = $standing['pending'];
 
-        // `locale` is selected even though it equals the argument: it is a document COLUMN, and the
-        // host's URL resolver receives the model. A resolver that builds a per-locale route would
-        // otherwise read null off a column that was simply never fetched.
+        // The SAME resolved set statusFor() reads, from the same cache: the request locale, plus every
+        // mandatory document that is not translated into it, resolved through the locale chain
+        // ({@see EnforceableDocumentCache::resolvedFor()}). A private strict-locale query here showed a
+        // subject browsing in an untranslated language no contract at all, while the gate stopped
+        // them for it and the status map listed it — a screen and the map it is built from
+        // disagreeing, which this package refuses everywhere else.
         //
-        // `id` is selected for the same reason, one step further: the resolver is handed the MODEL,
-        // so the most ordinary thing a Laravel host can do with it — `route('legal.show', $document)`,
-        // implicit route-model binding — reads the primary key. Without the column that read is null
-        // and the seam throws a UrlGenerationException on a settings page, while the same closure
-        // works on the re-consent gate, whose document set does select it.
-        $documents = LegalDocument::query()
-            ->select(['id', 'key', 'title', 'version', 'major_version', 'type', 'locale', 'requires_explicit_optin'])
-            ->where('locale', $locale)
-            ->where('is_active', true)
+        // `locale` and `id` are among the cached columns, and both matter: the host's URL resolver
+        // receives the MODEL, and the most ordinary thing it does with one — `route('legal.show',
+        // $document)`, implicit route-model binding — reads the primary key, while a per-locale route
+        // reads `locale`. A resolved row carries the locale it was published in, which is the language
+        // the subject will actually read.
+        $documents = app(EnforceableDocumentCache::class)
+            ->resolvedFor($locale)
             // The same boundary statusFor() draws, drawn on the same side of it: an informational
             // page (an Impressum, a cookie policy) binds nobody, so it has no standing to report.
             // Nobody ever accepts one, which makes `held` false and `outstanding` permanently true —
             // a "your agreements" row for a page nobody agrees to, with a grant control next to it
             // that can only ever 404. The set is derived from the predicate rather than naming the
             // one type to exclude, so a future type is classified by isConsentBearing() alone.
-            ->whereIn('type', array_map(
-                static fn (DocumentType $type): string => $type->value,
-                array_values(array_filter(
-                    DocumentType::cases(),
-                    static fn (DocumentType $type): bool => $type->isConsentBearing(),
-                )),
-            ))
-            ->orderBy('key')
-            ->get();
+            ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing())
+            ->values();
 
         // A document the subject still holds whose active version is gone. Retiring one is
         // `is_active = false`, which leaves the ledger untouched: the acceptance stands, the fold

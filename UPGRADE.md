@@ -4,6 +4,20 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.26.1 → 0.26.2
+
+**Nothing is required of you, and one behavior changes on purpose.** No configuration key and no table changed. Subjects browsing in a language your legal texts are not translated into now meet the consent gate, and on PostgreSQL the ledger relation answers eager loads and existence queries for integer and uuid subject keys.
+
+### The consent gate resolves an untranslated mandatory document through the locale chain
+
+The gate read the documents a subject owes in the request locale and nowhere else. An application with terms in `de` and `en` let everybody using it in Italian through: `Consent::outstanding()` answered empty and `EnsureLegalConsent` passed the request. A mandatory document with no version in the request locale now resolves through the chain registration already walks, `fallback_locale` and then `default_locale`, and the gate shows it in the language it was published in.
+
+**Expect subjects in untranslated locales to meet the gate after updating.** They are the ones who were being let through. A subject browsing in a translated locale sees no change, and a voluntary consent is never resolved this way, because it is never owed.
+
+### `with('legalConsents')` and `whereHas('legalConsents')` work on PostgreSQL
+
+On PostgreSQL, with a subject keyed by an integer or a native `uuid`, both ended in `SQLSTATE[42883]`, and so did `whereDoesntHave()` and `withCount()`. They work now. Nothing changes on MySQL or SQLite, and `legalConsents()` still returns a `MorphMany`.
+
 ## 0.26.0 → 0.26.1
 
 **Run `php artisan migrate` after updating, and that is the whole of it.** No code, no configuration key and no table changed. One migration alters six existing trigger functions, and only on PostgreSQL.
