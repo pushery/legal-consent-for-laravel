@@ -69,7 +69,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         'change_summary', 'is_active', 'published_at', 'announce_from', 'enforce_from',
         'notified_at', 'created_at', 'updated_at', 'notice_mode', 'change_class', 'regime',
         'notice_period_days', 'offers_termination', 'keeps_unmodified_offered',
-        'objection_deadline', 'objection_closed_at',
+        'objection_deadline', 'objection_closed_at', 'source_hash', 'render_fingerprint',
     ];
 
     public function __construct(public readonly LegalDocument $document) {}

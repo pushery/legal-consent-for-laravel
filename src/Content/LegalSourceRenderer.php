@@ -120,6 +120,8 @@ final readonly class LegalSourceRenderer
             'announceAt' => $document->announceAt?->toIso8601String(),
             'enforceAt' => $document->enforceAt?->toIso8601String(),
             'sourceRef' => $document->sourceRef,
+            'sourceHash' => $document->sourceHash,
+            'renderFingerprint' => $document->renderFingerprint,
         ];
     }
 
@@ -153,7 +155,7 @@ final readonly class LegalSourceRenderer
             return null;
         }
 
-        foreach (['uiWording', 'announceAt', 'enforceAt', 'sourceRef'] as $nullable) {
+        foreach (['uiWording', 'announceAt', 'enforceAt', 'sourceRef', 'sourceHash', 'renderFingerprint'] as $nullable) {
             if (! array_key_exists($nullable, $row) || (! is_string($row[$nullable]) && $row[$nullable] !== null)) {
                 return null;
             }
@@ -174,6 +176,8 @@ final readonly class LegalSourceRenderer
             announceAt: $row['announceAt'] === null ? null : CarbonImmutable::parse($row['announceAt']),
             enforceAt: $row['enforceAt'] === null ? null : CarbonImmutable::parse($row['enforceAt']),
             sourceRef: $row['sourceRef'],
+            sourceHash: $row['sourceHash'],
+            renderFingerprint: $row['renderFingerprint'],
         );
     }
 

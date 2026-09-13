@@ -144,8 +144,10 @@ final class ProofColumnGuard
      * it.
      *
      * So ANY migration that rebuilds `legal_consents` or `legal_documents` runs its schema work
-     * inside this call. The four that already do (000014, 000018, 000022, 000028) are the working
-     * examples. That list is derived from the migration directory by a guard rather than trusted
+     * inside this call. The five that already do (000014, 000018, 000022, 000028, 000030) are the
+     * working examples — and 000030 shows the second reason to use it: it only ADDS two columns,
+     * which rebuilds nothing, but the MySQL and SQLite triggers ENUMERATE the columns they freeze,
+     * so a column added without the re-install would stay writable on a frozen row. That list is derived from the migration directory by a guard rather than trusted
      * here: it said "two" while three did it, and it is the sentence the author of the next one
      * reads before deciding whether they need the wrapper.
      *

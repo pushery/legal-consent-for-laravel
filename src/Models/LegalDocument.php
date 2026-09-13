@@ -40,6 +40,8 @@ use Pushery\LegalConsent\Support\TenantContext;
  * @property string $content_format
  * @property string $content
  * @property string $content_hash
+ * @property string|null $source_hash the hash of the source text this version was rendered from; NULL on a row published before the package recorded it
+ * @property string|null $render_fingerprint the renderer that produced this version's HTML; NULL on a row published before the package recorded it
  * @property string|null $ui_wording the acceptance sentence; NULL for an informational page, which asks the reader for nothing
  * @property string $source_driver
  * @property string|null $source_reference

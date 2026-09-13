@@ -47,6 +47,26 @@ final class LegalHtmlSanitizer
         'abbr' => ['title'],
     ];
 
+    /**
+     * A fingerprint over the allowlists this sanitizer enforces.
+     *
+     * It is one input of {@see RenderPipeline::fingerprint()}, the value every published row
+     * freezes beside its content hash so `legal-consent:check-drift` can tell a changed TEXT from
+     * a changed RENDERING. Widening `ALLOWED` — as the table tags were — changes the HTML of texts
+     * nobody edited, and that difference is exactly what the fingerprint has to be able to show.
+     *
+     * The three constants are the whole of what the allowlist decides; the traversal that reads
+     * them is not covered here, so a change in `cleanNode()` alone moves no fingerprint. The drift
+     * report names that residue rather than guessing at it.
+     */
+    public function fingerprint(): string
+    {
+        return hash('sha256', json_encode(
+            [self::ALLOWED, self::DANGEROUS, self::ALLOWED_ATTRIBUTES],
+            JSON_THROW_ON_ERROR,
+        ));
+    }
+
     public function sanitize(string $html): string
     {
         // A short-circuit, not a correctness guard, and worth the distinction: measured, the parse

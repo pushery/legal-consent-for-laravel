@@ -26,6 +26,7 @@ use Pushery\LegalConsent\Console\FlushDocumentCacheCommand;
 use Pushery\LegalConsent\Console\PruneExpiredConsentRecordsCommand;
 use Pushery\LegalConsent\Console\PublishDocumentCommand;
 use Pushery\LegalConsent\Console\RenotifyVersionCommand;
+use Pushery\LegalConsent\Console\RerenderCommand;
 use Pushery\LegalConsent\Console\VerifyDocumentsCommand;
 use Pushery\LegalConsent\Console\VerifyLedgerCommand;
 use Pushery\LegalConsent\Content\LegalHtmlSanitizer;
@@ -354,6 +355,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 FlushDocumentCacheCommand::class,
                 PublishDocumentCommand::class,
                 CheckDriftCommand::class,
+                RerenderCommand::class,
                 DispatchDueLegalNoticesCommand::class,
                 RenotifyVersionCommand::class,
                 DescribeChangeCommand::class,

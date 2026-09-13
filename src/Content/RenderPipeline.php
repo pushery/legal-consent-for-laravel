@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Content;
 
+use Composer\InstalledVersions;
 use League\CommonMark\Environment\Environment;
 use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
+use League\CommonMark\Extension\ExtensionInterface;
 use League\CommonMark\Extension\Table\TableExtension;
 use League\CommonMark\MarkdownConverter;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Exceptions\InvalidDocumentVersion;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\MissingAcceptanceWording;
+use Pushery\LegalConsent\Support\LegalDriftChecker;
 
 /**
  * Turns a driver's RawDocument into a fully resolved Document — the one place where
@@ -20,6 +23,11 @@ use Pushery\LegalConsent\Exceptions\MissingAcceptanceWording;
  * The content hash is taken over the sanitized, canonicalized HTML so a whitespace- or
  * formatting-only edit never triggers a false re-consent, while any real wording change
  * does (EDPB 05/2020 Rz. 108/110).
+ *
+ * Two more values leave here with every document: a hash of the SOURCE text, taken before any
+ * rendering decision touches it, and a fingerprint of the renderer that produced the HTML. They
+ * are what lets `legal-consent:check-drift` answer the question the content hash alone cannot —
+ * did the TEXT move, or only the way it is presented.
  */
 final readonly class RenderPipeline
 {
@@ -46,7 +54,31 @@ final readonly class RenderPipeline
         'max_nesting_level' => 20,
     ];
 
+    /**
+     * The extensions the converter registers, in order.
+     *
+     * A list rather than two `addExtension()` calls because {@see self::fingerprint()} reads it:
+     * an extension that is registered without appearing here would change the HTML of every
+     * published text while claiming the renderer had not moved, which is the one lie this
+     * fingerprint exists to prevent.
+     *
+     * @var list<class-string<ExtensionInterface>>
+     */
+    private const array EXTENSIONS = [
+        CommonMarkCoreExtension::class,
+        TableExtension::class,
+    ];
+
     private MarkdownConverter $converter;
+
+    /**
+     * The markdown settings this instance actually renders with — the defaults plus whatever the
+     * application overrode. Kept because the fingerprint has to state the settings that produced
+     * a row, not the ones the package ships.
+     *
+     * @var array<string, mixed>
+     */
+    private array $markdown;
 
     /**
      * @param  array<string, mixed>  $markdownConfig  overrides, per key, on top of
@@ -77,9 +109,13 @@ final readonly class RenderPipeline
         // autolinking, strikethrough and task lists, and turning three unrelated behaviors on
         // while fixing one is how a rendering surface changes underneath texts that are hashed
         // into append-only proof rows.
-        $environment = new Environment(array_merge(self::MARKDOWN_DEFAULTS, $markdownConfig));
-        $environment->addExtension(new CommonMarkCoreExtension);
-        $environment->addExtension(new TableExtension);
+        $this->markdown = array_merge(self::MARKDOWN_DEFAULTS, $markdownConfig);
+
+        $environment = new Environment($this->markdown);
+
+        foreach (self::EXTENSIONS as $extension) {
+            $environment->addExtension(new $extension);
+        }
 
         $this->converter = new MarkdownConverter($environment);
     }
@@ -127,7 +163,56 @@ final readonly class RenderPipeline
             announceAt: $raw->announceAt,
             enforceAt: $raw->enforceAt,
             sourceRef: $raw->sourceRef,
+            sourceHash: $this->sourceHashOf($raw->body),
+            renderFingerprint: $this->fingerprint(),
         );
+    }
+
+    /**
+     * The SHA-256 hash over the SOURCE text, taken before a single rendering decision touches it.
+     *
+     * Frozen onto the published row next to the content hash, it is the proof that answers "did
+     * anybody edit this?" on its own. Without it a drift report can only say that the HTML differs,
+     * and the operator is sent into a materiality decision about a text nobody changed — which is
+     * what happened to every document holding a table when TableExtension was registered.
+     *
+     * ⚠️ THE CANONICALIZATION IS DELIBERATELY NARROWER THAN {@see self::canonicalize()}, AND THE
+     * DIFFERENCE IS LOAD-BEARING. In HTML, whitespace between tags carries nothing; in Markdown it
+     * carries meaning — four leading spaces are a code block, two trailing ones are a hard line
+     * break. Collapsing runs of whitespace here would hide a real rendering change behind an
+     * unchanged source hash and have drift report "presentation only" over an edit that moved the
+     * text. So only the two things that never mean anything are normalized: the line endings a
+     * checkout decides, and the final newline an editor decides.
+     */
+    public function sourceHashOf(string $body): string
+    {
+        return hash('sha256', rtrim(str_replace(["\r\n", "\r"], "\n", $body), "\n"));
+    }
+
+    /**
+     * A fingerprint over HOW this pipeline renders: the markdown options in effect, the extensions
+     * it registers, the sanitizer's allowlists, and the installed CommonMark version.
+     *
+     * Frozen onto every published row, it is the second half of the drift answer. When the HTML of
+     * an untouched text changes, this is the value that says the RENDERER moved — and when the
+     * text changed as well, it is what lets the report name both without conflating them.
+     *
+     * ⚠️ It states what the renderer WAS, and only over what is listed above. It cannot see a
+     * change inside the sanitizer's own traversal, or inside CommonMark at a version it already
+     * had. {@see LegalDriftChecker} reports that residue as the
+     * open case it is instead of attributing it to the text.
+     */
+    public function fingerprint(): string
+    {
+        return hash('sha256', json_encode([
+            'markdown' => $this->markdown,
+            'extensions' => self::EXTENSIONS,
+            'sanitizer' => $this->sanitizer->fingerprint(),
+            // `??` rather than a guarded call: league/commonmark is a hard requirement of this
+            // package, so the null side is unreachable in an installed tree — it is here because
+            // the signature allows it, not because a run can take it.
+            'commonmark' => InstalledVersions::getVersion('league/commonmark') ?? 'unknown',
+        ], JSON_THROW_ON_ERROR));
     }
 
     /**
