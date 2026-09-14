@@ -4,6 +4,18 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.30.0 → 0.31.0
+
+**Nothing is required of you.** No migration, no renamed key, no removed option, and nothing you render changes unless you want it to.
+
+### Short forms for the admin matrix's state words
+
+Every state the admin matrix draws now ships a short form beside its long one — `admin_not_written_short` and its five siblings, in all seven languages. The long forms are unchanged and still shipped: they are what the short ones are explained by.
+
+A matrix with one column per locale is what makes this necessary. The state words are sentences, and seven columns of them fit no desktop width; the package's own screen draws the short form in the cell, keeps the long one as the badge's accessible name, and explains the six once in a legend above the table.
+
+**If you render your own matrix**, you can switch to the short keys and keep the long ones for a legend. **If you render the long forms today, nothing changes.**
+
 ## 0.29.0 → 0.30.0
 
 **Nothing is required of you unless you render a refused lead time from the values the exception carries.** No migration, no renamed config key and no removed option.

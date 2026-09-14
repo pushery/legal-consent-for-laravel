@@ -46,6 +46,31 @@
              The prop is `header-scope`, NOT `scope`: `scope` is WireKit's token-scope override, which
              every component shares for scoped theming. Passing scope="row" there would silently
              re-theme the cell and still emit scope="col". --}}
+        {{-- The legend, and it is what makes the short cells legible rather than cryptic.
+
+             This matrix carries one column PER LOCALE, so the widest state word decides the table's
+             width -- and the words are sentences: "Unveröffentlichte Änderungen" is 28 characters,
+             and seven of those columns do not fit any desktop. Measured in a consuming application
+             at 1728px: the table wanted 1407px of content space and had 1400. Letting the cells
+             break inside a word makes it fit and stacks "Nicht geschrieben" one letter per line.
+
+             So the cell carries the short form and the badge's accessible name carries the long one
+             -- a screen reader announces the sentence, a sighted reader reads the legend once. Each
+             short form is drawn from its own language's long wording rather than translated from
+             English, because a legend only explains a word that belongs to the same family. --}}
+        <x-wirekit::text size="sm" intent="muted" class="mb-[var(--space-wk-sm)]">
+            @foreach ([
+                'admin_not_written',
+                'review_state_draft',
+                'review_state_reviewed',
+                'admin_machine',
+                'admin_needs_update',
+                'admin_unpublished',
+            ] as $state)
+                <span class="whitespace-nowrap">{{ __('legal-consent::ui.'.$state.'_short') }} = {{ __('legal-consent::ui.'.$state) }}</span>@if (! $loop->last) · @endif
+            @endforeach
+        </x-wirekit::text>
+
         <x-wirekit::table :tableLabel="__('legal-consent::ui.admin_heading')">
             <x-wirekit::table.head>
                 <x-wirekit::table.row>
@@ -64,16 +89,16 @@
                             @php($cell = $rows[$key][$locale])
                             <x-wirekit::table.td>
                                 @if (! $cell['written'])
-                                    <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.admin_not_written') }}</x-wirekit::badge>
+                                    <x-wirekit::badge intent="neutral" size="sm" :aria-label="__('legal-consent::ui.admin_not_written')" :title="__('legal-consent::ui.admin_not_written')">{{ __('legal-consent::ui.admin_not_written_short') }}</x-wirekit::badge>
                                 @else
-                                    <x-wirekit::badge :intent="$cell['publishable'] ? 'success' : 'warning'" size="sm">{{ __($cell['review_state_label']) }}</x-wirekit::badge>
+                                    <x-wirekit::badge :intent="$cell['publishable'] ? 'success' : 'warning'" size="sm" :aria-label="__($cell['review_state_label'])" :title="__($cell['review_state_label'])">{{ __($cell['review_state_label'].'_short') }}</x-wirekit::badge>
                                     @if ($cell['machine'])
-                                        <x-wirekit::badge intent="info" size="sm">{{ __('legal-consent::ui.admin_machine') }}</x-wirekit::badge>
+                                        <x-wirekit::badge intent="info" size="sm" :aria-label="__('legal-consent::ui.admin_machine')" :title="__('legal-consent::ui.admin_machine')">{{ __('legal-consent::ui.admin_machine_short') }}</x-wirekit::badge>
                                     @endif
                                     @if ($cell['stale'])
-                                        <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.admin_needs_update') }}</x-wirekit::badge>
+                                        <x-wirekit::badge intent="warning" size="sm" :aria-label="__('legal-consent::ui.admin_needs_update')" :title="__('legal-consent::ui.admin_needs_update')">{{ __('legal-consent::ui.admin_needs_update_short') }}</x-wirekit::badge>
                                     @elseif ($cell['unpublished_changes'])
-                                        <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.admin_unpublished') }}</x-wirekit::badge>
+                                        <x-wirekit::badge intent="neutral" size="sm" :aria-label="__('legal-consent::ui.admin_unpublished')" :title="__('legal-consent::ui.admin_unpublished')">{{ __('legal-consent::ui.admin_unpublished_short') }}</x-wirekit::badge>
                                     @endif
                                 @endif
                             </x-wirekit::table.td>

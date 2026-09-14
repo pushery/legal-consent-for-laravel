@@ -33,6 +33,22 @@
              viewport. A keyboard-focusable horizontal-scroll region keeps it reachable without
              forcing whole-page horizontal scrolling (WCAG 1.4.10 Reflow). --}}
         <div role="region" aria-label="{{ __('legal-consent::ui.admin_heading') }}" tabindex="0" style="overflow-x: auto;">
+        {{-- The legend. This matrix carries one column per locale, so the widest state word
+             decides the table's width -- and the words are sentences. The cell carries the short
+             form, its `title` the long one, and this line explains the six once for a reader who
+             has no pointer to hover with. The WireKit twin does the same with an accessible name,
+             which a `title` alone is not. --}}
+        <p>
+            @foreach ([
+                'admin_not_written',
+                'review_state_draft',
+                'review_state_reviewed',
+                'admin_machine',
+                'admin_needs_update',
+                'admin_unpublished',
+            ] as $state){{ __('legal-consent::ui.'.$state.'_short') }} = {{ __('legal-consent::ui.'.$state) }}@if (! $loop->last) · @endif @endforeach
+        </p>
+
         <table>
             <thead>
                 <tr>
@@ -51,16 +67,16 @@
                             @php($cell = $rows[$key][$locale])
                             <td>
                                 @if (! $cell['written'])
-                                    <span>{{ __('legal-consent::ui.admin_not_written') }}</span>
+                                    <span title="{{ __('legal-consent::ui.admin_not_written') }}">{{ __('legal-consent::ui.admin_not_written_short') }}</span>
                                 @else
-                                    <span>{{ __($cell['review_state_label']) }}</span>
+                                    <span title="{{ __($cell['review_state_label']) }}">{{ __($cell['review_state_label'].'_short') }}</span>
                                     @if ($cell['machine'])
-                                        <span> · {{ __('legal-consent::ui.admin_machine') }}</span>
+                                        <span title="{{ __('legal-consent::ui.admin_machine') }}"> · {{ __('legal-consent::ui.admin_machine_short') }}</span>
                                     @endif
                                     @if ($cell['stale'])
-                                        <span> · {{ __('legal-consent::ui.admin_needs_update') }}</span>
+                                        <span title="{{ __('legal-consent::ui.admin_needs_update') }}"> · {{ __('legal-consent::ui.admin_needs_update_short') }}</span>
                                     @elseif ($cell['unpublished_changes'])
-                                        <span> · {{ __('legal-consent::ui.admin_unpublished') }}</span>
+                                        <span title="{{ __('legal-consent::ui.admin_unpublished') }}"> · {{ __('legal-consent::ui.admin_unpublished_short') }}</span>
                                     @endif
                                 @endif
                                 {{-- No edit control ships here, and the WireKit twin has none either.

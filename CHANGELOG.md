@@ -4,6 +4,12 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0] - 2026-09-15
+
+### Added
+
+- **Every state word the admin matrix draws has a short form, in all seven languages.** The matrix carries one column per locale, so the widest state word decides the table's width — and the words are sentences: "Unpublished changes" is nineteen characters and its German version twenty-eight. Measured in a consuming application at 1728 pixels wide, the table wanted 1407 pixels of content space and had 1400, so it fits on no desktop width at all; letting the cells break inside a word makes it fit and stacks "Not written" one letter per line, in each of the seven columns. Each state now ships a short form beside its long one — `admin_not_written_short` and its five siblings — and the package's own matrix draws the short form in the cell, keeps the long one as the badge's accessible name, and explains all six once in a legend above the table. The short forms are drawn from each language's own wording rather than translated from English, so the legend explains a word from the same family. Nothing is removed: a host rendering the long form keeps it.
+
 ## [0.30.0] - 2026-09-14
 
 ### Changed
@@ -2566,7 +2572,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.27.0...v0.28.0
