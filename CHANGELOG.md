@@ -4,6 +4,14 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0] - 2026-09-14
+
+### Changed
+
+- **A refused lead time says which deadline it measured to.** The publisher checks two different spans under one rule: for a deemed-consent change the statutory period is the objection window, and for every other change that owes notice it runs to enforcement. The refusal called both of them enforcement, so an operator whose objection window was too short was told to move the enforcement date — which was never the problem — and was refused again with the same number. A reported case: announcement 2026-08-01, objection deadline 2026-09-01, enforcement 2026-11-01, and the message named 2026-11-01's change as enforcement at 2026-09-01. The exception now carries which span it measured, words it with a sentence of its own in all seven shipped languages, and names the end date under a placeholder that says what it is — `deadline` for the objection window, `enforce` unchanged for the other. A host carrying its own translation of the existing sentence keeps working: only the case that was wrong got a new key.
+
+- **`statusFor()` says which language it answers about.** It resolves a mandatory document the same way registration does — the locale you asked for, then `fallback_locale`, then `default_locale` — and reports on whichever version it found, so a reader in a language nothing was published in gets a status for the documents they are actually shown. That has been the behavior since 0.26.2; what was missing was the sentence saying so, and an arm holding it to the checklist. The two used to disagree, and an application combining them to ask what an account still owed read the silence as "nothing owed". A voluntary consent is deliberately still strictly per locale: it may never be required, so not published here means not offered here.
+
 ## [0.29.0] - 2026-09-14
 
 ### Added
@@ -2558,7 +2566,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.2...v0.27.0

@@ -11,6 +11,7 @@ use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Enums\DocumentType;
+use Pushery\LegalConsent\Enums\LeadTimeSpan;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Events\LegalDocumentPublished;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
@@ -487,7 +488,11 @@ final readonly class LegalDocumentPublisher
             $minDays = $this->minLeadDays($mode, $regime, $key);
 
             if ($announce->addDays($minDays)->greaterThan($deadline)) {
-                throw LeadTimeTooShortException::for($key, $minDays, $announce, $deadline);
+                // The span ENDS at the objection deadline here, and saying so is the whole of
+                // this argument: the refusal used to name this date 'enforcement', so an
+                // operator moved the enforcement date — which was never the problem — and got
+                // refused again with the same number.
+                throw LeadTimeTooShortException::for($key, $minDays, $announce, $deadline, LeadTimeSpan::ObjectionDeadline);
             }
         } elseif ($mode->requiresNotice() && $enforce->greaterThan($now)) {
             // A change SCHEDULED for a future enforcement date must give the minimum advance
@@ -519,7 +524,7 @@ final readonly class LegalDocumentPublisher
             // owes no period, so no period is measured -- and reading that from the arithmetic
             // instead would make the next reader re-derive the paragraph above.
             if ($minDays > 0 && $announce->addDays($minDays)->greaterThan($enforce)) {
-                throw LeadTimeTooShortException::for($key, $minDays, $announce, $enforce);
+                throw LeadTimeTooShortException::for($key, $minDays, $announce, $enforce, LeadTimeSpan::Enforcement);
             }
         }
 

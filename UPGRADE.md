@@ -4,6 +4,28 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.29.0 → 0.30.0
+
+**Nothing is required of you unless you render a refused lead time from the values the exception carries.** No migration, no renamed config key and no removed option.
+
+### A refused deemed-consent lead time now names the objection deadline
+
+`LeadTimeTooShortException` measures two different spans and used to call both of them enforcement. For a deemed-consent change the statutory period is the objection window, so the span ends at the objection deadline; for every other change that owes notice it ends at enforcement. An operator told the wrong word moved the wrong date and was refused again with the same number.
+
+The exception now carries a `LeadTimeSpan`, and `label()` and `replacements()` follow it.
+
+**If you word the refusal yourself, read the placeholder the span names rather than `enforce`.** For a deemed-consent refusal the end date now arrives under `deadline` and `enforce` is absent; for every other refusal nothing changes. The package's own sentences ship for both, in all seven languages, so this only concerns a host that carries its own translation:
+
+```php
+// before — correct for one of the two spans, silently empty for the other
+$date = $e->replacements()['enforce'];
+
+// after — whichever span it was
+$date = $e->replacements()[$e->span->endPlaceholder()];
+```
+
+`$e->enforceAt` still holds the date for both spans and did not change. It keeps its name because it is public readonly state you may already read; `$e->span` is what says which of the two it is.
+
 ## 0.28.0 → 0.29.0
 
 **Nothing is required of you unless a morph alias or a document key in your application is a number.** No migration, no renamed key and no removed option.
