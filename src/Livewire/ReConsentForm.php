@@ -197,7 +197,7 @@ final class ReConsentForm extends Component
                     // never rendered. Take the same path as a changed document: clear the stale ticks
                     // and ask the subject to review the version they are actually shown.
                     $this->accept = [];
-                    $this->setStatus((string) __('legal-consent::ui.reconsent_changed'));
+                    $this->setStatus(__('legal-consent::ui.reconsent_changed'));
 
                     return;
                 }
@@ -226,7 +226,7 @@ final class ReConsentForm extends Component
                     // leave the subject on an error page with no idea which of their ticks took
                     // effect. Clearing and re-rendering shows them exactly what is still owed.
                     $this->accept = [];
-                    $this->setStatus((string) __('legal-consent::ui.reconsent_changed'));
+                    $this->setStatus(__('legal-consent::ui.reconsent_changed'));
 
                     return;
                 }
@@ -243,7 +243,7 @@ final class ReConsentForm extends Component
             // version". Append-only, so the row cannot be corrected afterwards.
             $this->accept = [];
 
-            $this->setStatus((string) __('legal-consent::ui.reconsent_recorded'));
+            $this->setStatus(__('legal-consent::ui.reconsent_recorded'));
 
             // A re-consent GATE that is now fully cleared returns the subject to where the
             // enforcement middleware intercepted them (redirect()->guest stashed it), falling back
@@ -267,7 +267,7 @@ final class ReConsentForm extends Component
         } else {
             // Nothing was ticked: with no status the submit reads as a dead no-op. Announce a prompt
             // so the subject learns their click registered and that a box still needs ticking.
-            $this->setStatus((string) __('legal-consent::ui.reconsent_none_selected'));
+            $this->setStatus(__('legal-consent::ui.reconsent_none_selected'));
         }
     }
 
@@ -313,6 +313,8 @@ final class ReConsentForm extends Component
         // `//evil`) and the protocol-relative `//host`. Do not trust the caller to have
         // pre-sanitized the value — honor the contract here.
 
+        // The `=== ''` is EQUIVALENT under mutation: an empty target also fails the rooted-path test
+        // below, so it is refused either way. It stays because it says the case out loud.
         if ($target === '' || str_contains($target, '\\') || str_starts_with($target, '//')) {
             return false;
         }
@@ -341,7 +343,7 @@ final class ReConsentForm extends Component
             // response is a second click, and a second click writes a second row that cannot be
             // taken back. WCAG 4.1.3 is the same requirement from the other side.
 
-            $this->setStatus((string) __('legal-consent::ui.objected_confirmation'));
+            $this->setStatus(__('legal-consent::ui.objected_confirmation'));
         }
     }
 
@@ -355,7 +357,7 @@ final class ReConsentForm extends Component
             $this->guardedTransition(fn () => app(ConsentManager::class)->terminate($subject, $key, ConsentContext::fromRequest(request(), $this->questionFor($key)), $this->locale));
 
             // Same reason as object() above: an irreversible write nobody is told about.
-            $this->setStatus((string) __('legal-consent::ui.terminated_confirmation'));
+            $this->setStatus(__('legal-consent::ui.terminated_confirmation'));
         }
     }
 
@@ -403,6 +405,8 @@ final class ReConsentForm extends Component
                 ? $manager->firstAcceptance($subject, $this->locale)
                 : $manager->outstanding($subject, $this->locale);
 
+            // Recorded for questionFor(), which reads it only for a gate-question mount. On this path
+            // it is never read, so emptying the map is EQUIVALENT under mutation here.
             $this->questionByKey = $pending
                 ->mapWithKeys(fn (LegalDocument $document): array => [$document->key => $this->method])
                 ->all();
@@ -417,6 +421,8 @@ final class ReConsentForm extends Component
             ->reject(fn (LegalDocument $document): bool => in_array($document->key, $changedKeys, true))
             ->values();
 
+        // A changed document's entry is EQUIVALENT under mutation: questionFor() answers
+        // ReConsentGate for a key it does not find, which is what this entry says.
         $this->questionByKey = array_merge(
             $changed->mapWithKeys(fn (LegalDocument $d): array => [$d->key => ConsentMethod::ReConsentGate])->all(),
             $first->mapWithKeys(fn (LegalDocument $d): array => [$d->key => ConsentMethod::FirstUseGate])->all(),

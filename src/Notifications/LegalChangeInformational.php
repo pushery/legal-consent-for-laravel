@@ -93,6 +93,8 @@ class LegalChangeInformational extends ChangeNotification
      */
     public function mandatoryContentPresent(): bool
     {
+        // The replacements handed in here are EQUIVALENT under mutation: a placeholder left unfilled
+        // still leaves a non-empty line, and the check only asks whether each line is there.
         return $this->line('intro', ['title' => '']) !== ''
             && $this->line('effective', ['deadline' => '']) !== ''
             && $this->line('subject') !== '';

@@ -12,6 +12,7 @@ use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Exceptions\MissingAcceptanceWording;
 use Pushery\LegalConsent\Models\LegalDraft;
+use Pushery\LegalConsent\Support\DocumentTitle;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\LegalDraftSet;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
@@ -96,10 +97,7 @@ final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocume
      */
     private function titleFor(string $type, string $locale): string
     {
-        $key = "legal-consent::titles.{$type}";
-        $translated = trans($key, [], $locale);
-
-        return is_string($translated) && $translated !== $key ? $translated : $type;
+        return DocumentTitle::for($type, $locale);
     }
 
     /**

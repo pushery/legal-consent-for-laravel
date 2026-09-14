@@ -77,7 +77,7 @@ final class PublishDocumentCommand extends Command
 
         $key = $this->argument('key');
         $key = is_string($key) ? $key : '';
-        $all = (bool) $this->option('all');
+        $all = $this->option('all');
 
         if ($all === ($key !== '')) {
             $this->error('Pass either a document key or --all, not both and not neither. --all publishes every configured document in every configured locale.');
@@ -88,7 +88,7 @@ final class PublishDocumentCommand extends Command
         // --only-missing is a modifier of the matrix run, not a second command. On a single key
         // the operator has already named the subject and looked at it, so gap-filling semantics
         // there would only hide a refusal behind a success line.
-        if ((bool) $this->option('only-missing') && ! $all) {
+        if ($this->option('only-missing') && ! $all) {
             $this->error('--only-missing modifies --all. On a single document the publish is already deliberate; drop the flag or pass --all.');
 
             return self::FAILURE;
@@ -100,7 +100,7 @@ final class PublishDocumentCommand extends Command
 
         $locale = $this->resolveLocale();
 
-        return (bool) $this->option('dry-run')
+        return $this->option('dry-run')
             ? $this->previewOne($publisher, $mode, $key, $locale)
             : $this->publishOne($publisher, $mode, $key, $locale);
     }
@@ -152,9 +152,11 @@ final class PublishDocumentCommand extends Command
      */
     private function publishAll(LegalDocumentPublisher $publisher, NoticeMode $mode): int
     {
+        // A VALUE_NONE flag is already a bool, so this cast is EQUIVALENT under mutation. It is there
+        // for previewAll()'s bool parameter, which static analysis rejects `mixed` for.
         $onlyMissing = (bool) $this->option('only-missing');
 
-        if ((bool) $this->option('dry-run')) {
+        if ($this->option('dry-run')) {
             return $this->previewAll($publisher, $mode, $onlyMissing);
         }
 
@@ -361,6 +363,8 @@ final class PublishDocumentCommand extends Command
     private function activeVersion(string $key, string $locale): ?LegalDocument
     {
         return LegalDocument::query()
+            // `id` is EQUIVALENT under mutation: every caller reads the version and the hash. Measured
+            // 2026-09-14, the publish suites stay green without it and turn red without either of those.
             ->select(['id', 'version', 'content_hash'])
             ->where('key', $key)
             ->where('locale', $locale)
@@ -389,6 +393,8 @@ final class PublishDocumentCommand extends Command
             announceAt: $this->dateOption('announce-at'),
             enforceAt: $this->dateOption('enforce-at'),
             objectionDeadline: $this->dateOption('objection-at'),
+            // Both flags are VALUE_NONE, so these casts are EQUIVALENT under mutation. They satisfy the bool
+            // parameters, which static analysis rejects `mixed` for.
             offersTermination: (bool) $this->option('offers-termination'),
             keepsUnmodified: (bool) $this->option('keeps-unmodified'),
         );
@@ -405,6 +411,8 @@ final class PublishDocumentCommand extends Command
             announceAt: $this->dateOption('announce-at'),
             enforceAt: $this->dateOption('enforce-at'),
             objectionDeadline: $this->dateOption('objection-at'),
+            // Both flags are VALUE_NONE, so these casts are EQUIVALENT under mutation. They satisfy the bool
+            // parameters, which static analysis rejects `mixed` for.
             offersTermination: (bool) $this->option('offers-termination'),
             keepsUnmodified: (bool) $this->option('keeps-unmodified'),
         );
@@ -427,7 +435,7 @@ final class PublishDocumentCommand extends Command
         $selected = [];
 
         foreach ($map as $flag => $mode) {
-            if ((bool) $this->option($flag)) {
+            if ($this->option($flag)) {
                 $selected[] = $mode;
             }
         }

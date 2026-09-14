@@ -156,10 +156,16 @@ final class LegalDocument extends Model
             // why this file's sibling guard exists — deleting the last document of a locale left
             // its set cached for the full TTL, so the gate kept enforcing a version that no longer
             // existed. The model still carries the attribute here; the table no longer does.
+            // The `!== ''` is EQUIVALENT under mutation: `locale` is a NOT NULL column no write path leaves
+            // empty, and flushing '' would drop nothing. It keeps an empty value from reading as a locale.
             if ($document->locale !== '') {
                 $cache->flush($document->locale);
             }
 
+            // EQUIVALENT under mutation for the row this listener was called with: every set is keyed
+            // per locale, and resolvedFor() walks a chain by reading each locale's own set, so the
+            // flush above already reaches every reader this write can change. Measured 2026-09-14
+            // through a locale chain. It stays as the wider net the comment above `$flush` describes.
             $cache->flushAll();
         };
 

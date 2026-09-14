@@ -120,6 +120,8 @@ class ReconsentRequired extends ChangeNotification
      */
     private function fallback(string $key, array $replace = []): string
     {
+        // The `?? ''` below is EQUIVALENT under mutation: toMail() asks only for keys this map
+        // carries, so the empty fallback for an unknown key is never taken.
         $line = [
             'subject' => 'Wichtig: aktualisierte Nutzungsbedingungen',
             'intro' => 'Wir haben unsere Nutzungsbedingungen aktualisiert und bitten dich um deine erneute Zustimmung.',

@@ -132,13 +132,13 @@ final readonly class WriteNoticeDeliveryProof
         try {
             $mail = $notification->toMail($subject);
 
-            /** @var list<string> $lines */
-            $lines = array_values(array_filter([
+            /** @var array<int, string> $lines */
+            $lines = array_filter([
                 $mail->subject,
                 ...$mail->introLines,
                 $mail->actionText,
                 ...$mail->outroLines,
-            ], is_string(...)));
+            ], is_string(...));
 
             // Must be evaluated INSIDE the version's locale — the same locale the notice was
             // rendered in — or it would certify a translation the subject never received. Ask the

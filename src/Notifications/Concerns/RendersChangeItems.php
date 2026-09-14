@@ -96,6 +96,8 @@ trait RendersChangeItems
             $line .= ' — '.$item->detail;
         }
 
+        // array_values() is EQUIVALENT under mutation: implode() and the emptiness check below read
+        // no keys.
         $facets = array_values(array_filter([
             $item->party_location,
             $item->purpose,

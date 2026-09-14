@@ -4,6 +4,20 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.28.0 → 0.29.0
+
+**Nothing is required of you unless a morph alias or a document key in your application is a number.** No migration, no renamed key and no removed option.
+
+### A morph alias that is a number
+
+If your morph map gives a model an alias that is a number, such as `Relation::morphMap(['404' => User::class])`, neither notice sweep reached a subject under it: `legal-consent:dispatch-notices` queued nothing for them and still stamped each version it ran over as notified, and `legal-consent:close-objection-windows` deemed nobody. Both sweeps reach them now.
+
+**A version stamped while this was broken is not swept again by itself.** The sweep only takes active versions whose `notified_at` is empty. Clear it on each version those subjects are still owed a notice for, and the next run sends it.
+
+### A document whose key is a number
+
+`legal-consent:publish --all`, the doctor's report of unpublished documents and `legal-consent:rerender` without arguments skipped a document configured under a key that is a number, such as `'2024' => [...]`. They include it now. If you have such a document and have held it back on purpose, the next `publish --all` publishes it.
+
 ## 0.27.0 → 0.28.0
 
 **Run the migration.** `php artisan migrate` adds two nullable columns to `legal_documents`, and nothing else is required of you: no renamed key, no removed option, no published view or config that has to change.

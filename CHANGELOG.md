@@ -4,6 +4,30 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] - 2026-09-14
+
+### Added
+
+- **A lead time that is too short can be worded in your language.** `LeadTimeTooShortException` built one English sentence and kept nothing else, so a host could neither translate the refusal nor name the document by its title. It now carries `documentKey`, `minDays`, `announceAt` and `enforceAt`. `label()` names the translation key `legal-consent::ui.lead_time_too_short`, shipped in all seven languages, and `replacements()` fills its placeholders with the document's title, the minimum and both dates. The release screen states the refusal that way. The exception's message is unchanged.
+
+### Fixed
+
+- **The unstamped-boundary warning no longer sends a migrated installation to `migrate`.** `legal-consent:doctor` and `legal-consent:verify-ledger` both said to run the package migrations because 000024 stamps the chain-root boundary. It only does that when it runs with `tamper_evidence_key` already set. An installation migrated before the key was set gets its marker from the first consent recorded with the key, and running `migrate` again changes nothing, so the advice left the warning standing with nothing to act on. Both messages now name the two cases, and say that every row already in the ledger when the marker is stamped counts as history.
+
+- **A deemed-consent change can follow a major that went out as an active re-consent.** An atomic release publishes every locale in one transaction, one after another, and the publisher's check that one major carries one notice mode across locales compared the first locale against siblings still holding the version being replaced. Any change of mode within a major was refused at its first locale, so in an installation with more than one locale no deemed-consent change could follow a major at all, from the editor or from `LegalDocumentReleaser`. The releaser now names the locales it publishes together and the check skips them: each is about to carry the incoming mode, and a failure at any of them rolls all of them back. The per-locale `legal-consent:publish` is still checked against every sibling.
+
+- **The editor and the manager show a refused release instead of failing the request.** Both screens promise a status message for every failure, and both caught only the refusals that had their own exception type. Every other refusal from the publisher, among them a deemed-consent change without an objection deadline, a major released under silence and a version lower than the active one, left the Livewire action as a bare `RuntimeException`: a 500 on an admin screen, with the reason in the log only. Those refusals are now `LegalPublishRefused`, which still extends `RuntimeException`, and both screens print their message after “… was not released”. A database failure is not one of them and still surfaces as the error it is.
+
+- **A frozen change item names its change set through a connection that stringifies fetched values.** `change_set_id` had no integer cast, unlike `position`, so under `PDO::ATTR_STRINGIFY_FETCHES` it arrived as a string. The refusal to edit a published item then named change set 0, and the refusal to delete one threw a `TypeError` from the exception factory instead of `LegalDocumentFrozenException`. The column is now cast like its sibling.
+
+- **A subject whose morph alias is a number is notified and deemed like any other.** Laravel accepts a numeric morph alias such as `Relation::morphMap(['404' => User::class])`. The resolver behind both notice sweeps grouped the ledger by `subject_type`, PHP turned `'404'` into the integer key `404`, and every group that was not a string was skipped as unmapped. Nobody under such an alias was reached: `legal-consent:dispatch-notices` reported the audience, queued no notice and still stamped the version as notified, and `legal-consent:close-objection-windows` deemed nobody. The grouped key is read as the string the ledger holds. A version stamped while this was broken is not swept again by itself, because the sweep only takes versions whose `notified_at` is empty. An installation whose aliases are not numbers sees no change.
+
+- **A document whose key looks like a number is part of the publish matrix.** A key such as `'2024'` is an integer once PHP holds it, and the matrix behind `legal-consent:publish --all`, the doctor's report of unpublished documents and `legal-consent:rerender` without arguments dropped every key that was not a string, to keep a config written as a list out. Such a document was never published by the bulk publish, never reported missing and never re-rendered, while registration, `legal-consent:check-drift` and `legal-consent:cache-flush` handled it. An integer key is now left out only when its value is not an array, which is what an entry of a list looks like.
+
+### Security
+
+- **`legal-consent:verify-ledger` no longer skips the root proof for a chain whose `subject_token` is empty.** The check that catches a consent planted as a new chain exempted an empty token alongside the unkeyed and un-migrated cases, so a single `INSERT` with `subject_token = ''` and the genesis link, for a subject who never consented, still verified as intact while the gate counted the row. Nothing else in the command sees it: that subject holds one token, the token belongs to one subject, and an empty string is not `NULL`. The package never writes an empty token, so the exemption is gone. Only a keyed ledger was affected, because without `tamper_evidence_key` there is no root proof to require, and only on SQLite and MySQL: PostgreSQL's `uuid` column refuses the empty string on its own.
+
 ## [0.28.0] - 2026-09-13
 
 ### Added
@@ -2534,7 +2558,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.2...v0.27.0
 [0.26.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.26.1...v0.26.2

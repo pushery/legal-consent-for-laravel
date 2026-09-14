@@ -80,7 +80,7 @@ final class DoctorCommand extends Command
      */
     private function deemedConsentWithoutProof(): bool
     {
-        if ((bool) config('legal-consent.durable_medium.proof', true)) {
+        if (config('legal-consent.durable_medium.proof', true)) {
             return false;
         }
 
@@ -191,6 +191,10 @@ final class DoctorCommand extends Command
 
         // One key per document identity: the same contract published in seven locales is one
         // thing a subject accepts, and naming it seven times would read as seven problems.
+        //
+        // The filter and array_values() are EQUIVALENT under mutation: `key` is a non-null string
+        // column, and the only readers, count() and implode(), ignore array keys. Both stay for the
+        // list<string> this returns; measured 2026-09-14, static analysis rejects either removal.
         return array_values(array_unique(array_filter($keys, is_string(...))));
     }
 
@@ -360,7 +364,9 @@ final class DoctorCommand extends Command
                     '  A chain opened by a direct INSERT — fresh token, genesis link, no root proof —',
                     '  is what that check catches, and without the marker `verify-ledger` reports such',
                     '  a ledger as intact. Measured: the identical row is caught once the marker exists.',
-                    '  Run the package migrations; 000024 stamps the boundary.',
+                    '  Not migrated yet: run the package migrations with the key set; 000024 stamps it.',
+                    '  Already migrated: running them again changes nothing. The first consent recorded',
+                    '  with the key stamps it, and every row already in the ledger then counts as history.',
                 ],
             ];
         }
@@ -368,7 +374,11 @@ final class DoctorCommand extends Command
         return $findings;
     }
 
-    /** Whether migration 000024 has stamped the chain-root boundary in this database. */
+    /**
+     * Whether the chain-root boundary is stamped in this database. Migration 000024 stamps it when
+     * it runs with a key; an installation migrated before the key gets it from the first consent
+     * recorded with one.
+     */
     private function rootBoundaryStamped(): bool
     {
         if (! Schema::hasTable('legal_ledger_markers')) {
@@ -426,6 +436,9 @@ final class DoctorCommand extends Command
             $store = is_string($default) ? $default : null;
         }
 
+        // EQUIVALENT under mutation without this return: the lookup below would read
+        // `cache.stores..driver`, which is null, and return null all the same. It stays because it
+        // says the case out loud.
         if ($store === null) {
             return null;
         }
@@ -692,6 +705,9 @@ final class DoctorCommand extends Command
         $narrowed = [];
 
         foreach ($this->comparableBlocks($package, $published) as $block => [$value, $current]) {
+            // A `break` here is EQUIVALENT under mutation only by accident of the package config:
+            // `locales` is its one list and comes before every block, so nothing is left to skip. A
+            // list added further down would be skipped silently, which is why this is `continue`.
             if (! array_is_list($value) || ! array_is_list($current)) {
                 continue;
             }
@@ -699,6 +715,12 @@ final class DoctorCommand extends Command
             // Scalars only: array_diff compares string casts, and a list holding anything else is
             // not a set of choices an operator made — it is a shape this report has nothing to say
             // about.
+            //
+            // On the package side the filter, the describe() map and array_values() are EQUIVALENT
+            // under mutation: its one list holds strings, describe() hands a string back unchanged,
+            // and implode() ignores keys. They stay for the list<string> this returns (measured
+            // 2026-09-14: static analysis rejects each removal), and on the published side the
+            // filter carries real weight, because a hand-edited list can hold an array.
             $missing = array_values(array_map($this->describe(...), array_diff(
                 array_filter($value, is_scalar(...)),
                 array_filter($current, is_scalar(...)),
@@ -744,6 +766,8 @@ final class DoctorCommand extends Command
                 continue;
             }
 
+            // The cast is EQUIVALENT under mutation, because PHP stores a numeric string key as an
+            // int either way. It is there for the string keys the return type promises.
             $blocks[(string) $block] = [$value, $published[$block]];
         }
 
@@ -771,6 +795,7 @@ final class DoctorCommand extends Command
             // reported as stale on a perfectly synchronized file.
             if (! is_array($value) || array_is_list($value)) {
                 if (! array_key_exists($block, $package)) {
+                    // EQUIVALENT under mutation for the reason given in comparableBlocks().
                     $stale[(string) $block] = $this->describe($value);
                 }
 

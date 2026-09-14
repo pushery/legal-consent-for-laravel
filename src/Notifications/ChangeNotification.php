@@ -113,7 +113,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
             return $query;
         }
 
-        return $query->select(array_values(array_diff(self::DOCUMENT_COLUMNS, $this->documentColumnsNotRestored())));
+        return $query->select(array_diff(self::DOCUMENT_COLUMNS, $this->documentColumnsNotRestored()));
     }
 
     /**
@@ -156,7 +156,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         $identity = app(ResolvesNoticeIdentity::class)->forDocument($this->document);
 
         if ($identity->isDeclared()) {
-            $mail->line((string) trans('legal-consent::notifications.common.issuer', ['declarant' => $identity->declarationLine()]));
+            $mail->line(trans('legal-consent::notifications.common.issuer', ['declarant' => $identity->declarationLine()]));
         }
 
         $from = NoticeMailConfig::from();
@@ -203,6 +203,9 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
      */
     private function decoratedSubject(?string $subject): string
     {
+        // Every shipped notice sets a subject before this runs, so the cast is EQUIVALENT under
+        // mutation here. It stays for a subclass that sets none: the subject is then null, and this
+        // has to return a string.
         $subject = (string) $subject;
         $prefix = NoticeMailConfig::subjectPrefix();
 
@@ -213,7 +216,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         $enforceFrom = $this->document->enforce_from;
 
         if (NoticeMailConfig::showsEffectiveDateInSubject() && $enforceFrom instanceof CarbonImmutable) {
-            return (string) trans('legal-consent::notifications.common.subject_effective', [
+            return trans('legal-consent::notifications.common.subject_effective', [
                 'subject' => $subject,
                 'date' => $enforceFrom->toDateString(),
             ]);

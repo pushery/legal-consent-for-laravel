@@ -130,4 +130,5 @@ return [
     'admin_deemed_keeps_unmodified' => 'Garde la version inchangée disponible',
     'admin_deemed_submit' => 'Publier avec un délai d’opposition',
     'admin_status_deemed_window_rejected' => 'Non publié — le délai d’opposition a été refusé : :reason',
+    'lead_time_too_short' => 'une modification substantielle de « :document » exige au moins :days jours entre l’annonce (:announce) et l’entrée en vigueur (:enforce)',
 ];

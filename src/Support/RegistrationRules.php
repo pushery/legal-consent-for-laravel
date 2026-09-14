@@ -128,7 +128,6 @@ final class RegistrationRules
         $resolved = [];
 
         foreach (array_keys($this->documents) as $key) {
-            $key = (string) $key;
             $document = $byLocale[$locale]->get($key);
 
             if (! $document instanceof LegalDocument) {
@@ -165,7 +164,7 @@ final class RegistrationRules
     private function activeByKey(string $locale): Collection
     {
         return $this->activeByLocale[$locale] ??= LegalDocument::query()
-            ->select(['key', 'type', 'locale'])
+            ->select(['key', 'type'])
             ->where('locale', $locale)
             ->where('is_active', true)
             ->get()

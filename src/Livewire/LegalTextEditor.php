@@ -15,6 +15,7 @@ use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\LegalDocumentUnparsable;
+use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Exceptions\NoticeTimelineInvertedException;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
@@ -135,14 +136,14 @@ final class LegalTextEditor extends Component
             // they belong on the screen rather than in a 500. The unparsable one is the sharper
             // case: it means the HTML parser stopped part-way, and the alternative to refusing is
             // freezing a hash over the fragment.
-            $this->setStatus((string) __('legal-consent::ui.admin_status_not_saved', ['reason' => $e->getMessage()]));
+            $this->setStatus(__('legal-consent::ui.admin_status_not_saved', ['reason' => $e->getMessage()]));
 
             return;
         }
 
         // A status message after a save, and after the two acts below — WCAG 4.1.3: an action that
         // changes the record must announce its result, not leave a screen reader in silence.
-        $this->setStatus((string) __('legal-consent::ui.admin_status_saved'));
+        $this->setStatus(__('legal-consent::ui.admin_status_saved'));
     }
 
     public function translate(): void
@@ -150,7 +151,7 @@ final class LegalTextEditor extends Component
         $sourceLocale = $this->sourceLocale();
 
         if ($this->locale === $sourceLocale) {
-            $this->setStatus((string) __('legal-consent::ui.admin_status_source_not_translated'));
+            $this->setStatus(__('legal-consent::ui.admin_status_source_not_translated'));
 
             return;
         }
@@ -158,7 +159,7 @@ final class LegalTextEditor extends Component
         $source = LegalDraftSet::for($this->key)->draft($sourceLocale);
 
         if (! $source instanceof LegalDraft) {
-            $this->setStatus((string) __('legal-consent::ui.admin_status_no_source'));
+            $this->setStatus(__('legal-consent::ui.admin_status_no_source'));
 
             return;
         }
@@ -176,31 +177,33 @@ final class LegalTextEditor extends Component
         } catch (LegalDocumentTooLarge|LegalDocumentUnparsable $e) {
             // The translator's output travels the same pipeline and is not privileged — a service
             // that returns something the parser gives up on must not freeze a fragment either.
-            $this->setStatus((string) __('legal-consent::ui.admin_status_not_saved', ['reason' => $e->getMessage()]));
+            $this->setStatus(__('legal-consent::ui.admin_status_not_saved', ['reason' => $e->getMessage()]));
 
             return;
         }
 
         $this->body = $draft->body;
-        $this->setStatus((string) __('legal-consent::ui.admin_status_machine_translated'));
+        $this->setStatus(__('legal-consent::ui.admin_status_machine_translated'));
     }
 
     public function markReviewed(): void
     {
         app(LegalDraftWriter::class)->markReviewed($this->key, $this->locale, $this->actor());
-        $this->setStatus((string) __('legal-consent::ui.admin_status_reviewed'));
+        $this->setStatus(__('legal-consent::ui.admin_status_reviewed'));
     }
 
     /**
      * Release this document across its locales as a DEEMED-CONSENT change, on a stated objection
      * window.
      *
-     * Every failure here is a status message, never a fatal. Three can happen and they mean
+     * Every failure here is a status message, never a fatal. Four kinds can happen and they mean
      * different things to the person clicking:
      *
      *  - the set is not ready (a locale unwritten or unreviewed) — {@see LegalReleaseNotReady}
      *  - the window runs backwards — {@see NoticeTimelineInvertedException}
      *  - the window is shorter than the statutory lead time — {@see LeadTimeTooShortException}
+     *  - the publisher refuses the version itself: a major that must gate, a missing objection
+     *    deadline, a version lower than the active one — {@see LegalPublishRefused}
      *
      * The last two are the ones that make this surface worth shipping rather than leaving to the
      * CLI: an operator picking dates in a form finds out immediately, in their own language, that
@@ -212,7 +215,7 @@ final class LegalTextEditor extends Component
         $unreadable = $this->unreadableDates();
 
         if ($unreadable !== []) {
-            $this->setStatus((string) __('legal-consent::ui.admin_status_deemed_window_rejected', [
+            $this->setStatus(__('legal-consent::ui.admin_status_deemed_window_rejected', [
                 'reason' => 'unreadable date in '.implode(', ', $unreadable).' — expected YYYY-MM-DD',
             ]));
 
@@ -233,29 +236,51 @@ final class LegalTextEditor extends Component
                 ),
             );
         } catch (LegalReleaseNotReady $e) {
-            $this->setStatus((string) __('legal-consent::ui.admin_status_release_blocked', [
+            $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
                 'key' => $this->key,
                 'reasons' => implode('; ', array_map(
                     static fn (string $locale, BlockingReason $reason): string => "{$locale} (".__($reason->label()).')',
                     array_keys($e->blocking),
-                    array_values($e->blocking),
+                    $e->blocking,
                 )),
             ]));
 
             return;
-        } catch (NoticeTimelineInvertedException|LeadTimeTooShortException $e) {
+        } catch (LeadTimeTooShortException $e) {
+            // Worded in the screen's own language from the values the refusal carries, with the
+            // document named by its title. The minimum and both dates are what an operator needs to
+            // fix it, so they stay in the sentence.
+            $this->setStatus(__('legal-consent::ui.admin_status_deemed_window_rejected', [
+                'reason' => __($e->label(), $e->replacements()),
+            ]));
+
+            return;
+        } catch (NoticeTimelineInvertedException $e) {
             // The message carries the package's own numbers (which minimum, which dates), so it is
             // shown rather than replaced by a vaguer sentence of our own.
-            $this->setStatus((string) __('legal-consent::ui.admin_status_deemed_window_rejected', [
+            $this->setStatus(__('legal-consent::ui.admin_status_deemed_window_rejected', [
                 'reason' => $e->getMessage(),
+            ]));
+
+            return;
+        } catch (LegalPublishRefused $e) {
+            // Every other refusal the publisher makes: a major that must gate, a missing objection
+            // deadline, a version lower than the active one. The message names the version and what
+            // to publish instead, so it is shown whole.
+            $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
+                'key' => $this->key,
+                'reasons' => $e->getMessage(),
             ]));
 
             return;
         }
 
+        // The instanceof, and the 0 beside it, are EQUIVALENT under mutation here: a release that got
+        // this far published one row per configured locale, and mount() has already refused a
+        // screen whose locale is not among them, so there is always a first row.
         $first = $released->first();
         $affects = $first instanceof LegalDocument ? app(LegalDocumentReleaser::class)->affects($first) : 0;
-        $this->setStatus((string) __('legal-consent::ui.admin_status_released', [
+        $this->setStatus(__('legal-consent::ui.admin_status_released', [
             'key' => $this->key,
             'count' => count($released),
             'affects' => $affects,
@@ -287,6 +312,9 @@ final class LegalTextEditor extends Component
      */
     private function date(string $value): ?CarbonImmutable
     {
+        // The empty check is EQUIVALENT under mutation, measured 2026-09-14: Carbon refuses an empty
+        // string with InvalidFormatException, which parseDate() turns into null as well. It stays so
+        // that "left blank means not stated" does not rest on a parser's error path.
         return $value === '' ? null : $this->parseDate($value);
     }
 
@@ -321,6 +349,9 @@ final class LegalTextEditor extends Component
             return null;
         }
 
+        // The instanceof is EQUIVALENT under mutation: createFromFormat() throws rather than returning
+        // null, measured 2026-09-14 for an empty string and for garbage. Static analysis types the
+        // result as nullable, which is why the guard stays.
         if (! $date instanceof CarbonImmutable || $date->format('Y-m-d') !== $value) {
             return null;
         }
@@ -378,6 +409,9 @@ final class LegalTextEditor extends Component
     {
         $locales = config('legal-consent.locales');
 
+        // array_values() is EQUIVALENT under mutation: its readers, in_array() and a foreach in the
+        // releaser, never read a key. It stays for the list<string> this returns; static analysis
+        // rejects the removal (measured 2026-09-14).
         return is_array($locales) ? array_values(array_filter($locales, is_string(...))) : [];
     }
 

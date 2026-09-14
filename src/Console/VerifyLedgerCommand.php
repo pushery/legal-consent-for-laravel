@@ -89,13 +89,15 @@ final class VerifyLedgerCommand extends Command
                 }
             }
 
+            // The '' fallback is EQUIVALENT under mutation: chainedRows() reads only rows whose
+            // prev_record_hash is not null, and the column is a string, so it is never taken.
             $stored = is_string($row->prev_record_hash ?? null) ? $row->prev_record_hash : '';
 
             if ($stored !== $expectedPrev) {
                 $reason = $expectedPrev === $genesis
                     ? 'chain does not start at genesis (a prior row may have been removed)'
                     : 'link does not match the previous row (edit, deletion, insertion, or reorder)';
-                $rowId = is_int($row->id) || is_string($row->id) ? (string) $row->id : '?';
+                $rowId = is_int($row->id) || is_string($row->id) ? $row->id : '?';
                 $token = is_string($row->subject_token) ? $row->subject_token : '?';
                 $breaks[] = "subject_token {$token}, row #{$rowId}: {$reason}";
             }
@@ -110,6 +112,8 @@ final class VerifyLedgerCommand extends Command
         // written through the manager: it is a direct insert. Pre-feature rows have lower ids and
         // are legitimately unchained, so they are not flagged.
         $firstChainedId = DB::table('legal_consents')->whereNotNull('prev_record_hash')->min('id');
+        // Seeded at 0 and only ever read as `> 0`, so a seed of -1 is EQUIVALENT under mutation. A
+        // seed of 1 is not, and the report arm for an empty ledger holds that.
         $unprotected = 0;
 
         if ($firstChainedId !== null) {
@@ -120,11 +124,11 @@ final class VerifyLedgerCommand extends Command
                 ->get(['id']);
 
             foreach ($suspects as $suspect) {
-                $rowId = is_int($suspect->id) || is_string($suspect->id) ? (string) $suspect->id : '?';
+                $rowId = is_int($suspect->id) || is_string($suspect->id) ? $suspect->id : '?';
                 $breaks[] = "row #{$rowId}: unchained row inserted after tamper-evidence began — a chained ledger has no unchained inserts (direct DB write?)";
             }
 
-            $unprotected = (int) DB::table('legal_consents')
+            $unprotected = DB::table('legal_consents')
                 ->whereNull('prev_record_hash')
                 ->where('id', '<=', $firstChainedId)
                 ->count();
@@ -166,7 +170,7 @@ final class VerifyLedgerCommand extends Command
         // read the absence of this class as its absence in the data. Only when keyed: unkeyed the
         // check would not run anyway, and the note below already says that guarantee is weaker.
         if ($keyed && ! $boundary instanceof LedgerRootBoundary) {
-            $this->warn('The chain-root boundary is NOT stamped, so the root-proof check did not run: a chain opened by a direct insert cannot be detected here. Run the package migrations — 000024 stamps the boundary.');
+            $this->warn('The chain-root boundary is NOT stamped, so the root-proof check did not run: a chain opened by a direct insert cannot be detected here. Not migrated yet: run the package migrations with the key set, and 000024 stamps it. Already migrated: running them again changes nothing; the first consent recorded with the key stamps it, and every row already in the ledger then counts as history.');
         }
 
         if ($breaks === []) {
@@ -263,7 +267,11 @@ final class VerifyLedgerCommand extends Command
             return;
         }
 
-        $ceiling = (int) $highest;
+        $ceiling = $highest;
+
+        // Dropping an engine from this list is EQUIVALENT under mutation in this suite, and not
+        // because the choice is free: both seek forms return the same rows, so only the query plan
+        // differs, and the seek itself runs only from the second page on (see below).
         $rowValueSeek = in_array(DB::connection()->getDriverName(), ['pgsql', 'sqlite'], true);
 
         $lastToken = null;
@@ -338,6 +346,9 @@ final class VerifyLedgerCommand extends Command
         $id = $marker->boundary_id ?? null;
         $proof = $marker->proof ?? null;
 
+        // Both fallbacks are EQUIVALENT under mutation: boundary_id and proof are NOT NULL columns,
+        // so neither is ever taken. The cast is not: through a connection that stringifies fetched
+        // values the id arrives as a string, and a test holds that.
         return new LedgerRootBoundary(
             is_int($id) || is_string($id) ? (int) $id : 0,
             is_string($proof) ? $proof : '',
@@ -355,15 +366,26 @@ final class VerifyLedgerCommand extends Command
      */
     private function rootProofBreak(LedgerHashChain $chain, stdClass $row, ?LedgerRootBoundary $boundary): array
     {
+        // The '' fallback is EQUIVALENT under mutation: the walk reads only rows whose
+        // subject_token is not null, so it is never taken.
         $token = is_string($row->subject_token ?? null) ? $row->subject_token : '';
         $expected = $chain->rootProof($token);
 
         // Unkeyed, un-migrated, or a row from before the boundary: nothing is claimed and nothing
         // is checked. Each of the three is a state an honest installation is legitimately in.
-        if ($expected === null || ! $boundary instanceof LedgerRootBoundary || $token === '') {
+        //
+        // An EMPTY token is not a fourth, and it used to be exempt here. That exemption was a way
+        // around this whole check: one INSERT with subject_token = '' and a genesis link, for a
+        // subject who never consented, verified as intact while the gate counted the row. Nothing
+        // honest needs it, because the package never writes an empty token. PostgreSQL's uuid
+        // column refuses '' on its own; SQLite and MySQL's char(36) store it.
+        if ($expected === null || ! $boundary instanceof LedgerRootBoundary) {
             return [];
         }
 
+        // The cast and the 0 fallback are EQUIVALENT under mutation: an id always arrives as an int
+        // or a string, so the fallback is never taken, and a numeric string compares with the
+        // boundary and prints exactly as its int does.
         $rowId = is_int($row->id) || is_string($row->id) ? (int) $row->id : 0;
 
         if ($rowId <= $boundary->id) {
@@ -372,7 +394,7 @@ final class VerifyLedgerCommand extends Command
 
         $stored = is_string($row->root_proof ?? null) ? $row->root_proof : '';
 
-        if ($stored !== '' && hash_equals($expected, $stored)) {
+        if (hash_equals($expected, $stored)) {
             return [];
         }
 
@@ -455,6 +477,9 @@ final class VerifyLedgerCommand extends Command
         $subjectsPerToken = [];
 
         foreach ($pairs as $pair) {
+            // The two casts and the tenant's '' fallback are EQUIVALENT under mutation: tenant_id is a
+            // NOT NULL string column, and both values only ever reach a concatenation or `%s`, which
+            // print an int the same way. The casts stay so `id` is the string its shape declares.
             $type = is_string($pair->subject_type) ? $pair->subject_type : '?';
             $id = is_scalar($pair->subject_id) ? (string) $pair->subject_id : '?';
             $tenant = is_scalar($pair->tenant_id) ? (string) $pair->tenant_id : '';
@@ -465,6 +490,11 @@ final class VerifyLedgerCommand extends Command
             // one — while this query reads through DB::table(), which the tenant scope never
             // touches. A perfectly clean two-tenant ledger therefore reported a fabricated chain,
             // and a multi-tenant installation could never verify green.
+            //
+            // Reordering the parts of this identity, or of the subject below, is EQUIVALENT under
+            // mutation: both are only ever compared, never read apart. Dropping a part or a separator
+            // is not, and tests hold each one. The empty `tokens` list is equivalent too, because the
+            // append below creates it; it stays to spell out the shape.
             $identity = $type."\0".$id."\0".$tenant;
 
             $tokensPerSubject[$identity] ??= ['type' => $type, 'id' => $id, 'tokens' => []];
@@ -476,6 +506,10 @@ final class VerifyLedgerCommand extends Command
             $subjectsPerToken[$token][] = $type."\0".$id;
         }
 
+        // Both array_unique() calls are EQUIVALENT under mutation for every ledger this package
+        // writes: the query groups by all four columns and tenant_id is never NULL, so no token
+        // repeats within an identity, and a subject is minted one token per tenant.
+        //
         // One subject, several tokens — the shape a fabricated chain creates.
         foreach ($tokensPerSubject as $subject) {
             $distinct = count(array_unique($subject['tokens']));
@@ -510,7 +544,7 @@ final class VerifyLedgerCommand extends Command
         $firstChainedId = DB::table('legal_consents')->whereNotNull('prev_record_hash')->min('id');
 
         if ($firstChainedId !== null) {
-            $tokenless = (int) DB::table('legal_consents')
+            $tokenless = DB::table('legal_consents')
                 ->whereNull('subject_token')
                 ->where('id', '>', $firstChainedId)
                 ->count();

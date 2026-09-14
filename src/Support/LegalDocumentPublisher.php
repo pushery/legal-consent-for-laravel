@@ -14,9 +14,9 @@ use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Events\LegalDocumentPublished;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
+use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
 use Pushery\LegalConsent\Exceptions\NoticeTimelineInvertedException;
 use Pushery\LegalConsent\Models\LegalDocument;
-use RuntimeException;
 
 /**
  * Freezes the current source text of a document into a new, immutable, active
@@ -153,6 +153,8 @@ final readonly class LegalDocumentPublisher
      *
      * Its guards are also the dry run's guards — see {@see previewWithMode}, which runs this
      * method's checks in this method's order and writes nothing.
+     *
+     * @param  list<string>  $releasedTogether  the locales an atomic release publishes in the same transaction
      */
     public function publishWithMode(
         string $key,
@@ -166,6 +168,7 @@ final readonly class LegalDocumentPublisher
         bool $offersTermination = false,
         bool $keepsUnmodified = false,
         ?Document $prerendered = null,
+        array $releasedTogether = [],
     ): LegalDocument {
         $this->assertRequestCoherent($key, $locale, $mode, $regime);
 
@@ -177,7 +180,7 @@ final readonly class LegalDocumentPublisher
         $rendered = $prerendered ?? $this->preview($key, $locale);
         $type = $this->typeFor($key);
 
-        $this->assertVersionPublishable($key, $locale, $mode, $type, $rendered);
+        $this->assertVersionPublishable($key, $locale, $mode, $type, $rendered, $releasedTogether);
 
         $existing = $this->existingVersion($key, $locale, $rendered->version);
 
@@ -377,11 +380,13 @@ final readonly class LegalDocumentPublisher
      * The plain `>` major check runs only after that branch has already returned, so it never
      * guards this vector. Version is monotonic by design; a revert is a new, higher version
      * carrying the old text, never a re-activation of an old row.
+     *
+     * @param  list<string>  $releasedTogether  the locales published in the same atomic release
      */
-    private function assertVersionPublishable(string $key, string $locale, NoticeMode $mode, DocumentType $type, Document $rendered): void
+    private function assertVersionPublishable(string $key, string $locale, NoticeMode $mode, DocumentType $type, Document $rendered, array $releasedTogether = []): void
     {
         $this->assertModeAllowedForType($mode, $type, $key);
-        $this->assertModeConsistentAcrossLocales($mode, $key, $locale, $rendered);
+        $this->assertModeConsistentAcrossLocales($mode, $key, $locale, $rendered, $releasedTogether);
         $this->assertNotDowngrade($key, $locale, $rendered);
     }
 
@@ -407,13 +412,13 @@ final readonly class LegalDocumentPublisher
     private function assertRepublishable(LegalDocument $existing, NoticeMode $mode, Document $rendered, string $key, string $locale): void
     {
         if ($existing->content_hash !== $rendered->contentHash) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "Version {$rendered->version} of '{$key}' ({$locale}) already exists with different content — bump the version before publishing."
             );
         }
 
         if ($existing->noticeMode() !== $mode) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "Version {$rendered->version} of '{$key}' ({$locale}) already exists as {$existing->noticeMode()->value}; re-publishing identical content cannot re-classify it as {$mode->value} — bump the version before publishing."
             );
         }
@@ -551,7 +556,7 @@ final readonly class LegalDocumentPublisher
         // This is the same class of silent legal downgrade the version check below prevents, and
         // it fails just as loudly. The reverse direction stays allowed: becoming stricter is safe.
         if ($active->type->isConsentBearing() && ! $this->typeFor($key)->isConsentBearing()) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "Cannot publish '{$key}' ({$locale}) as informational: its active version {$active->version} is a {$active->type->value} that subjects have been asked to accept. An informational page binds nobody, so this would silently remove the gate while their recorded acceptances stay on file. Publish it under its existing legal basis, or retire the document and register the page under a new key."
             );
         }
@@ -568,7 +573,7 @@ final readonly class LegalDocumentPublisher
         $incoming = [$rendered->majorVersion, $rendered->minorVersion, $rendered->patchVersion];
 
         if ($incoming < $current) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "Cannot publish version {$rendered->version} of '{$key}' ({$locale}): it is lower than the active version {$active->version}. Versions are monotonic — publish a higher version carrying the reverted text instead of re-activating an old one."
             );
         }
@@ -580,11 +585,21 @@ final readonly class LegalDocumentPublisher
      * Acceptance is identity-keyed — accepting `terms` major 2 in any language satisfies the gate
      * for `terms` major 2 everywhere. If the same major were DeemedConsent in one locale and
      * ActiveReconsent in another, a subject bound by silence in the first would silently satisfy
-     * the hard re-consent gate of the second: a weaker proof standing in for a stronger one. The
-     * atomic releaser makes this unreachable by construction; this guard covers the per-locale CLI
-     * escape hatch, which cannot see its sibling locales.
+     * the hard re-consent gate of the second: a weaker proof standing in for a stronger one.
+     *
+     * ⚠️ THE ATOMIC RELEASER DID NOT MAKE THIS UNREACHABLE, and this paragraph used to say it did.
+     * It publishes its locales one after another inside one transaction, so the first locale met
+     * siblings still holding the version being replaced, under its old mode, and was refused.
+     * Measured 2026-09-14: a major released as an active re-consent in `de` and `en`, then 1.1.0 as
+     * a deemed-consent change, failed at `de`. A contract's major must gate, so no deemed-consent
+     * change could follow one in any installation with a second locale. The releaser now names the
+     * locales it publishes together, and those are skipped: each is about to carry the incoming
+     * mode, and a failure at any of them rolls all of them back. The per-locale CLI escape hatch
+     * names none, so it is still checked against every sibling.
+     *
+     * @param  list<string>  $releasedTogether  the locales published in the same atomic release
      */
-    private function assertModeConsistentAcrossLocales(NoticeMode $mode, string $key, string $locale, Document $rendered): void
+    private function assertModeConsistentAcrossLocales(NoticeMode $mode, string $key, string $locale, Document $rendered, array $releasedTogether = []): void
     {
         // ⚠️ A VERSION THAT CARRIES EXACTLY THE ACTIVE VERSION'S TEXT IS NOT A CHANGE, SO IT HAS
         // NOTHING TO BE CONSISTENT WITH. The presentation re-render publishes the identical source
@@ -605,13 +620,13 @@ final readonly class LegalDocumentPublisher
             ->select(['locale', 'notice_mode', 'requires_reconsent'])
             ->where('key', $key)
             ->where('major_version', $rendered->majorVersion)
-            ->where('locale', '!=', $locale)
+            ->whereNotIn('locale', [$locale, ...$releasedTogether])
             ->where('is_active', true)
             ->get();
 
         foreach ($siblings as $sibling) {
             if ($sibling->noticeMode() !== $mode) {
-                throw new RuntimeException(
+                throw new LegalPublishRefused(
                     "'{$key}' major {$rendered->majorVersion} is already active in '{$sibling->locale}' as {$sibling->noticeMode()->value}; publishing '{$locale}' as {$mode->value} would make one change bind by two different standards. Acceptance is identity-keyed, so the weaker one would satisfy the stronger one's gate — release every locale of a version with the same notice mode."
                 );
             }
@@ -661,7 +676,7 @@ final readonly class LegalDocumentPublisher
         // recipients from ledger rows, and this type never writes one. Publishing it is simply
         // making the current text live.
         if (! $type->isConsentBearing() && $mode !== NoticeMode::SilentEditorial) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "'{$key}' is an informational page (Impressum, cookie policy) — it binds nobody, so it is published silently. Publish it with --editorial; there is no acceptance to deem or re-request, and no recipient to notify."
             );
         }
@@ -670,7 +685,7 @@ final readonly class LegalDocumentPublisher
         // (§ 308 Nr. 5 BGB; BGH XI ZR 26/20). A privacy notice is acknowledged, and a real
         // consent can never be deemed (EDPB 05/2020 Rz. 79).
         if ($mode === NoticeMode::DeemedConsent && $type !== DocumentType::ContractTerms) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "A deemed-consent (Zustimmungsfiktion) change is lawful only for a contract/terms document; '{$key}' is a {$type->value}. A privacy notice is acknowledged — publish it info-only; a consent is never deemed — publish it as active re-consent."
             );
         }
@@ -679,7 +694,7 @@ final readonly class LegalDocumentPublisher
         // to force acknowledgment is unlawful pressure (WP260 rev.01 Rz. 30-31); a material
         // privacy change is info-only.
         if ($mode === NoticeMode::ActiveReconsent && $type === DocumentType::PrivacyNotice) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 'A privacy notice is information — acknowledged, never gated. Publish a material privacy change info-only (a hard-blocking re-consent would unlawfully pressure the subject; WP260 rev.01 Rz. 30-31).'
             );
         }
@@ -702,7 +717,7 @@ final readonly class LegalDocumentPublisher
 
         if ($type === DocumentType::PrivacyNotice) {
             if ($mode !== NoticeMode::InfoPush) {
-                throw new RuntimeException(
+                throw new LegalPublishRefused(
                     "Version {$version} of '{$key}' ({$locale}) is a material privacy change (major bump) — publish it info-only so subjects are actively informed (WP260 rev.01 Rz. 29-31); it is never gated and never silent."
                 );
             }
@@ -711,7 +726,7 @@ final readonly class LegalDocumentPublisher
         }
 
         if (! $mode->gates()) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "Version {$version} of '{$key}' ({$locale}) increases the major version, which forces re-consent — publish it as an active re-consent. A material core change cannot ride on silence or mere information (BGH XI ZR 26/20)."
             );
         }
@@ -784,13 +799,13 @@ final readonly class LegalDocumentPublisher
     private function assertObjectionWindow(?CarbonImmutable $objectionDeadline, CarbonImmutable $enforce, string $key): CarbonImmutable
     {
         if (! $objectionDeadline instanceof CarbonImmutable) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "A deemed-consent change to '{$key}' needs an objection deadline (the Widerspruchsfrist) — silence past it is deemed acceptance (§ 308 Nr. 5 lit. a BGB)."
             );
         }
 
         if ($objectionDeadline->greaterThanOrEqualTo($enforce)) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "The objection deadline ({$objectionDeadline->toDateString()}) for '{$key}' must fall before the effective date ({$enforce->toDateString()}) — the subject must be able to object before the change takes effect."
             );
         }
@@ -807,7 +822,7 @@ final readonly class LegalDocumentPublisher
     private function assertRegimeKnown(?string $regime, string $key): void
     {
         if ($regime !== null && ! in_array($regime, self::REGIMES, true)) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "Unknown regime '{$regime}' for '{$key}'. Use one of: ".implode(', ', self::REGIMES).'. An unrecognized regime would silently fall back to a tunable default instead of its statutory notice period.'
             );
         }
@@ -830,7 +845,7 @@ final readonly class LegalDocumentPublisher
     private function assertRegimeCoherentWithMode(?string $regime, NoticeMode $mode, string $key): void
     {
         if ($regime !== null && ! $mode->requiresNotice()) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "Regime '{$regime}' was declared on a silent editorial change to '{$key}'. An editorial change owes no notice, so the regime's advance-notice period would never be applied — publish it without a regime, or classify the change as the one it is (--info, --deemed or --active)."
             );
         }
@@ -853,7 +868,7 @@ final readonly class LegalDocumentPublisher
         $supported = array_values(array_filter($locales, is_string(...)));
 
         if ($supported !== [] && ! in_array($locale, $supported, true)) {
-            throw new RuntimeException(
+            throw new LegalPublishRefused(
                 "Locale '{$locale}' is not in the configured legal-consent.locales (".implode(', ', $supported).'). Add it there, or publish a supported locale.'
             );
         }

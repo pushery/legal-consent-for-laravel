@@ -277,6 +277,8 @@ final class ConsentFake implements ConsentManager
                 'version' => '1.0.0',
                 'title' => $key,
                 'ui_wording' => $this->acceptanceWordingFor($key, $locale),
+                // Swapping the halves is EQUIVALENT under mutation: the fingerprint is only ever compared
+                // with itself, and either order is stable and distinct per key and locale.
                 'content_hash' => hash('sha256', $key.'|'.$locale),
                 // An arranged document is mandatory and still owed — the two reads a gate makes,
                 // kept consistent with hasCurrent() answering false for exactly these keys.
@@ -437,6 +439,8 @@ final class ConsentFake implements ConsentManager
 
     private function identify(Model $subject): string
     {
+        // Reordering the parts is EQUIVALENT under mutation, since the identity is only ever used as a
+        // key. Dropping the subject's key from it is not.
         return $subject::class.'|'.(RecordedConsent::keyOf($subject) ?? 'null');
     }
 
