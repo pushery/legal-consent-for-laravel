@@ -329,6 +329,9 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // audience size, not a delivery forecast — it errs toward more notice rather than less,
             // which is the safe direction here, but it is not the same number.
             $remaining = $resolver->countForVersion($version, skipNotified: $proofEnabled);
+            // The floor is EQUIVALENT under mutation: the resume count reads the same audience with one
+            // more condition, so it never exceeds the total. It stays to say the difference cannot go
+            // negative.
             $proofed = max(0, $total - $remaining);
 
             // The real sweep measures the brake against the RAW audience, before the resume

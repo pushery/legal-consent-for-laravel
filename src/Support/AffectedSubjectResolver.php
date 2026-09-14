@@ -293,7 +293,12 @@ readonly class AffectedSubjectResolver
         $models = new Collection;
 
         foreach ($chunk->groupBy('subject_type') as $type => $rows) {
-            $class = $this->modelClass($type);
+            // groupBy() keys each group by its subject_type, and PHP turns a numeric one into an INT
+            // key: the alias of `Relation::morphMap(['404' => User::class])` arrives as 404. The
+            // ledger and the morph map both hold the string, so it is cast back before the lookup.
+            // Without the cast every subject under a numeric alias was skipped as unmapped, and the
+            // notice sweep stamped its version as notified having sent nothing.
+            $class = $this->modelClass((string) $type);
 
             if ($class === null) {
                 continue; // unmapped / non-model subject_type — skip
@@ -315,21 +320,8 @@ readonly class AffectedSubjectResolver
      *
      * @return class-string<Model>|null
      */
-    private function modelClass(int|string $type): ?string
+    private function modelClass(string $type): ?string
     {
-        // ⚠️ NO OUTCOME DEPENDS ON THIS, kept for readability rather than effect. `groupBy` coerces a
-        // numeric subject_type to an INT key, which is the case this guard names -- but the check
-        // below already answers null for it: measured, `getMorphedModel(123)` does not throw and
-        // `is_a(123, Model::class, true)` is false. So RemoveEarlyReturn here changes nothing, and
-        // the arm that covers the numeric type passes either way.
-        //
-        // It stays because "a non-string is not a morph type" is a statement about the input, and
-        // reading that out of an is_a() two lines down is work the next person should not have to
-        // do twice.
-        if (! is_string($type)) {
-            return null;
-        }
-
         $class = Relation::getMorphedModel($type) ?? $type;
 
         return is_a($class, Model::class, true) ? $class : null;

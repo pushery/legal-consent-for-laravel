@@ -45,7 +45,7 @@ final class RerenderCommand extends Command
 
         foreach ($keys as $documentKey) {
             foreach ($locales as $documentLocale) {
-                $document = $this->rerenderOne($rerenderer, (string) $documentKey, (string) $documentLocale, $refusals);
+                $document = $this->rerenderOne($rerenderer, $documentKey, $documentLocale, $refusals);
 
                 if ($document instanceof LegalDocument) {
                     $published[] = "'{$documentKey}' ({$documentLocale}) re-frozen as v{$document->version}";

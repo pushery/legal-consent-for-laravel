@@ -130,4 +130,5 @@ return [
     'admin_deemed_keeps_unmodified' => 'Houdt de ongewijzigde versie beschikbaar',
     'admin_deemed_submit' => 'Publiceren met bezwaartermijn',
     'admin_status_deemed_window_rejected' => 'Niet gepubliceerd — de bezwaartermijn is afgewezen: :reason',
+    'lead_time_too_short' => 'een wezenlijke wijziging van ‘:document’ vereist minstens :days dagen tussen de aankondiging (:announce) en de inwerkingtreding (:enforce)',
 ];

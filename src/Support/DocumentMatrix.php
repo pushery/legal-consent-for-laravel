@@ -25,9 +25,25 @@ final readonly class DocumentMatrix
     {
         $documents = config('legal-consent.documents', []);
 
-        return is_array($documents)
-            ? array_values(array_filter(array_keys($documents), is_string(...)))
-            : [];
+        if (! is_array($documents)) {
+            return [];
+        }
+
+        $keys = [];
+
+        foreach ($documents as $key => $definition) {
+            // An integer key is one of two things, and only the value tells them apart. `'2024' =>
+            // [...]` is a document whose key looks like a number, which registration records and
+            // check-drift and cache-flush handle as '2024'. An entry of a config written as a list,
+            // `['terms', 'privacy']`, is a bare name that defines nothing.
+            if (is_int($key) && ! is_array($definition)) {
+                continue;
+            }
+
+            $keys[] = (string) $key;
+        }
+
+        return $keys;
     }
 
     /**

@@ -177,7 +177,7 @@ final class ConsentSettings extends Component
             );
         });
 
-        $this->setStatus((string) __('legal-consent::ui.granted_confirmation'));
+        $this->setStatus(__('legal-consent::ui.granted_confirmation'));
     }
 
     public function withdraw(string $key): void
@@ -192,7 +192,7 @@ final class ConsentSettings extends Component
                 $this->locale,
             ));
 
-            $this->setStatus((string) __('legal-consent::ui.withdrawn_confirmation'));
+            $this->setStatus(__('legal-consent::ui.withdrawn_confirmation'));
         }
     }
 
@@ -218,7 +218,7 @@ final class ConsentSettings extends Component
             // response is a second click, and a second click writes a second row that cannot be
             // taken back. WCAG 4.1.3 is the same requirement from the other side.
 
-            $this->setStatus((string) __('legal-consent::ui.objected_confirmation'));
+            $this->setStatus(__('legal-consent::ui.objected_confirmation'));
         }
     }
 
@@ -237,7 +237,7 @@ final class ConsentSettings extends Component
             ));
 
             // Same reason as object() above: an irreversible write nobody is told about.
-            $this->setStatus((string) __('legal-consent::ui.terminated_confirmation'));
+            $this->setStatus(__('legal-consent::ui.terminated_confirmation'));
         }
     }
 

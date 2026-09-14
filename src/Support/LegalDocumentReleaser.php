@@ -89,6 +89,9 @@ final readonly class LegalDocumentReleaser
 
         // Count the grouped set directly — never hydrate the whole affected population just to
         // size it (this runs in the release Livewire request).
+        //
+        // The 0 is EQUIVALENT under mutation: the watermark only bounds `id <=` in SQL, and an empty
+        // ledger counts nobody below any number.
         return $this->resolver->countForVersion($version, is_numeric($maxConsentId) ? (int) $maxConsentId : 0);
     }
 
@@ -113,7 +116,9 @@ final readonly class LegalDocumentReleaser
         // the requirement (`change_items.required`), because a package that started refusing every
         // existing release the day it shipped a new field would be forcing a feature, not offering
         // one. Off by default; the notice simply carries no delta until someone turns it on.
-        if ($mode->requiresNotice() && (bool) config('legal-consent.change_items.required', false)) {
+        if ($mode->requiresNotice() && config('legal-consent.change_items.required', false)) {
+            // array_values() is EQUIVALENT under mutation, since blockingLocales() only iterates the locales.
+            // Static analysis needs the list its signature declares (measured 2026-09-14).
             $blocking = [...$blocking, ...$this->changeItems->blockingLocales($key, array_values(array_diff($locales, array_keys($blocking))))];
         }
 
@@ -137,6 +142,7 @@ final readonly class LegalDocumentReleaser
                     objectionDeadline: $options->objectionDeadline,
                     offersTermination: $options->offersTermination,
                     keepsUnmodified: $options->keepsUnmodified,
+                    releasedTogether: $locales,
                 ));
             }
         });

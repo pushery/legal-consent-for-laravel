@@ -9,6 +9,7 @@ use Livewire\Component;
 use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\DraftOrigin;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
@@ -61,7 +62,7 @@ final class LegalTextManager extends Component
         } catch (LegalReleaseNotReady $e) {
             // A polite live-region message — never a fatal — so a screen reader hears WHY the
             // release did not happen (WCAG 4.1.3), and nothing was written.
-            $this->setStatus((string) __('legal-consent::ui.admin_status_release_blocked', [
+            $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
                 'key' => $key,
                 'reasons' => implode('; ', array_map(
                     // The reason is translated HERE, where it reaches a person. The exception keeps
@@ -69,8 +70,18 @@ final class LegalTextManager extends Component
                     // be in the reader's language.
                     static fn (string $locale, BlockingReason $reason): string => "{$locale} (".__($reason->label()).')',
                     array_keys($e->blocking),
-                    array_values($e->blocking),
+                    $e->blocking,
                 )),
+            ]));
+
+            return;
+        } catch (LegalPublishRefused $e) {
+            // A refusal of the version itself rather than of the set. The message names the version
+            // and what to publish instead, and nothing was written, because the release is one
+            // transaction.
+            $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
+                'key' => $key,
+                'reasons' => $e->getMessage(),
             ]));
 
             return;
@@ -78,7 +89,7 @@ final class LegalTextManager extends Component
 
         $first = $released->first();
         $affects = $first instanceof LegalDocument ? app(LegalDocumentReleaser::class)->affects($first) : 0;
-        $this->setStatus((string) __('legal-consent::ui.admin_status_released', [
+        $this->setStatus(__('legal-consent::ui.admin_status_released', [
             'key' => $key,
             'count' => count($released),
             'affects' => $affects,
@@ -146,6 +157,9 @@ final class LegalTextManager extends Component
     {
         $locales = config('legal-consent.locales');
 
+        // array_values() is EQUIVALENT under mutation: its readers, in_array() and a foreach in the
+        // releaser, never read a key. It stays for the list<string> this returns; static analysis
+        // rejects the removal (measured 2026-09-14).
         return is_array($locales) ? array_values(array_filter($locales, is_string(...))) : [];
     }
 }

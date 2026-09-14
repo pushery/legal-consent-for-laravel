@@ -85,6 +85,10 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
         // resolver's `HAVING MAX(major) < …` set mid-stream and make the LIMIT/OFFSET paging skip
         // subjects it never returns — who would then be locked out for good by objection_closed_at.
         $latestConsentId = DB::table('legal_consents')->max('id');
+        // The cast and the 0 are EQUIVALENT under mutation: the watermark only bounds `id <=` in SQL,
+        // where a numeric string compares the same, and an empty ledger owes nobody below any number.
+        // The cast stays for forVersion()'s int parameter; static analysis rejects the removal
+        // (measured 2026-09-14).
         $maxConsentId = is_numeric($latestConsentId) ? (int) $latestConsentId : 0;
 
         $versions = LegalDocument::query()
@@ -96,7 +100,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
             ->whereNull('objection_closed_at')
             ->get();
 
-        if ($versions->isNotEmpty() && ! (bool) config('legal-consent.durable_medium.proof', true)) {
+        if ($versions->isNotEmpty() && ! config('legal-consent.durable_medium.proof', true)) {
             // Refuse the WHOLE run rather than close windows that can deem nobody. Closing them
             // would burn the one watermark that lets a corrected configuration try again, and it
             // would do it while reporting success.
@@ -177,9 +181,9 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
             $unproved += $unprovedHere;
 
-            // A memory hint with no observable behavior, so removing the call would read as a
-            // no-op and always will. It stays because this sweep walks the ledger in
-            // chunks and the cycles it drops are real; nothing about that is assertable.
+            // A memory hint, and observable after all: with the automatic collector off, a cycle left
+            // before the run is freed only by this call, and an arm holds that. It stays because this
+            // sweep walks the ledger in chunks and the cycles it drops are real.
             gc_collect_cycles();
         }
 
@@ -239,6 +243,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
         // A subject with no key cannot own a proof row, so it can never be proven — the resolver
         // only ever hydrates persisted models, but stringifying `mixed` is not something to assume.
-        return $subject->getMorphClass().'#'.(is_scalar($key) ? (string) $key : '');
+        // The '' is EQUIVALENT under mutation for the same reason: no keyless subject reaches this.
+        return $subject->getMorphClass().'#'.(is_scalar($key) ? $key : '');
     }
 }

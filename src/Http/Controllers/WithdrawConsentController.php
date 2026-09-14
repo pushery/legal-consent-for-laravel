@@ -74,7 +74,7 @@ final readonly class WithdrawConsentController
             ]);
 
             return $this->backToOwnOrigin($request)
-                ->with(self::ERROR_KEY, (string) __('legal-consent::ui.not_withdrawable'));
+                ->with(self::ERROR_KEY, __('legal-consent::ui.not_withdrawable'));
         } catch (LegalDocumentNotFound $e) {
             // Only the active-version lookup means "no such document being served here". Anything
             // else — a consuming application's listener raising this same type AFTER the ledger
@@ -88,7 +88,7 @@ final readonly class WithdrawConsentController
         }
 
         return $this->backToOwnOrigin($request)
-            ->with(self::STATUS_KEY, (string) __('legal-consent::ui.withdrawn_confirmation'));
+            ->with(self::STATUS_KEY, __('legal-consent::ui.withdrawn_confirmation'));
     }
 
     /**
@@ -137,6 +137,9 @@ final readonly class WithdrawConsentController
         // `//evil.example` — a check that trimmed the ends would approve a string that becomes a
         // foreign authority afterwards. No legitimate Referer carries a raw control or space;
         // browsers percent-encode them.
+        //
+        // The `=== ''` is EQUIVALENT under mutation: url()->previous() is handed a non-empty fallback
+        // and never answers with an empty string, so the pattern test below would refuse one anyway.
         if ($target === '' || preg_match('/[\x00-\x20\x7F]/', $target) === 1) {
             return false;
         }

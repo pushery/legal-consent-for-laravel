@@ -84,6 +84,10 @@ final class LegalChangeItem extends Model
     private static function storedRow(self $item): ?self
     {
         if (array_key_exists('state', $item->getRawOriginal())) {
+            // Trusting the loaded row is EQUIVALENT under mutation for an item whose state has not moved
+            // since it was loaded, which is every item the package writes: reading it again finds the
+            // same three values. One whose state did move is refused either way, by the database trigger
+            // instead of by this hook.
             return $item;
         }
 
@@ -126,6 +130,7 @@ final class LegalChangeItem extends Model
         return [
             'state' => ChangeSetState::class,
             'type' => ChangeItemType::class,
+            'change_set_id' => 'integer',
             'position' => 'integer',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',

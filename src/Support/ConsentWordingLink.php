@@ -50,6 +50,9 @@ final readonly class ConsentWordingLink
      */
     public static function locate(string $wording, string $title): ?self
     {
+        // The empty wording is EQUIVALENT under mutation: mb_stripos() finds no title in an empty
+        // sentence, and the lookup below answers null for it. The empty title is not, because it
+        // matches at offset 0 and would link nothing.
         if ($title === '' || $wording === '') {
             return null;
         }

@@ -75,6 +75,8 @@ class DeemedConsentNotice extends ChangeNotification
      */
     public function mandatoryContentPresent(): bool
     {
+        // The blanks are EQUIVALENT under mutation, as in LegalChangeInformational: a placeholder left
+        // unfilled still leaves a non-empty line, and only presence is asked.
         $blank = ['deadline' => '', 'effective' => '', 'title' => ''];
 
         // An adverse entry makes the termination line owed whether or not the operator set the

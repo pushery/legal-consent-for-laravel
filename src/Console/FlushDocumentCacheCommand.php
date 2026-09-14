@@ -39,7 +39,7 @@ final class FlushDocumentCacheCommand extends Command
 
         foreach ($keys as $documentKey) {
             foreach ($locales as $documentLocale) {
-                $manager->forget((string) $documentKey, (string) $documentLocale);
+                $manager->forget((string) $documentKey, $documentLocale);
                 $count++;
             }
         }
@@ -57,6 +57,8 @@ final class FlushDocumentCacheCommand extends Command
         $locales = config('legal-consent.locales');
 
         if (is_array($locales)) {
+            // array_values() is EQUIVALENT under mutation, since every caller only iterates the list. Static
+            // analysis needs it for the list<string> return type (measured 2026-09-14).
             $strings = array_values(array_filter($locales, is_string(...)));
 
             if ($strings !== []) {

@@ -186,6 +186,8 @@ final readonly class EnsureLegalConsent
         foreach ($endpoints as $endpoint) {
             $path = mb_trim($endpoint, '/');
 
+            // The `!== ''` is EQUIVALENT under mutation: no reachable Livewire endpoint trims to an
+            // empty path, and an empty pattern matches no request path anyway.
             if ($path !== '' && ($request->is($path) || $request->is($path.'/*'))) {
                 return true;
             }
@@ -208,6 +210,9 @@ final readonly class EnsureLegalConsent
 
         $consentPath = config('legal-consent.routes.consent_path');
 
+        // Widening the first `&&`, or dropping the `!== ''`, is EQUIVALENT under mutation: a string
+        // path passes either way, and an empty or missing one reaches `is('')`, which matches no
+        // request path.
         return is_string($consentPath) && $consentPath !== '' && $request->is(ltrim($consentPath, '/'));
     }
 
@@ -215,6 +220,9 @@ final readonly class EnsureLegalConsent
     {
         $name = config('legal-consent.routes.consent_name');
 
+        // The `!== ''` is EQUIVALENT under mutation, because `Route::has('')` is false, and so is
+        // widening the first `&&`. It stays as the cheaper half of the pair, as in
+        // ChangeNotification::ctaUrl().
         if (is_string($name) && $name !== '' && Route::has($name)) {
             return route($name);
         }

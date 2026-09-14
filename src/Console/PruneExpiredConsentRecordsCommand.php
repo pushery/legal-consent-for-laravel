@@ -106,6 +106,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         // sweep tampering. Adding every chain whose first link does not point at genesis makes each
         // run heal an interrupted predecessor.
         foreach ($this->chainsNotStartingAtGenesis() as $token) {
+            // Only the keys are read, by array_keys() below, so the value is EQUIVALENT under mutation.
             $brokenTokens[$token] = true;
         }
 
@@ -192,6 +193,8 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      */
     private function relinkBrokenChains(?array $tokens): int
     {
+        // EQUIVALENT under mutation every way it can be written: the one caller passes a list, never
+        // null, and an empty list returns 0 through the loop below as well.
         if ($tokens === null || $tokens === []) {
             return 0;
         }
@@ -200,6 +203,9 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         $relinked = 0;
 
         foreach ($tokens as $token) {
+            // array_values() is EQUIVALENT under mutation, because get() already yields a list. It is
+            // there for the list relink() declares; static analysis rejects the removal (measured
+            // 2026-09-14).
             $rows = array_values(DB::table('legal_consents')
                 ->where('subject_token', $token)
                 ->orderBy('id')
@@ -224,6 +230,9 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
             // empty-rows branch above), and a chain collected because its first link does not point
             // at genesis is by definition one whose first link has to change. A guard for
             // "nothing moved" would read as a case worth considering and be dead on arrival.
+            // The filter and array_values() are EQUIVALENT under mutation in the ledger they leave:
+            // an unmoved row deleted and inserted again comes back identical, id included. What the
+            // filter saves is the work, and a test of that would pin the implementation.
             $moved = array_values(array_filter(
                 $corrected,
                 fn (array $row, int $index): bool => $row['prev_record_hash'] !== $rows[$index]['prev_record_hash'],
@@ -353,7 +362,8 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
                             // rescanned everything collected so far on every new subject —
                             // quadratic in the number of subjects, and measurably so: 0.17 s at
                             // 10 000 tokens against 2.6 s at 40 000, for pure list scanning with no
-                            // database work in it at all.
+                            // database work in it at all. Only the key is read, so the `true` is
+                            // EQUIVALENT under mutation.
                             $brokenTokens[$token] = true;
                         }
                     }
