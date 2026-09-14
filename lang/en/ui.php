@@ -134,4 +134,5 @@ return [
     'admin_deemed_submit' => 'Release with an objection window',
     'admin_status_deemed_window_rejected' => 'Not released — the objection window was rejected: :reason',
     'lead_time_too_short' => 'a material change to “:document” needs at least :days days between the announcement (:announce) and enforcement (:enforce)',
+    'lead_time_too_short_objection' => 'a material change to “:document” needs at least :days days between the announcement (:announce) and the deadline for objections (:deadline)',
 ];

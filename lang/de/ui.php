@@ -131,4 +131,5 @@ return [
     'admin_deemed_submit' => 'Mit Widerspruchsfenster freigeben',
     'admin_status_deemed_window_rejected' => 'Nicht freigegeben — das Widerspruchsfenster wurde abgelehnt: :reason',
     'lead_time_too_short' => 'eine wesentliche Änderung an „:document“ braucht mindestens :days Tage zwischen der Ankündigung (:announce) und dem Inkrafttreten (:enforce)',
+    'lead_time_too_short_objection' => 'eine wesentliche Änderung an „:document“ braucht mindestens :days Tage zwischen der Ankündigung (:announce) und der Widerspruchsfrist (:deadline)',
 ];

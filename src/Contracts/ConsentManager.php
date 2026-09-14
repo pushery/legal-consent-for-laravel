@@ -133,6 +133,21 @@ interface ConsentManager
     /**
      * A per-document status map for the subject.
      *
+     * ## Which language it answers about, which is not always the one you asked for
+     *
+     * `$locale` is the language the subject is READING, not a filter on what they owe. A mandatory
+     * document that has no version in that language is still legally required, so this resolves it
+     * the same way registration does — the requested locale, then `fallback_locale`, then
+     * `default_locale` — and reports on whatever the first hit is. The keys are the same ones
+     * {@see self::registrationChecklist()} returns for that locale, by construction: both sit on
+     * `EnforceableDocumentCache::resolvedFor()`.
+     *
+     * They did not always. The checklist walked the chain and this read the strict per-locale set,
+     * so a reader in an untranslated language was shown two mandatory documents and then told
+     * nothing about them — and an application combining the two to ask what an account still owes
+     * read that silence as "nothing owed". A voluntary consent is deliberately NOT resolved that
+     * way: it may never be required, so not published here means not offered here.
+     *
      * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool, accepted_version: string|null, accepted_at: string|null}>
      */
     public function statusFor(Model $subject, ?string $locale = null): array;

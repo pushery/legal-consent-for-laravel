@@ -131,4 +131,5 @@ return [
     'admin_deemed_submit' => 'Publicar com prazo de oposição',
     'admin_status_deemed_window_rejected' => 'Não publicado — o prazo de oposição foi recusado: :reason',
     'lead_time_too_short' => 'uma alteração substancial em «:document» exige pelo menos :days dias entre o anúncio (:announce) e a entrada em vigor (:enforce)',
+    'lead_time_too_short_objection' => 'uma alteração substancial em «:document» exige pelo menos :days dias entre o anúncio (:announce) e o prazo para oposição (:deadline)',
 ];

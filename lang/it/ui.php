@@ -131,4 +131,5 @@ return [
     'admin_deemed_submit' => 'Pubblica con termine di opposizione',
     'admin_status_deemed_window_rejected' => 'Non pubblicato — il termine di opposizione è stato rifiutato: :reason',
     'lead_time_too_short' => 'una modifica sostanziale a «:document» richiede almeno :days giorni tra l’annuncio (:announce) e l’entrata in vigore (:enforce)',
+    'lead_time_too_short_objection' => 'una modifica sostanziale a «:document» richiede almeno :days giorni tra l’annuncio (:announce) e il termine per opporsi (:deadline)',
 ];
