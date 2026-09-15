@@ -4,6 +4,38 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.32.0 → 0.33.0
+
+**Nothing is required of you.** No migration, no renamed config key and no removed option — one number on the admin screen changes, and it changes because it was wrong.
+
+### The admin screens name a document instead of quoting its key
+
+The manager's and the editor's status messages put the configuration key and the locale code into their sentences: `terms (fr)`. The document is now named by its published row's title, then by the shipped `legal-consent::titles.*` catalog, then by its key. A language is still answered as its code, because nothing in this package knows that `fr` is called French and `ext-intl` is not a requirement of this package.
+
+**If an assertion of yours matches on the key in one of those messages**, it matches the title now. **If you have language names** — a switcher usually does — bind `Pushery\LegalConsent\Contracts\NamesLegalTexts` and both halves of the sentence use yours.
+
+### The version of a change can be derived instead of typed
+
+`LegalDocumentReleaser::nextVersionFor($key, $mode)` is new and optional. A gating change answers the next major, a change that must not ask anybody again answers the next minor of the active version, and a key nothing has published yet answers `1.0.0`. It reads the highest active version across the languages, because the next version has to clear every one of them.
+
+**If you compute the next version yourself before a release**, this is the same answer with the package's own reading of the gate behind it. **If you do not**, nothing changes: no release path calls it, and the version keeps coming from the draft row.
+
+### An informational page no longer waits for every translation
+
+The manager's release button passed every configured locale to the releaser, and a locale without a draft blocks the whole set. For a contract, a privacy notice or an opt-in that is exactly right — nobody may be bound in a language they did not read. An imprint, a cookie notice or an accessibility statement binds nobody, and `PublishedDocumentReader::fallbackFor()` already serves the source language under any other locale for those rows, so a missing translation kept the page off the site for no reason the package could name.
+
+The button now releases an `informational` document in the locales that have a draft. A locale whose draft is written but **not reviewed** still blocks, and a document with no draft anywhere still refuses with every language named.
+
+**If you narrowed the locale list yourself before calling `release()`**, you can drop that code for informational documents. **The releaser is unchanged:** it still releases exactly the locales it is given, for every document type, so a CLI publish and your own screens behave as before.
+
+### The number under a release counts people, not one language
+
+A consent row carries the language it was given in, so `LegalDocumentReleaser::affects()` answers per (key, locale). The manager's success line reported the first released row's count under a release covering every configured locale, and therefore named the people of whichever language came back first. In a seven-locale installation that read "affects 0 people" while one person was a major behind on the German text.
+
+`affectsRelease(Collection $released)` is the count for a whole release: every language it covered, every person once. Somebody who accepted the new major in any language is not behind on it, because the major belongs to the document rather than to its translations.
+
+**If you render your own release screen**, switch from `affects($released->first())` to `affectsRelease($released)`. **If you sum `affects()` over the released rows**, that counts a subject who accepted two languages twice — the new method is what you wanted. `affects()` itself is unchanged and stays the right call for a single (key, locale), which is the unit the notice sweep works on.
+
 ## 0.31.0 → 0.32.0
 
 **Nothing is required of you unless you publish a re-consent as a minor or a patch.** No migration, no renamed config key and no removed option.
