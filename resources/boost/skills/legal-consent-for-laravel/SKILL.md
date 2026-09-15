@@ -112,7 +112,9 @@ php artisan legal-consent:check-drift                    # source changed since 
 
 The mode is the legal classification of the change, so it is never guessed: `--active` (the subject
 must accept again), `--deemed` (silence counts, contract terms only), `--info` (announced, takes
-effect regardless), `--editorial` (no material change).
+effect regardless), `--editorial` (no material change). `--active` needs a new major version: the
+gate compares major versions, so the publisher refuses it on a minor or patch bump of a contract or
+a consent. A document's first publication is not a bump and is unaffected.
 
 **A fresh install has published nothing, and nothing says so.** `legal_documents` is empty after
 `migrate`, `Consent::published()` returns `null` for every document, and the read path does not

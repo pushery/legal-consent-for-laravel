@@ -4,6 +4,22 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0] - 2026-09-15
+
+### Changed
+
+- **A release that asks for re-consent without raising the major version is refused.** The gate asks whether a subject holds a document's major version, so an active re-consent published as a minor or a patch reached nobody who had accepted the major: the row said a re-consent was requested, and no earlier acceptor was ever asked for one. The publisher now refuses a gating mode on a version that keeps the active major, with a message naming the version to publish instead. A document's first publication is unaffected.
+
+  **Upgrade:** publishing a minor or a patch with `NoticeMode::ActiveReconsent`, or through `publish(..., isMaterial: true)`, is now refused. Raise the major to ask for re-consent, or publish the minor in a mode that does not gate.
+
+### Documentation
+
+- **The document source contract says that `type` is the document key.** `LegalDocumentSource::resolve()` and `fingerprint()` receive, and `RawDocument::$type` carries, the name a document is registered under (`terms`, `privacy`), not a `DocumentType` value. Their docblocks said "type" and nothing more, which reads as the enum. Nothing a custom source implements or calls changes.
+
+### Fixed
+
+- **The legal text manager releases a privacy notice.** Its release button used an active re-consent for every document, which the publisher refuses for a privacy notice, so the button failed for every privacy notice and a consuming app had to fork the final component to release one. The manager now releases each document in the mode a material change of its type takes: an active re-consent for a contract or a real consent, info-only for a privacy notice, silent for an informational page.
+
 ## [0.31.0] - 2026-09-15
 
 ### Added
@@ -2572,7 +2588,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.28.0...v0.29.0

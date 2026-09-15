@@ -63,6 +63,22 @@ enum DocumentType: string
     }
 
     /**
+     * The notice mode a material change of this type takes: an active re-consent for a contract or a real
+     * consent, info-only for a privacy notice, which is acknowledged and never gated, and a silent activation
+     * for an informational page, which binds nobody. The publisher refuses any other mode for a major bump of
+     * a consent-bearing type, so a screen that releases material changes picks this instead of fixing one
+     * mode for every type.
+     */
+    public function materialChangeMode(): NoticeMode
+    {
+        return match ($this) {
+            self::ContractTerms, self::ConsentOptin => NoticeMode::ActiveReconsent,
+            self::PrivacyNotice => NoticeMode::InfoPush,
+            self::Informational => NoticeMode::SilentEditorial,
+        };
+    }
+
+    /**
      * Does this document ask the subject for ANYTHING — an acceptance, an
      * acknowledgment, or a consent?
      *

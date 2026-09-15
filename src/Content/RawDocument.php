@@ -11,9 +11,12 @@ use Carbon\CarbonImmutable;
  * source could supply. Deliberately "dumb" — no hashing, rendering, or sanitizing
  * happens here. The RenderPipeline turns this into a Document (the driver never does).
  *
- * `type` is the document key/type the caller asked for (e.g. 'terms'). Dates and
- * materiality are optional: a Markdown file can declare them in frontmatter, a
- * headless HTML source may leave them null and let the operator set them at publish.
+ * `type` is the document key the caller asked for: the name the document is registered
+ * under in `legal-consent.documents`, such as 'terms' or 'privacy'. It is not a
+ * DocumentType value ('contract_terms', 'privacy_notice', …); the pipeline derives the
+ * type from the registry entry for this key. Dates and materiality are optional: a
+ * Markdown file can declare them in frontmatter, a headless HTML source may leave them
+ * null and let the operator set them at publish.
  */
 final readonly class RawDocument
 {

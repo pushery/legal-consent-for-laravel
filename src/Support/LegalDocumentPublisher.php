@@ -197,6 +197,8 @@ final readonly class LegalDocumentPublisher
 
         if ($this->isMajorBump($key, $locale, $rendered)) {
             $this->assertMajorBumpMode($mode, $type, $rendered->version, $key, $locale);
+        } else {
+            $this->assertGatingModeRaisesTheMajor($mode, $type, $rendered->version, $rendered->majorVersion, $key, $locale);
         }
 
         $now = CarbonImmutable::now();
@@ -351,6 +353,8 @@ final readonly class LegalDocumentPublisher
 
         if ($this->isMajorBump($key, $locale, $rendered)) {
             $this->assertMajorBumpMode($mode, $type, $rendered->version, $key, $locale);
+        } else {
+            $this->assertGatingModeRaisesTheMajor($mode, $type, $rendered->version, $rendered->majorVersion, $key, $locale);
         }
 
         $this->assertedSchedule($key, $locale, $mode, $regime, $rendered, $announceAt, $enforceAt, $objectionDeadline, CarbonImmutable::now());
@@ -428,13 +432,21 @@ final readonly class LegalDocumentPublisher
     /** Whether this version raises the major over the one currently active for (key, locale). */
     private function isMajorBump(string $key, string $locale, Document $rendered): bool
     {
-        $previousMajor = LegalDocument::query()
+        $previousMajor = $this->activeMajor($key, $locale);
+
+        return $previousMajor !== null && $rendered->majorVersion > $previousMajor;
+    }
+
+    /** The major version active for (key, locale), or null before the first publication. */
+    private function activeMajor(string $key, string $locale): ?int
+    {
+        $major = LegalDocument::query()
             ->where('key', $key)
             ->where('locale', $locale)
             ->where('is_active', true)
             ->value('major_version');
 
-        return $previousMajor !== null && is_numeric($previousMajor) && $rendered->majorVersion > (int) $previousMajor;
+        return is_numeric($major) ? (int) $major : null;
     }
 
     /**
@@ -735,6 +747,34 @@ final readonly class LegalDocumentPublisher
                 "Version {$version} of '{$key}' ({$locale}) increases the major version, which forces re-consent — publish it as an active re-consent. A material core change cannot ride on silence or mere information (BGH XI ZR 26/20)."
             );
         }
+    }
+
+    /**
+     * The converse of assertMajorBumpMode(): a mode that gates has to raise the major.
+     *
+     * The gate asks whether a subject holds the document's major version, so an active re-consent
+     * published as a minor or a patch reaches nobody who accepted the current major. The row would
+     * say a re-consent was requested, and no earlier acceptor would ever be asked for one. The first
+     * publication of a key has no major anyone holds yet, and gating it is how the first acceptance
+     * is collected, so it passes; a LOWER major is the monotonic check's refusal, not this one's.
+     */
+    private function assertGatingModeRaisesTheMajor(NoticeMode $mode, DocumentType $type, string $version, int $major, string $key, string $locale): void
+    {
+        if (! $mode->gates() || ! $type->isConsentBearing()) {
+            return;
+        }
+
+        $activeMajor = $this->activeMajor($key, $locale);
+
+        if ($activeMajor === null || $major !== $activeMajor) {
+            return;
+        }
+
+        $next = $activeMajor + 1;
+
+        throw new LegalPublishRefused(
+            "Version {$version} of '{$key}' ({$locale}) keeps major {$activeMajor}, so an active re-consent would gate nobody who accepted it: the gate compares major versions. Publish it as {$next}.0.0 to ask for re-consent, or choose a mode that does not gate."
+        );
     }
 
     /**
