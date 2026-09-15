@@ -4,6 +4,28 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.31.0 → 0.32.0
+
+**Nothing is required of you unless you publish a re-consent as a minor or a patch.** No migration, no renamed config key and no removed option.
+
+### A re-consent has to raise the major version
+
+The gate asks whether a subject holds a document's major version. An active re-consent published as a minor or a patch therefore reached nobody who had accepted the current major: the version said a re-consent was requested, and no earlier acceptor was ever asked for one. The publisher now refuses a gating mode on a version that keeps the active major of a contract or a real consent, and the refusal names the version to publish instead.
+
+**If you publish a re-consent as a minor or a patch today, raise the major instead:** a text that has to be accepted again goes out as `2.0.0`, not `1.1.0`. A change that should not ask anyone again keeps its minor and goes out in a mode that does not gate: `--info`, `--editorial`, or `--deemed` for a minor contract change. The same holds when you publish from code with `NoticeMode::ActiveReconsent` or through the legacy `publish(..., isMaterial: true)`.
+
+A document's first publication is unaffected: nobody holds a major yet, and gating it is how the first acceptance is collected.
+
+### The legal text manager releases a privacy notice
+
+The manager's release button used an active re-consent for every document. The publisher refuses that for a privacy notice, so the button failed for every privacy notice. It now releases each document in the mode a material change of its type takes: an active re-consent for a contract or a real consent, info-only for a privacy notice, silent for an informational page.
+
+**If you copied the component only to release a privacy notice**, you can go back to the package's own. Nothing else changes.
+
+### The document source contract names the document key
+
+Only docblocks changed. `LegalDocumentSource::resolve()` and `fingerprint()` receive, and `RawDocument::$type` carries, the name a document is registered under (`terms`, `privacy`), not a `DocumentType` value. **If you implement your own source, nothing changes:** that is what the argument always held.
+
 ## 0.30.0 → 0.31.0
 
 **Nothing is required of you.** No migration, no renamed key, no removed option, and nothing you render changes unless you want it to.

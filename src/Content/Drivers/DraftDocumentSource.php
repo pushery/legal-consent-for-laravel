@@ -110,6 +110,9 @@ final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocume
      * pipeline discards or a spurious failure: an operator who removed the `wording.default`
      * translation (because none of their documents needs it) could not publish an Impressum, and
      * the error would name an acceptance sentence for a page that accepts nothing.
+     *
+     * `$type` is the document key, as everywhere a source receives one; typeFor() looks the
+     * document's type up from it.
      */
     private function wordingFor(string $type, string $locale): ?string
     {

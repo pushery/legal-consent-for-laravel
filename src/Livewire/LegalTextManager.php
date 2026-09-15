@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Livewire;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
 use Pushery\LegalConsent\Enums\BlockingReason;
+use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\DraftOrigin;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
@@ -42,9 +43,12 @@ final class LegalTextManager extends Component
         // package: a key this instance does not have is one that does not exist here.
         abort_unless(in_array($key, $this->documentKeys(), true), 404);
 
-        // The manager releases the common case — an initial version or a re-consent change, both of
-        // which gate. The deemed/info-only modes are a per-change legal call made from the editor
-        // controls or the CLI, not a button on an overview grid.
+        // The manager releases a material change in the mode its document type takes: an active
+        // re-consent for a contract or a real consent, info-only for a privacy notice, silent for an
+        // informational page. It used to fix an active re-consent for every key, which the publisher
+        // refuses for a privacy notice, so the button failed for every privacy notice and a consuming
+        // app had to fork this final class to release one. The deemed mode is a per-change legal call
+        // made from the editor controls or the CLI, not a button on an overview grid.
         //
         // ⚠️ THAT SENTENCE NAMED TWO HOMES AND ONLY ONE OF THEM EXISTED, for as long as it has been
         // here. Measured 2026-09-05: `LegalTextEditor` carried nothing — no notice mode, no
@@ -58,7 +62,7 @@ final class LegalTextManager extends Component
         // binds people by their SILENCE, and the editor is per (key, locale) — the context of "this
         // one change" is already there, and somebody has read the text.
         try {
-            $released = app(LegalDocumentReleaser::class)->release($key, NoticeMode::ActiveReconsent, $this->locales());
+            $released = app(LegalDocumentReleaser::class)->release($key, $this->modeFor($key), $this->locales());
         } catch (LegalReleaseNotReady $e) {
             // A polite live-region message — never a fatal — so a screen reader hears WHY the
             // release did not happen (WCAG 4.1.3), and nothing was written.
@@ -142,6 +146,14 @@ final class LegalTextManager extends Component
         }
 
         return $grid;
+    }
+
+    /** The mode a material change of this key's document type takes, from the documents registry. */
+    private function modeFor(string $key): NoticeMode
+    {
+        $basis = config("legal-consent.documents.{$key}.legal_basis");
+
+        return DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract')->materialChangeMode();
     }
 
     /** @return list<string> */
