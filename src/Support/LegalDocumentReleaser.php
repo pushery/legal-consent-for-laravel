@@ -82,6 +82,11 @@ final readonly class LegalDocumentReleaser
      * reports success; that is worth SEEING. It is not worth throwing over: refusing a gating mode
      * on a non-major bump would force a typo fix on a live gating version down the editorial path,
      * which silently drops the gate for everyone still on the older major.
+     *
+     * ⚠️ THE ANSWER IS PER (key, locale), because a consent row carries the locale it was given in.
+     * A caller holding a whole release — one document across several locales — wants
+     * {@see affectsRelease} instead: summing this over the released rows counts a subject who
+     * accepted two languages twice, and reading one row answers about one language.
      */
     public function affects(LegalDocument $version): int
     {
@@ -93,6 +98,81 @@ final readonly class LegalDocumentReleaser
         // The 0 is EQUIVALENT under mutation: the watermark only bounds `id <=` in SQL, and an empty
         // ledger counts nobody below any number.
         return $this->resolver->countForVersion($version, is_numeric($maxConsentId) ? (int) $maxConsentId : 0);
+    }
+
+    /**
+     * The version a change of this shape has to carry — the other half of the publisher's refusal.
+     *
+     * Since 0.32.0 the publisher refuses a gating mode on a version that keeps the active major,
+     * because the gate asks whether a subject holds a document's major: an active re-consent
+     * published as `1.1.0` reached nobody who had accepted `1.0.0`. That refusal names what is
+     * wrong and, on its own, leaves the operator with the question it raises. The version still
+     * comes from the draft row, which is typed by a person.
+     *
+     * So this answers it, and it ENFORCES NOTHING: a caller that has its own numbering keeps it.
+     * What it removes is every consumer writing the same four lines — one of them did, measured
+     * against 0.32.0, and its whole wrapper existed for little else.
+     *
+     *   gating      the next MAJOR. A text that has to be accepted again is a new major, and that
+     *               is the only shape the gate can see.
+     *   not gating  the next MINOR of the active version. An announced or editorial change keeps
+     *               the major deliberately: raising it would gate nobody and re-ask everybody.
+     *
+     * A key with no active version at all answers `1.0.0` — a first publication gates its first
+     * acceptance, and there is no earlier major to raise.
+     *
+     * The active row is read per key rather than per locale because a release writes one version
+     * across every locale; where an escape-hatch publish has left them disagreeing, the HIGHEST is
+     * the honest floor — the next version has to clear every language, not the one that lags.
+     */
+    public function nextVersionFor(string $key, NoticeMode $mode): string
+    {
+        $active = LegalDocument::query()
+            ->where('key', $key)
+            ->where('is_active', true)
+            ->orderByDesc('major_version')
+            ->orderByDesc('minor_version')
+            ->orderByDesc('patch_version')
+            ->first();
+
+        if (! $active instanceof LegalDocument) {
+            return '1.0.0';
+        }
+
+        return $mode->gates()
+            ? ($active->major_version + 1).'.0.0'
+            : $active->major_version.'.'.($active->minor_version + 1).'.0';
+    }
+
+    /**
+     * The same advisory number for a whole release: every locale it covered, every person once.
+     *
+     * This is what the shipped manager reports after `release()`, and it is the only place the
+     * number appears. It takes the rows the release returned rather than a key and a major, because
+     * those rows ARE the release — the version that gates and the locales it reached both come from
+     * the same object, so the count cannot describe a set the release did not write.
+     *
+     * An empty collection answers 0: nothing was released, so nobody was reached. That is not the
+     * same as "no rows in the ledger", and no caller has to tell the two apart, because a release
+     * that wrote nothing has already thrown.
+     *
+     * @param  Collection<int, LegalDocument>  $released
+     */
+    public function affectsRelease(Collection $released): int
+    {
+        $version = $released->first();
+
+        if (! $version instanceof LegalDocument) {
+            return 0;
+        }
+
+        $maxConsentId = DB::table('legal_consents')->max('id');
+
+        return $this->resolver->countForRelease(
+            $version,
+            array_values($released->map(static fn (LegalDocument $row): string => $row->locale)->all()),
+            is_numeric($maxConsentId) ? (int) $maxConsentId : 0,
+        );
     }
 
     /**

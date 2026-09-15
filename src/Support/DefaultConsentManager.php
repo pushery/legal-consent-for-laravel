@@ -568,7 +568,7 @@ readonly class DefaultConsentManager implements ConsentManager
     {
         // The choke point every write passes through, which is why the class check belongs here and
         // not only on the callers. `record()` takes an arbitrary action from an arbitrary caller —
-        // `HasLegalConsents::recordConsent()` is a public trait method on the consumer's own model —
+        // `HasLegalConsents::recordConsent()` is public, and it lives on the consumer's own model —
         // and only Withdrawn/Declined were guarded above. Everything else fell through to the
         // insert below, where `ui_wording_snapshot` is NOT NULL and an informational document has
         // no sentence: the caller got a raw SQLSTATE integrity violation.

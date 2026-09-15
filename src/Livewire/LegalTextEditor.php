@@ -10,6 +10,7 @@ use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Pushery\LegalConsent\Contracts\LegalTextTranslator;
+use Pushery\LegalConsent\Contracts\NamesLegalTexts;
 use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
@@ -21,7 +22,6 @@ use Pushery\LegalConsent\Exceptions\NoticeTimelineInvertedException;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
-use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDraftSet;
@@ -236,10 +236,14 @@ final class LegalTextEditor extends Component
                 ),
             );
         } catch (LegalReleaseNotReady $e) {
+            $names = app(NamesLegalTexts::class);
+
             $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
-                'key' => $this->key,
+                'key' => $names->document($this->key),
                 'reasons' => implode('; ', array_map(
-                    static fn (string $locale, BlockingReason $reason): string => "{$locale} (".__($reason->label()).')',
+                    // Named rather than keyed, on both halves of the sentence: the reasons have been
+                    // translated since 0.22.0, and an administrator read `terms (fr)` beside them.
+                    static fn (string $locale, BlockingReason $reason): string => $names->language($locale).' ('.__($reason->label()).')',
                     array_keys($e->blocking),
                     $e->blocking,
                 )),
@@ -268,20 +272,18 @@ final class LegalTextEditor extends Component
             // deadline, a version lower than the active one. The message names the version and what
             // to publish instead, so it is shown whole.
             $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
-                'key' => $this->key,
+                'key' => app(NamesLegalTexts::class)->document($this->key),
                 'reasons' => $e->getMessage(),
             ]));
 
             return;
         }
 
-        // The instanceof, and the 0 beside it, are EQUIVALENT under mutation here: a release that got
-        // this far published one row per configured locale, and mount() has already refused a
-        // screen whose locale is not among them, so there is always a first row.
-        $first = $released->first();
-        $affects = $first instanceof LegalDocument ? app(LegalDocumentReleaser::class)->affects($first) : 0;
+        // Over the WHOLE release, like the manager: this screen releases every locale too, and
+        // `affects()` answers per (key, locale), so the first row named the people of one language.
+        $affects = app(LegalDocumentReleaser::class)->affectsRelease($released);
         $this->setStatus(__('legal-consent::ui.admin_status_released', [
-            'key' => $this->key,
+            'key' => app(NamesLegalTexts::class)->document($this->key),
             'count' => count($released),
             'affects' => $affects,
         ]));

@@ -239,12 +239,49 @@ readonly class AffectedSubjectResolver
      */
     public function countForVersion(LegalDocument $version, ?int $maxConsentId = null, bool $skipNotified = false): int
     {
+        return $this->countGrouped($version, [$version->locale], $maxConsentId, $skipNotified);
+    }
+
+    /**
+     * How many subjects a RELEASE reaches — one document across several locales, counted once each.
+     *
+     * {@see countForVersion} answers per (key, locale), because that is the unit a notice sweep
+     * works on: a consent row carries the locale it was given in. A release is the other unit. It
+     * writes one version across every locale it covers, in one transaction, and the number an
+     * operator reads under it is about PEOPLE — so a subject who accepted the German text and a
+     * subject who accepted the French one are two, and somebody who accepted both is one.
+     *
+     * Summing `countForVersion()` over the released rows answers neither: it double-counts the
+     * bilingual subject. Reporting the first row's count answers the language that happened to come
+     * back first — measured in a seven-locale consumer, that was 0 where the honest answer was 1,
+     * under a sentence saying the release reaches nobody.
+     *
+     * So the grouping drops `locale` and the locale filter becomes a set. The gating predicate stays
+     * per SUBJECT and is the load-bearing part: `MAX(document_major_version) < ?` over every locale
+     * of this document means somebody who has accepted the new major in ANY language is not behind
+     * on it. That is the same claim the gate itself makes — the major is a property of the document,
+     * not of its translations.
+     *
+     * @param  list<string>  $locales  the locales this release covered
+     */
+    public function countForRelease(LegalDocument $version, array $locales, ?int $maxConsentId = null): int
+    {
+        return $this->countGrouped($version, $locales, $maxConsentId, false);
+    }
+
+    /**
+     * The one grouped query both counts read, so the two answers cannot drift apart.
+     *
+     * @param  list<string>  $locales
+     */
+    private function countGrouped(LegalDocument $version, array $locales, ?int $maxConsentId, bool $skipNotified): int
+    {
         $accepting = array_map(static fn (ConsentAction $action): string => $action->value, ConsentAction::accepting());
 
         $grouped = DB::table('legal_consents')
             ->select('subject_type', 'subject_id')
             ->where('document_key', $version->key)
-            ->where('locale', $version->locale)
+            ->whereIn('locale', $locales)
             // Guarded and null-coerced for the same reasons as the sibling above.
             ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id ?? ''))
             ->when($maxConsentId !== null, fn (QueryBuilder $query): QueryBuilder => $query->where('id', '<=', $maxConsentId))

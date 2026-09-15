@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Livewire;
 
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
+use Pushery\LegalConsent\Contracts\NamesLegalTexts;
 use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\DraftOrigin;
@@ -14,7 +15,6 @@ use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
-use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDraftSet;
@@ -62,17 +62,25 @@ final class LegalTextManager extends Component
         // binds people by their SILENCE, and the editor is per (key, locale) — the context of "this
         // one change" is already there, and somebody has read the text.
         try {
-            $released = app(LegalDocumentReleaser::class)->release($key, $this->modeFor($key), $this->locales());
+            $released = app(LegalDocumentReleaser::class)->release($key, $this->modeFor($key), $this->releaseLocalesFor($key));
         } catch (LegalReleaseNotReady $e) {
             // A polite live-region message — never a fatal — so a screen reader hears WHY the
             // release did not happen (WCAG 4.1.3), and nothing was written.
+            $names = app(NamesLegalTexts::class);
+
             $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
-                'key' => $key,
+                'key' => $names->document($key),
                 'reasons' => implode('; ', array_map(
                     // The reason is translated HERE, where it reaches a person. The exception keeps
                     // the English sentence for logs; a status line spoken by a screen reader has to
                     // be in the reader's language.
-                    static fn (string $locale, BlockingReason $reason): string => "{$locale} (".__($reason->label()).')',
+                    //
+                    // …and so is the SUBJECT of the sentence, since the reasons stopped being the
+                    // only translated half: an administrator read `terms (fr)` for a document the
+                    // public site calls "Nutzungsbedingungen" in a language its own switcher offers
+                    // as "Französisch". The package names what it owns and hands the rest to
+                    // {@see NamesLegalTexts}.
+                    static fn (string $locale, BlockingReason $reason): string => $names->language($locale).' ('.__($reason->label()).')',
                     array_keys($e->blocking),
                     $e->blocking,
                 )),
@@ -84,17 +92,21 @@ final class LegalTextManager extends Component
             // and what to publish instead, and nothing was written, because the release is one
             // transaction.
             $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
-                'key' => $key,
+                'key' => app(NamesLegalTexts::class)->document($key),
                 'reasons' => $e->getMessage(),
             ]));
 
             return;
         }
 
-        $first = $released->first();
-        $affects = $first instanceof LegalDocument ? app(LegalDocumentReleaser::class)->affects($first) : 0;
+        // Over the WHOLE release, not over its first row. `affects()` answers per (key, locale) —
+        // a consent row carries the language it was given in — so the first row named the people of
+        // whichever language came back first. Measured in a seven-locale consumer: it said 0 where
+        // one person was a major behind, under a sentence an operator reads to decide whether to
+        // check the announcement again.
+        $affects = app(LegalDocumentReleaser::class)->affectsRelease($released);
         $this->setStatus(__('legal-consent::ui.admin_status_released', [
-            'key' => $key,
+            'key' => app(NamesLegalTexts::class)->document($key),
             'count' => count($released),
             'affects' => $affects,
         ]));
@@ -122,6 +134,11 @@ final class LegalTextManager extends Component
             $set = LegalDraftSet::for($key);
             $blocking = $set->blockingLocales($this->locales());
 
+            // One statement per key for the whole row, rather than one per cell. Asked per cell,
+            // six documents in seven languages cost 42 of them on a component that re-renders on
+            // every filter click.
+            $unpublished = $set->unpublishedChanges($this->locales());
+
             foreach ($this->locales() as $locale) {
                 $draft = $set->draft($locale);
 
@@ -134,7 +151,7 @@ final class LegalTextManager extends Component
                     'review_state_label' => $draft?->review_state->label(),
                     'machine' => $draft?->origin === DraftOrigin::Machine,
                     'stale' => $draft instanceof LegalDraft && $set->isStale($draft),
-                    'unpublished_changes' => $draft instanceof LegalDraft && $set->hasUnpublishedChanges($draft),
+                    'unpublished_changes' => $unpublished[$locale],
                     'publishable' => $draft instanceof LegalDraft && $set->isPublishable($draft),
                 ];
             }
@@ -148,12 +165,60 @@ final class LegalTextManager extends Component
         return $grid;
     }
 
+    /**
+     * The locales this key is released in — every configured one, unless nobody can be bound by it.
+     *
+     * A release is atomic across locales because a subject must never be bound in a language it did
+     * not read: German gated while Italian lags would leave two populations under two majors of the
+     * same contract. That reasoning covers a contract, a privacy notice and a real opt-in, and it
+     * covers nothing at all for an INFORMATIONAL page — an imprint, a cookie notice, an
+     * accessibility statement. Those bind nobody and gate nobody, so there is no half-released state
+     * for the atomicity to prevent, and the read path already serves the source language under any
+     * other locale for exactly these rows ({@see PublishedDocumentReader::fallbackFor()}).
+     *
+     * Without this, one missing translation kept such a page off the site entirely: the capability
+     * was there and the route to it was closed. Measured in a consumer with three informational
+     * documents out of six, which narrowed the list itself rather than go without an imprint.
+     *
+     * ⚠️ Only a locale with NO DRAFT AT ALL is dropped, never one whose draft is merely unreviewed.
+     * "Nothing has been written here" is what the fallback answers for; "it is written and nobody
+     * has looked at it" is a reason an operator can act on, and swallowing it would publish the
+     * other locales and leave that one silently behind. When no locale has a draft, the full list
+     * goes through — so the refusal still names every language and why, instead of releasing an
+     * empty set.
+     *
+     * @return list<string>
+     */
+    private function releaseLocalesFor(string $key): array
+    {
+        $locales = $this->locales();
+
+        if ($this->typeFor($key) !== DocumentType::Informational) {
+            return $locales;
+        }
+
+        $set = LegalDraftSet::for($key);
+
+        $written = array_values(array_filter(
+            $locales,
+            static fn (string $locale): bool => $set->draft($locale) instanceof LegalDraft,
+        ));
+
+        return $written === [] ? $locales : $written;
+    }
+
     /** The mode a material change of this key's document type takes, from the documents registry. */
     private function modeFor(string $key): NoticeMode
     {
+        return $this->typeFor($key)->materialChangeMode();
+    }
+
+    /** The document type this key is registered under, from the documents registry. */
+    private function typeFor(string $key): DocumentType
+    {
         $basis = config("legal-consent.documents.{$key}.legal_basis");
 
-        return DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract')->materialChangeMode();
+        return DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
     }
 
     /** @return list<string> */

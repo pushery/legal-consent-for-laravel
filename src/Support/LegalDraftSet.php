@@ -132,15 +132,44 @@ final readonly class LegalDraftSet
         return $blocking;
     }
 
+    /**
+     * The same question for a whole set of locales, in ONE query rather than one per locale.
+     *
+     * The admin matrix is documents × locales and asked per cell: six documents in seven languages
+     * cost 42 statements for something one statement answers, on a Livewire component that
+     * re-renders on every filter click. A consumer measured it and folded the matrix itself.
+     *
+     * A locale with no draft answers false: there is no approved text waiting to go live. That is
+     * the same answer the matrix composed by hand around the single-draft call, kept here so the two
+     * cannot drift.
+     *
+     * @param  list<string>  $locales
+     * @return array<string, bool>
+     */
+    public function unpublishedChanges(array $locales): array
+    {
+        $active = LegalDocument::query()
+            ->where('key', $this->key)
+            ->whereIn('locale', $locales)
+            ->where('is_active', true)
+            ->pluck('content_hash', 'locale');
+
+        $answer = [];
+
+        foreach ($locales as $locale) {
+            $draft = $this->draft($locale);
+
+            $answer[$locale] = $draft instanceof LegalDraft && $active->get($locale) !== $draft->content_hash;
+        }
+
+        return $answer;
+    }
+
     /** Approved text that is not live: the draft differs from the active published row. */
     public function hasUnpublishedChanges(LegalDraft $draft): bool
     {
-        $activeHash = LegalDocument::query()
-            ->where('key', $this->key)
-            ->where('locale', $draft->locale)
-            ->where('is_active', true)
-            ->value('content_hash');
-
-        return $activeHash !== $draft->content_hash;
+        // Through the set variant, so a single cell and a whole matrix answer with one predicate.
+        // It is the same one query this used to make on its own.
+        return $this->unpublishedChanges([$draft->locale])[$draft->locale];
     }
 }

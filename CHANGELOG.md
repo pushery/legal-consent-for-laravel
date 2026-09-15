@@ -4,6 +4,22 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0] - 2026-09-15
+
+### Added
+
+- **`LegalDocumentReleaser::nextVersionFor($key, NoticeMode $mode)` answers which version a change of that shape has to carry.** Since 0.32.0 the publisher refuses a gating mode on a version that keeps the active major — the right refusal, and on its own it leaves the operator with the question it raises, because the version still comes from the draft row and a person types it. A gating change answers the next major, anything that must not ask again answers the next minor of the active version, and a key nothing has published yet answers `1.0.0`. **It enforces nothing**: no release path calls it, and a project with its own numbering keeps it. What it removes is every consumer writing the same four lines.
+
+### Changed
+
+- **The admin screens name the document and hand the language to the application, instead of quoting the configuration key and the locale code.** An administrator read `terms (fr)` for a document the public site calls "Nutzungsbedingungen" in a language its own switcher offers as "Französisch" — and the reasons in those sentences have been translated since 0.22.0, which made the untranslated half louder rather than quieter. The document is now named by its published row's title, falling back to the shipped `legal-consent::titles.*` catalog and finally to the key, which stays the honest answer for a document nobody has named. A **language** is still answered as its code: nothing in this package knows that `fr` is called French, and the library that does lives in `ext-intl`, which this package does not require — making every consumer install an extension to read a status line is the wrong trade. `Pushery\LegalConsent\Contracts\NamesLegalTexts` is the seam for both halves, so an application with a language switcher supplies the names without rewriting the sentences.
+- **The admin matrix asks for the published state once per document instead of once per cell.** `LegalDraftSet::unpublishedChanges(array $locales)` answers for a whole row in one statement; `hasUnpublishedChanges()` is unchanged, keeps its single-draft signature and now goes through the same predicate, so a cell and a row cannot answer differently. Six documents in seven languages cost 42 statements for something one statement answers — on a Livewire component that re-renders on every filter click. A consumer measured that and folded the matrix itself rather than use the shipped one.
+- **An informational page is released in the languages that have text, instead of waiting for every configured one.** A release is atomic across locales so a subject is never bound in a language it did not read — which is the right rule for a contract, a privacy notice and a real opt-in, and no rule at all for an imprint, a cookie notice or an accessibility statement. Those bind nobody, and the read path already serves the source language under any other locale for exactly these rows. One missing translation nevertheless kept such a page off the site completely: the capability was there and the route to it was closed. Only a language with **no draft at all** is left out; one whose draft is written and unreviewed still blocks the release, because that is a reason an operator can act on, and when no language has a draft the refusal still names every one of them.
+
+### Fixed
+
+- **The number under a release counts the people of every language it covered, each of them once.** A consent row carries the language it was given in, so `affects()` answers per (key, locale) — and the admin manager reported the first released row's count under a release covering every configured locale. In a seven-locale installation that read "affects 0 people" while one person was a major behind on the German text, under the sentence an operator reads to decide whether the announcement needs a second look. `LegalDocumentReleaser::affectsRelease()` answers for a whole release instead: summing the rows would count a subject who accepted two languages twice, and somebody who holds the new major in any language is not behind on it, because the major belongs to the document rather than to its translations. `affects()` keeps its per-locale meaning, which is the unit the notice sweep works on.
+
 ## [0.32.0] - 2026-09-15
 
 ### Changed
@@ -2588,7 +2604,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.29.0...v0.30.0

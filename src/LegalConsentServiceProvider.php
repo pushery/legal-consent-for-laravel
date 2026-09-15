@@ -36,6 +36,7 @@ use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
 use Pushery\LegalConsent\Contracts\LegalTextTranslator;
+use Pushery\LegalConsent\Contracts\NamesLegalTexts;
 use Pushery\LegalConsent\Contracts\ResolvesNoticeIdentity;
 use Pushery\LegalConsent\Events\LegalDocumentPublished;
 use Pushery\LegalConsent\Http\Middleware\EnsureLegalConsent;
@@ -61,6 +62,7 @@ use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
 use Pushery\LegalConsent\Support\NullMonitor;
 use Pushery\LegalConsent\Support\PublishedDocumentReader;
+use Pushery\LegalConsent\Support\PublishedTitleNames;
 use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
 use Pushery\LegalConsent\Support\RegistrationRules;
 use Pushery\LegalConsent\Support\TenantContext;
@@ -147,6 +149,12 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // own implementation. Unbound, a Translate action fails loud rather than filing the
         // untranslated source as a translation.
         $this->app->bind(LegalTextTranslator::class, UnavailableTranslator::class);
+
+        // What the admin screens call a document and a language. The default answers what the
+        // package owns -- the published row's title -- and answers a language as its code, because
+        // nothing here knows that `fr` is called French and `ext-intl` is not a requirement of this
+        // package. An application with a language switcher binds its own and keeps the sentences.
+        $this->app->bind(NamesLegalTexts::class, PublishedTitleNames::class);
 
         // scoped, not singleton: RegistrationRules memoizes its active-row lookups per request, so the
         // memo must be discarded between requests (a publish in a later request must be seen).
