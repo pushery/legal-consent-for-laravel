@@ -208,6 +208,26 @@ final class ConsentFake implements ConsentManager
         return $this->capture($subject, $documentKey, ConsentAction::Granted, $context, $locale, $expectedContentHash);
     }
 
+    /**
+     * The acknowledgment door, faked.
+     *
+     * Records Acknowledged rather than Granted, which is the one place this fake CAN be specific:
+     * accept() guesses because it does not know the document's type, but nothing reaches
+     * acknowledge() except an informational page, so the action is not in doubt.
+     *
+     * The wording is captured too. A test that asserts the row exists but not what sentence it
+     * carries would pass over the defect this parameter exists to prevent — a ledger entry naming a
+     * sentence nobody was shown.
+     */
+    public function acknowledge(Model $subject, string $documentKey, ConsentContext $context, string $acknowledgmentWording, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent
+    {
+        $consent = $this->capture($subject, $documentKey, ConsentAction::Acknowledged, $context, $locale, $expectedContentHash);
+
+        $consent->ui_wording_snapshot = $acknowledgmentWording;
+
+        return $consent;
+    }
+
     public function withdraw(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
     {
         return $this->capture($subject, $documentKey, ConsentAction::Withdrawn, $context, $locale);

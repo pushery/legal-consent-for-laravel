@@ -20,6 +20,7 @@ use Pushery\LegalConsent\Testing\ConsentFake;
 /**
  * @method static LegalConsent record(Model $subject, string $documentKey, ConsentAction $action, ConsentContext $context, ?string $locale = null)
  * @method static LegalConsent accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null)
+ * @method static LegalConsent acknowledge(Model $subject, string $documentKey, ConsentContext $context, string $acknowledgmentWording, ?string $locale = null, ?string $expectedContentHash = null)
  * @method static LegalConsent withdraw(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null)
  * @method static LegalConsent object(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null)
  * @method static LegalConsent terminate(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null)

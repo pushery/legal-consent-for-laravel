@@ -132,7 +132,12 @@ final class LegalTextManager extends Component
 
         foreach ($this->documentKeys() as $key) {
             $set = LegalDraftSet::for($key);
-            $blocking = $set->blockingLocales($this->locales());
+
+            // Over the locales a release of THIS document would cover, not over every configured
+            // one. Asked the wide way, an informational page with an untranslated locale showed a
+            // blocked row beside a button that would have released it — the screen argued with
+            // itself, and an operator had no way to tell which half was right.
+            $blocking = $set->blockingLocales($set->releaseLocales($this->locales()));
 
             // One statement per key for the whole row, rather than one per cell. Asked per cell,
             // six documents in seven languages cost 42 of them on a component that re-renders on
@@ -166,45 +171,16 @@ final class LegalTextManager extends Component
     }
 
     /**
-     * The locales this key is released in — every configured one, unless nobody can be bound by it.
+     * The locales this key is released in — the reasoning lives on the set, and so does the answer.
      *
-     * A release is atomic across locales because a subject must never be bound in a language it did
-     * not read: German gated while Italian lags would leave two populations under two majors of the
-     * same contract. That reasoning covers a contract, a privacy notice and a real opt-in, and it
-     * covers nothing at all for an INFORMATIONAL page — an imprint, a cookie notice, an
-     * accessibility statement. Those bind nobody and gate nobody, so there is no half-released state
-     * for the atomicity to prevent, and the read path already serves the source language under any
-     * other locale for exactly these rows ({@see PublishedDocumentReader::fallbackFor()}).
-     *
-     * Without this, one missing translation kept such a page off the site entirely: the capability
-     * was there and the route to it was closed. Measured in a consumer with three informational
-     * documents out of six, which narrowed the list itself rather than go without an imprint.
-     *
-     * ⚠️ Only a locale with NO DRAFT AT ALL is dropped, never one whose draft is merely unreviewed.
-     * "Nothing has been written here" is what the fallback answers for; "it is written and nobody
-     * has looked at it" is a reason an operator can act on, and swallowing it would publish the
-     * other locales and leave that one silently behind. When no locale has a draft, the full list
-     * goes through — so the refusal still names every language and why, instead of releasing an
-     * empty set.
+     * It used to live HERE, privately, which is why the grid a few lines up and this screen's own
+     * release button could disagree about one document ({@see LegalDraftSet::releaseLocales()}).
      *
      * @return list<string>
      */
     private function releaseLocalesFor(string $key): array
     {
-        $locales = $this->locales();
-
-        if ($this->typeFor($key) !== DocumentType::Informational) {
-            return $locales;
-        }
-
-        $set = LegalDraftSet::for($key);
-
-        $written = array_values(array_filter(
-            $locales,
-            static fn (string $locale): bool => $set->draft($locale) instanceof LegalDraft,
-        ));
-
-        return $written === [] ? $locales : $written;
+        return LegalDraftSet::for($key)->releaseLocales($this->locales());
     }
 
     /** The mode a material change of this key's document type takes, from the documents registry. */

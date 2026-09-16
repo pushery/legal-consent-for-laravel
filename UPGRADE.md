@@ -4,6 +4,22 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.33.0 → 0.34.0
+
+**Nothing is required of you — but read the one paragraph below if you ever ran `vendor:publish` on this package's config.**
+
+### Settings you never published now take effect
+
+Until now the provider merged its shipped defaults with Laravel's flat `mergeConfigFrom()`. That asks one question per top-level block: is it already there? A published file has every block, so any key this package added *inside* one of them in a later release never reached you. It read as `null`, nothing errored and nothing logged.
+
+The provider now merges section by section, so those keys arrive.
+
+**What that means in practice:** if your published `config/legal-consent.php` predates a setting, that setting stops being `null` and starts being whatever the package ships as its default. In almost every case that is the value you would have got had you published today, and it is the reason this is a fix. **In one case it is worth a look:** a default that is deliberately strict — a gate, a throttle, a switch for unsafe content — was effectively off for you and is now on. If you had relied on it being absent, write it explicitly in your published file.
+
+**A list you narrowed is left exactly as you wrote it,** including an emptied one. Recursion alone would not do that: `array_replace_recursive()` merges lists by index and would hand back entries you removed, which on `routes.api_middleware` would restore middleware you took off on purpose. Recursion here stops at any list.
+
+**If your config is cached** (`config:cache`), nothing merges at all — that is the framework's design and was already true. For those installations the published file remains the whole truth.
+
 ## 0.32.0 → 0.33.0
 
 **Nothing is required of you.** No migration, no renamed config key and no removed option — one number on the admin screen changes, and it changes because it was wrong.

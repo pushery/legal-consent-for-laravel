@@ -5,6 +5,12 @@ declare(strict_types=1);
 // UI strings for the publishable stubs (settings page + grace-period banner). The three legal
 // types stay separately named ('contracts' / 'acknowledgements' / 'consents'). Informal tone (per Du).
 return [
+    // The version line of the document-fragment stub. It is not decoration: somebody reading that
+    // fragment in a dialog is about to agree to it, and WHICH version they read is the fact a ledger
+    // row will later claim. A fragment showing the text and hiding the version would leave that row
+    // unverifiable from the only side that matters — the reader's.
+    'document_version' => 'Fassung :version',
+
     'settings_heading' => 'Deine Zustimmungen',
     'contracts_heading' => 'Verträge',
     'acknowledgements_heading' => 'Zur Kenntnis genommen',
@@ -123,6 +129,11 @@ return [
     'admin_status_not_saved' => 'Nicht gespeichert — :reason',
     'admin_status_source_not_translated' => 'Die Quellsprache wird verfasst, nicht übersetzt.',
     'admin_status_no_source' => 'Schreibe zuerst den Quelltext — es gibt nichts, wovon übersetzt werden könnte.',
+    // The status a QUEUED translation reports. It names where the result will appear rather than
+    // asking the reader to do anything, because there is nothing for them to do: the page polls
+    // while the job runs and stops when it stops.
+    'admin_status_translation_queued' => 'Die Übersetzung läuft. Sie erscheint hier, sobald sie fertig ist.',
+
     'admin_status_machine_translated' => 'Maschinell übersetzt. Ein Mensch muss den Text prüfen, bevor er veröffentlicht werden kann.',
     'admin_status_reviewed' => 'Als geprüft markiert. Dieser Text ist jetzt veröffentlichbar.',
     'admin_status_release_blocked' => '„:key“ wurde nicht veröffentlicht: :reasons',

@@ -21,6 +21,7 @@ use Pushery\LegalConsent\Events\ConsentWithdrawn;
 use Pushery\LegalConsent\Exceptions\DocumentChangedException;
 use Pushery\LegalConsent\Exceptions\IncompatibleConsentActionException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
+use Pushery\LegalConsent\Exceptions\NotAcknowledgeableException;
 use Pushery\LegalConsent\Exceptions\NotConfirmableException;
 use Pushery\LegalConsent\Exceptions\NotConsentBearingException;
 use Pushery\LegalConsent\Exceptions\NotGrantableException;
@@ -275,6 +276,54 @@ readonly class DefaultConsentManager implements ConsentManager
         return $this->append($subject, $document, $document->type->defaultAcceptAction(), $context);
     }
 
+    /**
+     * Record that a subject was SHOWN an informational page the operator flagged, with the sentence
+     * their own form put next to it.
+     *
+     * Not a consent and never a gate. An informational page binds nobody -- that is the meaning of
+     * the basis -- so this writes down which version somebody read and nothing more. It cannot lock
+     * anyone out of anything: {@see ConsentGate} is not routed through here and keeps asking
+     * `isConsentBearing()`.
+     *
+     * ⚠️ THE SENTENCE COMES FROM THE CALLER, AND THAT IS THE DESIGN RATHER THAN A CONVENIENCE. The
+     * ledger column holding it is NOT NULL, and an informational document has no `ui_wording` of its
+     * own precisely because the package never asks the reader for anything on such a page. Three
+     * ways out of that, and two of them are worse than the gap:
+     *
+     *  - make the column nullable: that is the ledger schema and the hash chain, the evidence-bearing
+     *    structure of this package, changed for a feature that does not need it;
+     *  - write a placeholder: a legal ledger then carries a sentence nobody was shown, which is the
+     *    exact falsehood {@see self::acceptanceFingerprint()} refuses to manufacture;
+     *  - take the sentence the subject actually read.
+     *
+     * The third is free and true. These pages are shown under the consumer's own wording -- one
+     * checkbox naming a privacy policy, an imprint, a cookie notice and an accessibility statement
+     * together is an ordinary registration form -- so the sentence belongs to that form, not to this
+     * document.
+     *
+     * `$expectedContentHash` guards the same mid-session release `accept()` guards, against the
+     * BODY alone. Not the acceptance fingerprint: that folds in the package's own sentence, and
+     * there is none here. The body is the only thing this package rendered.
+     */
+    public function acknowledge(Model $subject, string $documentKey, ConsentContext $context, string $acknowledgmentWording, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent
+    {
+        $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
+
+        if ($document->type->isConsentBearing()) {
+            throw NotAcknowledgeableException::isConsentBearing($documentKey, $document->type);
+        }
+
+        if (! RegistrationAcknowledgment::covers($documentKey)) {
+            throw NotAcknowledgeableException::notFlagged($documentKey);
+        }
+
+        if ($expectedContentHash !== null && $expectedContentHash !== $document->content_hash) {
+            throw DocumentChangedException::for($documentKey, $expectedContentHash, $document->content_hash);
+        }
+
+        return $this->append($subject, $document, ConsentAction::Acknowledged, $context, $acknowledgmentWording);
+    }
+
     public function withdraw(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
     {
         $document = $this->documentForTransition($subject, $documentKey, $this->resolveLocale($context, $locale));
@@ -456,7 +505,14 @@ readonly class DefaultConsentManager implements ConsentManager
             // `! requires_explicit_optin`, the same false a contract carries — would be
             // permanently true. A "your agreements" screen built from this map would then show
             // a row for the Impressum that can never be satisfied.
-            ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing());
+            // …plus an informational page the operator flagged for acknowledgment. That one HAS
+            // standing to report, which is the whole reason it is here: a row was written, so
+            // `accepted_major` is a real number rather than a permanent 0, and the difference
+            // between it and `current_major` is exactly the "which version did they see" question
+            // a consumer asked for. `outstanding` stays false for it below — the state is reported,
+            // nothing is enforced.
+            ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing()
+                || RegistrationAcknowledgment::covers($document->key));
 
         // The holdings whose document has been retired out from under them. Resolved by the SAME
         // class the settings screen uses, because a status map and the screen built from it
@@ -495,7 +551,16 @@ readonly class DefaultConsentManager implements ConsentManager
                 // A retired holding is never outstanding — nothing is being enforced, and this flag
                 // is what a screen turns into "please accept". See the same reasoning, at length,
                 // in ConsentPresenter::settingsFor().
-                'outstanding' => ! $isRetired && ! $document->requires_explicit_optin && $acceptedMajor < $document->major_version,
+                // An informational page is never outstanding either, and for the same reason a
+                // retired holding is not: nothing is being enforced. A flagged one can absolutely
+                // be STALE — `accepted_major` below `current_major` says so, and that is the signal
+                // a consumer turns into a banner, a hint or nothing at all, as they choose. Calling
+                // it outstanding would turn a page that binds nobody into a gate by writing it
+                // down, which is the one thing this feature must not do.
+                'outstanding' => ! $isRetired
+                    && $document->type->isConsentBearing()
+                    && ! $document->requires_explicit_optin
+                    && $acceptedMajor < $document->major_version,
                 'retired' => $isRetired,
                 // The double opt-in's middle state, and the only one `accepted_major` cannot
                 // express: entered but not yet confirmed reads as never entered, so a screen built
@@ -564,7 +629,13 @@ readonly class DefaultConsentManager implements ConsentManager
         return (new LedgerSubjectEraser)->forget($subject);
     }
 
-    private function append(Model $subject, LegalDocument $document, ConsentAction $action, ConsentContext $context): LegalConsent
+    /**
+     * @param  string|null  $acknowledgmentWording  the sentence the SUBJECT read, supplied by the
+     *                                              caller for an informational page the operator
+     *                                              has flagged. See acknowledge() for why it comes
+     *                                              from outside rather than from the document.
+     */
+    private function append(Model $subject, LegalDocument $document, ConsentAction $action, ConsentContext $context, ?string $acknowledgmentWording = null): LegalConsent
     {
         // The choke point every write passes through, which is why the class check belongs here and
         // not only on the callers. `record()` takes an arbitrary action from an arbitrary caller —
@@ -572,14 +643,14 @@ readonly class DefaultConsentManager implements ConsentManager
         // and only Withdrawn/Declined were guarded above. Everything else fell through to the
         // insert below, where `ui_wording_snapshot` is NOT NULL and an informational document has
         // no sentence: the caller got a raw SQLSTATE integrity violation.
-        if (! $document->type->isConsentBearing()) {
+        if (! $document->type->isConsentBearing() && $acknowledgmentWording === null) {
             throw NotConsentBearingException::for($document->key, $document->type);
         }
 
         // The rest of the compatibility question, in the same place and for the same reason. Each
         // named transition asks its own half before calling here, so a caller who used one keeps
         // its specific message; this arm is what the untyped `record()` never had.
-        if (! $this->allowsAction($action, $document->type)) {
+        if (! $this->allowsAction($action, $document->type, $acknowledgmentWording !== null)) {
             throw IncompatibleConsentActionException::for($document->key, $document->type, $action);
         }
 
@@ -607,7 +678,7 @@ readonly class DefaultConsentManager implements ConsentManager
             'document_major_version' => $document->major_version,
             'content_hash' => $document->content_hash,
             'locale' => $document->locale,
-            'ui_wording_snapshot' => $document->ui_wording,
+            'ui_wording_snapshot' => $acknowledgmentWording ?? $document->ui_wording,
             'action' => $action,
             'method' => $context->method,
             'source' => $context->source,
@@ -730,7 +801,11 @@ readonly class DefaultConsentManager implements ConsentManager
      * where a consent is asked for (Art. 8) and where a contract is (§ 107 BGB) — refusing either
      * would refuse a lawful row, which is the more expensive mistake in an append-only ledger.
      */
-    private function allowsAction(ConsentAction $action, DocumentType $type): bool
+    /**
+     * @param  bool  $acknowledgedByForm  the caller supplied the sentence the subject read, which is
+     *                                    the only way an informational page reaches the ledger
+     */
+    private function allowsAction(ConsentAction $action, DocumentType $type, bool $acknowledgedByForm = false): bool
     {
         return match ($action) {
             ConsentAction::Granted,
@@ -738,7 +813,11 @@ readonly class DefaultConsentManager implements ConsentManager
             ConsentAction::Declined,
             ConsentAction::OptInRequested,
             ConsentAction::Confirmed => $type->requiresExplicitOptin(),
-            ConsentAction::Acknowledged => $type->isMandatory(),
+            // An informational page is not mandatory and never will be -- it binds nobody. It
+            // reaches this arm only on the acknowledge() path, where the caller has handed over the
+            // sentence its own form showed, and that sentence is what makes the row truthful.
+            ConsentAction::Acknowledged => $type->isMandatory()
+                || ($acknowledgedByForm && $type === DocumentType::Informational),
             ConsentAction::Objected => $type->isObjectable(),
             ConsentAction::Terminated => $type->isTerminable(),
             ConsentAction::DeemedAccepted => $type === DocumentType::ContractTerms,

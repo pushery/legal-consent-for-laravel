@@ -129,11 +129,15 @@ final readonly class RegistrationConsentRecorder
                 continue; // optional consent, or the key is entirely unpublished
             }
 
-            // An informational page binds nobody, so there is nothing to freeze: writing a row
-            // would claim the subject acknowledged an Impressum they were never shown a control
-            // for. It never reaches validation either (RegistrationRules skips it), so a tick
-            // cannot exist to honor.
-            if (! $document->type->isConsentBearing()) {
+            // An informational page binds nobody, so by default there is nothing to freeze: writing
+            // a row would claim the subject acknowledged an Impressum they were never shown a
+            // control for, and it never reaches validation either, so a tick cannot exist to honor.
+            //
+            // UNLESS the operator says their form DOES show it. Then the opposite is true: the box
+            // was ticked over four pages and a ledger naming one of them is the misleading record.
+            // The predicate is asked rather than the type, so this site and RegistrationRules
+            // cannot drift into disagreeing about which pages the form covers.
+            if (! RegistrationAcknowledgment::isRecordedAtRegistration($document)) {
                 continue;
             }
 
@@ -172,14 +176,34 @@ final readonly class RegistrationConsentRecorder
 
             // Snapshot the version the recorder actually resolved (its own locale), which
             // may be the default-locale fallback rather than the requested locale.
-            $pending[] = [(string) $key, $document->locale, is_string($expectedHash) ? $expectedHash : null];
+            //
+            // The wording rides along because it decides WHICH door this row goes through, and the
+            // decision is made here where the document is in hand rather than in the loop below,
+            // which would have to resolve it a second time and could resolve it differently.
+            $pending[] = [
+                (string) $key,
+                $document->locale,
+                is_string($expectedHash) ? $expectedHash : null,
+                $document->type->isConsentBearing() ? null : RegistrationAcknowledgment::wordingFor((string) $key),
+            ];
         }
 
         if ($unevidenced !== [] && $this->withoutFormFields === self::WITHOUT_FORM_FIELDS_REFUSE) {
             throw UnevidencedConsentException::for($unevidenced);
         }
 
-        foreach ($pending as [$key, $documentLocale, $expectedHash]) {
+        foreach ($pending as [$key, $documentLocale, $expectedHash, $acknowledgmentWording]) {
+            // An informational page the operator flagged goes through acknowledge(), which is a
+            // different act and not a stricter accept(): it records that the subject was SHOWN the
+            // page, under the sentence the operator's own form put next to it, and it binds nobody.
+            // `accept()` would refuse it — rightly, because the sentence it guards is one this
+            // document does not have.
+            if ($acknowledgmentWording !== null) {
+                $this->consent->acknowledge($subject, $key, $context, $acknowledgmentWording, $documentLocale, $expectedHash);
+
+                continue;
+            }
+
             $this->consent->accept($subject, $key, $context, $documentLocale, $expectedHash);
         }
 

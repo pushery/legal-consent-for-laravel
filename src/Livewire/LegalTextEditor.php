@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Livewire;
 use Carbon\CarbonImmutable;
 use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Pushery\LegalConsent\Contracts\LegalTextTranslator;
@@ -20,6 +21,7 @@ use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Exceptions\NoticeTimelineInvertedException;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
+use Pushery\LegalConsent\Jobs\TranslateLegalDraft;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
 use Pushery\LegalConsent\Models\LegalDraft;
@@ -164,6 +166,24 @@ final class LegalTextEditor extends Component
             return;
         }
 
+        // OFF THE REQUEST, where an application asked for that. The translator is the application's
+        // own binding and might answer in microseconds or in minutes; a consumer measured the inline
+        // call ending in a 500 twice in one day on a privacy notice. Dispatching answers that without
+        // this package guessing a timeout on somebody else's service.
+        //
+        // The marker is written HERE rather than in the job, and that ordering is the point: between
+        // dispatch and the worker picking the job up there is a window, and a screen that polled
+        // through it would see no marker and conclude the translation had already finished.
+        if ($this->queuesTranslation()) {
+            Cache::put(TranslateLegalDraft::markerFor($this->key, $this->locale), true, now()->addHour());
+
+            TranslateLegalDraft::dispatch($this->key, $this->locale, $sourceLocale, $this->actor());
+
+            $this->setStatus(__('legal-consent::ui.admin_status_translation_queued'));
+
+            return;
+        }
+
         try {
             $translated = app(LegalTextTranslator::class)->translate($source->body, $sourceLocale, $this->locale);
         } catch (TranslatorNotConfigured $e) {
@@ -184,6 +204,29 @@ final class LegalTextEditor extends Component
 
         $this->body = $draft->body;
         $this->setStatus(__('legal-consent::ui.admin_status_machine_translated'));
+    }
+
+    /** Whether this application asked for the translation to leave the request. */
+    private function queuesTranslation(): bool
+    {
+        return (bool) config('legal-consent.translation.queue', false);
+    }
+
+    /**
+     * Whether a translation of THIS draft is running right now.
+     *
+     * PRIVATE, and the views read it as view DATA rather than calling it. A public method on a
+     * Livewire component is a client-callable ACTION, and this package's own trust-boundary check
+     * refuses one that announces no result — correctly, because this is a reader rather than an
+     * action, and the only caller that needs it is `render()`.
+     *
+     * It is a hint rather than a lock — see the job — and it answers false when the feature is off,
+     * so a screen without a queue never polls.
+     */
+    private function translating(): bool
+    {
+        return $this->queuesTranslation()
+            && Cache::get(TranslateLegalDraft::markerFor($this->key, $this->locale)) === true;
     }
 
     public function markReviewed(): void
@@ -226,7 +269,11 @@ final class LegalTextEditor extends Component
             $released = app(LegalDocumentReleaser::class)->release(
                 $this->key,
                 NoticeMode::DeemedConsent,
-                $this->locales(),
+                // The locales a release of this document covers, which is not always every
+                // configured one. This screen used to narrow nothing at all, so an
+                // informational page released from HERE was refused over a language that binds
+                // nobody — while the same page released from the grid went through.
+                LegalDraftSet::for($this->key)->releaseLocales($this->locales()),
                 new ReleaseOptions(
                     announceAt: $this->date($this->announceAt),
                     enforceAt: $this->date($this->enforceAt),
@@ -295,6 +342,7 @@ final class LegalTextEditor extends Component
         $draft = $set->draft($this->locale);
 
         return view('legal-consent::livewire.legal-text-editor', [
+            'translating' => $this->translating(),
             'sourceLocale' => $this->sourceLocale(),
             'isSource' => $this->locale === $this->sourceLocale(),
             'reviewState' => $draft?->review_state->value,

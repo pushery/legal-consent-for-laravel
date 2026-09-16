@@ -451,6 +451,53 @@ final class DoctorCommand extends Command
         return $driver === 'database' ? [$store, $origin] : null;
     }
 
+    /**
+     * A configured notification channel that cannot deliver, so a notice about a changed legal text
+     * fails at the one moment somebody needed it.
+     *
+     * ⚠️ ONLY `database` IS ANSWERABLE FROM HERE, and the limit is stated rather than implied.
+     * Whether a mailer reaches its host is a question no doctor can answer without sending
+     * something, and a check that pretended otherwise would print a green line over a question it
+     * never asked — the failure mode this whole command exists against. What IS answerable is the
+     * one that leaves no trace in the application until a queue worker log is read: `database` is in
+     * the channel list and Laravel's `notifications` table was never migrated, so every database
+     * notification job fails.
+     *
+     * ⚠️ The mail is not lost with it, and that changes how loud this is. Laravel dispatches one
+     * queued job PER CHANNEL, so a missing table fails the database job alone; a consumer reported
+     * this as "the retry re-sends the mail" and it does not. What is lost is the in-app record, on
+     * an install that asked for one.
+     *
+     * Reported, never enforced, like the cache finding above: the exit code of this command is for
+     * a configuration that contradicts itself, and this one is merely broken in a way an operator
+     * can fix in one migration.
+     *
+     * @return list<string> the configured channels that cannot deliver, in configured order
+     */
+    private function undeliverableNotificationChannels(): array
+    {
+        $configured = config('legal-consent.notifications.channels', ['mail', 'database']);
+        $channels = is_array($configured) ? array_values(array_filter($configured, is_string(...))) : [];
+
+        // The same fallback `ChangeNotification::via()` applies, read the same way: an empty or
+        // unreadable list means the notification sends on the package's defaults, and a doctor that
+        // reported "no channels" there would describe a configuration nothing uses.
+        if ($channels === []) {
+            $channels = ['mail', 'database'];
+        }
+
+        if (! in_array('database', $channels, true)) {
+            return [];
+        }
+
+        // No `try` around this, and the coverage floor is what settled it. By the time this runs,
+        // `handle()` has already read the database several times -- the tamper-evidence findings ask
+        // `Schema::hasTable()` themselves, and the unpublished-combination check queries. An
+        // unreachable database has therefore already ended the command, so a guard here is a second
+        // answer to a question an earlier line answered by throwing, and a line no run can enter.
+        return Schema::hasTable('notifications') ? [] : ['database'];
+    }
+
     public function handle(): int
     {
         $variantFinding = $this->uiVariantFinding();
@@ -461,6 +508,7 @@ final class DoctorCommand extends Command
         $uncacheable = $this->uncacheableKeys();
         $tamperFindings = $this->tamperEvidenceFindings();
         $databaseCache = $this->databaseBackedDocumentCache();
+        $undeliverable = $this->undeliverableNotificationChannels();
 
         if ($variantFinding !== null) {
             [$headline, $explanation] = $variantFinding;
@@ -554,6 +602,22 @@ final class DoctorCommand extends Command
 
             $this->newLine();
             $this->line('  Publish the whole matrix idempotently: legal-consent:publish --all --editorial');
+            $this->newLine();
+        }
+
+        if ($undeliverable !== []) {
+            $this->newLine();
+            $this->warn('These notification channels are configured but cannot deliver:');
+
+            foreach ($undeliverable as $channel) {
+                $this->line("  <fg=yellow>?</> {$channel} — Laravel's `notifications` table does not exist.");
+            }
+
+            $this->line('  Every database notification job fails; the mail of the same notice still goes out,');
+            $this->line('  because Laravel queues one job per channel. What is lost is the in-app record.');
+            $this->newLine();
+            $this->line('  Create the table: php artisan make:notifications-table && php artisan migrate');
+            $this->line('  Or drop the channel: legal-consent.notifications.channels');
             $this->newLine();
         }
 
