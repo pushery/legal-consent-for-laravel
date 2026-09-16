@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Support\Collection;
 use Pushery\LegalConsent\Enums\BlockingReason;
+use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\ReviewState;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalDraft;
@@ -93,6 +94,61 @@ final readonly class LegalDraftSet
     public function isPublishable(LegalDraft $draft): bool
     {
         return $draft->review_state === ReviewState::Reviewed && ! $this->isStale($draft);
+    }
+
+    /**
+     * The locales a release of THIS document covers, out of the ones an application configured.
+     *
+     * A release is atomic across locales because a subject must never be bound in a language they
+     * did not read: German gated while Italian lags would leave two populations under two majors of
+     * the same contract. That reasoning covers a contract, a privacy notice and a real opt-in, and
+     * it covers nothing at all for an INFORMATIONAL page — an imprint, a cookie notice, an
+     * accessibility statement. Those bind nobody and gate nobody, so there is no half-released state
+     * for the atomicity to prevent, and the read path already serves the source language under any
+     * other locale for exactly these rows ({@see PublishedDocumentReader::fallbackFor()}).
+     *
+     * Without this, one missing translation kept such a page off the site entirely: the capability
+     * was there and the route to it was closed. Measured in a consumer with three informational
+     * documents out of six, which narrowed the list itself rather than go without an imprint.
+     *
+     * ⚠️ Only a locale with NO DRAFT AT ALL is dropped, never one whose draft is merely unreviewed.
+     * "Nothing has been written here" is what the fallback answers for; "it is written and nobody
+     * has looked at it" is a reason an operator can act on, and swallowing it would publish the
+     * other locales and leave that one silently behind. When no locale has a draft, the full list
+     * goes through — so the refusal still names every language and why, instead of releasing an
+     * empty set.
+     *
+     * ⚠️ IT LIVES HERE BECAUSE THREE PLACES ASK IT AND THEY DISAGREED. Until it moved here, the answer
+     * sat in a PRIVATE method of the admin grid's component, so it reached the release button and
+     * nothing else: the grid computed its blocking flags over every configured locale, and the
+     * editor's own release narrowed nothing at all. An informational page could therefore read as
+     * blocked on a screen whose button would have released it. The document's type is resolved from
+     * this set's own key rather than passed in, so a caller cannot answer the question differently
+     * by handing over a different type.
+     *
+     * @param  list<string>  $configured
+     * @return list<string>
+     */
+    public function releaseLocales(array $configured): array
+    {
+        if ($this->type() !== DocumentType::Informational) {
+            return $configured;
+        }
+
+        $written = array_values(array_filter(
+            $configured,
+            fn (string $locale): bool => $this->draft($locale) instanceof LegalDraft,
+        ));
+
+        return $written === [] ? $configured : $written;
+    }
+
+    /** This document's type, from the registry entry its key names. */
+    public function type(): DocumentType
+    {
+        $basis = config("legal-consent.documents.{$this->key}.legal_basis");
+
+        return DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
     }
 
     /**

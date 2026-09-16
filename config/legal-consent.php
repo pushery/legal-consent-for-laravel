@@ -75,6 +75,24 @@ return [
         'imprint' => [
             'source' => 'markdown',
             'legal_basis' => 'informational',
+
+            // Does YOUR registration form show this page? A single checkbox naming a privacy
+            // policy, an imprint, a cookie notice and an accessibility statement together is an
+            // ordinary form, and then you want to know per page which version somebody saw.
+            // Off by default: an informational page binds nobody, so nothing is written down
+            // unless you say your form shows it.
+            //
+            // It stays informational. It never gates anything, never appears as outstanding, and
+            // a new version of it never blocks a sign-in — you get the state and a way to write
+            // it, and whether you ask for a second look is yours to decide.
+            //
+            // BOTH keys or neither. `registration_wording` is the sentence YOUR form puts next to the page,
+            // stored verbatim, because this page carries none of its own: nothing here asks the
+            // reader for anything, so the only truthful sentence is the one you showed. Set the
+            // flag without it and this document is simply not covered — a configuration that does
+            // nothing, which you find, rather than a registration that fails, which they do.
+            // 'acknowledge_at_registration' => true,
+            // 'registration_wording' => 'I have read the imprint.',
         ],
     ],
 
@@ -245,6 +263,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Machine translation
+    |--------------------------------------------------------------------------
+    |
+    | Binding `Pushery\LegalConsent\Contracts\LegalTextTranslator` enables the editor's
+    | "Translate" action. Turn `queue` on and the action returns immediately and a job does the work.
+    |
+    | OFF by default, because off is the behavior that needs no infrastructure — an application
+    | without a queue worker keeps working exactly as before.
+    |
+    | Turn it on if your translator is a language model. A privacy notice is ~15 kB of text, which is
+    | an ordinary length for one and a long time for a model: a consumer measured the inline call
+    | ending in a 500 twice in one day. The duration is not this package's to know — the translator is
+    | YOUR binding, and might answer in microseconds or in minutes — which is why the answer is not a
+    | longer timeout but a request that does not wait.
+    |
+    */
+    'translation' => [
+        'queue' => false,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Routes
     |--------------------------------------------------------------------------
     |
@@ -301,6 +341,25 @@ return [
         'web_prefix' => 'legal',
         'web_middleware' => ['web', 'auth'],
         'web_throttle' => '60,1',
+
+        // Way D — the published text of one document as a FRAGMENT, so a dialog on your registration
+        // form can hold it instead of navigating the reader away from a half-filled form.
+        //
+        // Off like every other route here. With it off the consent checkbox's anchor keeps opening
+        // your own page, which is the half that carries the clickwrap: a consent binds only where the
+        // full text was reachable BEFORE agreeing (§ 305 Abs. 2 BGB), and a dialog opened by script
+        // is not reachable without script. The dialog goes OVER that link, never in its place.
+        //
+        // ⚠️ It adds no exposure. What it returns is the text you already publish at the address the
+        // checkbox links to; only the shape differs. It serves PUBLISHED documents only, under a
+        // registered key, in a configured locale — a draft is nobody's terms and answers 404.
+        //
+        // No `auth` in the default stack, deliberately: the reader of a registration form has not
+        // signed up yet, and a login wall in front of the terms they are being asked to accept is
+        // the failure this whole seam exists to remove.
+        'fragment' => false,
+        'fragment_prefix' => 'legal',
+        'fragment_middleware' => ['web'],
     ],
 
     /*

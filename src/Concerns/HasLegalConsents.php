@@ -98,7 +98,12 @@ trait HasLegalConsents
      * fold and one document query, so the cost is flat in the number of keys.
      *
      * A key with no active document — a typo, a deactivated version, an informational page nobody
-     * ever accepts — is `false`, the same answer the single-key method gives.
+     * ever acknowledges — is `false`, the same answer the single-key method gives.
+     *
+     * ⚠️ AN INFORMATIONAL PAGE THE OPERATOR FLAGGED FOR ACKNOWLEDGMENT IS THE EXCEPTION, and it
+     * answers truthfully rather than falsely: a row exists for it, so this reports whether the
+     * subject saw the CURRENT version. `true` there means "they have seen this one", never "they
+     * are bound by it" — such a page binds nobody and never gates anything.
      *
      * @param  list<string>  $documentKeys
      * @return array<string, bool>

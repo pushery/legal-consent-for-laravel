@@ -109,9 +109,13 @@
                                      NOT an aria target: pointing a describedby at it would restore the
                                      association this comment exists to prevent. --}}
                                 <button type="button" disabled aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.$key }}">{{ __('legal-consent::ui.admin_release_all') }}</button>
+                                {{-- Grouped by REASON, for the measurement recorded in the WireKit twin:
+                                     per-locale lines made a blocked row 210 px tall at seven locales, and
+                                     nothing about the column was ever too narrow. Every locale still
+                                     appears, beside the reason it shares. --}}
                                 <ul id="blocking-{{ $key }}">
-                                    @foreach ($rows[$key]['_release']['blocking'] as $locale => $reason)
-                                        <li>{{ $locale }}: {{ __($reason->label()) }}</li>
+                                    @foreach (\Pushery\LegalConsent\Support\BlockingReasonGroups::of($rows[$key]['_release']['blocking']) as $reason => $locales)
+                                        <li>{{ $reason }}: {{ implode(', ', $locales) }}</li>
                                     @endforeach
                                 </ul>
                             @endif

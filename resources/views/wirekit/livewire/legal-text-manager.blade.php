@@ -165,9 +165,16 @@
                                      NOT an aria target: pointing a describedby at it would restore the
                                      association this comment exists to prevent. --}}
                                 <x-wirekit::button size="sm" disabled :aria-label="__('legal-consent::ui.admin_release_all').' — '.$key">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
+                                {{-- Grouped by REASON, one line each, because the per-locale form grew with
+                                     the language count and the language count is what an application with
+                                     seven of them cannot reduce. Measured in a browser at 1728 px with seven
+                                     blocked locales: the cell was 486 px wide with nothing overflowing, and
+                                     210 px TALL — six documents then show two rows per screen. Every locale
+                                     still appears, beside the reason it shares, because an operator needs to
+                                     know which language to go and fix. --}}
                                 <x-wirekit::stack gap="xs" id="blocking-{{ $key }}">
-                                    @foreach ($rows[$key]['_release']['blocking'] as $locale => $reason)
-                                        <x-wirekit::text size="sm">{{ $locale }}: {{ __($reason->label()) }}</x-wirekit::text>
+                                    @foreach (\Pushery\LegalConsent\Support\BlockingReasonGroups::of($rows[$key]['_release']['blocking']) as $reason => $locales)
+                                        <x-wirekit::text size="sm">{{ $reason }}: {{ implode(', ', $locales) }}</x-wirekit::text>
                                     @endforeach
                                 </x-wirekit::stack>
                             @endif

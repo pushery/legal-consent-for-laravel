@@ -1,4 +1,13 @@
-<div>
+{{-- POLLS ONLY WHILE A QUEUED TRANSLATION IS RUNNING, and only where one can run at all: the
+     component answers false when `translation.queue` is off, so an application without a queue never
+     polls. A dispatched job is invisible to the page that dispatched it, and without this the
+     operator would click Translate, read that it is running, and have to guess when to reload.
+
+     ⚠️ `?? false` because this view is ALSO rendered standalone, by the tests that check its markup
+     against real components. There is no Livewire component behind those, so the flag is absent —
+     and absent means "do not poll", which is the only thing a render without a component could
+     honestly mean. Calling `$this->translating()` here instead threw on every one of them. --}}
+<div @if ($translating ?? false) wire:poll.3s @endif>
     <section aria-labelledby="legal-text-editor-heading">
         <h1 id="legal-text-editor-heading">{{ $key }} — {{ $locale }}</h1>
 

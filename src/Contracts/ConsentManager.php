@@ -34,6 +34,21 @@ interface ConsentManager
      */
     public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent;
 
+    /**
+     * Record that a subject was SHOWN an informational page the operator flagged for acknowledgment
+     * at registration — not a consent, and never a gate.
+     *
+     * `$acknowledgmentWording` is the sentence YOUR form put next to the page. It is required
+     * because an informational document carries none of its own: the package never asks the reader
+     * for anything on such a page, so the only truthful sentence is the one you showed. The ledger
+     * stores it verbatim.
+     *
+     * Refuses a consent-bearing document (use `accept()`) and an informational page the operator has
+     * not flagged. `$expectedContentHash` guards a mid-session release against the document BODY,
+     * which is the only part this package rendered.
+     */
+    public function acknowledge(Model $subject, string $documentKey, ConsentContext $context, string $acknowledgmentWording, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent;
+
     public function withdraw(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
 
     /**

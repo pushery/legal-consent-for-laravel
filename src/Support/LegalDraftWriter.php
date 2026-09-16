@@ -11,9 +11,11 @@ use Pushery\LegalConsent\Content\RawDocument;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Enums\DraftOrigin;
 use Pushery\LegalConsent\Enums\ReviewState;
+use Pushery\LegalConsent\Events\LegalDraftDiscarded;
 use Pushery\LegalConsent\Events\LegalDraftReviewed;
 use Pushery\LegalConsent\Events\LegalDraftSaved;
 use Pushery\LegalConsent\Exceptions\LegalDraftNotFound;
+use Pushery\LegalConsent\Exceptions\LegalSourceDraftCannotBeDiscarded;
 use Pushery\LegalConsent\Models\LegalDraft;
 
 /**
@@ -121,6 +123,42 @@ readonly class LegalDraftWriter
         event(new LegalDraftSaved($draft, $actor));
 
         return $draft;
+    }
+
+    /**
+     * Throw a draft away, so the locale is back to having no draft at all.
+     *
+     * The case it exists for is a machine translation nobody wants: it holds a language in a state
+     * that is neither published nor gone, and for an informational page it holds that language out
+     * of release entirely, because only locales with a publishable draft are released. Without a
+     * door here a consuming application deletes the row itself, which puts a second writer on a
+     * table this class exists to be the only writer of.
+     *
+     * ⚠️ THE SOURCE LOCALE IS REFUSED, AND THE CHECK RUNS BEFORE THE LOOKUP. Every translation
+     * measures its freshness against the source's hash and falls back to the source when it has
+     * none of its own, so removing it would leave every other locale of that key measured against
+     * a text that does not exist. Asking first means the answer is the structural one even when
+     * there is no source row to find — "you may not" is the useful reply there, not "not found".
+     *
+     * Nothing about the ledger changes: this touches a draft, never a published version.
+     */
+    public function discard(string $key, string $locale, ?string $actor = null): void
+    {
+        if ($locale === $this->sourceLocale()) {
+            throw LegalSourceDraftCannotBeDiscarded::for($key, $locale);
+        }
+
+        $draft = $this->find($key, $locale);
+
+        if (! $draft instanceof LegalDraft) {
+            throw LegalDraftNotFound::for($key, $locale);
+        }
+
+        $draft->delete();
+
+        // Fired with the row already gone, carrying the last state it had — so a listener can say
+        // what was discarded without a query that would find nothing.
+        event(new LegalDraftDiscarded($draft, $actor));
     }
 
     /** Set the version the next release will carry. Kept on the source row; read for every locale. */

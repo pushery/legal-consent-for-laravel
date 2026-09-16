@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use Pushery\LegalConsent\Http\Controllers\ConsentController;
+use Pushery\LegalConsent\Http\Controllers\LegalDocumentFragmentController;
 use Pushery\LegalConsent\Http\Controllers\WithdrawConsentController;
 use Pushery\LegalConsent\Support\SessionWriteThrottle;
 
@@ -43,6 +44,27 @@ if (config('legal-consent.routes.web', false)) {
         ->prefix(is_string($webPrefix) ? $webPrefix : 'legal')
         ->post('consent/withdraw', WithdrawConsentController::class)
         ->name('legal-consent.web.withdraw');
+}
+
+// Way D — the published text of one document as a FRAGMENT, for a dialog over a registration form.
+//
+// The path is `document/{key}/{locale}`, which collides with neither of the two above: Way B is a
+// POST to `consent/withdraw` and Way C's GET is `status`. All three default to the `legal` prefix,
+// and two routes under one URI do not warn — the later registration silently replaces the earlier —
+// so the segment is chosen rather than found to be free.
+//
+// READ-ONLY and unauthenticated by default, which is the one place this package's routes differ from
+// each other on purpose. The reader of a registration form has not signed up yet; a login wall in
+// front of the terms they are being asked to accept would be the defect, not the protection. It
+// serves published documents only, and those are already public at the address the checkbox links to.
+if (config('legal-consent.routes.fragment', false)) {
+    $fragmentMiddleware = config('legal-consent.routes.fragment_middleware', ['web']);
+    $fragmentPrefix = config('legal-consent.routes.fragment_prefix', 'legal');
+
+    Route::middleware(is_array($fragmentMiddleware) ? $fragmentMiddleware : ['web'])
+        ->prefix(is_string($fragmentPrefix) ? $fragmentPrefix : 'legal')
+        ->get('document/{key}/{locale}', LegalDocumentFragmentController::class)
+        ->name('legal-consent.document.fragment');
 }
 
 // Way C — the headless JSON API. Opt-in: nothing is registered unless
