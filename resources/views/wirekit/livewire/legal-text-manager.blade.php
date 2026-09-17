@@ -6,8 +6,18 @@
     `@wirekitScripts` in the layout (Release all locales confirms via an alert-dialog).
 --}}
 <div>
-    <x-wirekit::stack gap="lg" as="section" aria-labelledby="lc-legal-texts">
-        <x-wirekit::heading :level="1" id="lc-legal-texts">{{ __('legal-consent::ui.admin_heading') }}</x-wirekit::heading>
+    {{-- ⚠️ THE LABEL IS ASSEMBLED INTO AN ATTRIBUTE BAG, because a Blade `@if` INSIDE a component
+         tag does not compile — it is emitted as literal text into the rendered attribute list.
+         The landmark takes its name directly when the heading is gone: `aria-labelledby` pointing
+         at a missing id names nothing, and an unnamed region is not an improvement on a duplicated
+         title. `?? true` for a render outside the component, which passes no such flag. --}}
+    @php($lcSection = new Illuminate\View\ComponentAttributeBag(($heading ?? true)
+        ? ['aria-labelledby' => 'lc-legal-texts']
+        : ['aria-label' => (string) __('legal-consent::ui.admin_heading')]))
+    <x-wirekit::stack gap="lg" as="section" :attributes="$lcSection">
+        @if ($heading ?? true)
+            <x-wirekit::heading :level="1" id="lc-legal-texts">{{ __('legal-consent::ui.admin_heading') }}</x-wirekit::heading>
+        @endif
 
         {{-- WCAG 4.1.3: the release result (or the reason it did not happen) is announced here. The
              region is ALWAYS in the DOM so the update is spoken — a live region inserted together
@@ -78,16 +88,30 @@
                     @foreach ($locales as $locale)
                         <x-wirekit::table.th>{{ $locale }}</x-wirekit::table.th>
                     @endforeach
-                    <x-wirekit::table.th>{{ __('legal-consent::ui.admin_release') }}</x-wirekit::table.th>
                 </x-wirekit::table.row>
             </x-wirekit::table.head>
             <x-wirekit::table.body>
                 @foreach ($keys as $key)
                     <x-wirekit::table.row wire:key="row-{{ $key }}">
-                        <x-wirekit::table.th header-scope="row">{{ $key }}</x-wirekit::table.th>
+                        <x-wirekit::table.th header-scope="row">{{ $documentNames[$key] ?? $key }}</x-wirekit::table.th>
                         @foreach ($locales as $locale)
                             @php($cell = $rows[$key][$locale])
                             <x-wirekit::table.td>
+                                {{-- The whole cell is the link when an editor route is configured, and
+                                     `underline="none"` is the reason it is readable: an underline drawn
+                                     across a row of badges runs THROUGH each pill, which reads as struck
+                                     out — the opposite of what every one of these states means. What is
+                                     left is `cursor-pointer` and the hover fade the component already
+                                     carries. A resting affordance is a border, and a border is CSS this
+                                     package does not ship: publish this view and add one if your design
+                                     calls for it.
+
+                                     The accessible name repeats the states on purpose. An `aria-label`
+                                     REPLACES the content it sits on, so a link announcing only "Edit
+                                     Terms (de)" would hide the one fact the cell exists to state. --}}
+                                @if ($cell['url'] !== null)
+                                    <x-wirekit::link :href="$cell['url']" underline="none" :aria-label="$cell['label']">
+                                @endif
                                 @if (! $cell['written'])
                                     <x-wirekit::badge intent="neutral" size="sm" :aria-label="__('legal-consent::ui.admin_not_written')" :title="__('legal-consent::ui.admin_not_written')">{{ __('legal-consent::ui.admin_not_written_short') }}</x-wirekit::badge>
                                 @else
@@ -101,9 +125,17 @@
                                         <x-wirekit::badge intent="neutral" size="sm" :aria-label="__('legal-consent::ui.admin_unpublished')" :title="__('legal-consent::ui.admin_unpublished')">{{ __('legal-consent::ui.admin_unpublished_short') }}</x-wirekit::badge>
                                     @endif
                                 @endif
+                                @if ($cell['url'] !== null)
+                                    </x-wirekit::link>
+                                @endif
                             </x-wirekit::table.td>
                         @endforeach
-                        <x-wirekit::table.td>
+                    </x-wirekit::table.row>
+                    {{-- Its own row, across all columns — see the plain twin for the measurement that
+                         moved it: at 390 px the control sat 200 px past the right edge of the table's
+                         visible area, and it is the only control this screen has. --}}
+                    <x-wirekit::table.row wire:key="release-{{ $key }}">
+                        <x-wirekit::table.td :colspan="count($locales) + 1">
                             @if ($rows[$key]['_release']['ready'])
                                 {{-- The installed alert-dialog exposes a `trigger` slot
                                      plus a default-slot panel body built from alert-dialog.title /
@@ -112,7 +144,7 @@
                                      confirm button, so the release is unreachable through the UI). --}}
                                 <x-wirekit::alert-dialog :name="'lc-release-'.$key">
                                     <x-slot:trigger>
-                                        <x-wirekit::button size="sm" :aria-label="__('legal-consent::ui.admin_release_all').' — '.$key">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
+                                        <x-wirekit::button size="sm" :aria-label="__('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key)">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
                                     </x-slot:trigger>
 
                                     <x-wirekit::alert-dialog.title>
@@ -164,7 +196,7 @@
                                      The id below is therefore a styling hook only. It is deliberately
                                      NOT an aria target: pointing a describedby at it would restore the
                                      association this comment exists to prevent. --}}
-                                <x-wirekit::button size="sm" disabled :aria-label="__('legal-consent::ui.admin_release_all').' — '.$key">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
+                                <x-wirekit::button size="sm" disabled :aria-label="__('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key)">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
                                 {{-- Grouped by REASON, one line each, because the per-locale form grew with
                                      the language count and the language count is what an application with
                                      seven of them cannot reduce. Measured in a browser at 1728 px with seven
@@ -173,8 +205,8 @@
                                      still appears, beside the reason it shares, because an operator needs to
                                      know which language to go and fix. --}}
                                 <x-wirekit::stack gap="xs" id="blocking-{{ $key }}">
-                                    @foreach (\Pushery\LegalConsent\Support\BlockingReasonGroups::of($rows[$key]['_release']['blocking']) as $reason => $locales)
-                                        <x-wirekit::text size="sm">{{ $reason }}: {{ implode(', ', $locales) }}</x-wirekit::text>
+                                    @foreach (\Pushery\LegalConsent\Support\BlockingReasonGroups::of($rows[$key]['_release']['blocking']) as $reason => $blockedLocales)
+                                        <x-wirekit::text size="sm">{{ $reason }}: {{ implode(', ', $blockedLocales) }}</x-wirekit::text>
                                     @endforeach
                                 </x-wirekit::stack>
                             @endif

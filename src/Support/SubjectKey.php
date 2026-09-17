@@ -43,4 +43,32 @@ final class SubjectKey
     {
         return is_int($key) || is_string($key) ? (string) $key : null;
     }
+
+    /**
+     * The map key for a (subject type, subject key) pair — the form a reader over MANY subjects
+     * has to index by, because the key alone does not name a subject: a `User` and a `Team` can
+     * both be number 1, and a map keyed by the id would hand one of them the other's answer.
+     *
+     * A NUL byte cannot appear in a morph alias or in a primary key, so the pair never collides
+     * the way a `:` or a `-` would against a key that contains one.
+     *
+     * It lives here rather than beside its first caller for the reason this whole class exists:
+     * a separator spelled at two call sites is how a subject gets stored under one key and looked
+     * up under another.
+     */
+    public static function pair(string $type, string $key): string
+    {
+        return $type."\0".$key;
+    }
+
+    /**
+     * Null for the same reason {@see for()} is: a key with no lossless string form names no
+     * subject, so it gets no entry rather than one under a value that would name a different one.
+     */
+    public static function pairFor(Model $subject): ?string
+    {
+        $key = self::for($subject);
+
+        return $key === null ? null : self::pair((string) $subject->getMorphClass(), $key);
+    }
 }

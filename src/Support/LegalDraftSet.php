@@ -90,6 +90,23 @@ final readonly class LegalDraftSet
         return $draft->source_hash !== $this->source()?->content_hash;
     }
 
+    /**
+     * Has this draft ever been confirmed against a source text AT ALL?
+     *
+     * The other half of {@see isStale()}, and it exists because that method answers two different
+     * situations with one boolean. `save()` does not stamp `source_hash` — only `markReviewed()`
+     * and `applyTranslation()` do — so a translation somebody typed by hand and never reviewed has
+     * no stamp and is stale, correctly: nobody has confirmed it against today's source.
+     *
+     * What is NOT correct is telling that person the source changed *after this translation was
+     * reviewed*. It never was. A screen that narrates a sequence of events which did not happen is
+     * worse than one that says less, and this one is read by whoever decides to publish.
+     */
+    public function wasConfirmedAgainstASource(LegalDraft $draft): bool
+    {
+        return $draft->source_hash !== null;
+    }
+
     /** The gate's predicate: a human signed off on these exact bytes, and the source has not moved. */
     public function isPublishable(LegalDraft $draft): bool
     {

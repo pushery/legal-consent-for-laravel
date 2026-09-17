@@ -245,7 +245,12 @@ readonly class DefaultConsentManager implements ConsentManager
         return $this->append($subject, $document, $action, $context);
     }
 
-    public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent
+    /**
+     * @param  string|null  $shownWording  the sentence the subject actually read, when it is not this
+     *                                     document's own published one — a registration line that
+     *                                     names several texts under one sentence, for instance
+     */
+    public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null, ?string $shownWording = null): LegalConsent
     {
         $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
 
@@ -273,7 +278,7 @@ readonly class DefaultConsentManager implements ConsentManager
             throw DocumentChangedException::for($documentKey, $expectedContentHash, self::acceptanceFingerprint($document));
         }
 
-        return $this->append($subject, $document, $document->type->defaultAcceptAction(), $context);
+        return $this->append($subject, $document, $document->type->defaultAcceptAction(), $context, $shownWording);
     }
 
     /**
@@ -630,12 +635,12 @@ readonly class DefaultConsentManager implements ConsentManager
     }
 
     /**
-     * @param  string|null  $acknowledgmentWording  the sentence the SUBJECT read, supplied by the
-     *                                              caller for an informational page the operator
-     *                                              has flagged. See acknowledge() for why it comes
-     *                                              from outside rather than from the document.
+     * @param  string|null  $shownWording  the sentence the SUBJECT read, supplied by the
+     *                                     caller for an informational page the operator
+     *                                     has flagged. See acknowledge() for why it comes
+     *                                     from outside rather than from the document.
      */
-    private function append(Model $subject, LegalDocument $document, ConsentAction $action, ConsentContext $context, ?string $acknowledgmentWording = null): LegalConsent
+    private function append(Model $subject, LegalDocument $document, ConsentAction $action, ConsentContext $context, ?string $shownWording = null): LegalConsent
     {
         // The choke point every write passes through, which is why the class check belongs here and
         // not only on the callers. `record()` takes an arbitrary action from an arbitrary caller —
@@ -643,14 +648,14 @@ readonly class DefaultConsentManager implements ConsentManager
         // and only Withdrawn/Declined were guarded above. Everything else fell through to the
         // insert below, where `ui_wording_snapshot` is NOT NULL and an informational document has
         // no sentence: the caller got a raw SQLSTATE integrity violation.
-        if (! $document->type->isConsentBearing() && $acknowledgmentWording === null) {
+        if (! $document->type->isConsentBearing() && $shownWording === null) {
             throw NotConsentBearingException::for($document->key, $document->type);
         }
 
         // The rest of the compatibility question, in the same place and for the same reason. Each
         // named transition asks its own half before calling here, so a caller who used one keeps
         // its specific message; this arm is what the untyped `record()` never had.
-        if (! $this->allowsAction($action, $document->type, $acknowledgmentWording !== null)) {
+        if (! $this->allowsAction($action, $document->type, $shownWording !== null)) {
             throw IncompatibleConsentActionException::for($document->key, $document->type, $action);
         }
 
@@ -678,7 +683,7 @@ readonly class DefaultConsentManager implements ConsentManager
             'document_major_version' => $document->major_version,
             'content_hash' => $document->content_hash,
             'locale' => $document->locale,
-            'ui_wording_snapshot' => $acknowledgmentWording ?? $document->ui_wording,
+            'ui_wording_snapshot' => $shownWording ?? $document->ui_wording,
             'action' => $action,
             'method' => $context->method,
             'source' => $context->source,

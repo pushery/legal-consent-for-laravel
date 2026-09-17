@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Http\Controllers;
 use Illuminate\Contracts\View\View;
 use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Contracts\ConsentManager;
+use Pushery\LegalConsent\Support\DocumentMatrix;
 
 /**
  * The published text of one legal document, as a FRAGMENT rather than as a page.
@@ -53,13 +54,16 @@ final readonly class LegalDocumentFragmentController
 
     public function __invoke(string $key, string $locale): View
     {
-        $documents = config('legal-consent.documents');
         $locales = config('legal-consent.locales', ['de']);
 
         // The registry decides, not the request. Reading `published()` for an unregistered key would
         // answer 404 anyway most of the time — but "most of the time" is the part that makes a
         // surface hard to reason about, so the answer comes from the configuration either way.
-        abort_unless(is_array($documents) && array_key_exists($key, $documents), 404);
+        //
+        // Through the matrix, like every other reader of the key SET: asking the raw array would
+        // serve a fragment for `0` on a config written as a list, which is a name that defines
+        // nothing — and this route is one a consent checkbox links to.
+        abort_unless(in_array($key, DocumentMatrix::keys(), true), 404);
         abort_unless(is_array($locales) && in_array($locale, $locales, true), 404);
 
         $document = $this->consent->published($key, $locale);

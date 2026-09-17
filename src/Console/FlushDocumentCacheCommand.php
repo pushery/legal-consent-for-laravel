@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
 use Pushery\LegalConsent\Content\LegalSourceRenderer;
+use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -32,7 +33,12 @@ final class FlushDocumentCacheCommand extends Command
         // global fact, and a half-flushed gate is worse than a fully cold one.
         $enforceable->flushAll();
 
-        $keys = is_string($key) ? [$key] : array_keys((array) config('legal-consent.documents', []));
+        // `DocumentMatrix::keys()` rather than `array_keys()`, and it takes nothing away from this
+        // command: the matrix drops only an INT key whose definition is not an array — the
+        // list-config case, where `0` and `1` are bare names and not documents. A document whose
+        // key merely LOOKS like a number, `'2024' => [...]`, has a definition and is kept, which is
+        // the support this command already had.
+        $keys = is_string($key) ? [$key] : DocumentMatrix::keys();
         $locales = is_string($locale) ? [$locale] : $this->configuredLocales();
 
         $count = 0;

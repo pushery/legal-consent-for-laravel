@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
+use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -25,7 +26,12 @@ final class CheckDriftCommand extends Command
         $key = $this->argument('key');
         $locale = $this->argument('locale');
 
-        $keys = is_string($key) ? [$key] : array_keys((array) config('legal-consent.documents', []));
+        // `DocumentMatrix::keys()` rather than `array_keys()`, and it takes nothing away from this
+        // command: the matrix drops only an INT key whose definition is not an array — the
+        // list-config case, where `0` and `1` are bare names and not documents. A document whose
+        // key merely LOOKS like a number, `'2024' => [...]`, has a definition and is kept, which is
+        // the support this command already had.
+        $keys = is_string($key) ? [$key] : DocumentMatrix::keys();
         $locales = is_string($locale) ? [$locale] : $this->configuredLocales();
 
         $drifts = [];

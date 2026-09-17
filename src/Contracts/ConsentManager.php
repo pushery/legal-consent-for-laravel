@@ -31,8 +31,16 @@ interface ConsentManager
      * render time — to guard against a mid-session release: if the active document no longer hashes
      * to it, a `DocumentChangedException` (409) is thrown instead of freezing a version the subject
      * never read (Art. 7(1)). Null skips the check.
+     *
+     * `$shownWording` is the sentence the subject actually read, for the case where it is not this
+     * document's own published one: a registration line that names several texts under a single
+     * sentence shows words no one of those documents carries, and freezing each document's own
+     * wording would put a text nobody saw in the proof — on the record that exists to demonstrate
+     * what they agreed to (Art. 7(1)). Null keeps the published wording, which is what a screen
+     * rendering this package's own control shows. The document's identity is unaffected either
+     * way: `content_hash` and `document_version` name the text, this names the sentence beside it.
      */
-    public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent;
+    public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null, ?string $shownWording = null): LegalConsent;
 
     /**
      * Record that a subject was SHOWN an informational page the operator flagged for acknowledgment

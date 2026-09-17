@@ -70,6 +70,44 @@
              and does not replace it; assistive technology does not switch its voice on `hreflang`.
              Set only when it differs from the page. See the plain stub, and ContentLanguage. --}}
         @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document['locale'] ?? null))
+        {{-- THE DIALOG, AND IT IS RESOLVED HERE BECAUSE IT DECIDES WHAT THE ANCHOR DOES.
+             It holds the FRAGMENT ROUTE's address and fetches on first open — it does not inline the
+             text. That is this package's own decision rather than a new one: the fragment route was
+             built for exactly this dialog, and the guide says why in the same breath. A registration
+             form can name four documents, a privacy notice is tens of kilobytes, and in the normal
+             case the reader opens none of them — so inlining all four is a large certain cost for an
+             uncommon benefit, on the page whose load time decides whether somebody registers at all.
+
+             No fragment route means no dialog, and the anchor stays exactly what it was: a link to
+             the page, which says the same thing honestly. --}}
+        @php($dialog = config('legal-consent.ui.wording_dialog', false)
+            {{-- ASKED OF THE ROUTER, not of the switch that is supposed to have registered it. The
+                 flag says what the configuration wants; only the router knows what is actually
+                 registered, and `route()` on a name that is not throws — out of a view, that takes
+                 the whole registration form down over a dialog nobody needed. --}}
+            && \Illuminate\Support\Facades\Route::has('legal-consent.document.fragment')
+            && ($document['url'] ?? null) !== null
+            && ($document['locale'] ?? '') !== ''
+            ? route('legal-consent.document.fragment', ['key' => $document['key'], 'locale' => $document['locale']])
+            : null)
+        @php($dialogName = 'legal-consent-'.$field)
+        {{-- ASSEMBLED rather than written as a Blade `@if` INSIDE the component tag. That form does
+             not compile at all here — the directive lands between attributes and the view dies on
+             an unexpected `@endif` — and where it does compile it leaves its own literal spaces
+             behind. An empty bag renders nothing, which is the off state.
+
+             `x-bind:aria-haspopup` is BOUND rather than written, and the distinction is the point: a
+             screen reader announcing "link" sets up an expectation of navigation, and with scripting
+             this opens a dialog instead. Without scripting it really does navigate, so a hard-coded
+             `aria-haspopup` would be a promise the page does not keep. Alpine binds it only once it
+             is running, which is exactly when it is true.
+
+             A WINDOW EVENT rather than the modal's own trigger slot: that slot renders a div, and
+             flow content inside a label is invalid markup. --}}
+        @php($dialogTrigger = new \Illuminate\View\ComponentAttributeBag($dialog !== null ? [
+            'x-bind:aria-haspopup' => "'dialog'",
+            'x-on:click.prevent' => '$dispatch(\'wirekit-modal-show\', { name: \''.$dialogName.'\' })',
+        ] : []))
         <x-wirekit::stack gap="xs" class="legal-consent-field" :lang="$lang">
             {{-- The wording is the SNAPSHOTTED consent text — it is what gets recorded in the
                  ledger as what the subject agreed to, so it renders verbatim as the label. --}}
@@ -98,6 +136,7 @@
                     :href="$document['url']"
                     :hreflang="($document['locale'] ?? '') !== '' ? $document['locale'] : null"
                     external
+                    :attributes="$dialogTrigger"
                 >{{ $wordingLink->match }}</x-wirekit::link>{{ $wordingLink->after }}@else{{ $document['wording'] }}@endif</x-wirekit::checkbox>
 
             @if (($document['url'] ?? null) !== null && $wordingLink === null)
@@ -109,6 +148,7 @@
                     :href="$document['url']"
                     :hreflang="($document['locale'] ?? '') !== '' ? $document['locale'] : null"
                     external
+                    :attributes="$dialogTrigger"
                 >{{ $document['title'] }}</x-wirekit::link>
             @endif
 
@@ -121,5 +161,57 @@
                 <input type="hidden" name="{{ $document['hashField'] }}" value="{{ $document['contentHash'] }}">
             @endif
         </x-wirekit::stack>
+
+        {{-- THE TEXT, IN A DIALOG OVER THE FORM. Outside the field's stack and outside the label:
+             a dialog is not part of the checkbox's accessible name, and flow content inside a
+             label is invalid markup.
+
+             The body is emitted unescaped because it is the frozen, already-sanitized HTML the
+             published page itself renders — one allowlist, applied when the text was stored, and
+             the same bytes the ledger records as accepted. Re-escaping here would show the reader
+             markup instead of a document.
+
+             It scrolls on its own and says so to a keyboard: a legal text outgrows any window, the
+             dialog opens with focus on the close control in the header, and that control sits
+             OUTSIDE this box — so without `tabindex` the arrow keys move the dialog and not the
+             prose, and the reader is asked to tick that they read a document they could see the
+             top of (WCAG 2.1.1). `role="region"` without an accessible name is worse than none, so
+             it carries the title. --}}
+        @if ($dialog !== null)
+            <x-wirekit::modal :name="$dialogName" size="lg">
+                <x-wirekit::modal.header>{{ $document['title'] }}</x-wirekit::modal.header>
+
+                <x-wirekit::modal.body class="max-h-[65vh] overflow-y-auto" tabindex="0" role="region" :aria-label="$document['title']">
+                    {{-- FETCHED ON FIRST OPEN, and kept afterwards. The text is the published,
+                         already-sanitized HTML the legal page itself renders — one allowlist, applied
+                         when it was stored, and the same bytes the ledger records as accepted.
+                         `x-html` is what puts it in as markup rather than as escaped source.
+
+                         A failed fetch says so instead of leaving an empty box: a dialog that opens
+                         onto nothing reads as a document with no content, and the reader is then
+                         asked to tick that they read it. The anchor behind this dialog is still a
+                         real link, so the sentence points at the way that always works. --}}
+                    <div x-data="{ body: '', state: 'idle' }"
+                         x-on:wirekit-modal-show.window="if ($event.detail?.name === @js($dialogName) && state === 'idle') {
+                             state = 'loading';
+                             fetch(@js($dialog), { headers: { 'Accept': 'text/html' } })
+                                 .then(r => r.ok ? r.text() : Promise.reject(r.status))
+                                 .then(html => { body = html; state = 'ready' })
+                                 .catch(() => { state = 'failed' });
+                         }"
+                         @if ($lang !== null) lang="{{ $lang }}" @endif>
+                        <div x-show="state === 'ready'" x-html="body"></div>
+                        <p x-show="state === 'loading'" x-cloak>{{ __('legal-consent::ui.dialog_loading') }}</p>
+                        <p x-show="state === 'failed'" x-cloak>{{ __('legal-consent::ui.dialog_failed') }}</p>
+                    </div>
+                </x-wirekit::modal.body>
+
+                <x-wirekit::modal.footer>
+                    <x-wirekit::modal.close>
+                        <x-wirekit::button size="sm" surface="soft">{{ __('legal-consent::ui.dialog_close') }}</x-wirekit::button>
+                    </x-wirekit::modal.close>
+                </x-wirekit::modal.footer>
+            </x-wirekit::modal>
+        @endif
     @endforeach
 </x-wirekit::stack>

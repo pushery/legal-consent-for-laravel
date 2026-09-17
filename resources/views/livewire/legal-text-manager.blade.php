@@ -1,7 +1,14 @@
 <div>
     {{-- A named landmark region so the whole admin surface is reachable by assistive tech. --}}
-    <section aria-labelledby="legal-text-manager-heading">
-        <h1 id="legal-text-manager-heading">{{ __('legal-consent::ui.admin_heading') }}</h1>
+    {{-- Left out where the embedding page titles itself (`:heading="false"`), the same switch the
+         consent panel carries. The landmark then takes its name DIRECTLY rather than pointing at a
+         heading that is no longer in the document: `aria-labelledby` at a missing id names nothing,
+         and an unnamed region is not an improvement on a duplicated title.
+         `?? true` for a render outside the component, which passes no such flag. --}}
+    <section @if ($heading ?? true) aria-labelledby="legal-text-manager-heading" @else aria-label="{{ __('legal-consent::ui.admin_heading') }}" @endif>
+        @if ($heading ?? true)
+            <h1 id="legal-text-manager-heading">{{ __('legal-consent::ui.admin_heading') }}</h1>
+        @endif
 
         {{-- Status: a live region, so a screen reader hears the result of a release (or why it did
              not happen) right after the action — WCAG 4.1.3. It is always present in the DOM (an
@@ -56,16 +63,18 @@
                     @foreach ($locales as $locale)
                         <th scope="col">{{ $locale }}</th>
                     @endforeach
-                    <th scope="col">{{ __('legal-consent::ui.admin_release') }}</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach ($keys as $key)
                     <tr wire:key="row-{{ $key }}">
-                        <th scope="row">{{ $key }}</th>
+                        <th scope="row">{{ $documentNames[$key] ?? $key }}</th>
                         @foreach ($locales as $locale)
                             @php($cell = $rows[$key][$locale])
                             <td>
+                                @if ($cell['url'] !== null)
+                                    <a href="{{ $cell['url'] }}" aria-label="{{ $cell['label'] }}">
+                                @endif
                                 @if (! $cell['written'])
                                     <span title="{{ __('legal-consent::ui.admin_not_written') }}">{{ __('legal-consent::ui.admin_not_written_short') }}</span>
                                 @else
@@ -79,28 +88,52 @@
                                         <span title="{{ __('legal-consent::ui.admin_unpublished') }}"> · {{ __('legal-consent::ui.admin_unpublished_short') }}</span>
                                     @endif
                                 @endif
-                                {{-- No edit control ships here, and the WireKit twin has none either.
-                                     The package brings no admin routes, so anything rendered would
-                                     have to point at `#`: a link with a fully worded promise that
-                                     stands in a screen reader's link list, one per cell, and moves
-                                     focus to the top of the document when activated. `wire:navigate`
-                                     makes it worse rather than inert — Livewire decides natively on
-                                     protocol, origin, `download` and `target` alone, so a hash href
-                                     is same-origin http(s), Livewire takes over and runs a full fetch
-                                     and DOM morph against the page the visitor is already on.
+                                @if ($cell['url'] !== null)
+                                    </a>
+                                @endif
+                                {{-- Nothing is rendered until `admin.editor_route` names a route, and
+                                     that is unchanged rather than a leftover: the package brings no
+                                     admin routes, so with no name configured anything here would have
+                                     to point at `#` — a link with a fully worded promise standing in a
+                                     screen reader's link list, one per cell, that moves focus to the
+                                     top of the document when activated. `wire:navigate` would make it
+                                     worse rather than inert: Livewire decides natively on protocol,
+                                     origin, `download` and `target` alone, so a hash href is same-origin
+                                     http(s), Livewire takes over, and it runs a full fetch and DOM morph
+                                     against the page the visitor is already on.
 
-                                     Wire your own editor route in here. `ui.admin_edit` is the label
-                                     and `ui.admin_edit_for` the per-cell accessible name, so a link
-                                     list does not read "edit, edit, edit…". --}}
+                                     With a name configured the href is real, so none of that applies —
+                                     and the accessible name names the document, the locale and the
+                                     states, because an `aria-label` replaces the content it sits on. --}}
                             </td>
                         @endforeach
-                        <td>
+                    </tr>
+                    {{-- ⚠️ ITS OWN ROW, ACROSS ALL COLUMNS, AND THE REASON IS A VIEWPORT NOBODY HAD
+                         MEASURED. As the last COLUMN of a grid that is documents x locales, the only
+                         control on this screen sat 200 px past the right edge of the visible table at
+                         390 px wide — reachable solely by scrolling the table sideways, with the
+                         reasons a blocked release gives sitting out there beside it.
+
+                         The earlier report against a row here was about HEIGHT, measured at 1728 px
+                         with one full sentence per language. Grouping the locales under the reason
+                         they share settled that, and the row is short now.
+
+                         `colspan` counts the locale columns plus the document column, and the release
+                         column header is gone with the cell — which is also what shrank the grid: at
+                         seven locales it now overflows its scroller by 35 px instead of 530.
+
+                         ⚠️ A `position: sticky` hold was here and is GONE, because a red probe showed
+                         it did nothing. Measured at fourteen locales, scrolled to the far end: the
+                         control sat at -115 px with the hold in place, exactly as without it. Shipping
+                         a declaration that cannot be shown to act is worse than shipping none. --}}
+                    <tr wire:key="release-{{ $key }}">
+                        <td colspan="{{ count($locales) + 1 }}">
                             @if ($rows[$key]['_release']['ready'])
                                 {{-- Per-document accessible name: with N rows, N buttons all reading
                                      "Release all locales" are indistinguishable in a screen reader's
                                      button list (WCAG 2.4.6) — the same rule this package already
                                      enforces for the withdraw control. --}}
-                                <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.$key }}" wire:click="releaseAll(@js($key))" wire:loading.attr="aria-busy" wire:target="releaseAll">{{ __('legal-consent::ui.admin_release_all') }}</button>
+                                <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key) }}" wire:click="releaseAll(@js($key))" wire:loading.attr="aria-busy" wire:target="releaseAll">{{ __('legal-consent::ui.admin_release_all') }}</button>
                             @else
                                 {{-- The blocking reasons stay OUTSIDE aria-describedby on a disabled
                                      button (a disabled control is skipped, so its description is never
@@ -108,14 +141,14 @@
                                      The id below is therefore a styling hook only. It is deliberately
                                      NOT an aria target: pointing a describedby at it would restore the
                                      association this comment exists to prevent. --}}
-                                <button type="button" disabled aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.$key }}">{{ __('legal-consent::ui.admin_release_all') }}</button>
+                                <button type="button" disabled aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key) }}">{{ __('legal-consent::ui.admin_release_all') }}</button>
                                 {{-- Grouped by REASON, for the measurement recorded in the WireKit twin:
                                      per-locale lines made a blocked row 210 px tall at seven locales, and
                                      nothing about the column was ever too narrow. Every locale still
                                      appears, beside the reason it shares. --}}
                                 <ul id="blocking-{{ $key }}">
-                                    @foreach (\Pushery\LegalConsent\Support\BlockingReasonGroups::of($rows[$key]['_release']['blocking']) as $reason => $locales)
-                                        <li>{{ $reason }}: {{ implode(', ', $locales) }}</li>
+                                    @foreach (\Pushery\LegalConsent\Support\BlockingReasonGroups::of($rows[$key]['_release']['blocking']) as $reason => $blockedLocales)
+                                        <li>{{ $reason }}: {{ implode(', ', $blockedLocales) }}</li>
                                     @endforeach
                                 </ul>
                             @endif

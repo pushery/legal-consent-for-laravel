@@ -4,6 +4,31 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.35.0 → 0.36.0
+
+**Nothing is required of you. Two things changed that you may want, and one that removes a failure you may have been living with.**
+
+### `legal-consent:doctor` no longer ends on an unreachable database
+
+Four of its sections are read from the database, and until now a refused connection ended the command. If you run it in a stage that reaches no external services on purpose — a statics or lint step — it stopped there with a `Connection refused` that looked like a package defect.
+
+It now names the half it could not check and carries on with the configuration comparison, which needs no connection at all. **The exit code is unchanged in both directions:** a key that does not reach your runtime is still a failure, and an unreachable database is not — and the second does not hide the first.
+
+**If you moved that command out of your quality stage to work around this, you can move it back.** A database that is there but not migrated was never the problem and still is not: every one of those checks already answers for a half-finished installation.
+
+### A document's text can open in a dialog over the consent form
+
+Opt-in, and it needs **two** switches, because the dialog fetches its text from the fragment route:
+
+```php
+'routes' => ['fragment' => true],
+'ui' => ['wording_dialog' => true],
+```
+
+With either one off, nothing changes and the consent sentence keeps the link it has always had. WireKit views only — the plain stub names no framework and needs no JavaScript.
+
+**The link stays a link.** A consent binds only where the full text was reachable *before* agreeing (§ 305 Abs. 2 BGB), and a dialog opened by script is not reachable without script, so the dialog sits on top of an anchor that works without it. You do not need to change anything about how you render consent for this to be true.
+
 ## 0.34.0 → 0.35.0
 
 **Run `php artisan migrate`. Nothing else is required of you, and nothing about your existing ledger changes.**

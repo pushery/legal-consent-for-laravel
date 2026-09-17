@@ -115,7 +115,11 @@ final class SubjectToken
     {
         $id = is_scalar($id) ? (string) $id : '';
 
-        return $type."\0".$id;
+        // The separator comes from {@see SubjectKey::pair()} rather than being spelled again: the
+        // standing reader keys its map the same way, and two copies of a separator is how two maps
+        // stop agreeing. The null POLICY stays this method's own — an unrepresentable id still
+        // mints a token under the empty string here, where it would be absent there.
+        return SubjectKey::pair($type, $id);
     }
 
     /**

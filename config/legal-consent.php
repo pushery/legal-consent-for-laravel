@@ -266,6 +266,22 @@ return [
             'withdraw' => null,
             'grant' => null,
         ],
+
+        // Open a document's text in a DIALOG over the consent form, instead of leaving the page
+        // for it. WireKit views only — the plain stub deliberately needs no JavaScript.
+        //
+        // NEEDS `routes.fragment`, and does nothing without it. The dialog fetches the text from
+        // that address on first open rather than inlining it — the fragment route was built for
+        // exactly this, and for the reason the guide gives: a form can name four documents, a
+        // privacy notice is tens of kilobytes, and in the normal case the reader opens none of
+        // them, so inlining all four is a large certain cost for an uncommon benefit on the page
+        // whose load time decides whether somebody registers at all.
+        //
+        // THE LINK STAYS A LINK EITHER WAY, and that is not a detail. A consent binds only where
+        // the full text was reachable BEFORE agreeing (§ 305 Abs. 2 BGB), and a dialog opened by
+        // script is not reachable without script. The dialog is therefore an improvement ON TOP of
+        // an anchor that works without it — never a replacement for one, and never a `#`.
+        'wording_dialog' => false,
     ],
 
     /*
@@ -783,6 +799,19 @@ return [
     */
     'admin' => [
         'ability' => null,
+
+        /*
+         * The route that edits one document in one locale, by name. Null ships nothing, which is
+         * what this package has always done: it brings no admin routes, because where a legal text
+         * is edited is your decision. Set it and every cell of the overview becomes a link to that
+         * text, so an operator gets from the overview to a document without typing its address.
+         *
+         * The parameters are filled BY POSITION — document first, locale second — so
+         * `admin/legal/{document}/{locale}` and `admin/legal/{key}/{lang}` both work. A name that
+         * is not registered, or a route these two cannot fill, leaves the cells unlinked rather
+         * than turning the overview into an error page; `legal-consent:doctor` reports it.
+         */
+        'editor_route' => null,
     ],
 
 ];

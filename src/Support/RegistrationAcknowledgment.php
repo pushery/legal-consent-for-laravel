@@ -203,6 +203,20 @@ final readonly class RegistrationAcknowledgment
             return null;
         }
 
-        return trim($wording);
+        $wording = trim($wording);
+
+        // THROUGH THE TRANSLATOR, because a configuration cannot be translated per reader and this
+        // sentence is read by one. `config:cache` freezes the language the cache was built in, so a
+        // registry shipping seven of them had a German registrant tick a German sentence while the
+        // ledger stored the English one — a proof of the wrong text, on the record that exists to
+        // demonstrate what somebody agreed to.
+        //
+        // `__()` hands back its own argument when nothing is registered under it, so the literal
+        // sentence every existing registry carries passes through untouched, and both a dotted key
+        // and a JSON-translated sentence resolve. A translation that resolves to nothing falls back
+        // rather than writing an empty sentence, which is the state the check above refuses.
+        $translated = __($wording);
+
+        return is_string($translated) && trim($translated) !== '' ? trim($translated) : $wording;
     }
 }

@@ -200,12 +200,23 @@ final class ConsentFake implements ConsentManager
         return $this->capture($subject, $documentKey, $action, $context, $locale);
     }
 
-    public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent
+    public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null, ?string $shownWording = null): LegalConsent
     {
         // Granted, not Acknowledged: the fake does not know the document's type, and guessing would
         // make assertAccepted() the only honest assertion anyway — which is why that one accepts
         // both. The hash is kept so a test can assert the render-time value was carried through.
-        return $this->capture($subject, $documentKey, ConsentAction::Granted, $context, $locale, $expectedContentHash);
+        $consent = $this->capture($subject, $documentKey, ConsentAction::Granted, $context, $locale, $expectedContentHash);
+
+        // Captured for the same reason acknowledge() captures its own, and it matters more here:
+        // a supplied sentence REPLACES the document's published one, so a fake that dropped it
+        // would let a test pass over a proof carrying a text nobody was shown. Left alone when
+        // null, because the fake cannot resolve the published wording and inventing one would be
+        // an assertion about a document it never read.
+        if ($shownWording !== null) {
+            $consent->ui_wording_snapshot = $shownWording;
+        }
+
+        return $consent;
     }
 
     /**
