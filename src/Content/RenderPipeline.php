@@ -95,7 +95,7 @@ final readonly class RenderPipeline
         private int $maxBytes = self::MAX_BYTES,
         private array $documents = [],
     ) {
-        // ⚠️ TABLES ARE REGISTERED, AND THE SANITIZER IS WHY THIS IS A FIX RATHER THAN A FEATURE.
+        // TABLES ARE REGISTERED, AND THE SANITIZER IS WHY THIS IS A FIX RATHER THAN A FEATURE.
         // Its allowlist has permitted `table`, `thead`, `tbody`, `tr`, `th` and `td` all along —
         // it was describing a capability the converter never had. A Markdown table in a legal text
         // came out as a paragraph full of pipe characters, and nothing went red: the sanitizer
@@ -176,7 +176,7 @@ final readonly class RenderPipeline
      * and the operator is sent into a materiality decision about a text nobody changed — which is
      * what happened to every document holding a table when TableExtension was registered.
      *
-     * ⚠️ THE CANONICALIZATION IS DELIBERATELY NARROWER THAN {@see self::canonicalize()}, AND THE
+     * THE CANONICALIZATION IS DELIBERATELY NARROWER THAN {@see self::canonicalize()}, AND THE
      * DIFFERENCE IS LOAD-BEARING. In HTML, whitespace between tags carries nothing; in Markdown it
      * carries meaning — four leading spaces are a code block, two trailing ones are a hard line
      * break. Collapsing runs of whitespace here would hide a real rendering change behind an
@@ -197,7 +197,7 @@ final readonly class RenderPipeline
      * an untouched text changes, this is the value that says the RENDERER moved — and when the
      * text changed as well, it is what lets the report name both without conflating them.
      *
-     * ⚠️ It states what the renderer WAS, and only over what is listed above. It cannot see a
+     * It states what the renderer WAS, and only over what is listed above. It cannot see a
      * change inside the sanitizer's own traversal, or inside CommonMark at a version it already
      * had. {@see LegalDriftChecker} reports that residue as the
      * open case it is instead of attributing it to the text.

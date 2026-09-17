@@ -8,7 +8,13 @@ use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
- * Whether a document gets a ledger row written for it at registration.
+ * Which documents may be acknowledged, and which of them the registration flow writes.
+ *
+ * TWO QUESTIONS, AND THE CLASS NAME DESCRIBES THE OLDER ONE. It began as the registration
+ * answer alone; {@see covers()} now answers the wider one — may this page be acknowledged at all,
+ * from anywhere — because that is the question {@see DefaultConsentManager::acknowledge()} actually
+ * asks. The name stays: it is a published class, and renaming it would break every consumer that
+ * references it for a word. Which question a method answers is on the method.
  *
  * ONE place, because the answer is needed in four and a rule spread over four call sites is a rule
  * that drifts. Before this, every one of them asked `$document->type->isConsentBearing()` directly,
@@ -38,19 +44,34 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * package never asks the reader for anything on such a page. Without it there is nothing truthful
  * to write down, and inventing one is the failure this whole design avoids.
  *
+ * ## …and the page that is never on that form
+ *
+ * A confirmation shown inside a CHECKOUT is the same kind of record and belongs nowhere near
+ * sign-up. It says so with the general pair, and the registration flow leaves it alone:
+ *
+ *     'creator-supplies-the-service' => [
+ *         'legal_basis' => 'informational',
+ *         'acknowledgeable' => true,
+ *         'acknowledgment_wording' => 'I understand the creator provides this service.',
+ *     ],
+ *
+ * `acknowledge_at_registration` implies `acknowledgeable`, so an existing registry keeps working
+ * word for word. `registration_wording` wins where both wordings are set — it is the more specific,
+ * and a registry carrying both is an operator whose sign-up form words the page its own way.
+ *
  * Refusing HERE rather than where the row is written is the difference between a configuration that
  * does nothing and a registration that throws. A half-configured document lands in the first
  * category, where an operator can find it, instead of the second, where their users do.
  *
  * ## What it deliberately does NOT change
  *
- * ⚠️ THE DOCUMENT TYPE STAYS `informational`, AND THAT IS THE POINT RATHER THAN A SHORTCUT. Moving
+ * THE DOCUMENT TYPE STAYS `informational`, AND THAT IS THE POINT RATHER THAN A SHORTCUT. Moving
  * such a page to `acknowledgement` is the obvious alternative and it is the wrong one: the
  * source-locale fallback in {@see PublishedDocumentReader} is constrained to informational rows, so
  * an imprint published only in the source language would stop being reachable under every other
  * locale's URL, and a release would suddenly have to cover every configured locale.
  *
- * ⚠️ AND IT NEVER BLOCKS. {@see ConsentGate} keeps asking `isConsentBearing()` and is not routed
+ * AND IT NEVER BLOCKS. {@see ConsentGate} keeps asking `isConsentBearing()` and is not routed
  * through here, so a flagged page can go stale without locking anybody out of anything. A page that
  * binds nobody must not become a gate by being written down, and pressure would be wrong there.
  * What the operator gets is the STATE — which version was acknowledged, and whether it is current —
@@ -68,11 +89,24 @@ final readonly class RegistrationAcknowledgment
      */
     public static function isRecordedAtRegistration(LegalDocument $document): bool
     {
-        return $document->type->isConsentBearing() || self::covers($document->key);
+        return $document->type->isConsentBearing() || self::coversRegistration($document->key);
     }
 
     /**
-     * Has the operator flagged this key for acknowledgment at registration?
+     * May this key be acknowledged AT ALL — anywhere, not only at registration?
+     *
+     * ONE FLAG USED TO ASSERT TWO DIFFERENT FACTS, AND THAT IS WHAT THIS SPLIT REPAIRS.
+     * `acknowledge_at_registration` said both "this page may be written to the ledger" and "the
+     * registration flow writes it", and {@see DefaultConsentManager::acknowledge()} — which is
+     * callable from anywhere — asked the combined question. So a consumer who shows a page inside a
+     * CHECKOUT, and must not touch the registration flow at all, had one way through: set a flag
+     * whose name says registration. A configuration that states something untrue to unlock a
+     * correct behavior is the same failure this package refuses one layer up, in the ledger itself.
+     *
+     * They really are two facts. A page shown before every purchase is acknowledgeable and must NOT
+     * be written at sign-up; a page on the registration form is both. So `acknowledgeable` carries
+     * the general permission, `acknowledge_at_registration` keeps meaning what it says — and it
+     * still implies the first, which is what leaves every existing registry untouched.
      *
      * Reads the registry rather than the row, so it answers for a key whose document is not
      * resolved yet — which is what the validation rules need, one step before a row exists.
@@ -83,17 +117,64 @@ final readonly class RegistrationAcknowledgment
      */
     public static function covers(string $key): bool
     {
+        $entry = self::entry($key);
+
+        if ($entry === null) {
+            return false;
+        }
+
+        $flagged = ($entry['acknowledgeable'] ?? false) === true
+            || ($entry['acknowledge_at_registration'] ?? false) === true;
+
+        return $flagged && self::wordingFor($key) !== null;
+    }
+
+    /**
+     * Does the REGISTRATION flow write this key, specifically?
+     *
+     * The narrower of the two questions, and the one the flag was named for. A page flagged only
+     * `acknowledgeable` is reachable through {@see DefaultConsentManager::acknowledge()} and is
+     * deliberately invisible here: its moment is somewhere else in the application, and writing it
+     * at sign-up would record a confirmation nobody gave yet.
+     */
+    public static function coversRegistration(string $key): bool
+    {
+        $entry = self::entry($key);
+
+        if ($entry === null) {
+            return false;
+        }
+
+        return ($entry['acknowledge_at_registration'] ?? false) === true
+            && self::wordingFor($key) !== null;
+    }
+
+    /**
+     * One document's registry entry, or null when the key names none.
+     *
+     * REBUILT RATHER THAN RETURNED, for the reason {@see LedgerChainRepair::toRow()} gives about a
+     * database row: `config()` hands back `mixed`, `is_array()` narrows it only to
+     * `array<mixed, mixed>`, and a registry entry never has integer keys — but nothing in the type
+     * system says so. An inline `@var` would ASSERT that; the loop ESTABLISHES it, and costs one
+     * pass over a handful of options.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function entry(string $key): ?array
+    {
         $documents = config('legal-consent.documents', []);
 
         if (! is_array($documents) || ! isset($documents[$key]) || ! is_array($documents[$key])) {
-            return false;
+            return null;
         }
 
-        if (($documents[$key]['acknowledge_at_registration'] ?? false) !== true) {
-            return false;
+        $entry = [];
+
+        foreach ($documents[$key] as $option => $value) {
+            $entry[(string) $option] = $value;
         }
 
-        return self::wordingFor($key) !== null;
+        return $entry;
     }
 
     /**
@@ -106,13 +187,17 @@ final readonly class RegistrationAcknowledgment
      */
     public static function wordingFor(string $key): ?string
     {
-        $documents = config('legal-consent.documents', []);
+        $entry = self::entry($key);
 
-        if (! is_array($documents) || ! isset($documents[$key]) || ! is_array($documents[$key])) {
+        if ($entry === null) {
             return null;
         }
 
-        $wording = $documents[$key]['registration_wording'] ?? null;
+        // `registration_wording` first, because it is the more specific of the two and a registry
+        // that carries both is saying the registration form words this page its own way. The
+        // general key exists for the page that is never on that form at all, where the older name
+        // would be a sentence claiming a screen the reader never saw.
+        $wording = $entry['registration_wording'] ?? $entry['acknowledgment_wording'] ?? null;
 
         if (! is_string($wording) || trim($wording) === '') {
             return null;

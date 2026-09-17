@@ -44,7 +44,20 @@
             @endif
         </div>
 
-        <div wire:ignore>
+        {{-- KEYED ON THE SERVER'S BODY NONCE, and that key is the fix rather than decoration.
+             `wire:ignore` holds the subtree out of Livewire's morph, which is what keeps the mounted
+             editor alive — and it holds a server-side REPLACEMENT out as well. After Translate the
+             visible editor still showed the old text while the hidden field already carried the new
+             one, so the reader edited what they saw, the engine wrote its document back on the next
+             keystroke, and Save stored the old text over the translation with nothing reporting it.
+             A changed key makes Livewire replace the element instead of morphing it, so the editor
+             is rebuilt from the new `:value`.
+
+             `$bodyNonce ?? 0` for the same reason as `$translating ?? false` above: this view is
+             also rendered standalone by the tests that check its markup against real components,
+             where no component supplies it. A constant is the honest answer there — a render with
+             no component behind it has no replacement to report. --}}
+        <div wire:ignore wire:key="lc-editor-body-{{ $bodyNonce ?? 0 }}">
             {{-- The current draft body seeds the editor via :value (the component reads the `value`
                  prop, never a slot — a slot here would silently render nothing on edit). Content
                  flows back through a plain wire:model: WireKit routes it to the inner

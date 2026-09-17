@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Schema;
  * `legal_consents_subject_doc_time_idx` and `sent_at` fourth in its notice twin, so neither was
  * reachable as a prefix and the predicate was evaluated against the table.
  *
- * ⚠️ THE DELETING PAGES WERE NEVER THE PROBLEM, AND THAT IS WHY THIS LOOKED FINE. In an append-only
+ * THE DELETING PAGES WERE NEVER THE PROBLEM, AND THAT IS WHY THIS LOOKED FINE. In an append-only
  * ledger `id` and `accepted_at` correlate, so a page that has rows to delete is a cheap primary-key
  * range scan — measured on PostgreSQL 18 over 200 000 rows: `Index Scan using legal_consents_pkey`,
  * 35 shared buffers for 1 000 rows.

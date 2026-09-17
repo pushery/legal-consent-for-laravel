@@ -87,6 +87,7 @@ return [
     'review_state_draft_short' => 'Concept',
     'review_state_reviewed' => 'Nagekeken',
     'review_state_reviewed_short' => 'Nagekeken',
+    'blocking_not_draft_backed' => 'dit document haalt zijn tekst niet uit de conceptopslag',
     'blocking_no_draft' => 'er is nog geen concept geschreven',
     'blocking_not_reviewed' => 'nog niet door een mens nagekeken',
     'blocking_stale_translation' => 'de brontekst is gewijzigd nadat deze vertaling was nagekeken',
@@ -135,6 +136,7 @@ return [
     'admin_status_translation_queued' => 'De vertaling loopt. Hij verschijnt hier zodra hij klaar is.',
 
     'admin_status_machine_translated' => 'Machinaal vertaald. Iemand moet de tekst controleren voordat die gepubliceerd kan worden.',
+    'admin_status_translation_failed' => 'De vertaling is niet afgerond. Het concept is ongewijzigd en je kunt het opnieuw proberen.',
     'admin_status_reviewed' => 'Als gecontroleerd gemarkeerd. Deze tekst kan nu gepubliceerd worden.',
     'admin_status_release_blocked' => '‘:key’ is niet gepubliceerd: :reasons',
     'admin_status_released' => '‘:key’ gepubliceerd in :count taal/talen — betreft :affects perso(o)n(en).',

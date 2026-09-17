@@ -13,7 +13,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * thousand people and one that mailed nobody looked the same from outside, and an operator who
  * wanted to hold a specific version back had no seam to do it from.
  *
- * ⚠️ CANCELING SUPPRESSES A LEGALLY REQUIRED COMMUNICATION. Under P2B Art. 3(3) a change
+ * CANCELING SUPPRESSES A LEGALLY REQUIRED COMMUNICATION. Under P2B Art. 3(3) a change
  * implemented without its notice is void; under § 675g the fiction of consent needs the notice to
  * have been delivered. So this is for an operational emergency — a wrong audience, a broken mail
  * configuration — never for routine throttling, which is what `notifications.max_recipients_per_run`

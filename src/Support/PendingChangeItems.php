@@ -119,7 +119,7 @@ final class PendingChangeItems
             // as well, so its absence is unobservable in both configurations. Kept because the
             // lookup above filters on this column and the write should say what it writes.
             'tenant_id' => $tenantId,
-            // ⚠️ THIS LINE CHANGES NOTHING TODAY, and the schema is why: `version` DEFAULTS to ''
+            // THIS LINE CHANGES NOTHING TODAY, and the schema is why: `version` DEFAULTS to ''
             // in migration 000016 and DRAFT_VERSION is '', so removing it stores the same value.
             // It stays because the row is looked up
             // BY this sentinel two statements above, and a default that silently agrees with a
@@ -172,7 +172,7 @@ final class PendingChangeItems
      */
     private function plain(string $value): string
     {
-        // ⚠️ `Str::squish`, NOT a hand-rolled `\s+` collapse — the difference is a class of
+        // `Str::squish`, NOT a hand-rolled `\s+` collapse — the difference is a class of
         // character `\s` does not cover. Measured: a zero-width space survives the hand-rolled
         // form and leaves a line that is non-empty and INVISIBLE; `Str::squish` also strips it,
         // along with the soft hyphen and the byte-order mark (`Str::INVISIBLE_CHARACTERS`).

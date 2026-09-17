@@ -200,12 +200,12 @@ final class ProofColumnGuard
     {
         self::drop();
 
-        // ⚠️ A RUN THAT ONLY SEES SQLITE CANNOT REACH THESE TWO, AND THE REASON IS THE DRIVER
+        // A RUN THAT ONLY SEES SQLITE CANNOT REACH THESE TWO, AND THE REASON IS THE DRIVER
         // CHECK RATHER THAN A MISSING TEST. This branch is entered only on a `pgsql` connection,
         // so nothing inside it executes anywhere else. They ARE exercised — the PostgreSQL
         // reversibility arm rolls this migration and asserts each guard function by name.
         //
-        // ⚠️ Until that arm was written they were executed by NOTHING, anywhere: no reversibility
+        // Until that arm was written they were executed by NOTHING, anywhere: no reversibility
         // test named this migration, and `uninstall()` has exactly one caller. So the gap was real
         // while looking like ordinary engine-scope noise — which is the argument for reading such
         // cases rather than dismissing them wholesale.

@@ -22,7 +22,7 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * version. Together they let the checker separate a changed TEXT from a changed PRESENTATION, and
  * they let `legal-consent:rerender` prove a text is untouched before it re-freezes it.
  *
- * ⚠️ BOTH ARE NULLABLE, AND NO BACKFILL IS POSSIBLE — that is the honest shape rather than a
+ * BOTH ARE NULLABLE, AND NO BACKFILL IS POSSIBLE — that is the honest shape rather than a
  * shortcut. A row published before this migration was rendered from a source whose bytes nobody
  * kept; the only value that could be written now is a hash of TODAY's source, which would claim
  * the text was unchanged at publish time without anything having checked. So a legacy row says

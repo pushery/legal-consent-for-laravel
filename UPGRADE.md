@@ -4,6 +4,22 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.34.0 → 0.35.0
+
+**Run `php artisan migrate`. Nothing else is required of you, and nothing about your existing ledger changes.**
+
+### The tamper-evidence audit now covers the newest row of every chain
+
+A row in the consent ledger was vouched for by the link its *successor* stores. That leaves exactly one row per person uncovered, and it is the one that matters most: the newest row is what says what somebody holds right now. The migration adds a table in which each row's own hash is recorded beside it, and `legal-consent:verify-ledger` checks the tail of every chain against it.
+
+**This only applies if you have `tamper_evidence` turned on**, which is off by default. With it off, the table is created and stays empty.
+
+**Rows already in your ledger are treated as history and always will be.** They were never witnessed, so no evidence exists to judge them by — the check applies from this migration onwards. The boundary between the two is recorded once, with a proof of its own, so it cannot be moved afterwards.
+
+**Until you run the migration the audit says so out loud** rather than reporting a clean ledger: it prints that the check did not run and names the migration. That is deliberate — a check nobody ran must not read as a check that found nothing.
+
+**One thing to expect if you write to `legal_consents` outside this package.** A direct `INSERT` that carries a valid chain link used to pass the audit; from this migration onwards it is reported, because the row carries no recorded hash. If you have a data-import path that writes consent rows itself, route it through `ConsentManager` or expect the audit to name those rows. An Art. 17 erasure and the retention sweep are unaffected — both record afresh for the rows they rewrite.
+
 ## 0.33.0 → 0.34.0
 
 **Nothing is required of you — but read the one paragraph below if you ever ran `vendor:publish` on this package's config.**

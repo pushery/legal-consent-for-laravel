@@ -18,6 +18,7 @@ use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\LedgerChainRepair;
 use Pushery\LegalConsent\Support\LedgerHashChain;
+use Pushery\LegalConsent\Support\LedgerRecordMacs;
 use stdClass;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -264,6 +265,18 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
                     foreach ($repair->batches($moved) as $batch) {
                         DB::table('legal_consents')->insert($batch);
                     }
+
+                    // A moved link changes the row's hash, so the mac recorded for it no longer
+                    // describes it — and one of these rows is a chain TAIL, which is the row the
+                    // mac is the only witness for. Without this the sweep would leave the ledger
+                    // reporting itself as tampered, permanently, which is precisely the failure
+                    // the re-link exists to prevent one layer down.
+                    //
+                    // APPENDED, not corrected: the store keeps the old mac beside the new one, so
+                    // the history of lawful rewrites stays readable. Ids survive a rewrite (the
+                    // rows are re-inserted with their own), which is what lets a mac keep pointing
+                    // at the row it describes.
+                    (new LedgerRecordMacs)->record(array_column($moved, 'id'));
                 });
 
                 $relinked++;

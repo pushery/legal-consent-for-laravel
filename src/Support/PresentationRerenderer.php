@@ -20,7 +20,7 @@ use RuntimeException;
  *
  * What happens instead: the identical text is frozen again under the next PATCH version, silently.
  *
- * ⚠️ IT IS A NEW ROW, NOT A CORRECTION OF THE OLD ONE, AND THAT IS THE POINT. Every consent in the
+ * IT IS A NEW ROW, NOT A CORRECTION OF THE OLD ONE, AND THAT IS THE POINT. Every consent in the
  * ledger names the `content_hash` it was given against, and the chain hashes it; rewriting the HTML
  * of a published version in place would leave every one of those rows pointing at a hash nothing
  * can reproduce. So the old version keeps its bytes and its proof value, and the new one carries

@@ -108,7 +108,7 @@ final readonly class PublishedDocument
      * immutability trigger is there to prevent; this is how a CALLER holding a read-path document
      * can confirm that for itself.
      *
-     * ⚠️ `legal-consent:verify-documents` does NOT come through here, and this line used to say it
+     * `legal-consent:verify-documents` does NOT come through here, and this line used to say it
      * did. The command sweeps `LegalDocument` rows and makes the identical comparison inline
      * against `content`/`content_hash` — the same two values, since `fromRow()` maps `html` from
      * `content`. So the rule is written twice, and changing it here does not move the command.

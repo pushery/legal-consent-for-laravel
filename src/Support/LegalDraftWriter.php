@@ -134,7 +134,7 @@ readonly class LegalDraftWriter
      * door here a consuming application deletes the row itself, which puts a second writer on a
      * table this class exists to be the only writer of.
      *
-     * ⚠️ THE SOURCE LOCALE IS REFUSED, AND THE CHECK RUNS BEFORE THE LOOKUP. Every translation
+     * THE SOURCE LOCALE IS REFUSED, AND THE CHECK RUNS BEFORE THE LOOKUP. Every translation
      * measures its freshness against the source's hash and falls back to the source when it has
      * none of its own, so removing it would leave every other locale of that key measured against
      * a text that does not exist. Asking first means the answer is the structural one even when

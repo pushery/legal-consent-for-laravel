@@ -21,7 +21,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * carry its own copy of the same store predicate, its own `10`, its own `5` and its own warning:
  * four constants and one condition, written three times, for one question.
  *
- * ⚠️ THAT TRIPLICATION IS NOT A TIDINESS COMPLAINT — IT SHIPPED A DEADLOCK. A release took the
+ * THAT TRIPLICATION IS NOT A TIDINESS COMPLAINT — IT SHIPPED A DEADLOCK. A release took the
  * lock and then called the publisher, which took the SAME NAME again inside it.
  * A Laravel lock is not reentrant: the second instance carries a different owner token, waits its
  * full five seconds and throws, so every release on a real store failed on its own serialization.

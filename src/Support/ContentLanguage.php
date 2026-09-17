@@ -16,7 +16,7 @@ namespace Pushery\LegalConsent\Support;
  * one the subject cannot make out is not that. WCAG 3.1.2 (Language of Parts) is the same
  * requirement stated as a success criterion.
  *
- * ⚠️ `hreflang` is NOT this, and the shipped views used to carry only that one under a comment
+ * `hreflang` is NOT this, and the shipped views used to carry only that one under a comment
  * citing 3.1.2. `hreflang` describes the language at the far end of a LINK; assistive technology
  * does not switch its voice on it. The two are set together and neither replaces the other.
  */

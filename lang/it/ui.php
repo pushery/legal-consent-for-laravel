@@ -87,6 +87,7 @@ return [
     'review_state_draft_short' => 'Bozza',
     'review_state_reviewed' => 'Revisionato',
     'review_state_reviewed_short' => 'Revisionato',
+    'blocking_not_draft_backed' => 'questo documento non prende il suo testo dall’archivio delle bozze',
     'blocking_no_draft' => 'non è stata ancora scritta alcuna bozza',
     'blocking_not_reviewed' => 'non ancora revisionato da una persona',
     'blocking_stale_translation' => 'il testo di partenza è cambiato dopo la revisione di questa traduzione',
@@ -135,6 +136,7 @@ return [
     'admin_status_translation_queued' => 'La traduzione è in corso. Comparirà qui non appena sarà pronta.',
 
     'admin_status_machine_translated' => 'Tradotto automaticamente. Una persona deve revisionarlo prima della pubblicazione.',
+    'admin_status_translation_failed' => 'La traduzione non è arrivata alla fine. La bozza è invariata e puoi riprovare.',
     'admin_status_reviewed' => 'Contrassegnato come revisionato. Questo testo ora è pubblicabile.',
     'admin_status_release_blocked' => '«:key» non è stato pubblicato: :reasons',
     'admin_status_released' => '«:key» pubblicato in :count lingua/e — riguarda :affects persona/e.',

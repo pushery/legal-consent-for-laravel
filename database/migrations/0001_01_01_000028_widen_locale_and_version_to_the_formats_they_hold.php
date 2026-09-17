@@ -17,7 +17,7 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * traffic rather than exotica: `zh-Hant-TW`, `zh-Hans-CN` and `sr-Latn-RS` are each exactly 10, so
  * a consumer serving Traditional Chinese sits ON the limit and any variant subtag goes over it.
  *
- * ⚠️ AND THE FAILURE IS INVISIBLE WHERE PEOPLE DEVELOP. SQLite ignores a `varchar` length
+ * AND THE FAILURE IS INVISIBLE WHERE PEOPLE DEVELOP. SQLite ignores a `varchar` length
  * completely — measured: `ca-ES-valencia` goes into a `VARCHAR(10)` column and comes back at 14
  * characters. MySQL 8.4 in strict mode refuses the same row outright with `1406 Data too long`.
  * So the suite is green, the developer's machine is green, and the deployment is where it breaks.
@@ -29,7 +29,7 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * `(key, locale, version, tenant_id)`, which grows from 158 to 227 characters — 908 bytes under
  * utf8mb4, well inside InnoDB's 3072-byte key limit.
  *
- * ⚠️ SQLITE IS SKIPPED ON PURPOSE, AND SKIPPING IT IS WHAT MAKES THIS MIGRATION SAFE. There is
+ * SQLITE IS SKIPPED ON PURPOSE, AND SKIPPING IT IS WHAT MAKES THIS MIGRATION SAFE. There is
  * nothing to widen there — the length is not enforced — and a `change()` would be Laravel's
  * twelve-step table rebuild, which drops the triggers `ProofColumnGuard` installs and brings the
  * partial one-active index back FULL (the warning migration 000025 carries in its own words). A
@@ -39,7 +39,7 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * it even on `legal_documents.locale`, which a STORED generated column concatenates and a unique
  * index covers — measured against a real 8.4 server before this was written.
  *
- * ⚠️ THE CREATE MIGRATIONS ARE LEFT AT 10 AND 20 ON PURPOSE, AND THAT IS THE OPPOSITE OF WHAT IT
+ * THE CREATE MIGRATIONS ARE LEFT AT 10 AND 20 ON PURPOSE, AND THAT IS THE OPPOSITE OF WHAT IT
  * LOOKS LIKE. Widening them too would mean a fresh install never holds the narrow column — tidier
  * to read, and it puts the SAME number in six files plus this one, with nothing holding them in
  * lockstep. The next person to change a width would have to find all seven, and the one they miss
@@ -81,7 +81,7 @@ return new class extends Migration
 
     private function resize(int $locale, int $version): void
     {
-        // ⚠️ THE DRIVER CHECK SITS AT THE ALTER, NOT HERE, AND THAT IS DELIBERATE. It used to guard
+        // THE DRIVER CHECK SITS AT THE ALTER, NOT HERE, AND THAT IS DELIBERATE. It used to guard
         // this whole method, which made the two "not there" branches below unreachable on the only
         // engine the coverage run measures — three lines nothing could enter, holding the floor
         // under 100% for a reason that had nothing to do with the change. Behavior is identical:
@@ -126,7 +126,7 @@ return new class extends Migration
 
         $column = $table->string($name, $width);
 
-        // ⚠️ THE COLLATION HAS TO BE RESTATED ON MySQL OR THE CHANGE UNDOES 000022. A `MODIFY`
+        // THE COLLATION HAS TO BE RESTATED ON MySQL OR THE CHANGE UNDOES 000022. A `MODIFY`
         // that names neither charset nor collation takes the TABLE default, and 000022 put
         // `legal_documents`.`locale` and `version` on `utf8mb4_bin` precisely so the three engines
         // agree on what "the same document" means. Widening them back into a case-insensitive

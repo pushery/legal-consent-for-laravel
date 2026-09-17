@@ -30,7 +30,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
 final class EnforceableDocumentCache
 {
     /**
-     * ⚠️ THE `:v2` IS A PAYLOAD VERSION, NOT DECORATION — do not drop it, and bump it again the
+     * THE `:v2` IS A PAYLOAD VERSION, NOT DECORATION — do not drop it, and bump it again the
      * next time the cached SHAPE changes.
      *
      * v0.5.0 changed what this key holds, from a serialized Eloquent collection to a list of
@@ -82,7 +82,7 @@ final class EnforceableDocumentCache
      * not published in it resolves through the same chain registration walks, fallback_locale and then
      * default_locale ({@see RegistrationLocaleChain}), and the first version found stands in.
      *
-     * ⚠️ {@see activeFor()} ALONE FAILED OPEN FOR EVERY UNTRANSLATED LOCALE. The gate read the strict
+     * {@see activeFor()} ALONE FAILED OPEN FOR EVERY UNTRANSLATED LOCALE. The gate read the strict
      * per-locale set, so a subject browsing in a language the terms were never translated into owed
      * nothing: measured in a consumer with terms in `de` and `en`, `outstanding()` answered empty for
      * `fr`, `es`, `it`, `nl` and `pt`, and a subject in `it` who had accepted nothing reached the
@@ -139,7 +139,7 @@ final class EnforceableDocumentCache
      * cached OBJECT back as `__PHP_Incomplete_Class`, which would then fail this method's
      * `: Collection` return on every cache HIT — an app-wide 500 on the gate's per-request path.
      *
-     * ⚠️ THAT SETTING IS OPT-IN, NOT THE SHIPPED DEFAULT, and this docblock used to say the
+     * THAT SETTING IS OPT-IN, NOT THE SHIPPED DEFAULT, and this docblock used to say the
      * opposite. `cache.serializable_classes` appears nowhere in the framework's own `config/cache.php`
      * — `CacheManager::serializableClasses()` reads it as `?? null` — so an application only has it
      * because someone hardened the cache deliberately. Getting that backwards makes the hazard sound
@@ -174,7 +174,7 @@ final class EnforceableDocumentCache
             $this->cache->put($key, $rows, $this->ttl);
         }
 
-        // ⚠️ A CACHE HIT STILL FIRES `retrieved`, ONCE PER DOCUMENT. `hydrate()` goes through
+        // A CACHE HIT STILL FIRES `retrieved`, ONCE PER DOCUMENT. `hydrate()` goes through
         // `newFromBuilder()`, which fires the model event whether the row came from the database
         // or from this cache. Before v0.5.0 a hit returned a stored collection and fired none, so
         // an application with a `LegalDocument::retrieved` listener sees accesses that never
@@ -210,7 +210,7 @@ final class EnforceableDocumentCache
             ])
             ->where('locale', $locale)
             ->where('is_active', true)
-            // ⚠️ ORDERED, BECAUSE EVERYTHING DOWNSTREAM RENDERS THIS SET IN THIS ORDER. Without it
+            // ORDERED, BECAUSE EVERYTHING DOWNSTREAM RENDERS THIS SET IN THIS ORDER. Without it
             // the engine decides: the banner listed pending changes in whatever sequence the
             // storage layer happened to return, so the same two documents came out in one order on
             // PostgreSQL and another on SQLite — and changed order again the moment an index was
@@ -253,7 +253,7 @@ final class EnforceableDocumentCache
      * Every locale a cached set could exist under: the declared ones, plus the ones actually
      * published.
      *
-     * ⚠️ THE CONFIG ALONE IS NOT ENOUGH, and the gap is total rather than partial. `locales()`
+     * THE CONFIG ALONE IS NOT ENOUGH, and the gap is total rather than partial. `locales()`
      * returns `[]` whenever `legal-consent.locales` is absent or not an array — and in exactly
      * that case `LegalDocumentPublisher::assertLocaleSupported()` returns early and permits ANY
      * locale. So the one configuration that lets a document be published in any language is the

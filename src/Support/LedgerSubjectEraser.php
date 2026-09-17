@@ -33,7 +33,7 @@ use stdClass;
  * as stored. Every rewritten row records `subject_erased_at`: a lawful change to append-only
  * evidence that leaves no trace is indistinguishable from the tampering the chain exists to catch.
  *
- * ⚠️ IDS ARE PRESERVED, AND THAT IS LOAD-BEARING RATHER THAN TIDY. The verifier flags any row with
+ * IDS ARE PRESERVED, AND THAT IS LOAD-BEARING RATHER THAN TIDY. The verifier flags any row with
  * a NULL link whose id is past the FIRST CHAINED ROW IN THE WHOLE TABLE — that watermark is global.
  * A subject with pre-tamper-evidence rows re-inserted at fresh ids would land every one of them
  * past it and be reported as a direct database write. Reusing the original ids keeps both that
@@ -62,7 +62,7 @@ final readonly class LedgerSubjectEraser
      * That ledger has no `ip_address`, `user_agent` or `request_id` at all; clearing them would
      * write columns the table does not have.
      *
-     * ⚠️ `notice_body` STAYS, and it is the one that looks like it should go. It holds the exact
+     * `notice_body` STAYS, and it is the one that looks like it should go. It holds the exact
      * message served, which reads like per-person data. It is not — but the reason is narrower than
      * it used to say here, and the old wording pointed at a method that does not exist.
      *
@@ -169,6 +169,16 @@ final readonly class LedgerSubjectEraser
         DB::table('legal_consents')->whereIn('id', array_column($rewritten, 'id'))->delete();
 
         $this->insertRows('legal_consents', $rewritten);
+
+        // The erasure cleared personal columns and the re-link moved every chain link, so every
+        // one of these rows hashes to something new — including the chain TAIL, the row a mac is
+        // the only witness for. Recording the new macs is what keeps a lawful Art. 17 erasure from
+        // reading as a replacement, the same reason the links are repaired at all.
+        //
+        // The ids are read from the rewritten rows rather than kept from before: a rewrite
+        // preserves `id` by contract ({@see LedgerHashChain::UNHASHED_COLUMNS}), and reading them
+        // from what was actually written is what holds that contract rather than assuming it.
+        (new LedgerRecordMacs)->record(array_column($rewritten, 'id'));
 
         return [$erased, $rechained];
     }

@@ -104,7 +104,7 @@ final class RegistrationRules
      */
     private function resolvedTypes(): array
     {
-        // ⚠️ THE SHORT-CIRCUIT COMES BEFORE THE CHAIN, and that ordering is the whole point.
+        // THE SHORT-CIRCUIT COMES BEFORE THE CHAIN, and that ordering is the whole point.
         // The loop below resolves the locale chain and issues one SELECT per candidate BEFORE it
         // ever looks at the registry, so an installation that registers no documents — an age-gate
         // only setup is the real one — paid one to two queries on every `POST /register` to build a

@@ -90,6 +90,7 @@ return [
     'review_state_draft_short' => 'Draft',
     'review_state_reviewed' => 'Reviewed',
     'review_state_reviewed_short' => 'Reviewed',
+    'blocking_not_draft_backed' => 'this document does not take its text from the draft store',
     'blocking_no_draft' => 'no draft has been written',
     'blocking_not_reviewed' => 'not reviewed by a human yet',
     'blocking_stale_translation' => 'the source text changed after this translation was reviewed',
@@ -138,6 +139,7 @@ return [
     'admin_status_translation_queued' => 'The translation is running. It appears here once it is done.',
 
     'admin_status_machine_translated' => 'Machine-translated. A human must review it before it can be published.',
+    'admin_status_translation_failed' => 'The translation did not finish. The draft is unchanged, and you can try again.',
     'admin_status_reviewed' => 'Marked reviewed. This text is now publishable.',
     'admin_status_release_blocked' => '“:key” was not released: :reasons',
     'admin_status_released' => 'Released “:key” across :count locale(s) — affects :affects subject(s).',

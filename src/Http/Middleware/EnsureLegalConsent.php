@@ -102,7 +102,7 @@ final readonly class EnsureLegalConsent
 
         $extraRoutes = config('legal-consent.middleware.allowlist_routes');
 
-        // ⚠️ THE NARROWING BELOW CANNOT BE KILLED BY A TEST, AND THAT IS A STATEMENT ABOUT
+        // THE NARROWING BELOW CANNOT BE KILLED BY A TEST, AND THAT IS A STATEMENT ABOUT
         // `routeIs()`, NOT ABOUT THE NARROWING. Measured: `Request::routeIs()` is an untyped
         // variadic (`routeIs(...$patterns)`) that hands each pattern to `Route::named()`, and a
         // non-string there simply matches nothing. So dropping the `is_string` filter -- or the
@@ -175,7 +175,7 @@ final readonly class EnsureLegalConsent
         // filter is the narrowing — a non-string simply contributes no pattern, which is the same
         // outcome as an installation without Livewire.
         //
-        // ⚠️ Removing this filter would change no outcome, because no reachable Livewire
+        // Removing this filter would change no outcome, because no reachable Livewire
         // configuration makes either accessor return a non-string: both are read off a registered
         // route. It is narrowing against a `mixed` signature, not against an observed value, and
         // it is kept for the same reason as the one in isAllowlisted() above. Dropping either

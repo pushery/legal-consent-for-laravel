@@ -9,7 +9,7 @@ use Illuminate\Support\ServiceProvider;
 /**
  * The publish groups a consumer has to ask for BY NAME, held on a provider of their own.
  *
- * ⚠️ THIS CLASS EXISTS BECAUSE `--provider` IGNORES TAGS, and that is a framework fact rather than
+ * THIS CLASS EXISTS BECAUSE `--provider` IGNORES TAGS, and that is a framework fact rather than
  * an oversight anyone could have coded around in place. `ServiceProvider::publishes()` merges every
  * path into `static::$publishes[static::class]` regardless of the tag it was given, and
  * `pathsForProviderOrGroup()` hands back that whole map when a provider is named without a group.
@@ -62,7 +62,7 @@ final class LegalConsentOptInPublishing extends ServiceProvider
         ], 'legal-consent-backfill');
 
         // WireKit-native variants — this tag maps component-built views onto the SAME destinations
-        // the plain stubs use. ⚠️ It does not overwrite them on its own: `vendor:publish` skips a
+        // the plain stubs use. IT DOES NOT OVERWRITE THEM ON ITS OWN: `vendor:publish` skips a
         // target that already exists, so on an installation that has published views before, this
         // tag needs `--force` or it is a silent no-op. Whichever tag ran FIRST wins otherwise, not
         // whichever is more specific. It covers the Livewire views too: those are

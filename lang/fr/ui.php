@@ -87,6 +87,7 @@ return [
     'review_state_draft_short' => 'Brouillon',
     'review_state_reviewed' => 'Relu',
     'review_state_reviewed_short' => 'Relu',
+    'blocking_not_draft_backed' => 'ce document ne tire pas son texte du magasin de brouillons',
     'blocking_no_draft' => 'aucun brouillon n\'a encore été écrit',
     'blocking_not_reviewed' => 'pas encore relu par une personne',
     'blocking_stale_translation' => 'le texte source a changé après la relecture de cette traduction',
@@ -135,6 +136,7 @@ return [
     'admin_status_translation_queued' => 'La traduction est en cours. Elle apparaîtra ici une fois terminée.',
 
     'admin_status_machine_translated' => 'Traduit automatiquement. Une personne doit le relire avant toute publication.',
+    'admin_status_translation_failed' => 'La traduction n\'est pas allée à son terme. Le brouillon est inchangé, vous pouvez réessayer.',
     'admin_status_reviewed' => 'Marqué comme relu. Ce texte est désormais publiable.',
     'admin_status_release_blocked' => '« :key » n\'a pas été publié : :reasons',
     'admin_status_released' => '« :key » publié dans :count langue(s) — concerne :affects personne(s).',

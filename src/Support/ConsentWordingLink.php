@@ -7,7 +7,7 @@ namespace Pushery\LegalConsent\Support;
 /**
  * Where a document's title sits inside the acceptance sentence, so the NAME itself can be the link.
  *
- * ⚠️ THE SENTENCE IS NEVER REWRITTEN, and that is the whole constraint this class exists under.
+ * THE SENTENCE IS NEVER REWRITTEN, and that is the whole constraint this class exists under.
  * `wording` is the snapshotted text the ledger records as the thing that was agreed to; it is frozen
  * proof. So the linked run comes out of the WORDING by offset — never by substituting the title —
  * and {@see before} . {@see match} . {@see after} reassembles the original byte for byte.
@@ -19,7 +19,7 @@ namespace Pushery\LegalConsent\Support;
  * comparison links a handful and leaves the rest silently unlinked, which is the failure shape this
  * package keeps meeting: correct for the case someone tested, quietly wrong for the rest.
  *
- * ⚠️ THAT COUNT SAID "fourteen … two documents" AND WAS A SENTENCE, NOT A MEASUREMENT. The third
+ * THAT COUNT SAID "fourteen … two documents" AND WAS A SENTENCE, NOT A MEASUREMENT. The third
  * consent type had never been in it, and that is where the one real gap sat: `es/newsletter`
  * carried the heading `Boletín` against a sentence saying `la newsletter`, so twenty of the
  * twenty-one pairs anchored and one silently fell back to the separate-link layout. The shipped

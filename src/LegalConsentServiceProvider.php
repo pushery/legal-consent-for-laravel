@@ -75,6 +75,35 @@ use Throwable;
 final class LegalConsentServiceProvider extends ServiceProvider
 {
     /**
+     * Top-level config blocks a publishing host owns WHOLE, never merged into.
+     *
+     * The test for this list is not "is it a map" — the merge already answers that — but whether
+     * the block is a REGISTRY or a set of SETTINGS. A settings block has defaults, and a host who
+     * customized part of it still wants a corrected default for the part they did not touch: that
+     * is the entire reason the merge recurses. A registry has no defaults, because every entry is
+     * a statement about what this application serves. There the shipped content is an EXAMPLE, the
+     * config file says so at the block, and merging it back in states something on the host's
+     * behalf that they deleted on purpose.
+     *
+     * `documents` is the registry, and the cost of getting it wrong is specific to what this
+     * package is for: a resurrected `legal_basis: consent` entry is consent-gating, so it appears
+     * in every surface that enumerates the registry and blocks sign-in as soon as it is published.
+     * Nothing turns red — it was found in a consuming application only because a guard there
+     * checked the set of unreachable paths in BOTH directions.
+     *
+     * Adding a key here is therefore a decision about ownership, not about merge convenience.
+     *
+     * PUBLIC because a second reader needs the same answer: `legal-consent:doctor` reports keys the
+     * published file does not name, and for a block on this list a missing key is the host's
+     * statement rather than drift. A copy of the list there would be a second place to change and
+     * a first place to forget — and the failure would be a red lane in exactly the installations
+     * that use the registry correctly.
+     *
+     * @var list<string>
+     */
+    public const array HOST_OWNED_REGISTRIES = ['documents'];
+
+    /**
      * The lowest `pushery/wirekit` this package's WireKit views are built and tested against —
      * the same constraint `composer.json` pins for the dev dependency, held in lockstep by a
      * test that reads both.
@@ -101,7 +130,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * Whether the bundled migrations are registered automatically. Disable with
      * self::ignoreMigrations() to publish and manage them in the host app instead.
      *
-     * ⚠️ IT SAYS NOTHING ABOUT WHETHER THE TABLES EXIST, and reading it as if it did cost three
+     * IT SAYS NOTHING ABOUT WHETHER THE TABLES EXIST, and reading it as if it did cost three
      * scheduled sweeps. The documented use is to publish the migrations and run them yourself —
      * the tables are then present — while `UPGRADE.md` for 0.16.1 read the same flag as declining
      * them. The schedule believed the second reading and gated on this flag, so a consumer taking
@@ -282,7 +311,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // WANTS that sweep; this asks whether it CAN run here at all, and nothing connected the two
         // — so a consumer without the tables got three commands a night against missing relations.
         //
-        // ⚠️ IT USED TO ASK `self::$runsMigrations`, AND THAT FLAG DOES NOT MEAN WHAT THE GATE
+        // IT USED TO ASK `self::$runsMigrations`, AND THAT FLAG DOES NOT MEAN WHAT THE GATE
         // NEEDED. Its own docblock offers it for publishing the migrations and running them from
         // the host app instead — the tables then EXIST — while `UPGRADE.md` reads it as declining
         // the tables altogether. The schedule believed the second reading and the documentation
@@ -342,7 +371,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
             }
         });
 
-        // ⚠️ WITHOUT THIS, `optimize:clear` LEAVES THE RENDERED DOCUMENTS BEHIND — for up to
+        // WITHOUT THIS, `optimize:clear` LEAVES THE RENDERED DOCUMENTS BEHIND — for up to
         // `cache.ttl` seconds, 86 400 by default. The operator runs the command whose whole job is
         // making a stale cache go away, and keeps being served the old legal text. It only bites
         // where the consumer configured `legal-consent.cache.store`, which is exactly the
@@ -352,7 +381,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // demand and invalidated by a publish, so an eager pass would populate a cache from a
         // process that is not serving anyone.
         //
-        // ⚠️ It is a method to CALL, not one to override — `ServiceProvider::optimizes()` registers
+        // It is a method to CALL, not one to override — `ServiceProvider::optimizes()` registers
         // into two static maps. Declaring it as a return-an-array hook reads plausible and is
         // silently inert; PHPStan catches it as a signature mismatch, which is the only reason it
         // did not ship that way.
@@ -483,7 +512,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * a host that manages them itself can run a subset), and a sweep against two of three tables
      * fails exactly as loudly as one against none.
      *
-     * ⚠️ AN UNREACHABLE DATABASE REGISTERS, and that direction is chosen rather than defaulted to.
+     * AN UNREACHABLE DATABASE REGISTERS, and that direction is chosen rather than defaulted to.
      * A connection that cannot be opened is not a consumer who declined the tables — it is an
      * outage. Registering means the command fails loudly for as long as it lasts; NOT registering
      * means three legally owed sweeps disappear silently and come back only when somebody notices.
@@ -547,7 +576,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // `legal-consent-backfill` deliberately. A flat map publishes exactly what is auto-loaded.
         $this->publishes($this->autoloadedMigrations(), ['legal-consent', 'legal-consent-migrations']);
 
-        // ⚠️ THE OPT-IN GROUPS LIVE ON THEIR OWN PROVIDER, and moving them there is the fix rather
+        // THE OPT-IN GROUPS LIVE ON THEIR OWN PROVIDER, and moving them there is the fix rather
         // than a tidy-up. `publishes()` merges into `static::$publishes[static::class]` whatever
         // tag it is given, so `vendor:publish --provider="…\LegalConsentServiceProvider"` — an
         // interactive first-class choice, and the obvious thing to type — published the three
@@ -738,7 +767,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * block wins whole, the new setting reads as null, and nothing errors or logs. A corrected
      * security default never takes effect for exactly the hosts that customized that area.
      *
-     * ⚠️ RECURSING IS NOT ENOUGH ON ITS OWN — A LIST IS A VALUE, NEVER A STRUCTURE. The trap next
+     * RECURSING IS NOT ENOUGH ON ITS OWN — A LIST IS A VALUE, NEVER A STRUCTURE. The trap next
      * door is `array_replace_recursive()`, which the framework's own `replaceConfigRecursivelyFrom()`
      * uses: it merges lists BY INDEX. A host narrowing this package's shipped
      * `routes.api_middleware` to a single entry would get the removed ones back. On a middleware
@@ -747,6 +776,20 @@ final class LegalConsentServiceProvider extends ServiceProvider
      *
      * `array_is_list([])` is true, which is the behavior you want: an empty array is a host saying
      * "none", and descending into it could only re-introduce what it emptied.
+     *
+     * AND A LIST IS NOT THE ONLY THING A HOST OWNS WHOLE. `documents` is a map of maps, so the
+     * list rule cannot see it — and it is a REGISTRY rather than a settings block: it is the list
+     * of what this application serves, not a set of knobs with defaults. Recursing into it
+     * resurrects a document the host deleted on purpose, and on a consent package that is not a
+     * merge artifact: a `legal_basis: consent` entry appears in every surface that enumerates the
+     * registry and can gate sign-in the moment it is published. Measured in a consuming
+     * application after v0.34.0, where a `newsletter` block that had been commented out since the
+     * beginning came back and put a seventh row in the admin overview.
+     *
+     * This package had chosen the flat merge for that block deliberately, and said why. The
+     * reasoning is restored here rather than rediscovered: a recursive merge would re-ask every
+     * user for consent to a document nobody meant to serve, which is a worse failure than a
+     * missing default. {@see HOST_OWNED_REGISTRIES}.
      *
      * NOTE THE EARLY RETURN, because it bounds what this can rescue. A host with a CACHED config is
      * never merged at all -- the framework's design, not this method's limit. For those installs
@@ -773,19 +816,48 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $repository->set($key, $this->mergeConfigSections(
             is_array($shipped) ? $shipped : [],
             is_array($existing) ? $existing : [],
+            self::HOST_OWNED_REGISTRIES,
         ));
     }
 
     /**
      * @param  array<array-key, mixed>  $shipped
      * @param  array<array-key, mixed>  $published
+     * @param  list<string>  $hostOwned  top-level blocks the host owns whole; empty below the top
      * @return array<array-key, mixed>
      */
-    private function mergeConfigSections(array $shipped, array $published): array
+    private function mergeConfigSections(array $shipped, array $published, array $hostOwned = []): array
     {
         foreach ($shipped as $key => $value) {
             if (! array_key_exists($key, $published)) {
                 $published[$key] = $value;
+
+                continue;
+            }
+
+            // A registry the host declared: their KEY SET wins, and the merge still descends into
+            // each entry they named. The two halves answer different questions, and only taking
+            // both preserves what the recursion is for.
+            //
+            // The key set is the fix: an entry the host did not name is one they do not serve, and
+            // adding it back states something on their behalf.
+            //
+            // Descending into the entries they DID name is the half that is easy to drop, and
+            // dropping it would be a quiet second defect: a field this package adds to a document
+            // in a later release — a retention window, a new source — would stop reaching exactly
+            // the hosts who published the block, which is the failure the recursion exists to end.
+            // Flattening the registry entirely restores the pre-0.34.0 behavior and is therefore
+            // not a regression, but it is not the best available answer either.
+            //
+            // Checked here rather than by name inside the recursion, and the default empty list is
+            // what makes that true: neither call below passes anything, so `documents` nested
+            // somewhere else still merges normally. A name-anywhere rule would be a different,
+            // wider promise than the one being made.
+            if (in_array($key, $hostOwned, true)) {
+                $published[$key] = $this->mergeRegistryEntries(
+                    is_array($value) ? $value : [],
+                    is_array($published[$key]) ? $published[$key] : [],
+                );
 
                 continue;
             }
@@ -797,6 +869,37 @@ final class LegalConsentServiceProvider extends ServiceProvider
             if (is_array($value) && is_array($published[$key]) && ! array_is_list($value) && ! array_is_list($published[$key])) {
                 $published[$key] = $this->mergeConfigSections($value, $published[$key]);
             }
+        }
+
+        return $published;
+    }
+
+    /**
+     * Merge shipped entries INTO the ones a registry's owner named, and into no others.
+     *
+     * The host's keys are the whole set — this never adds one. Within a key they both have, the
+     * ordinary section merge runs, so a field added to a shipped document in a later release still
+     * reaches a host who published that document.
+     *
+     * A shipped entry the host renamed is simply a key they do not have, and there is no way to
+     * tell that apart from one they removed. That is a property of the data rather than a gap here:
+     * the config file says every shipped key is an example to rename freely, so a rename IS a
+     * removal plus an addition, and the addition is theirs.
+     *
+     * @param  array<array-key, mixed>  $shipped
+     * @param  array<array-key, mixed>  $published
+     * @return array<array-key, mixed>
+     */
+    private function mergeRegistryEntries(array $shipped, array $published): array
+    {
+        foreach ($published as $entry => $definition) {
+            $default = $shipped[$entry] ?? null;
+
+            if (! is_array($default) || ! is_array($definition) || array_is_list($default) || array_is_list($definition)) {
+                continue;
+            }
+
+            $published[$entry] = $this->mergeConfigSections($default, $definition);
         }
 
         return $published;

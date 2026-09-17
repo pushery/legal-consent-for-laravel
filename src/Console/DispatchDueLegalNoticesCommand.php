@@ -324,7 +324,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // in the database. On the line an operator reads before sending a legally required
             // communication, a fabricated "already served" is the worst of the available errors.
             //
-            // ⚠️ WHAT THE SWAP COSTS, said rather than left to be discovered: `would be sent` now
+            // WHAT THE SWAP COSTS, said rather than left to be discovered: `would be sent` now
             // counts an orphaned group too, and the real run cannot deliver to one. It is an
             // audience size, not a delivery forecast — it errs toward more notice rather than less,
             // which is the safe direction here, but it is not the same number.

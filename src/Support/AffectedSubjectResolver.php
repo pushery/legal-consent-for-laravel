@@ -109,14 +109,14 @@ readonly class AffectedSubjectResolver
             ->where('locale', $version->locale)
             // The notice sweep crosses tenants, so scope subjects to THIS version's tenant.
             //
-            // ⚠️ `?? ''` IS THE FIX, AND THE `->when()` AROUND IT IS DELIBERATE — see below.
+            // `?? ''` IS THE FIX, AND THE `->when()` AROUND IT IS DELIBERATE — see below.
             // The column is NOT NULL DEFAULT '', but a model that was just CREATED has no value
             // loaded for it: measured, `$version->tenant_id` is null on a fresh insert and only
             // becomes '' after a refresh. `where('tenant_id', null)` compiles to IS NULL, which
             // matches no row of a NOT NULL column — the sweep resolves ZERO subjects and notifies
             // nobody, silently. With tenancy ON that was one un-refreshed model away.
             //
-            // ⚠️ AND THE GUARD STAYS. Making this filter unconditional so `tenant_id` could LEAD
+            // AND THE GUARD STAYS. Making this filter unconditional so `tenant_id` could LEAD
             // the affected-subject index looks correct — a NOT NULL DEFAULT '' column makes the
             // predicate hold in both modes — and it was built that way once. The suite refuted it:
             // with tenancy OFF, a version that belongs to a tenant must still
@@ -152,7 +152,7 @@ readonly class AffectedSubjectResolver
         // subject_id; migration 000013). Filtering those columns pre-aggregation is equivalent to
         // filtering groups — each group is one (subject_type, subject_id) pair.
         //
-        // ⚠️ THE LINEARITY BELOW IS A SINGLE-TENANT CLAIM, and it is stated rather than left for a
+        // THE LINEARITY BELOW IS A SINGLE-TENANT CLAIM, and it is stated rather than left for a
         // reader to discover from a slow sweep. With tenancy ON, `tenant_id`
         // is a RESIDUAL filter — it is not in the index, so the seek still walks (document_key,
         // locale) in order but reads and discards the rows of every other tenant on the way. The
@@ -182,7 +182,7 @@ readonly class AffectedSubjectResolver
                     // comparison, MariaDB reports its own driver name, and an unknown driver may not
                     // compile whereRowValues at all — the index still cuts the constant enormously
                     // there, though that path stays super-linear. An engine-appropriate seek.
-                    // ⚠️ INVERTING THIS BRANCH CHANGES NO RESULT, and the paragraph above says
+                    // INVERTING THIS BRANCH CHANGES NO RESULT, and the paragraph above says
                     // why: both seek forms resume at the same place and return the same rows.
                     // What the branch decides is whether the sweep stays LINEAR on this engine, and
                     // no assertion about the result can see that. The engine-shape arm covers which
@@ -231,7 +231,7 @@ readonly class AffectedSubjectResolver
      * the remaining population to arrive at a number. It is the same predicate, from the same
      * method, so the two answers cannot drift.
      *
-     * ⚠️ SWAPPING `forVersion(...)->count()` FOR THIS CHANGES THE REPORTED NUMBER for an orphaned
+     * SWAPPING `forVersion(...)->count()` FOR THIS CHANGES THE REPORTED NUMBER for an orphaned
      * group, in the direction the paragraph above describes: such a group is counted here and
      * dropped there. That is the honest answer for an audience SIZE — the acceptance is on file and
      * the notice is owed to it — but it is not the number of notifications a run will manage to

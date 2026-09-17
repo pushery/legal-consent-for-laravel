@@ -66,7 +66,7 @@ final readonly class ConsentBanner
 
             $enforce = $document->enforce_from;
 
-            // ⚠️ THE `?->` IN THIS PAYLOAD CANNOT FIRE, and the filter above is the reason: it
+            // THE `?->` IN THIS PAYLOAD CANNOT FIRE, and the filter above is the reason: it
             // requires `announced()` (which demands a real `announce_from`) and
             // `enforce_from instanceof CarbonImmutable`. Both fields are therefore non-null by the
             // time they get here, so dropping the null-safe operator would change no outcome and

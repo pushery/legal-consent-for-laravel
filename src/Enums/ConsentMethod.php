@@ -34,6 +34,22 @@ enum ConsentMethod: string
      */
     case FirstUseGate = 'first_use_gate';
 
+    /**
+     * A confirmation inside a transaction — shown in a checkout, before the purchase completes.
+     *
+     * It exists for the reason {@see self::FirstUseGate} spells out above, applied one case
+     * further: the alternatives are not gaps but FALSE STATEMENTS. `RegistrationCheckbox` asserts a
+     * sign-up form that was not involved; `ReConsentGate` asserts an acceptance after a document
+     * changed, which never happened; `FirstUseGate` names the moment "after signing up, before
+     * first use" and this is not that — it is shown before EVERY purchase, to people who have used
+     * the application for months. `Api` is the headless channel, a statement about how the row
+     * arrived rather than about what the reader was doing.
+     *
+     * The ledger is append-only, so a row filed under any of them cannot be corrected later; under
+     * an Art. 15 request it would describe a screen the person never saw.
+     */
+    case TransactionGate = 'transaction_gate';
+
     /** A toggle on the account's legal settings page. */
     case SettingsToggle = 'settings_toggle';
 

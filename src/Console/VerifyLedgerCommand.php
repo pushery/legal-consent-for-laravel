@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\LedgerHashChain;
+use Pushery\LegalConsent\Support\LedgerRecordMacs;
 use Pushery\LegalConsent\Support\LedgerRootBoundary;
 use stdClass;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -55,7 +56,7 @@ final class VerifyLedgerCommand extends Command
         /** @var list<string> $breaks */
         $breaks = [];
 
-        // ⚠️ THE BOUNDARY IS CHECKED BEFORE A SINGLE LEDGER ROW IS READ, and it is checked at all
+        // THE BOUNDARY IS CHECKED BEFORE A SINGLE LEDGER ROW IS READ, and it is checked at all
         // because a boundary an attacker can raise exempts whatever they put below it. Recomputing
         // its MAC needs the secret, so a moved boundary is a break rather than a loophole.
         //
@@ -68,12 +69,51 @@ final class VerifyLedgerCommand extends Command
             $breaks[] = "chain-root boundary marker #{$boundary->id}: proof does not verify — the marker was altered, or this environment holds a different tamper_evidence_key";
         }
 
+        // The second marker, read for the same reason and checked the same way: a boundary an
+        // attacker can raise exempts whatever they put below it.
+        $macs = new LedgerRecordMacs($chain);
+        $macBoundary = $macs->boundary();
+
+        if ($macBoundary instanceof LedgerRootBoundary && ! hash_equals($macBoundary->proof, $macs->boundaryProof($macBoundary->id))) {
+            $breaks[] = "record-mac boundary marker #{$macBoundary->id}: proof does not verify — the marker was altered, or this environment holds a different tamper_evidence_key";
+        }
+
+        // The TAIL of each chain — the only row a mac has anything to say about, and the reason is
+        // arithmetic rather than economy. For every row that HAS a successor, the successor's
+        // stored `prev_record_hash` is already a copy of that row's hash, so the walk below
+        // compares it on every single row. The last row of a chain is the one with no successor,
+        // and it is exactly the row this whole feature exists for.
+        //
+        // Collected as (id => the hash the row must still produce) and looked up ONCE at the end,
+        // so the mac lookup costs a handful of chunked queries rather than one per row.
+        //
+        // ONE BUFFER FOR THE WHOLE WALK, WHICH LOOKS LIKE THE WRONG CALL IN A COMMAND THAT
+        // OTHERWISE PAGES EVERYTHING. It holds one small entry per subject_token, and
+        // {@see tokenBindingBreaks()} below already reads every distinct (subject, token) tuple in
+        // the ledger into two PHP arrays — so this is strictly inside a bound the command already
+        // accepts, and halving that bound would not change what the command can survive.
+        //
+        // The version before this flushed every thousand tails. That branch needed a thousand
+        // CHAINS to be entered, so nothing could reach it: a fixture built to hit it would be tied
+        // to a constant one edit away from moving, which is the same trade this file already
+        // refuses for the keyset page boundary. An unreachable branch in a verifier is not a
+        // safety margin, it is a piece of code nobody has ever run.
+        $tailId = null;
+        /** @var array<int, string> $tails */
+        $tails = [];
+
         foreach ($this->chainedRows() as $row) {
             $rows++;
 
             if ($row->subject_token !== $currentToken) {
+                // The previous token's walk is finished, so whatever row it ended on is its tail.
+                if ($tailId !== null) {
+                    $tails[$tailId] = $expectedPrev;
+                }
+
                 $currentToken = $row->subject_token;
                 $expectedPrev = $genesis;
+                $tailId = null;
                 $subjects++;
 
                 // The row that OPENS a chain is the one the constant root cannot vouch for: it has
@@ -103,6 +143,24 @@ final class VerifyLedgerCommand extends Command
             }
 
             $expectedPrev = $chain->hashRow($row);
+
+            // The cast and the 0 fallback are EQUIVALENT under mutation, for the same reason the
+            // three other id reads in this file say so: `legal_consents.id` is a NOT NULL bigint,
+            // so a driver hands back an int or a numeric string and never anything else. The cast
+            // is what makes this key and {@see LedgerRecordMacs::newestFor()}'s key the same
+            // value — two spellings of one id would silently look up nothing.
+            $tailId = is_int($row->id) || is_string($row->id) ? (int) $row->id : 0;
+        }
+
+        // The LAST chain has no following token to close it, so its tail is closed here. Leaving
+        // this out would exempt exactly one chain — whichever sorts last — from the check, which is
+        // the shape of gap an attacker reads off the source of a public package.
+        if ($tailId !== null) {
+            $tails[$tailId] = $expectedPrev;
+        }
+
+        foreach ($this->macBreaks($macs, $tails, $macBoundary) as $break) {
+            $breaks[] = $break;
         }
 
         // A forged row inserted with prev_record_hash = NULL is skipped by the walk above (it
@@ -154,7 +212,7 @@ final class VerifyLedgerCommand extends Command
         // see below for why that silence is the expensive half.
         $keyed = is_string(config('legal-consent.tamper_evidence_key')) && config('legal-consent.tamper_evidence_key') !== '';
 
-        // ⚠️ A CHECK THAT DID NOT RUN MUST NOT PASS SILENTLY, and this is the one that can.
+        // A CHECK THAT DID NOT RUN MUST NOT PASS SILENTLY, and this is the one that can.
         //
         // rootBoundary() returns null when the marker is absent — an installation that never ran
         // migration 000024. Treating that as "boundary zero" would be worse (see rootBoundary():
@@ -169,6 +227,14 @@ final class VerifyLedgerCommand extends Command
         // Said on BOTH outcomes, because a break list is exactly where an operator would otherwise
         // read the absence of this class as its absence in the data. Only when keyed: unkeyed the
         // check would not run anyway, and the note below already says that guarantee is weaker.
+        // The same rule, for the other marker, and NOT limited to keyed installations — unlike the
+        // root proof, a mac is recorded whether or not a secret exists, so its absence is a real
+        // state to report either way. Said on both outcomes for the reason given above: a break
+        // list is exactly where the absence of a check gets read as the absence of its findings.
+        if (! $macBoundary instanceof LedgerRootBoundary) {
+            $this->warn('The record-mac boundary is NOT stamped, so the newest row of each chain was not checked: that row has no successor whose link covers it, and a replacement of it cannot be detected here. Run the package migrations — 000031 creates the table and stamps the boundary, and every row already in the ledger then counts as history.');
+        }
+
         if ($keyed && ! $boundary instanceof LedgerRootBoundary) {
             $this->warn('The chain-root boundary is NOT stamped, so the root-proof check did not run: a chain opened by a direct insert cannot be detected here. Not migrated yet: run the package migrations with the key set, and 000024 stamps it. Already migrated: running them again changes nothing; the first consent recorded with the key stamps it, and every row already in the ledger then counts as history.');
         }
@@ -195,9 +261,9 @@ final class VerifyLedgerCommand extends Command
             // Two statements instead of one arm each is the honest fix: it makes the attribution
             // unambiguous rather than suppressing the number, and it reads no worse.
             if ($keyed) {
-                $this->line('Note: an intact chain proves no naive tampering and no re-chaining, not that the ledger is untampered. The hash is HMAC-keyed, so editing history requires the secret — but the head is unsigned and each row stores only the link to its predecessor, so a tail truncation and a replacement of a chain'."'".'s newest row remain undetectable here. Restrict INSERT on legal_consents to the application role, and notarize the head externally to close the rest.');
+                $this->line('Note: an intact chain proves no naive tampering and no re-chaining, not that the ledger is untampered. The hash is HMAC-keyed, so editing history requires the secret, and the newest row of each chain is covered by a mac recorded beside it. What remains is the head: it is unsigned, so a tail TRUNCATION leaves nothing to mismatch — a removed row and a row a lawful sweep removed look alike. Restrict INSERT on legal_consents to the application role, and notarize the head externally to close the rest.');
             } else {
-                $this->line('Note: an intact chain proves no naive tampering, not that the ledger is untampered. The hash is unkeyed and the head unsigned, so an actor with table-write access can alter a row and re-chain its successors into a consistent chain, and a tail truncation leaves nothing to mismatch. Set legal-consent.tamper_evidence_key to close the re-chain path, and notarize the head externally for the rest.');
+                $this->line('Note: an intact chain proves no naive tampering, not that the ledger is untampered. The hash is unkeyed and the head unsigned, so an actor with table-write access can alter a row, re-chain its successors and record a fresh mac for the row they replaced — every value here is computable without a secret. Set legal-consent.tamper_evidence_key to close that path, and notarize the head externally for the tail truncation it leaves.');
             }
 
             return self::SUCCESS;
@@ -213,7 +279,7 @@ final class VerifyLedgerCommand extends Command
             $this->line(sprintf('  … and %d more.', count($breaks) - 20));
         }
 
-        // ⚠️ A KEYED RUN HAS TWO CAUSES FOR THIS OUTPUT AND THEY DEMAND OPPOSITE RESPONSES, so
+        // A KEYED RUN HAS TWO CAUSES FOR THIS OUTPUT AND THEY DEMAND OPPOSITE RESPONSES, so
         // saying "FAILED" without naming the mode sends the operator down one of them at random.
         // Real tampering is an incident; the wrong secret is a deployment mistake that has touched
         // no row. They are indistinguishable from the break list alone, because a key that does not
@@ -303,7 +369,7 @@ final class VerifyLedgerCommand extends Command
                 yield $row;
             }
 
-            // ⚠️ THE TWO `instanceof` CHECKS ARE REACHABLE ONLY AT AN EXACT PAGE BOUNDARY, so a
+            // THE TWO `instanceof` CHECKS ARE REACHABLE ONLY AT AN EXACT PAGE BOUNDARY, so a
             // run that never lands on one cannot tell them from `true`. `$page->last()` is
             // null only for an EMPTY page, and the loop below re-queries only when the previous
             // page was exactly full -- so a null here needs a chained-row count that is an exact
@@ -406,6 +472,53 @@ final class VerifyLedgerCommand extends Command
     }
 
     /**
+     * The breaks for a page of chain tails — the rows no successor witnesses.
+     *
+     * Two failures, and they are genuinely different findings rather than two wordings of one:
+     *
+     *  - a mac that does NOT match means the row's content or its link changed after it was
+     *    recorded. That is the replacement this feature was built for.
+     *  - NO mac at all, on a row above the boundary, means the evidence was removed. Without this
+     *    half, deleting the mac would be as good as forging it — an unwitnessed row is simply not
+     *    checked, so the cheapest attack on a mac store is to delete from it.
+     *
+     * Below the boundary a missing mac is history and cannot be anything else: every row already
+     * in the ledger when migration 000031 ran was written before a mac could exist. With no
+     * boundary at all nothing is claimed, the absence check does not run, and {@see handle()} says
+     * so out loud rather than letting silence read as a clean result.
+     *
+     * @param  array<int, string>  $tails  id => the hash that row must still produce
+     * @return list<string>
+     */
+    private function macBreaks(LedgerRecordMacs $macs, array $tails, ?LedgerRootBoundary $boundary): array
+    {
+        if ($tails === []) {
+            return [];
+        }
+
+        $breaks = [];
+        $recorded = $macs->newestFor(array_keys($tails));
+
+        foreach ($tails as $id => $expected) {
+            $mac = $recorded[$id] ?? null;
+
+            if (is_string($mac)) {
+                if (! hash_equals($expected, $mac)) {
+                    $breaks[] = "row #{$id}: content does not match the mac recorded for it — this row is the newest of its chain, so no successor's link covers it (replaced?)";
+                }
+
+                continue;
+            }
+
+            if ($boundary instanceof LedgerRootBoundary && $id > $boundary->id) {
+                $breaks[] = "row #{$id}: newest row of its chain and no mac was recorded for it — written after macs began, so it was not written by this package (direct DB write?), or its mac was deleted";
+            }
+        }
+
+        return $breaks;
+    }
+
+    /**
      * Breaks in the subject↔token binding: one subject must own exactly one token, and one token
      * must belong to exactly one subject.
      *
@@ -431,7 +544,7 @@ final class VerifyLedgerCommand extends Command
         // one column to be right. Reading the pairs and folding them here is the one shape that
         // says the same thing on all three engines.
         //
-        // ⚠️ AND THE GROUPING IS COMPARED AS BYTES, because on MySQL it otherwise is not.
+        // AND THE GROUPING IS COMPARED AS BYTES, because on MySQL it otherwise is not.
         //
         // GROUP BY follows the column's collation, and every collation Laravel configures by
         // default (utf8mb4_unicode_ci, utf8mb4_0900_ai_ci) is case- and accent-insensitive and

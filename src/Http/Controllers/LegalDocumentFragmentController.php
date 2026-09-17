@@ -36,7 +36,7 @@ use Pushery\LegalConsent\Contracts\ConsentManager;
  * registry answers 404 rather than an empty document, so probing this route tells a caller nothing
  * the registry does not already say in public.
  *
- * ⚠️ **It adds no exposure, and that is the reason it may be public at all.** The text it returns is
+ * **It adds no exposure, and that is the reason it may be public at all.** The text it returns is
  * the one the host already publishes at the address the checkbox links to. What changes is the
  * shape — a fragment instead of a page — so a dialog can hold it.
  *

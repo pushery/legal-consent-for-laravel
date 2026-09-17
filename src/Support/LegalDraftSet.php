@@ -111,14 +111,14 @@ final readonly class LegalDraftSet
      * was there and the route to it was closed. Measured in a consumer with three informational
      * documents out of six, which narrowed the list itself rather than go without an imprint.
      *
-     * ⚠️ Only a locale with NO DRAFT AT ALL is dropped, never one whose draft is merely unreviewed.
+     * Only a locale with NO DRAFT AT ALL is dropped, never one whose draft is merely unreviewed.
      * "Nothing has been written here" is what the fallback answers for; "it is written and nobody
      * has looked at it" is a reason an operator can act on, and swallowing it would publish the
      * other locales and leave that one silently behind. When no locale has a draft, the full list
      * goes through — so the refusal still names every language and why, instead of releasing an
      * empty set.
      *
-     * ⚠️ IT LIVES HERE BECAUSE THREE PLACES ASK IT AND THEY DISAGREED. Until it moved here, the answer
+     * IT LIVES HERE BECAUSE THREE PLACES ASK IT AND THEY DISAGREED. Until it moved here, the answer
      * sat in a PRIVATE method of the admin grid's component, so it reached the release button and
      * nothing else: the grid computed its blocking flags over every configured locale, and the
      * editor's own release narrowed nothing at all. An informational page could therefore read as

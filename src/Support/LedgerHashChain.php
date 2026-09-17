@@ -45,20 +45,25 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  *     chain now carries {@see rootProof()}, an HMAC over the token, and the verifier requires it above
  *     the boundary {@see stampRootBoundary()} records. Below that boundary, and on an UNKEYED
  *     installation, this gap is exactly as open as it was — there is no secret to prove anything with.
- *  2. STILL OPEN, and keying cannot close it. Only the backward LINK is stored, never a row's own
- *     hash, so the newest row of any chain can be REPLACED (not just truncated) with nothing to
- *     mismatch against. The link lives on the row that FOLLOWS, and the last row has no follower.
- *     Closing it needs a per-row MAC or a witness kept outside this database.
+ *  2. CLOSED, by {@see LedgerRecordMacs}, and it took the shape this line used to prescribe. Only
+ *     the backward LINK was stored, never a row's own hash, so the newest row of any chain could be
+ *     REPLACED (not just truncated) with nothing to mismatch against — the link lives on the row
+ *     that FOLLOWS, and the last row has no follower. What is recorded now is that same value:
+ *     `hashRow()` over the STORED row, held in a table of its own because it can only be taken
+ *     after the row is read back, and because this one is append-only. It is worth what the chain
+ *     is worth — keyed, an attacker cannot produce the mac for a row they substituted; unkeyed
+ *     they can, exactly as they can already re-chain.
  * So the append-only DB trigger — extended to restrict INSERT to the application role — remains the
  * real defense, and `verify-ledger`'s "intact" means "no evidence of re-chaining, and above the
  * boundary every chain was opened by a key holder", never "authentic".
  *
- * Independent of keying, the UNSIGNED head leaves two limits: it cannot detect deletion of a
- * subject's NEWEST row (a tail truncation — nothing follows it to mismatch); and a row written
- * straight to the table with a NULL `prev_record_hash` opts out of the walk — so the verifier
- * separately flags any unchained row inserted after chaining began, using the first chained row's id
- * as a self-derived watermark. To also anchor the head, periodically notarize the per-subject head
- * hash to an append-only external store; the append-only DB triggers are the primary defense meanwhile.
+ * Independent of keying, the UNSIGNED head leaves two limits. A tail TRUNCATION is still invisible:
+ * deleting a subject's newest row leaves nothing to mismatch, and its orphaned mac says nothing —
+ * a lawful retention sweep deletes rows too, so the two look alike. And a row written straight to
+ * the table with a NULL `prev_record_hash` opts out of the walk, so the verifier separately flags
+ * any unchained row inserted after chaining began, using the first chained row's id as a
+ * self-derived watermark. To also anchor the head, periodically notarize the per-subject head hash
+ * to an append-only external store; the append-only DB triggers are the primary defense meanwhile.
  *
  * Chaining is per SUBJECT (keyed by the stable `subject_token`, which survives
  * anonymization), not global — so it detects unauthorized tampering of a subject's proof
@@ -137,7 +142,7 @@ final class LedgerHashChain
      * The proof a NEW chain's first row carries beside the genesis link, or null when the chain is
      * unkeyed and there is therefore no secret to prove anything with.
      *
-     * ⚠️ THIS SITS BESIDE THE ROOT RATHER THAN REPLACING IT, and that is not a stylistic call.
+     * THIS SITS BESIDE THE ROOT RATHER THAN REPLACING IT, and that is not a stylistic call.
      * Keying `genesis()` itself invalidates every first row already stored — correcting those means
      * UPDATE on an append-only table whose MySQL trigger refuses one unconditionally — and it also
      * strips `PruneExpiredConsentRecordsCommand` of the single constant its SQL compares against.
@@ -161,7 +166,7 @@ final class LedgerHashChain
     /**
      * Record where key-bound roots begin, the first time anyone opens a chain with a key.
      *
-     * ⚠️ THIS DOES NOT BELONG IN THE MIGRATION, and putting it there was the first attempt.
+     * THIS DOES NOT BELONG IN THE MIGRATION, and putting it there was the first attempt.
      * A marker stamped at migrate-time is stamped with whatever key was configured THEN — and the
      * documented order of operations lets an operator set the secret afterwards. The marker was
      * then born holding an unkeyed hash it could never reproduce again, so a correctly-followed
@@ -207,11 +212,21 @@ final class LedgerHashChain
      * and inherit the exemption meant for history. Unkeyed it is a plain hash: inert, well-formed,
      * and honest about proving nothing, which is the same posture the chain itself takes without a
      * secret.
+     *
+     * `$domain` SEPARATES TWO MARKERS THAT LIVE IN ONE TABLE. `legal_ledger_markers` holds the
+     * chain-root boundary and {@see LedgerRecordMacs::BOUNDARY_MARKER}, and both are "an id with a
+     * MAC over it". Without a domain in the payload the two proofs are interchangeable: an
+     * attacker copies the row whose boundary is higher onto the name whose boundary constrains
+     * them, and the proof verifies because it was never bound to which question it answers.
+     *
+     * The default reproduces the payload the root boundary has stored since migration 000024 —
+     * changing it would invalidate every marker already written, on a value whose whole purpose is
+     * that it cannot be reproduced without the secret.
      */
-    public function boundaryProof(int $boundaryId): string
+    public function boundaryProof(int $boundaryId, string $domain = 'boundary'): string
     {
         $key = $this->key();
-        $payload = 'boundary|'.$boundaryId;
+        $payload = $domain.'|'.$boundaryId;
 
         return $key === null ? hash('sha256', $payload) : hash_hmac('sha256', $payload, $key);
     }
