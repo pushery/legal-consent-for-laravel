@@ -96,6 +96,34 @@ final class LegalTextEditor extends Component
     /** Whether the unmodified version stays on offer to whoever objects. */
     public bool $keepsUnmodified = false;
 
+    /**
+     * Which legal regime the change is being made under — one of the publisher's own.
+     *
+     * The five fields above are SCHEDULING; these two are the classification, and that is why they
+     * are here rather than left out as two more inputs. `ReleaseOptions` calls itself "the
+     * operator's legal classification of ONE change", and this screen built five of its seven
+     * fields: a release from here therefore froze a contract change with no regime and no class,
+     * and nothing said so — the publish succeeded and the columns were simply null.
+     *
+     * It matters most exactly where it is quietest. A deemed-consent release binds people by their
+     * silence, and the classification is what that binding is later argued from.
+     *
+     * An empty string means the operator said nothing, which is the shipped state and stays legal;
+     * it is passed on as null rather than as "".
+     */
+    public string $regime = '';
+
+    /**
+     * The operator's own classification tag for this change — free text, as the CLI's is.
+     *
+     * NOT a list, and deliberately: the publisher takes any string here and freezes it onto the
+     * row, and its own option calls it a "legal-review classification tag (e.g.
+     * agb_minor_peripheral, privacy_material)". A vocabulary invented on this screen would be a
+     * second answer to a question the package has already left to the operator, and the two would
+     * disagree the first time somebody used the command line.
+     */
+    public string $changeClass = '';
+
     /** The edited bytes. Client-writable by design — {@see LegalDraftWriter} sanitizes on the way in. */
     public string $body = '';
 
@@ -444,6 +472,12 @@ final class LegalTextEditor extends Component
                 // nobody — while the same page released from the grid went through.
                 LegalDraftSet::for($this->key)->releaseLocales($this->locales()),
                 new ReleaseOptions(
+                    // Empty means unsaid, and unsaid is null rather than "". The publisher reads a
+                    // regime it does not know as a refusal, so an empty string would turn "the
+                    // operator classified nothing" into "the operator named a regime that does not
+                    // exist" -- two different states, one of which is allowed.
+                    changeClass: $this->changeClass === '' ? null : $this->changeClass,
+                    regime: $this->regime === '' ? null : $this->regime,
                     announceAt: $this->date($this->announceAt),
                     enforceAt: $this->date($this->enforceAt),
                     objectionDeadline: $this->date($this->objectionDeadline),

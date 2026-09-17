@@ -592,6 +592,20 @@ final class LegalConsentServiceProvider extends ServiceProvider
             __DIR__.'/../lang' => $this->app->langPath('vendor/legal-consent'),
         ], ['legal-consent', 'legal-consent-lang']);
 
+        // The wording dialog's Alpine component, and it is published rather than bundled.
+        //
+        // WireKit ships a prebuilt bundle so that a consumer needs no bundler at all; a package that
+        // demanded one in order to use an optional feature would take that away. A served file is
+        // also what a strict Content-Security-Policy expects — `script-src 'self'` covers it, and an
+        // inline script would be exactly what such a policy exists to refuse.
+        //
+        // Under the umbrella tag as well, so a consumer who takes everything is not left with a
+        // dialog whose component is missing. It registers itself on `alpine:init`, so loading it is
+        // one script tag and no configuration.
+        $this->publishes([
+            __DIR__.'/../resources/js' => $this->app->publicPath('vendor/legal-consent'),
+        ], ['legal-consent', 'legal-consent-assets']);
+
         // The change-notice mail shell and its theme, separately publishable: a consumer who wants
         // to brand the notice takes these two and nothing else. Both are inside resources/views,
         // so the umbrella view tag already carries them — this tag exists so the mail can be taken

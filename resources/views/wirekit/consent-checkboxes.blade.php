@@ -60,7 +60,9 @@
              shape this field takes decides whether `aria-describedby` may point at the link. Where
              the title appears INSIDE the wording the link sits in the label and is already part of
              the accessible name, so describing the field by it reads the title twice. --}}
-        @php($wordingLink = ($document['url'] ?? null) !== null
+        @php($members = is_array($document['documents'] ?? null) ? array_values($document['documents']) : [])
+        @php($cut = $members !== [] ? \Pushery\LegalConsent\Support\ConsentWordingSegments::for($document['wording'], $members) : null)
+        @php($wordingLink = $cut === null && ($document['url'] ?? null) !== null
             ? \Pushery\LegalConsent\Support\ConsentWordingLink::locate($document['wording'], $document['title'] ?? '')
             : null)
         {{-- `lang` on the FIELD rather than on the label, because the wording reaches the checkbox
@@ -108,6 +110,30 @@
             'x-bind:aria-haspopup' => "'dialog'",
             'x-on:click.prevent' => '$dispatch(\'wirekit-modal-show\', { name: \''.$dialogName.'\' })',
         ] : []))
+        {{-- The label is assembled and echoed ONCE, rather than written as a chain of
+             directives. Blade leaves a closing directive that sits flush against the token before
+             it in the output as literal text, and this slot may carry no stray whitespace: it is
+             the accessible NAME of the control, and a space landing between a title and the comma
+             after it is visible in the sentence a consent rests on.
+
+             ⚠️ AND IT IS BUILT WITH THE ONE-LINE FORM, NOT A BLOCK. This file already uses the
+             one-line form above, and the raw-block scanner pairs the first of those with the end
+             of any block opened later — swallowing everything between and failing far from here
+             with a syntax error in a compiled file. Measured: adding a block broke the view at its
+             twentieth compiled line, four hundred lines before the block itself.
+
+             The link is RENDERED by its component through a view of its own, never rebuilt here.
+             That view says why it cannot be a string literal in this file. --}}
+        @php($memberLinkId = static fn (array $member): string => $field.'_link_'.(string) ($member['key'] ?? ''))
+        @php($bareBag = new \Illuminate\View\ComponentAttributeBag([]))
+        @php($renderLink = static fn (array $target, string $text, ?string $id, \Illuminate\View\ComponentAttributeBag $extra): string => trim(view('legal-consent::wirekit.consent-link', ['id' => $id, 'href' => (string) ($target['url'] ?? ''), 'hreflang' => ($target['locale'] ?? '') !== '' ? $target['locale'] : null, 'extra' => $extra, 'text' => $text])->render()))
+        @php($singleLabel = $wordingLink !== null ? e($wordingLink->before).$renderLink($document, $wordingLink->match, $field.'_link', $dialogTrigger).e($wordingLink->after) : e($document['wording']))
+        @php($label = $cut === null ? $singleLabel : implode('', array_map(static fn (array $segment): string => $segment['document'] !== null && ($segment['document']['url'] ?? null) !== null ? $renderLink($segment['document'], $segment['text'], null, $bareBag) : e($segment['text']), $cut->segments)))
+        {{-- ONE attribute carrying every id: the field's own link where it is a sibling, every
+             grouped member the sentence does not name, and the host's. Collapsed rather than only
+             trimmed — the parts are joined with a separator whether or not they are there, so an
+             absent one leaves a double space inside the value. --}}
+        @php($describedByIds = (string) preg_replace('/\\s+/', ' ', trim(($cut === null && ($document['url'] ?? null) !== null && $wordingLink === null ? $field.'_link' : '').' '.($cut === null ? '' : implode(' ', array_map(static fn (array $member): string => $memberLinkId($member), array_filter($cut->unlinked, static fn (array $member): bool => ($member['url'] ?? null) !== null)))).' '.trim((string) ($describedBy ?? '')))))
         <x-wirekit::stack gap="xs" class="legal-consent-field" :lang="$lang">
             {{-- The wording is the SNAPSHOTTED consent text — it is what gets recorded in the
                  ledger as what the subject agreed to, so it renders verbatim as the label. --}}
@@ -122,7 +148,14 @@
                      name. The prop stays as the same wording for a render outside Livewire. --}}
                 :label="$document['wording']"
                 :required="$document['required']"
-                :aria-describedby="($document['url'] ?? null) !== null && $wordingLink === null ? $field.'_link' : null"
+                {{-- The host's own id is appended rather than rendered as a second attribute, and
+                     the component merges its error target into whatever it is handed. A screen
+                     whose validation message belongs to the FORM -- a re-consent screen locks the
+                     account, so the reason nothing happened has to be heard on submit -- points
+                     every control at one shared line, and a second attribute would be dropped by
+                     the browser along with the document link. Last, because a message about all of
+                     them is read after this field's own. --}}
+                :aria-describedby="$describedByIds ?: null"
                 {{-- RESTORED from the visitor's own previous submit, never preset by us — see the
                      plain stub for why that distinction is the whole of Planet49 (C-673/17).
                      Passed as null rather than false when there is nothing to restore, so the
@@ -131,15 +164,23 @@
                      state, and a `checked` beside it fights every re-render. --}}
                 :checked="$bindTo === null && old($field) ? true : null"
                 :attributes="$binding"
-            >@if ($wordingLink !== null){{ $wordingLink->before }}<x-wirekit::link
-                    :id="$field.'_link'"
-                    :href="$document['url']"
-                    :hreflang="($document['locale'] ?? '') !== '' ? $document['locale'] : null"
-                    external
-                    :attributes="$dialogTrigger"
-                >{{ $wordingLink->match }}</x-wirekit::link>{{ $wordingLink->after }}@else{{ $document['wording'] }}@endif</x-wirekit::checkbox>
+            >{!! $label !!}</x-wirekit::checkbox>
 
-            @if (($document['url'] ?? null) !== null && $wordingLink === null)
+            @foreach ($cut?->unlinked ?? [] as $member)
+                {{-- A member the sentence never names still has to be reachable, so it gets the
+                     separate link the single-document path has always fallen back to. One per
+                     member, each with its own id, because the description above names them all. --}}
+                @if (($member['url'] ?? null) !== null)
+                    <x-wirekit::link
+                        :id="$memberLinkId($member)"
+                        :href="$member['url']"
+                        :hreflang="($member['locale'] ?? '') !== '' ? $member['locale'] : null"
+                        external
+                    >{{ $member['title'] ?? '' }}</x-wirekit::link>
+                @endif
+            @endforeach
+
+            @if ($cut === null && ($document['url'] ?? null) !== null && $wordingLink === null)
                 {{-- `hreflang` names the language of the linked text, which is not always this
                      page's — a mandatory document published only in the default locale still
                      binds and appears in its own language. See the plain stub. --}}
@@ -191,14 +232,18 @@
                          onto nothing reads as a document with no content, and the reader is then
                          asked to tick that they read it. The anchor behind this dialog is still a
                          real link, so the sentence points at the way that always works. --}}
-                    <div x-data="{ body: '', state: 'idle' }"
-                         x-on:wirekit-modal-show.window="if ($event.detail?.name === @js($dialogName) && state === 'idle') {
-                             state = 'loading';
-                             fetch(@js($dialog), { headers: { 'Accept': 'text/html' } })
-                                 .then(r => r.ok ? r.text() : Promise.reject(r.status))
-                                 .then(html => { body = html; state = 'ready' })
-                                 .catch(() => { state = 'failed' });
-                         }"
+                    {{-- TWO CALLS AND NOTHING ELSE, because Alpine's CSP build parses these
+                         attributes with its own grammar rather than handing them to `eval`. That
+                         grammar takes calls, member access, literals and operators — and refuses
+                         arrow functions, optional chaining and more than one statement. This
+                         carried a `fetch().then().catch()` chain inline, which is all three at
+                         once, so under a policy without `unsafe-eval` it never ran: the dialog
+                         opened onto nothing while `aria-haspopup` had already told a screen reader
+                         it would work. The logic lives in the published script now, where none of
+                         those limits apply, and an expression reduced to a call parses under both
+                         builds — one template, either policy. --}}
+                    <div x-data="legalConsentDialog(@js($dialogName), @js($dialog))"
+                         x-on:wirekit-modal-show.window="load($event)"
                          @if ($lang !== null) lang="{{ $lang }}" @endif>
                         <div x-show="state === 'ready'" x-html="body"></div>
                         <p x-show="state === 'loading'" x-cloak>{{ __('legal-consent::ui.dialog_loading') }}</p>

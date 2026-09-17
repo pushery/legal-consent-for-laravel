@@ -54,6 +54,17 @@
      swallowed everything between. Describe it, do not spell it. --}}
 @php
     $bindTo = ($bind ?? '') !== '' ? $bind : null;
+
+    // An id the HOST wants every control here to point at, mixed into the one attribute rather
+    // than rendered beside it. Two `aria-describedby` on one element are not two descriptions: the
+    // browser keeps the first and drops the rest, so a host that added its own next to this
+    // template's would silently take the document link away -- exactly the trap the assembly below
+    // already exists to avoid, one layer out.
+    //
+    // The case it is for: a screen whose validation message belongs to the FORM rather than to any
+    // one box. A re-consent screen locks the account, so somebody using a screen reader has to hear
+    // on submit why nothing happened, and every checkbox there points at one shared line.
+    $hostDescribedBy = trim((string) ($describedBy ?? ''));
 @endphp
 @foreach ($documents as $document)
     @php
@@ -68,9 +79,78 @@
         // separate link below is the fallback for a wording the title is not part of. Resolved
         // HERE rather than at the markup, because `aria-describedby` has to know which of the two
         // shapes this field takes — see below.
-        $wordingLink = ($document['url'] ?? null) !== null
+        // A GROUPED entry: one control, one sentence, several documents named in it. The members
+        // ride in `documents`; the entry's own `wording` is the sentence that names them all.
+        //
+        // It is a separate shape rather than a special single document because the two say
+        // different things. Ticking one box per document is agreeing to each; ticking a grouped box
+        // is one act over several texts, and only the caller knows which texts may be folded that
+        // way -- a contract and a confirmation of something read are not the same act, and neither
+        // belongs in a sentence about four other documents.
+        $members = is_array($document['documents'] ?? null) ? array_values($document['documents']) : [];
+
+        $cut = $members !== []
+            ? \Pushery\LegalConsent\Support\ConsentWordingSegments::for($document['wording'], $members)
+            : null;
+
+        $wordingLink = $cut === null && ($document['url'] ?? null) !== null
             ? \Pushery\LegalConsent\Support\ConsentWordingLink::locate($document['wording'], $document['title'] ?? '')
             : null;
+
+        // The id a member's separate link gets, where its title is not in the sentence. Keyed by the
+        // member rather than by position: a position changes when somebody reorders the group, and
+        // an `aria-describedby` pointing at the wrong one of two links is worse than none.
+        $memberLinkId = static fn (array $member): string => $field.'_link_'.(string) ($member['key'] ?? '');
+
+        // THE LABEL IS ASSEMBLED HERE RATHER THAN WRITTEN AS DIRECTIVES, and that is a measurement
+        // rather than a preference.
+        //
+        // AN ARGUMENT-LESS BLADE DIRECTIVE IMMEDIATELY PRECEDED BY A WORD CHARACTER IS NOT
+        // COMPILED. Blade guards the `@` with `\B`, so `X@endif` is a word boundary and stays in
+        // the output as literal text. That bites exactly here, because this label may carry no
+        // stray whitespace — it is the accessible NAME of the control, and the name is the sentence
+        // the consent rests on — so the directives have to sit flush against each other, and
+        // `@endif@endforeach` puts an `f` in front of the second one. Measured: the compiled view
+        // carried `@endforeach@endif@if (…)` verbatim and the sentence rendered empty.
+        //
+        // One echo has no adjacency to get wrong. Every dynamic part goes through `e()`, which is
+        // what `{{ }}` does; the wording itself is escaped exactly once, as before.
+        $anchorFor = static function (array $target, string $text, string $id = '', string $rel = 'noopener'): string {
+            $locale = (string) ($target['locale'] ?? '');
+
+            return '<a'
+                .($id === '' ? '' : ' id="'.e($id).'"')
+                .' href="'.e((string) ($target['url'] ?? '')).'"'
+                // `hreflang` names the language at the far end, which is not always this page's: a
+                // mandatory document published only in the default locale still binds, so it
+                // appears in its own language. Omitted rather than emptied — `hreflang=""` is
+                // itself a claim.
+                .($locale === '' ? '' : ' hreflang="'.e($locale).'"')
+                .' target="_blank" rel="'.$rel.'">'.e($text).'</a>';
+        };
+
+        if ($cut !== null) {
+            // A grouped sentence: the runs come out of the wording by offset, so the label is the
+            // original sentence with some of its runs wrapped. Nothing is substituted.
+            $label = '';
+
+            foreach ($cut->segments as $segment) {
+                $label .= $segment['document'] !== null && ($segment['document']['url'] ?? null) !== null
+                    ? $anchorFor($segment['document'], $segment['text'])
+                    : e($segment['text']);
+            }
+        } elseif ($wordingLink !== null) {
+            // The document NAME inside the sentence is the link, rather than a second link
+            // repeating the name underneath.
+            $label = e($wordingLink->before)
+                .$anchorFor($document, $wordingLink->match, $field.'_link')
+                .e($wordingLink->after);
+        } else {
+            // Null when the title does not appear in the sentence at all (`die AGB` against
+            // `Allgemeine Geschäftsbedingungen`) — then the separate link below stays, because a
+            // text that cannot be reached breaks the clickwrap requirement (§ 305 Abs. 2 BGB).
+            $label = e($document['wording']);
+        }
 
         // ONE `aria-describedby`, assembled here rather than written twice. Two of them on the
         // same element are not two descriptions: the browser keeps the first and drops the rest,
@@ -84,11 +164,28 @@
         // name. A screen reader then says the document title twice in a row, on every checkbox of
         // a registration page. The fallback branch below renders the link as a sibling, and there
         // it is a real description; the WireKit twin has always had it that way.
-        $describedBy = trim(
+        // The host's own id goes LAST. The order is the reading order: why this field is flagged,
+        // then what it points at, then whatever the surrounding screen wants said about all of
+        // them. A shared form-level message read before the field's own would answer a question
+        // nobody has asked yet.
+        // Collapsed, not merely trimmed: the parts are joined with a separator whether or not
+        // they are there, so an absent one leaves a double space INSIDE the value. A browser
+        // tolerates it; an arm asserting the attribute does not, and neither does anybody reading
+        // the rendered page.
+        $describedByIds = (string) preg_replace('/\s+/', ' ', trim(
             ($hasError ? $field.'_error' : '')
             .' '
-            .(($document['url'] ?? null) !== null && $wordingLink === null ? $field.'_link' : '')
-        );
+            .($cut === null && ($document['url'] ?? null) !== null && $wordingLink === null ? $field.'_link' : '')
+            .' '
+            // Every member the sentence does not name, because each gets its own sibling link and
+            // a description that named only the first would leave the rest unannounced.
+            .($cut === null ? '' : implode(' ', array_map(
+                static fn (array $member): string => $memberLinkId($member),
+                array_filter($cut->unlinked, static fn (array $member): bool => ($member['url'] ?? null) !== null),
+            )))
+            .' '
+            .$hostDescribedBy
+        ));
     @endphp
     {{-- ⚠️ THIS STUB SHIPS NO CSS, AND THIS IS THE SCREEN WHERE THAT COSTS THE MOST. Every class
          here is a BEM hook with no declarations behind it, so whether these controls are usable on
@@ -132,7 +229,7 @@
                 @if ($bindTo === null)@checked(old($field))@else wire:model="{{ $bindTo }}.{{ $field }}"@endif
                 @if ($document['required']) required @endif
                 @if ($hasError) aria-invalid="true" @endif
-                @if ($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
+                @if ($describedByIds !== '') aria-describedby="{{ $describedByIds }}" @endif
             >
             {{-- The document NAME inside the sentence is the link, rather than a second link
                  repeating the name underneath. `ConsentWordingLink` finds the title inside the
@@ -149,7 +246,7 @@
                  Set only when it differs from the page, and omitted rather than emptied when the
                  item carries no locale: `lang=""` is itself a claim. --}}
             @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document['locale'] ?? null))
-            <span @if ($lang !== null) lang="{{ $lang }}"@endif>@if ($wordingLink !== null){{ $wordingLink->before }}<a id="{{ $field }}_link" href="{{ $document['url'] }}"@if (($document['locale'] ?? '') !== '') hreflang="{{ $document['locale'] }}"@endif target="_blank" rel="noopener">{{ $wordingLink->match }}</a>{{ $wordingLink->after }}@else{{ $document['wording'] }}@endif</span>
+            <span @if ($lang !== null) lang="{{ $lang }}"@endif>{!! $label !!}</span>
         </label>
 
         @if ($hasError)
@@ -168,7 +265,26 @@
             <p id="{{ $field }}_error" class="legal-consent-error" role="alert">{{ $errorMessage }}</p>
         @endif
 
-        @if (($document['url'] ?? null) !== null && $wordingLink === null)
+        @if ($cut !== null)
+            {{-- A member the sentence never names — `die AGB` against `Allgemeine
+                 Geschäftsbedingungen` — still has to be reachable, so it gets the separate link the
+                 single-document path has always fallen back to. One per member, each with its own
+                 id, because the description above names them all: a text that cannot be reached
+                 breaks the clickwrap requirement (§ 305 Abs. 2 BGB) whether it sits alone in a
+                 sentence or third in a list of four. --}}
+            @foreach ($cut->unlinked as $member)
+                @if (($member['url'] ?? null) !== null)
+                    <a id="{{ $memberLinkId($member) }}" href="{{ $member['url'] }}"
+                       @if (($member['locale'] ?? '') !== '') hreflang="{{ $member['locale'] }}" @endif
+                       @if ($lang !== null) lang="{{ $lang }}" @endif
+                       target="_blank" rel="noopener noreferrer">
+                        {{ $member['title'] ?? '' }}
+                    </a>
+                @endif
+            @endforeach
+        @endif
+
+        @if ($cut === null && ($document['url'] ?? null) !== null && $wordingLink === null)
             {{-- `hreflang` names the language of the text at the other end, which is not always
                  the language of this page: a mandatory document published only in the default
                  locale still binds, so it appears in its own language (see

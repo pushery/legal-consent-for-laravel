@@ -4,6 +4,24 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.1] - 2026-09-17
+
+### Added
+
+- **Both consent stubs can fold several documents into one control with one sentence.** An entry may carry a `documents` list; the entry's own `wording` is then the sentence that names them all — *"I have read and taken note of the Imprint and the Cookie Policy."* — and each member's title inside it becomes that member's link. Four stacked "I have read X" lines read worse than one sentence, and for texts a reader merely takes note of, the agreement is the same either way. ⚠️ **What may be folded is the caller's decision, not the template's:** agreeing is a different act from taking note, and a confirmation that has to stand as its own proof stops being one inside a sentence about four other documents. The stub renders the group it is handed. **The sentence is never rewritten** — the runs come out of the wording by offset and reassemble byte for byte, because that text is what the ledger records as the thing agreed to, and an arm holds that over every shape. A member the sentence does not name keeps its own link beside it, announced with the control, which is the fallback a single document has always had. **An entry with no `documents` key renders exactly as before.** **Both trees carry it**, and the arms run over both from one dataset — a capability in one and not the other is exactly the drift a pair of shipped stubs invites.
+
+- **Both consent stubs take an `aria-describedby` from the host and mix it into their own.** A validation message can belong to the *form* rather than to any one box — a re-consent screen locks the account, so somebody using a screen reader has to hear on submit why nothing happened, and every control there points at one shared line. ⚠️ **A host could not simply write its own attribute beside ours:** two `aria-describedby` on one element are not two descriptions, the browser keeps the first and drops the rest, so the host's would have silently taken the document link away. It is now appended to the ids the template already assembles, after the field's own — why this field is flagged, then what it points at, then whatever the screen wants said about all of them. A blank one is dropped rather than pointed at nothing, and a host that passes none sees no change at all.
+
+- **The editor's objection-window release carries the legal classification, not just the schedule.** `ReleaseOptions` describes itself as the operator's legal classification of one change and carries seven fields; the editor built five of them. The two it left out — `changeClass` and `regime` — are exactly the ones that are classification rather than scheduling, and the publisher has read both all along. So a release from this screen froze a contract change with no regime and no class, and nothing said so: the publish succeeded and the columns were simply null. ⚠️ **It was quietest where it costs most.** A deemed-consent change binds people by their silence, and the classification is what that binding is later argued from. The regime is offered as a list read from the publisher itself, because it refuses one it does not know and a second list written on the screen would drift into a refusal on a release somebody had already scheduled. The class stays free text, as the command line's is. **An unsaid classification stays unsaid** — the controls submit an empty string and it is passed on as null, because "classified nothing" is allowed and "named a regime that does not exist" is refused.
+
+- **An arm over every Alpine expression this package ships, held against Alpine's own CSP build.** The defect above shipped because there was no check over this surface at all — and it was found by a consumer's integration gate, over a view mounted out of `vendor/`, which is a surface an application-side audit does not open by default. `@alpinejs/csp` is now a dev dependency and the suite fails on an expression the CSP grammar refuses, on a component name nothing registers, or on a manifest that has dropped the oracle — that last one because a check whose oracle is missing skips, and a permanent skip reads exactly like a pass.
+
+### Fixed
+
+- **The wording dialog from 0.36.0 could never run under a Content-Security-Policy without `unsafe-eval`.** Alpine's CSP build parses the expressions in your attributes with its own grammar instead of handing them to `eval`, and that grammar refuses arrow functions, optional chaining and more than one statement in an attribute. The dialog carried a `fetch(…).then(…).catch(…)` chain written inline, which is all three at once — so on such an installation it opened onto nothing. ⚠️ **The silent half is the worse one:** `aria-haspopup="dialog"` is bound by Alpine, so Alpine *was* running, the promise of a dialog *was* announced to a screen reader, and the click then did nothing. The logic now lives in a published Alpine component, and the template is reduced to two calls — a form that parses under both builds, so one template serves either policy. **The anchor is unchanged and still carries the document's real address**, which is what makes the text reachable without script at all.
+
+  **Upgrade:** if you have `ui.wording_dialog` on, publish the component and load it once — `php artisan vendor:publish --tag=legal-consent-assets`, then `<script src="{{ asset('vendor/legal-consent/legal-consent.js') }}" defer></script>` before Alpine. It registers itself on `alpine:init` and needs no bundler. **Without it the dialog does not open**, which is the one thing that changes for an installation that had it working; everything else, including the link, is exactly as it was.
+
 ## [0.36.0] - 2026-09-17
 
 ### Added
@@ -2713,6 +2731,7 @@ its recorded row from the same resolution, so the consent section stays dormant 
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
 [Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.36.0...HEAD
+[0.36.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.36.0...v0.36.1
 [0.36.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.33.0...v0.34.0
