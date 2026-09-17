@@ -6,7 +6,10 @@ namespace Pushery\LegalConsent\Console;
 
 use Closure;
 use Illuminate\Console\Command;
+use Illuminate\Database\QueryException;
+use Illuminate\Routing\Exceptions\UrlGenerationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
@@ -419,6 +422,49 @@ final class DoctorCommand extends Command
     }
 
     /**
+     * An editor route the admin overview was told to link to and cannot.
+     *
+     * The overview degrades on purpose: a name that is not registered, or one these two parameters
+     * cannot fill, leaves the cells unlinked rather than turning a read-only screen into an error
+     * page. That is the right behavior and the wrong silence — an operator who set the key sees an
+     * overview that looks exactly like one where nobody set it. This is where they find out.
+     *
+     * Reported, never enforced. Leaving it unset is the shipped default and a complete answer.
+     *
+     * @return array{0: string, 1: string}|null the configured name and what is wrong with it
+     */
+    private function unresolvableEditorRoute(): ?array
+    {
+        $name = config('legal-consent.admin.editor_route');
+
+        if (! is_string($name) || $name === '') {
+            return null;
+        }
+
+        if (! Route::has($name)) {
+            return [$name, 'is not a registered route name'];
+        }
+
+        $key = DocumentMatrix::keys()[0] ?? null;
+        $locales = config('legal-consent.locales');
+        $locale = is_array($locales) ? ($locales[0] ?? null) : null;
+
+        // Nothing registered to link TO yet. The route is fine as far as anything here can tell,
+        // and inventing a key to probe with would report on a document that does not exist.
+        if (! is_string($key) || ! is_string($locale)) {
+            return null;
+        }
+
+        try {
+            route($name, [$key, $locale]);
+        } catch (UrlGenerationException) {
+            return [$name, 'is registered, but a document key and a locale do not fill its parameters'];
+        }
+
+        return null;
+    }
+
+    /**
      * The store the document cache actually reads from, when that store is the database.
      *
      * THE ADVICE EXISTED AND ONLY A DOCBLOCK CARRIED IT. `EnforceableDocumentCache` explains
@@ -506,17 +552,89 @@ final class DoctorCommand extends Command
         return Schema::hasTable('notifications') ? [] : ['database'];
     }
 
+    /**
+     * Everything this report can only learn by asking the database, or null when it could not ask.
+     *
+     * ## WHY THE WHOLE HALF IS WRAPPED AND NOT EACH READER
+     *
+     * A connection that is refused is refused for all of them, so a guard per reader would answer
+     * the same question five times and produce five identical sentences. It is also the honest
+     * grouping: what is unknown here is not "the tamper chain" or "the channel" but whether the
+     * report could look at the database at all.
+     *
+     * ## AND IT IS A REPORT, NOT A FAILURE
+     *
+     * This command used to end on the exception. A consumer had it in the statics stage of their
+     * gate — which boots the application and deliberately reaches no external service, because
+     * nothing in that chain had ever needed one — and the upgrade turned a config check into a
+     * red lane with a `Connection refused` in it. In the next repository to adopt that arm the
+     * same failure would read as a package defect.
+     *
+     * So an unreachable database makes these sections say they could not be checked, which is the
+     * pattern this report already uses for the mailer: *whether a mailer reaches its host cannot be
+     * answered without sending something, and the command says so.* What it must never do is let
+     * "could not ask" read as "nothing to report".
+     *
+     * The shapes are each reader's own, copied from their docblocks rather than guessed at — a
+     * type written from memory here would have been a claim about six methods at once.
+     *
+     * @return array{
+     *     firstUse: array{0: string, 1: list<string>}|null,
+     *     incoherent: bool,
+     *     unpublished: list<string>,
+     *     tamper: list<array{0: string, 1: list<string>}>,
+     *     databaseCache: array{0: string, 1: string}|null,
+     *     undeliverable: list<string>,
+     * }|null
+     */
+    private function databaseFindings(): ?array
+    {
+        try {
+            return [
+                'firstUse' => self::describeFirstUseGate($this->publishedMandatoryKeys(), config('legal-consent.gate.first_use')),
+                'incoherent' => $this->deemedConsentWithoutProof(),
+                'unpublished' => $this->unpublishedCombinations(),
+                'tamper' => $this->tamperEvidenceFindings(),
+                'databaseCache' => $this->databaseBackedDocumentCache(),
+                'undeliverable' => $this->undeliverableNotificationChannels(),
+            ];
+        } catch (QueryException) {
+            // The connection, not the schema. A database that is THERE but not migrated is a state
+            // every reader above already handles on its own — that is the half-finished
+            // installation a doctor earns its name on, and swallowing it here would take those
+            // findings away from the one installation that needs them most.
+            return null;
+        }
+    }
+
     public function handle(): int
     {
         $variantFinding = $this->uiVariantFinding();
-        $firstUseFinding = self::describeFirstUseGate($this->publishedMandatoryKeys(), config('legal-consent.gate.first_use'));
         $unknownMode = $this->unknownRegistrationMode();
-        $incoherent = $this->deemedConsentWithoutProof();
-        $unpublished = $this->unpublishedCombinations();
+        $editorRoute = $this->unresolvableEditorRoute();
         $uncacheable = $this->uncacheableKeys();
-        $tamperFindings = $this->tamperEvidenceFindings();
-        $databaseCache = $this->databaseBackedDocumentCache();
-        $undeliverable = $this->undeliverableNotificationChannels();
+
+        $database = $this->databaseFindings();
+
+        $firstUseFinding = $database['firstUse'] ?? null;
+        $incoherent = $database['incoherent'] ?? false;
+        $unpublished = $database['unpublished'] ?? [];
+        $tamperFindings = $database['tamper'] ?? [];
+        $databaseCache = $database['databaseCache'] ?? null;
+        $undeliverable = $database['undeliverable'] ?? [];
+
+        if ($database === null) {
+            $this->newLine();
+            $this->warn('Some checks need a database, and this one could not be reached:');
+            $this->line('  The published documents, the tamper-evidence chain, the document cache and the');
+            $this->line('  `database` notification channel are all read from it, so none of them was checked.');
+            $this->line('  Everything below is about your CONFIGURATION, which needs no connection.');
+            $this->newLine();
+            $this->line('  If this runs in a quality stage that reaches no services on purpose, that is the');
+            $this->line('  whole explanation and there is nothing to fix. Run it again where the database is');
+            $this->line('  up to get the other half.');
+            $this->newLine();
+        }
 
         if ($variantFinding !== null) {
             [$headline, $explanation] = $variantFinding;
@@ -552,6 +670,19 @@ final class DoctorCommand extends Command
                 $this->line($line);
             }
 
+            $this->newLine();
+        }
+
+        if ($editorRoute !== null) {
+            [$routeName, $reason] = $editorRoute;
+
+            $this->newLine();
+            $this->warn("legal-consent.admin.editor_route is '{$routeName}'.");
+            $this->line("  It {$reason}.");
+            $this->line('  The admin overview links every cell to that route when it can. It cannot, so the');
+            $this->line('  cells are plain text — which looks exactly like an installation that never set the');
+            $this->line('  key, and is the reason this line exists. The parameters are filled by position:');
+            $this->line('  the document key first, the locale second.');
             $this->newLine();
         }
 

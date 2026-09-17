@@ -9,11 +9,13 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
+use stdClass;
 
 /**
  * Decides which mandatory documents a subject still owes acceptance for.
@@ -222,27 +224,149 @@ final class ConsentGate
      *                                   screen that showed a version next to a withdrawn holding would report a text as accepted
      *                                   that Art. 7(3) says is no longer held, which is the defect the withdrawal-aware fold was
      *                                   built to end rather than one to reintroduce a column later.
-     * @return array{held: array<string, int>, version: array<string, string|null>, at: array<string, string|null>, pending: list<string>}
+     *                                   `latest` and `ended` say what the four keys above cannot: which action stands newest
+     *                                   for a key and when, and which action ended the holding and when. See
+     *                                   {@see foldStanding()} for the rules, including why an objection after a withdrawal
+     *                                   leaves `ended` alone.
+     * @return array{held: array<string, int>, version: array<string, string|null>, at: array<string, string|null>, pending: list<string>, latest: array<string, array{action: string, at: string|null}>, ended: array<string, array{action: string, at: string|null}|null>}
      */
     public function standingFor(Model $subject, ?array $keys = null): array
     {
+        return $this->foldStanding($this->standingRows((string) $subject->getMorphClass(), [SubjectKey::for($subject)], $keys));
+    }
+
+    /**
+     * The same standing for many subjects, one query per subject type instead of one per subject.
+     *
+     * A page listing ten people asked {@see standingFor()} ten times, against a table that grows
+     * with every re-acceptance. What made a consumer write their own batch instead of looping is
+     * the fold, and that is exactly the part that must not drift: the first such copy built its
+     * own list of four actions, missed two accepting ones (the deemed acceptance and the confirmed
+     * double opt-in) and counted an objection as an ending. So the fold is not reimplemented here
+     * — both readers call the same private one, and an arm holds their answers against each other
+     * over ledgers of every shape.
+     *
+     * Keyed by {@see SubjectKey::pair()}, not by the subject key alone: a `User` and a `Team` can
+     * both be number 1, and a map keyed by the id would hand one of them the other's standing.
+     *
+     * Every subject passed in gets an entry, so a caller can read the map without checking for
+     * absence — one that the ledger has never seen gets the same empty standing `standingFor()`
+     * returns for them. The exception is a subject whose primary key has no lossless string form,
+     * which is absent for the reason {@see SubjectKey::for()} is null: it names no subject.
+     *
+     * @param  iterable<Model>  $subjects
+     * @param  list<string>|null  $keys
+     * @return array<string, array{held: array<string, int>, version: array<string, string|null>, at: array<string, string|null>, pending: list<string>, latest: array<string, array{action: string, at: string|null}>, ended: array<string, array{action: string, at: string|null}|null>}>
+     */
+    public function standingsFor(iterable $subjects, ?array $keys = null): array
+    {
+        $batches = [];
+
+        foreach ($subjects as $subject) {
+            $id = SubjectKey::for($subject);
+
+            if ($id === null) {
+                continue;
+            }
+
+            $type = (string) $subject->getMorphClass();
+
+            // The type and the id are carried as VALUES and never read back out of an array key.
+            // PHP turns a numeric-looking key into an int on the way in, and a morph ALIAS may be
+            // written as a number — the same footgun {@see SubjectToken::forSubjects()} documents.
+            // Grouping by the key while reading the value keeps both strings without a cast.
+            //
+            // De-duplicated on the way in, because the same subject twice is one subject to read
+            // for, and a caller paginating a list is exactly where a duplicate turns up.
+            $batches[$type]['type'] = $type;
+            $batches[$type]['ids'][$id] = $id;
+        }
+
+        $standing = [];
+
+        foreach ($batches as $batch) {
+            $rowsBySubject = [];
+
+            // Bucketing preserves the order the query imposed, so each bucket is still ordered by
+            // `document_key, accepted_at, id` — which is the order the fold depends on.
+            foreach ($this->standingRows($batch['type'], array_values($batch['ids']), $keys) as $row) {
+                $id = is_scalar($row->subject_id) ? (string) $row->subject_id : null;
+
+                if ($id !== null) {
+                    $rowsBySubject[$id][] = $row;
+                }
+            }
+
+            // Walked over the SUBJECTS rather than over the rows that came back, which is what
+            // makes "every subject gets an entry" structural instead of a separate seeding pass:
+            // one the ledger has never seen simply folds an empty bucket.
+            foreach ($batch['ids'] as $id) {
+                $standing[SubjectKey::pair($batch['type'], $id)] = $this->foldStanding($rowsBySubject[$id] ?? []);
+            }
+        }
+
+        return $standing;
+    }
+
+    /**
+     * The ledger rows both standing readers fold, ordered the way the fold needs them.
+     *
+     * `whereIn` rather than `where` for the single-subject case too, and that is a decision
+     * rather than a shortcut: `subject_id` is nullable, so `where('subject_id', null)` asks
+     * `is null` and would hand a subject whose key has no lossless string form every id-less row
+     * of its own type as its standing. `in (null)` is never true, which is the answer the
+     * many-subject reader can also give — and two readers that cannot agree are the whole reason
+     * this method exists.
+     *
+     * @param  list<string|null>  $ids
+     * @param  list<string>|null  $keys
+     * @return SupportCollection<int, stdClass>
+     */
+    private function standingRows(string $type, array $ids, ?array $keys): SupportCollection
+    {
         $tenant = app(TenantContext::class);
 
-        $rows = DB::table('legal_consents')
-            ->select('document_key', 'document_major_version', 'document_version', 'action', 'accepted_at')
-            ->where('subject_type', $subject->getMorphClass())
-            ->where('subject_id', SubjectKey::for($subject))
+        return DB::table('legal_consents')
+            ->select('subject_id', 'document_key', 'document_major_version', 'document_version', 'action', 'accepted_at')
+            ->where('subject_type', $type)
+            ->whereIn('subject_id', $ids)
             ->when($keys !== null, fn (QueryBuilder $query): QueryBuilder => $query->whereIn('document_key', $keys ?? []))
             ->when($tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $tenant->current()))
             ->orderBy('document_key')
             ->orderBy('accepted_at')
             ->orderBy('id')
             ->get();
+    }
 
+    /**
+     * ONE subject's rows, folded. The only implementation of the rules the class docblock states.
+     *
+     * `latest` and `ended` answer the two questions a status line asks that the four older keys
+     * cannot: an ended holding reads as `held = 0, version = null, at = null`, which says that
+     * nothing is held and nothing at all about WHAT ended it or WHEN. "Withdrawn on 3 September"
+     * needs both, and a ledger where nothing was ever held — an objection on its own, say — had
+     * nothing to say beyond "not held".
+     *
+     * `ended` survives a later NEUTRAL row, which is the whole subtlety. An objection after a
+     * withdrawal does not change what ended the consent, so `??=` keeps the earlier answer for the
+     * same reason the holding keeps its prior state. An ACCEPTING row clears it to null, because
+     * a holding that is live again has not been ended by anything.
+     *
+     * `at` is `string|null` in both new keys to match the existing `at`, whose null is the ending
+     * case rather than an unreadable timestamp. One rule for the reader, not two.
+     *
+     * @param  iterable<stdClass>  $rows  as {@see standingRows()} returns them — `object` would be
+     *                                    too wide, because a query row's columns are dynamic
+     *                                    properties and only `stdClass` is allowed to have those
+     * @return array{held: array<string, int>, version: array<string, string|null>, at: array<string, string|null>, pending: list<string>, latest: array<string, array{action: string, at: string|null}>, ended: array<string, array{action: string, at: string|null}|null>}
+     */
+    private function foldStanding(iterable $rows): array
+    {
         $held = [];
         $version = [];
         $at = [];
         $latest = [];
+        $ended = [];
 
         foreach ($rows as $row) {
             $key = $row->document_key;
@@ -256,20 +380,23 @@ final class ConsentGate
             if (is_string($key) && is_string($actionValue)) {
                 $action = ConsentAction::from($actionValue);
                 $major = is_numeric($row->document_major_version) ? (int) $row->document_major_version : 0;
+                // Normalized to a string here rather than left as whatever the driver returns:
+                // SQLite hands back a string, Postgres a string, and a consumer comparing two
+                // of these should not have to know which engine produced them.
+                $when = is_scalar($row->accepted_at) ? (string) $row->accepted_at : null;
 
-                $latest[$key] = $action;
+                $latest[$key] = ['action' => $action->value, 'at' => $when];
 
                 if ($action->isAccepting()) {
                     $held[$key] = $major;
                     $version[$key] = is_string($row->document_version) ? $row->document_version : null;
-                    // Normalized to a string here rather than left as whatever the driver returns:
-                    // SQLite hands back a string, Postgres a string, and a consumer comparing two
-                    // of these should not have to know which engine produced them.
-                    $at[$key] = is_scalar($row->accepted_at) ? (string) $row->accepted_at : null;
+                    $at[$key] = $when;
+                    $ended[$key] = null;
                 } elseif ($action->isNeutral()) {
                     $held[$key] ??= 0; // keep the prior state; only anchor the key if it is the first row
                     $version[$key] ??= null;
                     $at[$key] ??= null;
+                    $ended[$key] ??= null;
                 } else {
                     // Withdrawn / declined / terminated end the holding — and the version and date
                     // go with it. Leaving them behind would say "accepted 2.1.0 on the 3rd" about
@@ -277,6 +404,7 @@ final class ConsentGate
                     $held[$key] = 0;
                     $version[$key] = null;
                     $at[$key] = null;
+                    $ended[$key] = ['action' => $action->value, 'at' => $when];
                 }
             }
         }
@@ -287,8 +415,10 @@ final class ConsentGate
             'at' => $at,
             'pending' => array_keys(array_filter(
                 $latest,
-                static fn (ConsentAction $action): bool => $action === ConsentAction::OptInRequested,
+                static fn (array $entry): bool => $entry['action'] === ConsentAction::OptInRequested->value,
             )),
+            'latest' => $latest,
+            'ended' => $ended,
         ];
     }
 

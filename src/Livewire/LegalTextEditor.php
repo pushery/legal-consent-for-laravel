@@ -17,14 +17,17 @@ use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\LegalDocumentUnparsable;
+use Pushery\LegalConsent\Exceptions\LegalDraftNotFound;
 use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
+use Pushery\LegalConsent\Exceptions\LegalSourceDraftCannotBeDiscarded;
 use Pushery\LegalConsent\Exceptions\NoticeTimelineInvertedException;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
 use Pushery\LegalConsent\Jobs\TranslateLegalDraft;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
 use Pushery\LegalConsent\Models\LegalDraft;
+use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDraftSet;
 use Pushery\LegalConsent\Support\LegalDraftWriter;
@@ -139,7 +142,14 @@ final class LegalTextEditor extends Component
      * `<livewire:legal-consent.legal-text-editor :document-key="'terms'" :locale="'de'" />`.
      * The internal property stays `$key`; only the mount parameter had to move.
      */
-    public function mount(string $documentKey, string $locale): void
+    /**
+     * Whether the screen opens with its own page title. Same switch, same reason, as the overview
+     * beside it: an admin frame that titles itself would otherwise show two.
+     */
+    #[Locked]
+    public bool $heading = true;
+
+    public function mount(string $documentKey, string $locale, bool $heading = true): void
     {
         // The same refusal the manager makes at the top of releaseAll(), and for the same reason.
         // These are mount parameters rather than action arguments, so Livewire does not rewrite
@@ -160,6 +170,7 @@ final class LegalTextEditor extends Component
 
         $this->key = $documentKey;
         $this->locale = $locale;
+        $this->heading = $heading;
 
         $draft = LegalDraftSet::for($documentKey)->draft($locale);
         $this->replaceBody($draft instanceof LegalDraft ? $draft->body : '');
@@ -340,6 +351,53 @@ final class LegalTextEditor extends Component
         $this->bodyNonce++;
     }
 
+    /**
+     * Take a draft away, through the one writer that is allowed to.
+     *
+     * ## WHY THIS BELONGS ON THE SCREEN AND NOT IN A CONSUMER'S FRAME
+     *
+     * `LegalDraftWriter::discard()` exists precisely so an application does not delete the row
+     * itself — it refuses the source locale, fires `LegalDraftDiscarded` for a listener to record,
+     * and is the only writer of that table. A screen that does not offer it sends every consumer
+     * who wants the door to build the action beside it, which is how a second writer appears.
+     *
+     * A MACHINE TRANSLATION NOBODY WANTS is the case that needs it: it holds a language in a state
+     * that is neither published nor gone, and for an informational page it holds that language out
+     * of release entirely, because only locales with a publishable draft are released.
+     *
+     * ## THE REFUSALS ANSWER IN OUR WORDS, NOT THE WRITER'S
+     *
+     * Both messages are written for whoever reads a stack trace — *"Discard a translation, or
+     * rewrite the source with save()"* is advice to a developer. Neither can be reached from this
+     * screen, because the control is only offered for a translation that has a draft; they are
+     * caught because a Livewire action is client-callable and a screen must not answer a crafted
+     * call with an error page.
+     */
+    public function discard(): void
+    {
+        // No authorization call of its own, and that is not an omission: {@see AuthorizesLegalAdmin}
+        // checks in `boot()`, which runs on every request rather than only on mount — so an admin
+        // whose access was revoked mid-session is stopped before any action of this class runs.
+        try {
+            app(LegalDraftWriter::class)->discard($this->key, $this->locale, $this->actor());
+        } catch (LegalSourceDraftCannotBeDiscarded) {
+            $this->setStatus(__('legal-consent::ui.admin_status_source_not_discarded'));
+
+            return;
+        } catch (LegalDraftNotFound) {
+            $this->setStatus(__('legal-consent::ui.admin_status_no_draft_to_discard'));
+
+            return;
+        }
+
+        // The component owns the text, so it clears it itself rather than leaving the screen showing
+        // a draft that no longer exists. Through replaceBody(), which is what carries the change
+        // into the rich editor behind `wire:ignore` — without it the field would still hold the old
+        // bytes and the next save would write them straight back.
+        $this->replaceBody('');
+        $this->setStatus(__('legal-consent::ui.admin_status_draft_discarded'));
+    }
+
     public function markReviewed(): void
     {
         app(LegalDraftWriter::class)->markReviewed($this->key, $this->locale, $this->actor());
@@ -454,12 +512,40 @@ final class LegalTextEditor extends Component
 
         $this->takeQueuedTranslation($draft);
 
+        // WHICH sentence, decided here rather than in each view. The judgment has two reasons —
+        // the source moved under a reviewed translation, or nobody ever confirmed this one — and
+        // the old copy narrated the first for both. Two views branching on their own is how they
+        // come to say different things about the same draft.
+        //
+        // Assembled in statements rather than in one nested ternary because a multiline ternary
+        // whose else-arm is the bare constant `null` compiles to no opcode on its own line: pcov
+        // never records it, a 100% floor counts it as executable, and no test can reach it. This
+        // package has a guard for exactly that, and it found this expression.
+        $stale = $draft instanceof LegalDraft && $set->isStale($draft);
+        $staleNotice = null;
+
+        if ($stale) {
+            $staleNotice = $set->wasConfirmedAgainstASource($draft)
+                ? 'legal-consent::ui.admin_stale'
+                : 'legal-consent::ui.admin_stale_unconfirmed';
+        }
+
         return view('legal-consent::livewire.legal-text-editor', [
             'translating' => $this->translating(),
             'sourceLocale' => $this->sourceLocale(),
+            // The button said "Translate from de" on a German screen, because the code went
+            // straight into the sentence. The binding is what an application's own switcher
+            // already answers with; the shipped one returns the code, so nothing moves for a
+            // consumer who has not bound one.
+            'sourceLanguage' => app(NamesLegalTexts::class)->language($this->sourceLocale()),
+            // The screen's own title said `terms — de`. Same finding as the overview's row header,
+            // on the screen beside it, and the report listed three places rather than four.
+            'documentName' => app(NamesLegalTexts::class)->document($this->key),
+            'languageName' => app(NamesLegalTexts::class)->language($this->locale),
             'isSource' => $this->locale === $this->sourceLocale(),
             'reviewState' => $draft?->review_state->value,
-            'stale' => $draft instanceof LegalDraft && $set->isStale($draft),
+            'stale' => $stale,
+            'staleNotice' => $staleNotice,
             // The preview renders exactly what a publish would freeze — the already-sanitized body,
             // not a re-render — so it is a true fixpoint of what the subject will see.
             'preview' => $draft instanceof LegalDraft ? $draft->body : '',
@@ -557,9 +643,11 @@ final class LegalTextEditor extends Component
      */
     private function documentKeys(): array
     {
-        $documents = config('legal-consent.documents');
-
-        return is_array($documents) ? array_map(strval(...), array_keys($documents)) : [];
+        // THROUGH THE MATRIX, not off the raw config. A registry with two readers has two answers,
+        // and only one of them is tested: this line stood identically in the manager and the editor
+        // and neither filtered the list-config case, so `['terms', 'privacy']` reached the screens
+        // as documents named `0` and `1` while every command skipped them.
+        return DocumentMatrix::keys();
     }
 
     /**

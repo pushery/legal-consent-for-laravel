@@ -8,8 +8,24 @@
      and absent means "do not poll", which is the only thing a render without a component could
      honestly mean. Calling `$this->translating()` here instead threw on every one of them. --}}
 <div @if ($translating ?? false) wire:poll.3s @endif>
-    <section aria-labelledby="legal-text-editor-heading">
-        <h1 id="legal-text-editor-heading">{{ $key }} — {{ $locale }}</h1>
+    {{-- Left out where the embedding page titles itself (`:heading="false"`), the same switch the
+         consent panel carries. The landmark then takes its name DIRECTLY rather than pointing at a
+         heading that is no longer in the document: `aria-labelledby` at a missing id names nothing,
+         and an unnamed region is not an improvement on a duplicated title.
+         `?? true` for a render outside the component, which passes no such flag. --}}
+    <section @if ($heading ?? true) aria-labelledby="legal-text-editor-heading" @else aria-label="{{ ($documentName ?? $key).' — '.($languageName ?? $locale) }}" @endif>
+        @if ($heading ?? true)
+            <h1 id="legal-text-editor-heading">{{ ($documentName ?? $key) }} — {{ ($languageName ?? $locale) }}</h1>
+        @endif
+
+        {{-- Whether a human has signed off on these exact bytes, on the screen where that happens.
+             It reached this view and was rendered nowhere, so a reviewed draft looked exactly like
+             an unreviewed one as soon as the status line was replaced by the next action. Labeled
+             rather than shown as a bare word — see the WireKit twin. --}}
+        @if ($reviewState !== null)
+            <p>{{ __('legal-consent::ui.admin_review_state') }}
+                <strong>{{ __(\Pushery\LegalConsent\Enums\ReviewState::from($reviewState)->label()) }}</strong></p>
+        @endif
 
         {{-- WCAG 4.1.3: the result of Save / Translate / Mark reviewed is announced here. Always in
              the DOM so a live region added together with its text still announces. --}}
@@ -18,7 +34,7 @@
         {{-- WCAG 4.1.3: the stale-source warning stays always-present and only its inner text is gated,
              so a staleness that flips true as the RESULT of a Livewire action is still announced (an
              @if that inserts the whole role="alert" with its text would not be). --}}
-        <p role="alert" aria-live="assertive" wire:key="legal-text-editor-stale">@if ($stale){{ __('legal-consent::ui.admin_stale') }}@endif</p>
+        <p role="alert" aria-live="assertive" wire:key="legal-text-editor-stale">@if ($staleNotice ?? null){{ __($staleNotice) }}@endif</p>
 
         {{-- Plain-stub editor: a textarea bound straight to the property. The WireKit variant swaps
              in <x-wirekit::editor> with the same wire:model (see the published stub). This stub ships
@@ -31,10 +47,27 @@
             <button type="button" wire:click="save" wire:loading.attr="aria-busy" wire:target="save">{{ __('legal-consent::ui.admin_save') }}</button>
 
             @unless ($isSource)
-                <button type="button" wire:click="translate" wire:loading.attr="aria-busy" wire:target="translate">{{ __('legal-consent::ui.admin_translate', ['locale' => $sourceLocale]) }}</button>
+                <button type="button" wire:click="translate" wire:loading.attr="aria-busy" wire:target="translate">{{ __('legal-consent::ui.admin_translate', ['locale' => $sourceLanguage]) }}</button>
             @endunless
 
-            <button type="button" wire:click="markReviewed" wire:loading.attr="aria-busy" wire:target="markReviewed">{{ __('legal-consent::ui.admin_mark_reviewed') }}</button>
+            {{-- Only while there is something to stamp — see the WireKit twin for why. Both views
+                 carry the same capability: a consumer on the plain stub is reading the same sign-off
+                 screen. --}}
+            @if ($reviewState !== 'reviewed')
+                <button type="button" wire:click="markReviewed" wire:loading.attr="aria-busy" wire:target="markReviewed">{{ __('legal-consent::ui.admin_mark_reviewed') }}</button>
+            @endif
+
+            {{-- Only where it can do something — a translation that has a draft. See the WireKit
+                 twin for why the source is excluded.
+
+                 ⚠️ NO CONFIRMATION HERE, and that is stated rather than left to be discovered. This
+                 stub names no framework and needs no JavaScript, so it has no dialog to put one
+                 behind, and `confirm()` renders outside any design system and is not something a
+                 package should inject into a consumer's page. A host that wants the step wraps this
+                 control; the WireKit twin ships it. --}}
+            @if (! $isSource && $reviewState !== null)
+                <button type="button" wire:click="discard" wire:loading.attr="aria-busy" wire:target="discard">{{ __('legal-consent::ui.admin_discard') }}</button>
+            @endif
         </div>
 
         {{-- RELEASE WITH AN OBJECTION WINDOW — a deemed-consent change (§ 308 Nr. 5 BGB).

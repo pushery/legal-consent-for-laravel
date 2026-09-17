@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Livewire;
 
 use Illuminate\Contracts\View\View;
+use Illuminate\Routing\Exceptions\UrlGenerationException;
+use Illuminate\Support\Facades\Route;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Pushery\LegalConsent\Contracts\NamesLegalTexts;
 use Pushery\LegalConsent\Enums\BlockingReason;
@@ -16,6 +19,7 @@ use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
 use Pushery\LegalConsent\Models\LegalDraft;
+use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDraftSet;
 
@@ -33,6 +37,24 @@ final class LegalTextManager extends Component
 {
     use AnnouncesStatus;
     use AuthorizesLegalAdmin;
+
+    /**
+     * Whether the screen opens with its own page title.
+     *
+     * An application that mounts this inside its own admin frame already has one, and two page
+     * titles on one screen is what a browser sweep rejects. Off, the frame carries the title and
+     * the landmark takes its name directly instead of pointing at a heading that is no longer
+     * there — an unnamed region is not an improvement on a duplicated one.
+     *
+     * The same switch the consent panel has carried since it met the same frame.
+     */
+    #[Locked]
+    public bool $heading = true;
+
+    public function mount(bool $heading = true): void
+    {
+        $this->heading = $heading;
+    }
 
     public function releaseAll(string $key): void
     {
@@ -114,19 +136,32 @@ final class LegalTextManager extends Component
 
     public function render(): View
     {
+        $keys = $this->documentKeys();
+        $names = app(NamesLegalTexts::class);
+
+        $documentNames = array_combine($keys, array_map($names->document(...), $keys));
+        $languageNames = array_combine($this->locales(), array_map($names->language(...), $this->locales()));
+
         return view('legal-consent::livewire.legal-text-manager', [
-            'rows' => $this->grid(),
-            'keys' => $this->documentKeys(),
+            'rows' => $this->grid($documentNames, $languageNames),
+            'keys' => $keys,
             'locales' => $this->locales(),
+            // Resolved once per key and handed to the view, rather than called from it. The binding
+            // may answer from the database -- the shipped one does -- and a call inside the row loop
+            // is how a guarded render starts paying per cell again.
+            'documentNames' => $documentNames,
+            'languageNames' => $languageNames,
         ]);
     }
 
     /**
      * The grid: per key, per locale, the one cell an admin reads before deciding to act.
      *
+     * @param  array<string, string>  $documentNames  resolved once per key by the caller
+     * @param  array<string, string>  $languageNames  resolved once per locale by the caller
      * @return array<string, array<string, array<string, mixed>>>
      */
-    private function grid(): array
+    private function grid(array $documentNames, array $languageNames): array
     {
         $grid = [];
 
@@ -147,7 +182,7 @@ final class LegalTextManager extends Component
             foreach ($this->locales() as $locale) {
                 $draft = $set->draft($locale);
 
-                $grid[$key][$locale] = [
+                $cell = [
                     'written' => $draft instanceof LegalDraft,
                     'review_state' => $draft?->review_state->value,
                     // The raw value stays for anything that branches on state; the label is what a
@@ -159,6 +194,11 @@ final class LegalTextManager extends Component
                     'unpublished_changes' => $unpublished[$locale],
                     'publishable' => $draft instanceof LegalDraft && $set->isPublishable($draft),
                 ];
+
+                $cell['url'] = $this->editorUrl($key, $locale);
+                $cell['label'] = $this->cellName($documentNames[$key] ?? $key, $languageNames[$locale] ?? $locale, $cell);
+
+                $grid[$key][$locale] = $cell;
             }
 
             $grid[$key]['_release'] = [
@@ -168,6 +208,85 @@ final class LegalTextManager extends Component
         }
 
         return $grid;
+    }
+
+    /**
+     * Where this cell's text is edited, or null when the application has not said.
+     *
+     * The package ships no admin routes on purpose — which application shows a release button, and
+     * at what address, is the application's decision — so the overview had no way to reach the
+     * editor at all: you got to a text by typing its address. This is the seam for that, and it
+     * stays opt-in.
+     *
+     * The parameters are bound BY POSITION, document first and locale second, rather than by name.
+     * A name would be a contract this package cannot enforce: a route written as
+     * `{document}/{locale}` and one written as `{key}/{lang}` are the same route to an operator,
+     * and only positional binding accepts both.
+     *
+     * Asked of the ROUTER, not of the configuration. A name that is configured and not registered
+     * is the ordinary state of a half-finished installation, and `route()` answers it by throwing —
+     * on an overview, that is an error page instead of a screen. A misconfiguration degrades to a
+     * cell that is not a link, and `legal-consent:doctor` is what says so out loud.
+     */
+    private function editorUrl(string $key, string $locale): ?string
+    {
+        $name = config('legal-consent.admin.editor_route');
+
+        if (! is_string($name) || $name === '' || ! Route::has($name)) {
+            return null;
+        }
+
+        try {
+            return route($name, [$key, $locale]);
+        } catch (UrlGenerationException) {
+            // A registered route whose parameters this pair cannot fill. Same reasoning as above:
+            // the overview keeps working, and the doctor is where an operator learns why.
+            return null;
+        }
+    }
+
+    /**
+     * The accessible name of a linked cell — document, locale, and the states the badges show.
+     *
+     * The states are repeated here rather than left to the badges because an `aria-label` REPLACES
+     * the content it sits on: a link wrapping "None" that announces only "Edit Terms (de)" hides
+     * the one fact the cell exists to state. The words are the long ones, for the same reason the
+     * badges carry them as a `title` — "Stale" is a column heading, "Needs update" is a sentence.
+     *
+     * Both names arrive already resolved. The binding may answer either of them from the database —
+     * the shipped one does for a document — so calling it from inside the cell loop is how a render
+     * whose budget is guarded starts paying per cell again. The caller asks once per key and once
+     * per locale; this method only assembles.
+     *
+     * @param  array<string, mixed>  $cell
+     */
+    private function cellName(string $documentName, string $languageName, array $cell): string
+    {
+        $states = [];
+
+        if ($cell['written'] !== true) {
+            $states[] = (string) __('legal-consent::ui.admin_not_written');
+        } else {
+            $states[] = (string) __(is_string($cell['review_state_label']) ? $cell['review_state_label'] : '');
+
+            if ($cell['machine'] === true) {
+                $states[] = (string) __('legal-consent::ui.admin_machine');
+            }
+
+            if ($cell['stale'] === true) {
+                $states[] = (string) __('legal-consent::ui.admin_needs_update');
+            } elseif ($cell['unpublished_changes'] === true) {
+                $states[] = (string) __('legal-consent::ui.admin_unpublished');
+            }
+        }
+
+        // The outer punctuation lives in the translation, because it is punctuation: a language
+        // that separates an apposition differently gets to say so without a change here.
+        return (string) __('legal-consent::ui.admin_edit_for_state', [
+            'key' => $documentName,
+            'locale' => $languageName,
+            'state' => implode(' · ', $states),
+        ]);
     }
 
     /**
@@ -200,9 +319,11 @@ final class LegalTextManager extends Component
     /** @return list<string> */
     private function documentKeys(): array
     {
-        $documents = config('legal-consent.documents');
-
-        return is_array($documents) ? array_map(strval(...), array_keys($documents)) : [];
+        // THROUGH THE MATRIX, not off the raw config. A registry with two readers has two answers,
+        // and only one of them is tested: this line stood identically in the manager and the editor
+        // and neither filtered the list-config case, so `['terms', 'privacy']` reached the screens
+        // as documents named `0` and `1` while every command skipped them.
+        return DocumentMatrix::keys();
     }
 
     /** @return list<string> */

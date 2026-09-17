@@ -177,14 +177,20 @@ final readonly class RegistrationConsentRecorder
             // Snapshot the version the recorder actually resolved (its own locale), which
             // may be the default-locale fallback rather than the requested locale.
             //
-            // The wording rides along because it decides WHICH door this row goes through, and the
-            // decision is made here where the document is in hand rather than in the loop below,
-            // which would have to resolve it a second time and could resolve it differently.
+            // Both ride along because the document is in hand HERE; resolving either again in the
+            // loop below could resolve it differently.
+            //
+            // THE DOOR IS DECIDED BY THE TYPE, NOT BY THE PRESENCE OF A SENTENCE, and that used to
+            // be the same thing: a consent-bearing document had its wording nulled out precisely so
+            // the loop would route it to accept(). That made the sentence unreachable for the one
+            // document where it matters most — a binding text folded into a line that names four,
+            // whose proof then froze words the subject never read.
             $pending[] = [
                 (string) $key,
                 $document->locale,
                 is_string($expectedHash) ? $expectedHash : null,
-                $document->type->isConsentBearing() ? null : RegistrationAcknowledgment::wordingFor((string) $key),
+                RegistrationAcknowledgment::wordingFor((string) $key),
+                $document->type->isConsentBearing(),
             ];
         }
 
@@ -192,19 +198,24 @@ final readonly class RegistrationConsentRecorder
             throw UnevidencedConsentException::for($unevidenced);
         }
 
-        foreach ($pending as [$key, $documentLocale, $expectedHash, $acknowledgmentWording]) {
+        foreach ($pending as [$key, $documentLocale, $expectedHash, $registrationWording, $bindsSomebody]) {
             // An informational page the operator flagged goes through acknowledge(), which is a
             // different act and not a stricter accept(): it records that the subject was SHOWN the
             // page, under the sentence the operator's own form put next to it, and it binds nobody.
             // `accept()` would refuse it — rightly, because the sentence it guards is one this
             // document does not have.
-            if ($acknowledgmentWording !== null) {
-                $this->consent->acknowledge($subject, $key, $context, $acknowledgmentWording, $documentLocale, $expectedHash);
+            if (! $bindsSomebody) {
+                // Narrowing a type, not inventing a value: `isRecordedAtRegistration()` lets a
+                // non-binding page through only when `coversRegistration()` found it a sentence.
+                $this->consent->acknowledge($subject, $key, $context, (string) $registrationWording, $documentLocale, $expectedHash);
 
                 continue;
             }
 
-            $this->consent->accept($subject, $key, $context, $documentLocale, $expectedHash);
+            // Null where the operator configured no registration line, which is every registry that
+            // has not asked for one — and then the proof freezes this document's own published
+            // wording, exactly as before.
+            $this->consent->accept($subject, $key, $context, $documentLocale, $expectedHash, $registrationWording);
         }
 
         if ($unevidenced !== []) {
