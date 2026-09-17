@@ -207,7 +207,7 @@ final class PublishDocumentCommand extends Command
         // Name the unchanged count rather than printing a line per combination. On the second run
         // — the normal case in a deploy — every combination is unchanged, and a wall of "nothing
         // happened" lines trains people to stop reading the ones that matter.
-        // ⚠️ THE "WITHOUT TEXT" SEGMENT IS UNCONDITIONAL, AND IT USED TO DEPEND ON THE FLAG.
+        // THE "WITHOUT TEXT" SEGMENT IS UNCONDITIONAL, AND IT USED TO DEPEND ON THE FLAG.
         // The reasoning for that was sound while a textless source was a failure under the bare
         // --all: a permanently-zero count is noise, and it would move a line deploy logs are
         // grepped for. Both halves of the premise are gone — the count can be non-zero here now,

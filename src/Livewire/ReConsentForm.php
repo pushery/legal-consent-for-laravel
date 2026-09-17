@@ -27,7 +27,7 @@ use Pushery\LegalConsent\Support\DocumentUrlResolver;
  * installed; the plain checkbox stub covers the headless case. Requires an authenticated
  * Eloquent subject (auth()->user()).
  *
- * ⚠️ EVERY PUBLIC METHOD HERE IS A REACHABLE ENDPOINT ONCE THE COMPONENT IS EMBEDDED —
+ * EVERY PUBLIC METHOD HERE IS A REACHABLE ENDPOINT ONCE THE COMPONENT IS EMBEDDED —
  * Livewire dispatches to it whether or not your template renders a control for it, so deleting a
  * button from a published view switches nothing off. Besides `submit()` this exposes `object()`
  * and `terminate()`, exactly like the settings screen, and `$allowObjection` /
@@ -100,7 +100,7 @@ final class ReConsentForm extends Component
      * the gate kept holding the next request. The doctor already named the outcome: a dead end,
      * not a loop.
      *
-     * ⚠️ THIS IS A BOOLEAN, AND A NULLABLE `$method` WAS TRIED FIRST AND IS BROKEN TWICE OVER.
+     * THIS IS A BOOLEAN, AND A NULLABLE `$method` WAS TRIED FIRST AND IS BROKEN TWICE OVER.
      * Measured on this component: a `#[Locked]` typed property mounted as null reads back as null
      * on the mount request and as the property's own PHP default on EVERY request after it — so
      * the form rendered the union, the subject ticked both boxes, and `submit()`, a later
@@ -128,7 +128,7 @@ final class ReConsentForm extends Component
     private array $questionByKey = [];
 
     /**
-     * ⚠️ THE INITIALIZERS BELOW ARE NOT THE POLICY, AND EDITING ONE CHANGES NOTHING.
+     * THE INITIALIZERS BELOW ARE NOT THE POLICY, AND EDITING ONE CHANGES NOTHING.
      *
      * The value in effect always comes from somewhere else: on the first request from `mount()`'s
      * parameter default, and on every request after that from the checksummed snapshot, because

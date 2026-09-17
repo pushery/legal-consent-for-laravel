@@ -23,7 +23,7 @@ enum ReviewState: string
     /**
      * The translation key for this state, for a screen a person reads.
      *
-     * ⚠️ THE STORED VALUE IS NOT A WORD, and the two only look alike in English. `draft` and
+     * THE STORED VALUE IS NOT A WORD, and the two only look alike in English. `draft` and
      * `reviewed` are storage tokens; rendering them raw put untranslated English on a compliance
      * screen in every other locale, which is how this was found — by a consumer running a German
      * admin surface.

@@ -35,7 +35,7 @@ final readonly class NoticeMailConfig
     /**
      * The Markdown view the notice renders through, or null to keep Laravel's global template.
      *
-     * ⚠️ It is a MARKDOWN view, and swapping in a plain one is not a styling choice. `->view()`
+     * It is a MARKDOWN view, and swapping in a plain one is not a styling choice. `->view()`
      * nulls `$markdown` and leaves `introLines`/`outroLines` empty, so the proof body would
      * collapse to the subject line while `mandatory_content_ok` kept reporting true — a row
      * certifying content that is not in it. The base notification only ever calls `->markdown()`.

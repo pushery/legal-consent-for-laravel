@@ -66,8 +66,16 @@ final class DoctorCommand extends Command
      * drift. `documents` is the registry a consumer curates: removing the bundled `newsletter`
      * entry is the documented way to not have that document, and reporting it as "missing" would
      * train the reader to ignore this command.
+     *
+     * Taken from the provider rather than written out again. The two answer the same question —
+     * the provider stops merging into these blocks, this command stops judging them — and since
+     * the merge stopped, they cannot disagree without being wrong: a block the host owns whole is
+     * one whose entries genuinely do not reach the runtime, so a report asking the runtime would
+     * name every shipped example they chose not to serve. A copy here would be a second place to
+     * change and a first place to forget; a deliberate divergence needs its own reason, written
+     * where it is made.
      */
-    private const array APP_OWNED = ['documents'];
+    private const array APP_OWNED = LegalConsentServiceProvider::HOST_OWNED_REGISTRIES;
 
     /**
      * Is any active version relying on deemed consent while the durable-medium proof is switched
@@ -413,7 +421,7 @@ final class DoctorCommand extends Command
     /**
      * The store the document cache actually reads from, when that store is the database.
      *
-     * ⚠️ THE ADVICE EXISTED AND ONLY A DOCBLOCK CARRIED IT. `EnforceableDocumentCache` explains
+     * THE ADVICE EXISTED AND ONLY A DOCBLOCK CARRIED IT. `EnforceableDocumentCache` explains
      * that the enforceable set is asked for four times per request and that on Laravel's default
      * `database` store each of those is a SELECT against the cache table — so the per-request memo
      * hands part of its saving straight back. A consumer on a default install is in exactly that
@@ -455,7 +463,7 @@ final class DoctorCommand extends Command
      * A configured notification channel that cannot deliver, so a notice about a changed legal text
      * fails at the one moment somebody needed it.
      *
-     * ⚠️ ONLY `database` IS ANSWERABLE FROM HERE, and the limit is stated rather than implied.
+     * ONLY `database` IS ANSWERABLE FROM HERE, and the limit is stated rather than implied.
      * Whether a mailer reaches its host is a question no doctor can answer without sending
      * something, and a check that pretended otherwise would print a green line over a question it
      * never asked — the failure mode this whole command exists against. What IS answerable is the
@@ -463,7 +471,7 @@ final class DoctorCommand extends Command
      * the channel list and Laravel's `notifications` table was never migrated, so every database
      * notification job fails.
      *
-     * ⚠️ The mail is not lost with it, and that changes how loud this is. Laravel dispatches one
+     * The mail is not lost with it, and that changes how loud this is. Laravel dispatches one
      * queued job PER CHANNEL, so a missing table fails the database job alone; a consumer reported
      * this as "the retry re-sends the mail" and it does not. What is lost is the in-app record, on
      * an install that asked for one.
@@ -667,9 +675,12 @@ final class DoctorCommand extends Command
 
         if ($lost !== []) {
             $this->newLine();
-            $this->error('These keys exist in the package but NEVER reach your runtime config:');
-            $this->line('  The published file already declares their top-level block, and the merge is flat,');
-            $this->line('  so the published block wins wholesale and the package default is not applied.');
+            $this->error('These keys exist in the package and do not reach your runtime config:');
+            $this->line('  Asked of the runtime, not of your file: this package merges its defaults UNDER a');
+            $this->line('  published config recursively, so a key your file omits normally still arrives.');
+            $this->line('  These did not, and a STALE config cache is the usual reason — one built before');
+            $this->line('  the package added the key. A cached configuration skips the merge and serves');
+            $this->line('  what it captured, so the key can only appear after the cache is rebuilt.');
             $this->newLine();
 
             foreach ($lost as $key => $value) {
@@ -703,19 +714,48 @@ final class DoctorCommand extends Command
         }
 
         $this->newLine();
-        $this->line('Nothing was changed. Copy the missing keys into the matching block of your published file;');
-        $this->line('review the stale ones and delete what no longer applies.');
+        $this->line('Nothing was changed.');
+        $this->newLine();
+        $this->line('Run `php artisan config:clear` and this command again: a key that arrives then was only');
+        $this->line('cached away, and your file needs nothing. Add it by hand only where it stays missing — a');
+        $this->line('package default copied into your file stops following the package, which is what the');
+        $this->line('merge exists to avoid. Review the stale ones and delete what no longer applies.');
 
-        // Only LOST keys are a defect — the runtime is not what the file says. A stale key is
-        // hygiene, and exiting non-zero for it would make this command useless in a CI check. The
-        // legal contradiction is folded in rather than restated, so config hygiene can never
-        // decide it.
+        // Only LOST keys are a defect, and that word is earned now: the key is absent from the
+        // RUNTIME, not merely from the file. A key the merge still delivers no longer reaches this
+        // line at all, which is what takes a permanently red step off a correct configuration.
+        // A stale key is hygiene and exits 0 — failing on it would make this command
+        // useless in a CI check. The legal contradiction is folded in rather than restated, so
+        // config hygiene can never decide it.
         return $failed || $lost !== [] ? self::FAILURE : self::SUCCESS;
     }
 
     /**
-     * Keys the package defines that the flat merge cannot deliver: nested under a top-level
-     * block the published file already declares.
+     * Keys the package defines that do not reach the runtime.
+     *
+     * ## ASKED OF THE RUNTIME, NOT OF TWO FILES, AND THAT IS THE WHOLE CORRECTION
+     *
+     * This used to diff the shipped config against the published one and report every key the file
+     * did not name, with a sentence that argued from Laravel's `mergeConfigFrom()`: *"the merge is
+     * flat, so the published block wins wholesale."* This package does not use that merge for its
+     * own config. {@see LegalConsentServiceProvider::mergeConfigRecursivelyFrom()} descends into
+     * every map, precisely so a key added inside an already-published block still arrives.
+     *
+     * So the report named keys that were reaching the runtime perfectly well — and `$lost` drives
+     * the exit code, which made it a red step over a configuration with nothing wrong in it. It was
+     * measured by a consumer whose integration branch had gone red over exactly that, on a published
+     * file missing keys the recursive merge was delivering the whole time.
+     *
+     * AND THE ADVICE WAS WORSE THAN THE RED RUN. "Copy the missing keys into the matching block"
+     * writes package defaults into a published file and freezes them on the day the package
+     * improves them — the exact state the recursive merge exists to prevent.
+     *
+     * Asking the runtime needs no knowledge of how the merge works, and it stays right if that ever
+     * changes. It also reports the one case that is genuinely still lost, and which no comparison
+     * of two files can see: a STALE configuration cache. `config:cache` builds from a full
+     * bootstrap, so the merge IS in the cached file — but the provider skips merging while a cache
+     * exists, so a key the package adds AFTERWARDS never arrives until the cache is rebuilt. That
+     * is a deployment state, not a file state, and it is the one this report now names.
      *
      * A whole top-level block missing from the published file is NOT reported — the merge
      * supplies it, so it arrives intact.
@@ -738,9 +778,18 @@ final class DoctorCommand extends Command
             }
 
             foreach ($this->flatten($value, $block) as $key => $default) {
-                if (! $this->has($published, $key)) {
-                    $lost[$key] = $default;
+                if ($this->has($published, $key)) {
+                    continue;
                 }
+
+                // The file does not name it. That is a question about documentation until the
+                // runtime says otherwise — and only the runtime can, because the merge is what
+                // stands between the two.
+                if (config()->has("legal-consent.{$key}")) {
+                    continue;
+                }
+
+                $lost[$key] = $default;
             }
         }
 

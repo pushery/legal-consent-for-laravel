@@ -32,7 +32,7 @@ final readonly class LegalSourceRenderer
     /**
      * The default cache-key namespace.
      *
-     * ⚠️ IT CARRIES NO PAYLOAD VERSION, AND THAT IS A DECISION MADE AFTER MEASURING — a `:v2` was
+     * IT CARRIES NO PAYLOAD VERSION, AND THAT IS A DECISION MADE AFTER MEASURING — a `:v2` was
      * written here and taken back out. Two reasons, either sufficient:
      *
      *  1. **It would not have taken effect.** The runtime value comes from
@@ -88,7 +88,7 @@ final readonly class LegalSourceRenderer
     /**
      * The cached shape: primitives only, never the {@see Document} itself.
      *
-     * ⚠️ THIS USED TO CACHE THE OBJECT, and the sibling cache had already learned why that is wrong.
+     * THIS USED TO CACHE THE OBJECT, and the sibling cache had already learned why that is wrong.
      * An application running a serializing store under `cache.serializable_classes` reads a cached
      * object back as `__PHP_Incomplete_Class`, so the `instanceof` guard on the read path failed on
      * every single hit — and the method then re-rendered and re-wrote, forever, with nothing going

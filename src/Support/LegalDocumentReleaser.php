@@ -6,6 +6,10 @@ namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+use Pushery\LegalConsent\Content\Drivers\DraftDocumentSource;
+use Pushery\LegalConsent\Content\LegalDocumentSource;
+use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -47,7 +51,7 @@ final readonly class LegalDocumentReleaser
         // interleave with a release — this lock is the one that spans the outer transaction, and an
         // inner writer skips its own rather than re-taking this name.
         //
-        // ⚠️ THIS PARAGRAPH USED TO CALL THE INNER LOCK "A SAVEPOINT INSIDE IT", AND THAT SENTENCE
+        // THIS PARAGRAPH USED TO CALL THE INNER LOCK "A SAVEPOINT INSIDE IT", AND THAT SENTENCE
         // IS HOW THE DEADLOCK GOT WRITTEN. A savepoint is a database construct that nests; this
         // lock lives in the cache store and knows nothing about the transaction it is taken in. It
         // does not nest, it CONTENDS — the inner instance is a different owner, so it waits out its
@@ -83,7 +87,7 @@ final readonly class LegalDocumentReleaser
      * on a non-major bump would force a typo fix on a live gating version down the editorial path,
      * which silently drops the gate for everyone still on the older major.
      *
-     * ⚠️ THE ANSWER IS PER (key, locale), because a consent row carries the locale it was given in.
+     * THE ANSWER IS PER (key, locale), because a consent row carries the locale it was given in.
      * A caller holding a whole release — one document across several locales — wants
      * {@see affectsRelease} instead: summing this over the released rows counts a subject who
      * accepted two languages twice, and reading one row answers about one language.
@@ -181,6 +185,47 @@ final readonly class LegalDocumentReleaser
      */
     private function releaseNow(string $key, NoticeMode $mode, array $locales, ReleaseOptions $options): Collection
     {
+        // FIRST, whether this screen may release this document at all — before any question about
+        // the drafts, and the order is the whole point.
+        //
+        // The two halves of a release read different texts. Readiness is judged over the DRAFTS,
+        // three lines down; the publisher reads whatever source the document is configured for.
+        // On `drafts` those are the same bytes and nothing is wrong. On any other source they are
+        // not: a reviewed draft passes this pre-flight, and the publisher then freezes the file —
+        // a text the reviewer never saw — as the evidence of what was in force. It reports success,
+        // because from where it stands nothing failed.
+        //
+        // Asked before the draft check rather than after, because after it the answer would be
+        // NoDraft for the ordinary case of a markdown document nobody wrote a draft for, and that
+        // sentence is true about the wrong thing: it points at the draft store for a document that
+        // does not use it. A reader following it writes a draft, reviews it, releases — and lands
+        // exactly in the case this guard exists to stop.
+        //
+        // The console path is untouched: `legal-consent:publish` goes through the publisher
+        // directly, which is the route a markdown document has always taken.
+        // The question is "is the source something OTHER than the draft store", never "is there
+        // one". A document with no resolvable source is a misconfiguration, and turning an unknown
+        // into this refusal would rename an error that already has an owner: the draft pre-flight
+        // below reports it as a missing draft, the publisher as a missing source, and a caller who
+        // has been catching one of those keeps catching it. Measured — a suite configuring no
+        // registry at all had a release start answering InvalidArgumentException where it used to
+        // answer LegalReleaseNotReady.
+        $source = null;
+
+        try {
+            $source = $this->publisher->sourceFor($key);
+        } catch (InvalidArgumentException) {
+            // Not this guard's case. Left exactly where it was.
+        }
+
+        // Written as an instanceof on the interface rather than `$source !== null`, and the two say
+        // the same thing here only by accident of the local being initialized to null. The positive
+        // form states the condition the branch actually needs — a source that RESOLVED and is not
+        // the draft store — so it keeps reading correctly if this ever stops being a nullable local.
+        if ($source instanceof LegalDocumentSource && ! $source instanceof DraftDocumentSource) {
+            throw LegalReleaseNotReady::for($key, array_fill_keys($locales, BlockingReason::NotDraftBacked));
+        }
+
         // Pre-flight BEFORE the transaction: a release that cannot complete must not write a row
         // and roll it back, it must simply not start — and it must say which locales blocked it.
         $blocking = LegalDraftSet::for($key)->blockingLocales($locales);

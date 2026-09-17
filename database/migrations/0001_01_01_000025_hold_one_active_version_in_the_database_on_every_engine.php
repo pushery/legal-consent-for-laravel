@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
  * One active version per (key, locale, tenant) — enforced by the DATABASE on every engine, not
  * only on PostgreSQL.
  *
- * ⚠️ THIS CLOSES A GAP THAT WAS NAMED IN THE CODE AND THEN LIVED WITH FOR TWENTY-FOUR MIGRATIONS.
+ * THIS CLOSES A GAP THAT WAS NAMED IN THE CODE AND THEN LIVED WITH FOR TWENTY-FOUR MIGRATIONS.
  * Migration 000001 creates the partial unique index on PostgreSQL and says in its own comment:
  * *"MySQL/SQLite rely on the app-layer guard in LegalDocument::activate()"*. That guard is a lock
  * taken on the configured CACHE store — and `array` is process-local, `null` grants every lock,

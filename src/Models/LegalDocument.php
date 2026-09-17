@@ -107,7 +107,7 @@ final class LegalDocument extends Model
         // and a caller that sets only the mode gets the derived boolean — so a notice-mode query
         // and a legacy `requires_reconsent` query can never disagree.
         //
-        // ⚠️ This paragraph used to sit ABOVE `MUTABLE_AFTER_PUBLISH`, stacked on a second
+        // This paragraph used to sit ABOVE `MUTABLE_AFTER_PUBLISH`, stacked on a second
         // docblock. PHP attaches only the LAST one to a declaration, so it was invisible to
         // reflection and to every editor — describing this hook from a place nothing connects to
         // it, while the constant it appeared to document said something else entirely.

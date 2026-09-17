@@ -48,7 +48,7 @@ readonly class DefaultConsentManager implements ConsentManager
     private const int MAX_CHAIN_ATTEMPTS = 5;
 
     /**
-     * ⚠️ `$documents` IS NULLABLE BECAUSE "NOT GIVEN" AND "GIVEN AND EMPTY" ARE DIFFERENT ANSWERS,
+     * `$documents` IS NULLABLE BECAUSE "NOT GIVEN" AND "GIVEN AND EMPTY" ARE DIFFERENT ANSWERS,
      * and conflating them was a defect rather than a nicety. The old signature defaulted to `[]` and
      * read `!== []` as "a registry was configured", so an installation where EVERY document carries
      * `ask_at_registration => false` — a real configuration, and the one that says "ask nobody at
@@ -285,7 +285,7 @@ readonly class DefaultConsentManager implements ConsentManager
      * anyone out of anything: {@see ConsentGate} is not routed through here and keeps asking
      * `isConsentBearing()`.
      *
-     * ⚠️ THE SENTENCE COMES FROM THE CALLER, AND THAT IS THE DESIGN RATHER THAN A CONVENIENCE. The
+     * THE SENTENCE COMES FROM THE CALLER, AND THAT IS THE DESIGN RATHER THAN A CONVENIENCE. The
      * ledger column holding it is NOT NULL, and an informational document has no `ui_wording` of its
      * own precisely because the package never asks the reader for anything on such a page. Three
      * ways out of that, and two of them are worse than the gap:
@@ -488,7 +488,7 @@ readonly class DefaultConsentManager implements ConsentManager
         // layout, so this ran on every full page view of a signed-in member and paid an uncached
         // query for a fact that changes a few times a year.
         //
-        // ⚠️ THE LEDGER FOLD ABOVE STAYS UNCACHED, AND THAT IS THE POINT OF DOING ONLY HALF. It is
+        // THE LEDGER FOLD ABOVE STAYS UNCACHED, AND THAT IS THE POINT OF DOING ONLY HALF. It is
         // per-subject state, and a stale answer either strands somebody at a consent gate or waves
         // them past it. The global half is the half that is safe, and it needs no new invalidation
         // to reason about: publishing already flushes this cache, and its payload is plain
@@ -724,10 +724,11 @@ readonly class DefaultConsentManager implements ConsentManager
     private function appendChained(string $token, array $attributes): LegalConsent
     {
         $chain = new LedgerHashChain;
+        $macs = new LedgerRecordMacs($chain);
 
         for ($attempt = 1; ; $attempt++) {
             try {
-                return DB::transaction(function () use ($token, $attributes, $chain): LegalConsent {
+                return DB::transaction(function () use ($token, $attributes, $chain, $macs): LegalConsent {
                     // Chain onto the subject's last ALREADY-CHAINED row. Rows written before
                     // tamper-evidence was enabled carry a NULL link and are skipped, so the first
                     // chained row for such a subject starts at genesis — matching the verifier's
@@ -752,6 +753,18 @@ readonly class DefaultConsentManager implements ConsentManager
                     // proof row is deliberately something only this curated write path may do.
                     $consent = new LegalConsent;
                     $consent->forceFill($attributes)->save();
+
+                    // THE ROW IS RE-READ HERE, AND THE ID IS ALL THAT IS HANDED OVER. Until
+                    // this row has a mac of its own it is the one row of its chain nobody
+                    // witnesses — the link that vouches for a row lives on the row that FOLLOWS
+                    // it, and this one has no follower yet.
+                    //
+                    // The mac must be taken over what the DRIVER returns, never over the
+                    // attributes just written: `tenant_id` is stamped by a `creating` listener
+                    // during save(), and `accepted_at` comes back from PostgreSQL carrying the
+                    // connection's offset. {@see LedgerRecordMacs} does the read, so no call site
+                    // can hand it a pre-save shape by mistake.
+                    $macs->record([$consent->getKey()]);
 
                     return $consent;
                 });

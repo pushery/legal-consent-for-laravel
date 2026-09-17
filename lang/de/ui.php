@@ -87,6 +87,7 @@ return [
     'review_state_draft_short' => 'Entwurf',
     'review_state_reviewed' => 'Geprüft',
     'review_state_reviewed_short' => 'Geprüft',
+    'blocking_not_draft_backed' => 'dieses Dokument bezieht seinen Text nicht aus dem Entwurfs-Speicher',
     'blocking_no_draft' => 'es wurde noch kein Entwurf geschrieben',
     'blocking_not_reviewed' => 'noch nicht von einem Menschen geprüft',
     'blocking_stale_translation' => 'der Quelltext hat sich geändert, nachdem diese Übersetzung geprüft wurde',
@@ -135,6 +136,7 @@ return [
     'admin_status_translation_queued' => 'Die Übersetzung läuft. Sie erscheint hier, sobald sie fertig ist.',
 
     'admin_status_machine_translated' => 'Maschinell übersetzt. Ein Mensch muss den Text prüfen, bevor er veröffentlicht werden kann.',
+    'admin_status_translation_failed' => 'Die Übersetzung ist nicht zu Ende gekommen. Der Entwurf ist unverändert; du kannst es erneut versuchen.',
     'admin_status_reviewed' => 'Als geprüft markiert. Dieser Text ist jetzt veröffentlichbar.',
     'admin_status_release_blocked' => '„:key“ wurde nicht veröffentlicht: :reasons',
     'admin_status_released' => '„:key“ in :count Sprache(n) veröffentlicht — betrifft :affects Person(en).',

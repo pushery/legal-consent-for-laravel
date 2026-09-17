@@ -93,6 +93,13 @@ return [
             // nothing, which you find, rather than a registration that fails, which they do.
             // 'acknowledge_at_registration' => true,
             // 'registration_wording' => 'I have read the imprint.',
+            //
+            // For a page that is NEVER on your sign-up form — a confirmation inside a checkout,
+            // shown before every purchase — use the general pair instead. It says the same thing
+            // about the ledger and nothing at all about registration, so the sign-up flow leaves
+            // it alone. `acknowledge_at_registration` above implies this one.
+            // 'acknowledgeable' => true,
+            // 'acknowledgment_wording' => 'I understand the creator provides this service.',
         ],
     ],
 
@@ -281,6 +288,19 @@ return [
     */
     'translation' => [
         'queue' => false,
+
+        // WHICH LANE THE JOB TAKES, and it is a separate question from whether it queues at all.
+        // Both null keep today's behavior exactly: the default connection and its default queue.
+        //
+        // A minutes-long call does not belong beside an application's short jobs, and the numbers
+        // say why rather than the preference. Measured in a starter kit whose Horizon config ships
+        // from a template: `supervisor-1` gives a worker 60 seconds and the connection retries
+        // after 90, against a job built for minutes — so turning `queue` on there trades a 500 for
+        // a worker killed at its timeout. Raising that supervisor's timeout is not the answer
+        // either: it would apply to every job the application runs, and `retry_after` would have to
+        // move with it. Separating the lane is the whole point.
+        'connection' => null,
+        'queue_name' => null,
     ],
 
     /*
@@ -350,7 +370,7 @@ return [
         // full text was reachable BEFORE agreeing (§ 305 Abs. 2 BGB), and a dialog opened by script
         // is not reachable without script. The dialog goes OVER that link, never in its place.
         //
-        // ⚠️ It adds no exposure. What it returns is the text you already publish at the address the
+        // It adds no exposure. What it returns is the text you already publish at the address the
         // checkbox links to; only the shape differs. It serves PUBLISHED documents only, under a
         // registered key, in a configured locale — a draft is nobody's terms and answers 404.
         //

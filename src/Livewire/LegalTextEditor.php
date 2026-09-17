@@ -65,7 +65,7 @@ final class LegalTextEditor extends Component
     /**
      * The objection window a deemed-consent release binds on — announce, deadline, enforce.
      *
-     * ⚠️ THIS SURFACE IS HERE RATHER THAN ON THE MANAGER GRID, and that placement is the finding
+     * THIS SURFACE IS HERE RATHER THAN ON THE MANAGER GRID, and that placement is the finding
      * rather than a preference. `LegalTextManager` says in its own words that the deemed and
      * info-only modes belong to "the editor controls or the CLI, not a button on an overview
      * grid" — a deemed release binds people by their SILENCE (§ 308 Nr. 5 BGB), and a one-click
@@ -97,6 +97,42 @@ final class LegalTextEditor extends Component
     public string $body = '';
 
     /**
+     * Bumped whenever the SERVER replaces the body, so the view can key the rich editor off it.
+     *
+     * The WireKit editor lives behind `wire:ignore`, which is WireKit's documented integration and
+     * keeps Livewire from morphing a mounted ProseMirror node. It also keeps a server-side
+     * replacement out: after a translation the visible editor still showed the old text while the
+     * hidden field already carried the new one, so the reader edited what they saw, the engine
+     * wrote its own document back on the next keystroke, and a save stored the old text over the
+     * translation. Nothing failed anywhere, which is why this is data loss rather than a display
+     * fault. Measured by a consumer against v0.34.0 in Chromium.
+     *
+     * NOT `md5($body)`, which is the obvious derivation and fires too often. The client's own
+     * typing reaches the server with the next action, so a plain save would change that key too and
+     * rebuild the editor from scratch — on a privacy notice of some fifteen kilobytes that throws
+     * away the cursor and the scroll position of the text somebody is proofreading, every time they
+     * save. The question the key has to answer is not "did the text change" but "did it change
+     * WITHOUT the client doing it", and only the server can know that.
+     *
+     * The same shape as `$statusNonce`, and LOCKED where that one is not. The sibling is unlocked
+     * because a client bumping it only re-announces a sentence the server already wrote; this one
+     * decides whether the mounted editor is torn down and rebuilt, so a client that bumps it throws
+     * away its own cursor and whatever the engine holds that the property does not. Nothing needs to
+     * write it from the browser, and the stricter classification costs nothing.
+     */
+    #[Locked]
+    public int $bodyNonce = 0;
+
+    /**
+     * Whether this page dispatched a translation whose result it has not taken yet.
+     *
+     * Locked, because it is not an input: a client that set it would have the next render replace
+     * its unsaved edits with the stored draft.
+     */
+    #[Locked]
+    public bool $awaitingTranslation = false;
+
+    /**
      * The document key arrives as `documentKey`, never `key`: Livewire reserves `key` for its own
      * DOM-diffing identity and strips it before mount(), so `<livewire:… :key="'terms'" />` — the
      * form the docs used to show — could never reach this method. Mount it as
@@ -115,7 +151,7 @@ final class LegalTextEditor extends Component
         // it and raises: a 500 on an admin screen for a request that is simply not a thing.
         abort_unless(in_array($documentKey, $this->documentKeys(), true), 404);
 
-        // ⚠️ AND THE LOCALE, WHICH IS THE ONE THAT FAILS QUIETLY. releaseDeemed() releases the
+        // AND THE LOCALE, WHICH IS THE ONE THAT FAILS QUIETLY. releaseDeemed() releases the
         // locales from the configuration, never the one this screen is editing. Measured: an
         // editor mounted on `fr` with `locales => ['de']` accepts the text, reports it reviewed,
         // and then publishes `de` — while telling the operator that »terms« was released. The
@@ -126,7 +162,7 @@ final class LegalTextEditor extends Component
         $this->locale = $locale;
 
         $draft = LegalDraftSet::for($documentKey)->draft($locale);
-        $this->body = $draft instanceof LegalDraft ? $draft->body : '';
+        $this->replaceBody($draft instanceof LegalDraft ? $draft->body : '');
     }
 
     public function save(): void
@@ -179,6 +215,7 @@ final class LegalTextEditor extends Component
 
             TranslateLegalDraft::dispatch($this->key, $this->locale, $sourceLocale, $this->actor());
 
+            $this->awaitingTranslation = true;
             $this->setStatus(__('legal-consent::ui.admin_status_translation_queued'));
 
             return;
@@ -202,7 +239,7 @@ final class LegalTextEditor extends Component
             return;
         }
 
-        $this->body = $draft->body;
+        $this->replaceBody($draft->body);
         $this->setStatus(__('legal-consent::ui.admin_status_machine_translated'));
     }
 
@@ -227,6 +264,80 @@ final class LegalTextEditor extends Component
     {
         return $this->queuesTranslation()
             && Cache::get(TranslateLegalDraft::markerFor($this->key, $this->locale)) === true;
+    }
+
+    /**
+     * Take the result of a queued translation once the worker has finished with it.
+     *
+     * A dispatched job is invisible to the page that dispatched it: it writes the draft and clears
+     * the marker, and nothing tells this component. `$body` is a persisted property, so it kept the
+     * pre-translation text — on the SERVER, not only in the DOM — and the page went on showing it
+     * after polling stopped. A save then wrote that text over the translation, which is the same
+     * silent loss the inline path had, on the route this package recommends for a real translator.
+     *
+     * It replaces unsaved edits, and that is the existing contract rather than a new one: the
+     * inline path has always overwritten `$body` with the translation, and the status says which
+     * text is now on screen.
+     *
+     * ANNOUNCED ONLY WHEN THE DRAFT ACTUALLY MOVED. A job that gave up — a translator that threw,
+     * a source that vanished — clears the same marker, and claiming a machine translation there
+     * would be a report about something that did not happen. What such a run leaves behind is a
+     * page still reading "queued" and no way to learn it failed; that needs a durable failure
+     * record and is filed rather than guessed at here.
+     */
+    private function takeQueuedTranslation(?LegalDraft $draft): void
+    {
+        if (! $this->awaitingTranslation || $this->translating()) {
+            return;
+        }
+
+        $this->awaitingTranslation = false;
+
+        // A failure is read before the draft, because it is the more specific answer: a run that
+        // recorded one left the draft exactly as it was, so the check below would end in silence
+        // and the operator would be left to infer the failure from a text that never appeared.
+        $failure = TranslateLegalDraft::takeFailure($this->key, $this->locale);
+
+        if ($failure !== null) {
+            $this->setStatus($failure !== ''
+                ? __('legal-consent::ui.admin_status_not_saved', ['reason' => $failure])
+                : __('legal-consent::ui.admin_status_translation_failed'));
+
+            return;
+        }
+
+        // NO DRAFT AND NO RECORDED FAILURE means the run is over and left nothing — the marker
+        // reached its time-to-live, or a worker was replaced before it wrote one. It is the last
+        // path that could end in silence, and silence here reads as the run still being underway,
+        // which is exactly the hour this whole mechanism was built to stop.
+        if (! $draft instanceof LegalDraft) {
+            $this->setStatus(__('legal-consent::ui.admin_status_translation_failed'));
+
+            return;
+        }
+
+        // The bytes move only when they differ, because replacing them tears the editor down and
+        // rebuilds it. The SENTENCE is not conditional on that: a translator that answered with the
+        // text already on screen still finished, and a screen left reading "queued" over a finished
+        // run is the same defect one case over.
+        if ($draft->body !== $this->body) {
+            $this->replaceBody($draft->body);
+        }
+
+        $this->setStatus(__('legal-consent::ui.admin_status_machine_translated'));
+    }
+
+    /**
+     * The one writer of `$body` on the server, so the nonce cannot be forgotten at a new call site.
+     *
+     * {@see $bodyNonce} for why the view needs to know, and why the answer is not a hash of the
+     * text. Livewire's own hydration writes the property directly, which is correct: that is the
+     * client's text arriving, and the editor already holds it.
+     */
+    private function replaceBody(string $body): void
+    {
+        $this->body = $body;
+        $this->bodyNonce++;
     }
 
     public function markReviewed(): void
@@ -341,6 +452,8 @@ final class LegalTextEditor extends Component
         $set = LegalDraftSet::for($this->key);
         $draft = $set->draft($this->locale);
 
+        $this->takeQueuedTranslation($draft);
+
         return view('legal-consent::livewire.legal-text-editor', [
             'translating' => $this->translating(),
             'sourceLocale' => $this->sourceLocale(),
@@ -371,7 +484,7 @@ final class LegalTextEditor extends Component
     /**
      * One date-input value, or null when this screen cannot read it as the date it claims to be.
      *
-     * ⚠️ NOT CarbonImmutable::parse(), AND NOT createFromFormat ALONE — measured, both let a wrong
+     * NOT CarbonImmutable::parse(), AND NOT createFromFormat ALONE — measured, both let a wrong
      * date through, in different ways:
      *
      * - `parse()` never refuses. 'x' becomes TODAY and '31.02.2026' becomes 2026-03-03, silently.

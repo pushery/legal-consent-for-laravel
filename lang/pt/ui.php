@@ -87,6 +87,7 @@ return [
     'review_state_draft_short' => 'Rascunho',
     'review_state_reviewed' => 'Revisto',
     'review_state_reviewed_short' => 'Revisto',
+    'blocking_not_draft_backed' => 'este documento não obtém o seu texto do arquivo de rascunhos',
     'blocking_no_draft' => 'ainda não foi escrito nenhum rascunho',
     'blocking_not_reviewed' => 'ainda não foi revisto por uma pessoa',
     'blocking_stale_translation' => 'o texto de origem mudou depois de esta tradução ser revista',
@@ -135,6 +136,7 @@ return [
     'admin_status_translation_queued' => 'A tradução está em curso. Aparecerá aqui assim que terminar.',
 
     'admin_status_machine_translated' => 'Traduzido automaticamente. Uma pessoa tem de o rever antes de poder ser publicado.',
+    'admin_status_translation_failed' => 'A tradução não chegou ao fim. O rascunho está inalterado e podes tentar novamente.',
     'admin_status_reviewed' => 'Marcado como revisto. Este texto já pode ser publicado.',
     'admin_status_release_blocked' => '«:key» não foi publicado: :reasons',
     'admin_status_released' => '«:key» publicado em :count idioma(s) — afeta :affects pessoa(s).',

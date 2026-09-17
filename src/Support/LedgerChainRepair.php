@@ -17,7 +17,7 @@ use stdClass;
  * nobody tampered with — and an operator who cannot tell a lawful sweep from an attack stops
  * reading the alarm, which costs more than the alarm gives.
  *
- * ⚠️ THE COST OF THIS IS REAL AND WAS CHOSEN, NOT OVERLOOKED. A supported re-link path exists now,
+ * THE COST OF THIS IS REAL AND WAS CHOSEN, NOT OVERLOOKED. A supported re-link path exists now,
  * so "the chain verifies" no longer means "no row was ever rewritten" — it means "no row was
  * rewritten OUTSIDE these two operations", and both of them stamp `subject_erased_at` or are a
  * scheduled sweep that reports what it removed. Against an attacker it changes nothing: without a
@@ -88,7 +88,7 @@ final readonly class LedgerChainRepair
 
             $row['prev_record_hash'] = $this->chain->linkFor($previousChained);
 
-            // ⚠️ THE ROW THAT BECOMES THE OPENER NEEDS THE OPENER'S PROOF.
+            // THE ROW THAT BECOMES THE OPENER NEEDS THE OPENER'S PROOF.
             //
             // The writer sets `root_proof` only on the row that opened a chain. A prune that
             // removes that row makes THIS one the opener — and without the proof the verifier
@@ -195,7 +195,7 @@ final readonly class LedgerChainRepair
      * the row's own width keeps it correct as columns are added, which a row-count constant does
      * not: it is the number that silently stops meaning what it says.
      *
-     * ⚠️ IT LIVES HERE BECAUSE BOTH REWRITERS NEED THE SAME ANSWER AND ONE OF THEM HAD A
+     * IT LIVES HERE BECAUSE BOTH REWRITERS NEED THE SAME ANSWER AND ONE OF THEM HAD A
      * DIFFERENT ONE. The erasure derived its chunk from this budget; the retention sweep chunked
      * at a hardcoded 500 rows, which is 12 000 placeholders -- thirteen times the erasure's answer
      * for the identical rows, written by {@see toRow()}, into the identical table. Measured on a

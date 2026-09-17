@@ -29,7 +29,7 @@ final class LeadTimeTooShortException extends RuntimeException
          * The END of the span that was measured — the objection deadline or the enforcement date,
          * depending on `$span`.
          *
-         * ⚠️ IT IS STILL CALLED `enforceAt`, AND THAT NAME IS WHY THE DEFECT LASTED. The deemed-
+         * IT IS STILL CALLED `enforceAt`, AND THAT NAME IS WHY THE DEFECT LASTED. The deemed-
          * consent branch has always passed the objection deadline into it, so a reader of this
          * class saw "enforce" and wrote a sentence about enforcement. The name stays because it is
          * public readonly state that a host may already read; `$span` is what says what it holds,

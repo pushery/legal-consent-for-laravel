@@ -33,7 +33,7 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * SQLite re-parses every trigger in the schema at that rename, and a trigger whose referenced
  * table is missing at that instant is a hard error — raised after the original has already gone.
  *
- * ⚠️ ON SQLITE THIS REBUILDS THE TABLE, AND A REBUILD DOES NOT CARRY YOUR OWN TRIGGERS ACROSS.
+ * ON SQLITE THIS REBUILDS THE TABLE, AND A REBUILD DOES NOT CARRY YOUR OWN TRIGGERS ACROSS.
  * SQLite cannot drop a foreign key in place, so the grammar creates a temp table, copies the rows,
  * drops the original and renames — reconstructing columns, indexes, primary key and foreign keys
  * from BlueprintState, and nothing else. A trigger a CONSUMER added to `legal_consents` is silently

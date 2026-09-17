@@ -108,7 +108,7 @@ final readonly class WithdrawConsentController
     private function backToOwnOrigin(Request $request): RedirectResponse
     {
         $home = config('legal-consent.routes.home', '/');
-        // ⚠️ THE `!== ''` HALF IS DEFENSIVE AND CANNOT BE OBSERVED FROM OUTSIDE — measured, so that
+        // THE `!== ''` HALF IS DEFENSIVE AND CANNOT BE OBSERVED FROM OUTSIDE — measured, so that
         // nobody writes the test it invites. The URL generator normalizes an empty target and a
         // bare slash to the same place: `url()->previous('')` and `url()->previous('/')` both
         // answer the application root, and so do both `redirect()->to()` calls, with a foreign
@@ -147,7 +147,7 @@ final readonly class WithdrawConsentController
         // A backslash: browsers treat `\` as `/`, so `/\evil` is fetched as `//evil`, and
         // parse_url genuinely reads no authority there. That half is load-bearing.
         //
-        // ⚠️ THE `//` HALF IS REDUNDANT, AND THIS COMMENT USED TO GIVE IT A REASON THAT IS FALSE.
+        // THE `//` HALF IS REDUNDANT, AND THIS COMMENT USED TO GIVE IT A REASON THAT IS FALSE.
         // It said a protocol-relative `//host` "has no scheme for parse_url to hang a host on".
         // Measured: `parse_url('//host', PHP_URL_HOST)` returns `'host'`, and every degenerate
         // shape (`//`, `///`, `//?x`, `///host`) returns `false` — never `null`. The final line

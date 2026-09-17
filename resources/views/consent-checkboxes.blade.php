@@ -77,7 +77,7 @@
         // so an error target appended next to the document link would silently take the link away.
         // The error comes first — why the field is flagged is said before what it points at.
         //
-        // ⚠️ AND THE LINK IS ONLY A DESCRIPTION WHEN IT SITS OUTSIDE THE LABEL. Where the title
+        // AND THE LINK IS ONLY A DESCRIPTION WHEN IT SITS OUTSIDE THE LABEL. Where the title
         // appears inside the wording, the link is INSIDE the `<label>` and therefore already part
         // of the accessible NAME — measured: name "Ich akzeptiere die Allgemeinen
         // Geschäftsbedingungen.", description "Allgemeine Geschäftsbedingungen", a substring of the

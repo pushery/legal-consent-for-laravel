@@ -50,7 +50,7 @@ final class LegalTextManager extends Component
         // app had to fork this final class to release one. The deemed mode is a per-change legal call
         // made from the editor controls or the CLI, not a button on an overview grid.
         //
-        // ⚠️ THAT SENTENCE NAMED TWO HOMES AND ONLY ONE OF THEM EXISTED, for as long as it has been
+        // THAT SENTENCE NAMED TWO HOMES AND ONLY ONE OF THEM EXISTED, for as long as it has been
         // here. Measured 2026-09-05: `LegalTextEditor` carried nothing — no notice mode, no
         // objection deadline, no ReleaseOptions — so the only route to a deemed release was
         // `legal-consent:publish --deemed --objection-at=`. An application with an admin UI had no

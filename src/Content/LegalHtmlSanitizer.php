@@ -95,7 +95,7 @@ final class LegalHtmlSanitizer
         libxml_clear_errors();
         libxml_use_internal_errors($previous);
 
-        // ⚠️ THE ERRORS USED TO BE THROWN AWAY UNREAD, AND ONE CLASS OF THEM MEANS LOST CONTENT.
+        // THE ERRORS USED TO BE THROWN AWAY UNREAD, AND ONE CLASS OF THEM MEANS LOST CONTENT.
         //
         // Measured: 260 nested elements hit libxml's hard depth limit of 256 and the parser STOPS.
         // 500 004 bytes of input came back as 6 375 — no error, no warning, no log — and
@@ -146,7 +146,7 @@ final class LegalHtmlSanitizer
         // Strip comments, processing instructions, and CDATA sections; keep plain text.
         // A CDATA section serializes its content VERBATIM (unescaped), so it must never
         // reach the {!! !!} sink — defense in depth on top of removing raw-text elements.
-        // ⚠️ ONLY THE COMMENT ENTRY IS REACHABLE, so removing either of the other two would change
+        // ONLY THE COMMENT ENTRY IS REACHABLE, so removing either of the other two would change
         // nothing. Measured on the HTML path this sanitizer uses: libxml folds both a processing
         // instruction and a CDATA section into COMMENT nodes, so no input produces an XML_PI_NODE
         // or an XML_CDATA_SECTION_NODE, and removing either name from the list below changes
@@ -165,7 +165,7 @@ final class LegalHtmlSanitizer
 
     private function cleanElement(DOMElement $element, DOMNode $parent): void
     {
-        // ⚠️ NO TEST CAN KILL THE `strtolower` HERE, and that is a fact about the PARSER, not a
+        // NO TEST CAN KILL THE `strtolower` HERE, and that is a fact about the PARSER, not a
         // gap. Measured: libxml's HTML parser already lowercases `tagName`, so `<P>` arrives as
         // `p` and unwrapping this call cannot change any outcome reachable through
         // sanitize() -- the only caller.

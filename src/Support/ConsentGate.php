@@ -145,7 +145,7 @@ final class ConsentGate
     /**
      * The majors the subject CURRENTLY holds, keyed by document — a PRESENCE, not a number.
      *
-     * ⚠️ THE DIFFERENCE TO {@see heldMajorByKey()} ONLY BECOMES VISIBLE AT MAJOR 0, AND THERE IT IS
+     * THE DIFFERENCE TO {@see heldMajorByKey()} ONLY BECOMES VISIBLE AT MAJOR 0, AND THERE IT IS
      * TOTAL. That map uses 0 as its sentinel for "holds nothing", so a document published as
      * `0.9.0` folds to the same 0 as a withdrawal and as a key nobody ever touched. Every
      * comparison of the form `($held[$key] ?? 0) >= $document->major_version` is then true for

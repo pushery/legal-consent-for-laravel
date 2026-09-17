@@ -13,7 +13,7 @@ namespace Pushery\LegalConsent\Enums;
  * contract) — so the span ends at the objection deadline. For every other change that owes notice
  * it ends at enforcement.
  *
- * ⚠️ THE REFUSAL USED TO CALL BOTH OF THEM "ENFORCEMENT", AND THAT IS WHY THIS EXISTS. The
+ * THE REFUSAL USED TO CALL BOTH OF THEM "ENFORCEMENT", AND THAT IS WHY THIS EXISTS. The
  * deemed-consent branch handed the objection deadline to a parameter named `enforceAt`, so the
  * sentence an operator read named the wrong date under the wrong word — in the English message and,
  * once the sentence was translated, in all seven languages. A reported example: announcement

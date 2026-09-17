@@ -19,7 +19,7 @@ use Throwable;
  * classification behind it — which must never take effect unnoticed. The check is reporting-only;
  * it never mutates anything.
  *
- * ⚠️ AND IT SAYS WHICH KIND OF CHANGE IT IS, BECAUSE THE TWO NEED OPPOSITE ANSWERS. A differing
+ * AND IT SAYS WHICH KIND OF CHANGE IT IS, BECAUSE THE TWO NEED OPPOSITE ANSWERS. A differing
  * content hash used to be reported as "source differs — publish a new version and set its
  * materiality", whoever or whatever had moved. Registering CommonMark's TableExtension then made
  * every document holding a table differ, and the report sent operators into a materiality decision

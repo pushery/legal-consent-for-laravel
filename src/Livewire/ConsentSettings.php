@@ -24,7 +24,7 @@ use Pushery\LegalConsent\Support\ConsentPresenter;
  * Only ships/registers when livewire/livewire is installed; the plain Blade stub covers the
  * headless case. Requires an authenticated Eloquent subject (auth()->user()).
  *
- * ⚠️ EVERY PUBLIC METHOD HERE IS A REACHABLE ENDPOINT ONCE THE COMPONENT IS EMBEDDED —
+ * EVERY PUBLIC METHOD HERE IS A REACHABLE ENDPOINT ONCE THE COMPONENT IS EMBEDDED —
  * Livewire dispatches to it whether or not your template renders a control for it. Removing a
  * button from a published view therefore switches nothing off. Three transitions are exposed:
  * `withdraw()`, `object()`, `terminate()` and — only when you switch it on — `grant()`.
@@ -72,7 +72,7 @@ final class ConsentSettings extends Component
     public string $locale = '';
 
     /**
-     * ⚠️ THE INITIALIZERS BELOW ARE NOT THE POLICY, AND EDITING ONE CHANGES NOTHING.
+     * THE INITIALIZERS BELOW ARE NOT THE POLICY, AND EDITING ONE CHANGES NOTHING.
      *
      * The value in effect always comes from somewhere else: on the first request from `mount()`'s
      * parameter default, and on every request after that from the checksummed snapshot, because

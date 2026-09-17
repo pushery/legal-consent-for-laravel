@@ -82,7 +82,7 @@ final class LegalChangeSet extends Model
     /**
      * The stored row as the freeze needs to see it: its state, and the columns the refusal names.
      *
-     * ⚠️ NOT LOADED IS NOT "NOT PUBLISHED", and reading it that way opened the freeze on exactly
+     * NOT LOADED IS NOT "NOT PUBLISHED", and reading it that way opened the freeze on exactly
      * the rows it exists to protect. `getOriginal()` is `Arr::get($this->original, $key, $default)`
      * — on a partially hydrated row, `select(['id', …])`, the key is simply absent and the answer
      * is null. Null is not `Published`, so the write went through. Partial selects are house style

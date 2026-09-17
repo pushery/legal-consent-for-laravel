@@ -17,7 +17,7 @@ use Pushery\LegalConsent\Support\LedgerHashChain;
  * token, and that row — being the last of its own chain — has its hash compared against nothing.
  * `verify-ledger` then exits 0 over a forged ledger.
  *
- * ⚠️ WHY THE ROOT ITSELF IS NOT KEYED, WHICH IS THE OBVIOUS FIX AND DOES NOT WORK HERE.
+ * WHY THE ROOT ITSELF IS NOT KEYED, WHICH IS THE OBVIOUS FIX AND DOES NOT WORK HERE.
  * Two independent reasons, both measured rather than reasoned:
  *
  *  1. Every existing first row already stores the constant. A keyed root invalidates all of them,
@@ -73,7 +73,7 @@ return new class extends Migration
             return;
         }
 
-        // ⚠️ NOTHING IS STAMPED WITHOUT A KEY, AND THE FIRST VERSION OF THIS GOT IT WRONG.
+        // NOTHING IS STAMPED WITHOUT A KEY, AND THE FIRST VERSION OF THIS GOT IT WRONG.
         // It stamped unconditionally, which quietly required the secret to be configured before
         // `migrate` — otherwise the marker was born holding an unkeyed hash, and the day the
         // operator set the key it could never verify again. A permanent break produced by
@@ -90,7 +90,7 @@ return new class extends Migration
         // before a root proof could exist, so it is exempt by construction — and an install that
         // has never written a consent gets 0, which exempts nothing.
         //
-        // ⚠️ THIS BLESSES WHATEVER IS ALREADY IN THE TABLE, INCLUDING A FORGERY PLANTED BEFORE
+        // THIS BLESSES WHATEVER IS ALREADY IN THE TABLE, INCLUDING A FORGERY PLANTED BEFORE
         // TODAY. It has to: there is no evidence left to tell the two apart, and inventing one
         // would be worse than saying so. What it does close is every forgery from here on.
         $highest = DB::table('legal_consents')->max('id');

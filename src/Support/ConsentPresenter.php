@@ -128,7 +128,7 @@ final readonly class ConsentPresenter
                 // read it in, which puts a German title on an English page BY DESIGN. See
                 // {@see ContentLanguage} for what the views do with it.
                 'locale' => $document->locale,
-                // ⚠️ THIS READS `true` FOR EVERYONE WHEN `major_version` IS 0, and the two lines
+                // THIS READS `true` FOR EVERYONE WHEN `major_version` IS 0, and the two lines
                 // below have the mirror of the same problem. `?? 0` cannot tell three states
                 // apart — never acted, withdrawn (the fold drops an ENDING action to 0), and
                 // genuinely holding major 0 — and at major 0 the comparison `x >= 0` is true for
@@ -181,7 +181,7 @@ final readonly class ConsentPresenter
                 'withdraw_url' => $offersWithdrawal ? $withdrawUrl : null,
             ];
 
-            // ⚠️ THE TYPE BOUNDARY IS THE QUERY ABOVE, NOT THIS MATCH. The catch-all reads like one
+            // THE TYPE BOUNDARY IS THE QUERY ABOVE, NOT THIS MATCH. The catch-all reads like one
             // — it is what filed an informational page under "consents", absorbing a basis it had
             // never been told about while nothing went red — but tightening it here cannot be the
             // fix: `legalBasis()` is typed `string`, so an exhaustive match is impossible, and an

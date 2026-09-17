@@ -203,7 +203,7 @@ final readonly class LegalDocumentPublisher
 
         $now = CarbonImmutable::now();
 
-        // ⚠️ A RE-FREEZE MUST NOT CONSUME THE DRAFT THAT DESCRIBES THE NEXT CHANGE. The freezer
+        // A RE-FREEZE MUST NOT CONSUME THE DRAFT THAT DESCRIBES THE NEXT CHANGE. The freezer
         // TRANSITIONS the working row onto the version it publishes — it does not copy it — so a
         // presentation re-render would carry away the description an operator wrote for the text
         // change they have not published yet, and that publish would then go out with none.
@@ -211,7 +211,7 @@ final readonly class LegalDocumentPublisher
 
         [$announce, $enforce] = $this->assertedSchedule($key, $locale, $mode, $regime, $rendered, $announceAt, $enforceAt, $objectionDeadline, $now);
 
-        // ⚠️ THE ROW AND ITS ACTIVATION ARE ONE ACT, AND THEY USED NOT TO BE.
+        // THE ROW AND ITS ACTIVATION ARE ONE ACT, AND THEY USED NOT TO BE.
         // `forceCreate()` persisted the version and `activate()` ran after it, unwrapped. When
         // `activate()` lost the lock race it threw LockTimeoutException — and left the row behind,
         // persisted and inactive. That version is then unrepublishable: the next attempt meets
@@ -282,7 +282,7 @@ final readonly class LegalDocumentPublisher
             return $document;
         }));
 
-        // ⚠️ ASK WHETHER THE LOCK IS ALREADY HELD BEFORE TAKING IT. REPORTED FROM PRODUCTION.
+        // ASK WHETHER THE LOCK IS ALREADY HELD BEFORE TAKING IT. REPORTED FROM PRODUCTION.
         // This line used to take the activation lock unconditionally, and a multi-locale release
         // reaches it while holding that very name: LegalDocumentReleaser takes it, opens its
         // transaction, and calls this method once per locale. A Laravel lock is not reentrant, so
@@ -314,7 +314,7 @@ final readonly class LegalDocumentPublisher
      * decide nothing, so nothing here reads them; they are accepted so the call site stays a
      * mirror of the publish and a future guard over one of them needs no new signature.
      *
-     * ⚠️ THE GUARDS MAY NOT BE REBUILT IN A COMMAND. Every one of them is a legal rule — which
+     * THE GUARDS MAY NOT BE REBUILT IN A COMMAND. Every one of them is a legal rule — which
      * locales exist, which notice mode a document type can carry, what a statutory advance period
      * is — and a second copy of a legal rule is a second answer to it, diverging silently from the
      * moment one side is amended. That is why this lives beside the real path and calls the same
@@ -523,7 +523,7 @@ final readonly class LegalDocumentPublisher
             // nothing that passed before now fails for a reason nobody declared.
             $minDays = $this->minLeadDays($mode, $regime, $key);
 
-            // ⚠️ `> 0` VS `>= 0` IS UNOBSERVABLE HERE, so no test can tell the two apart. With
+            // `> 0` VS `>= 0` IS UNOBSERVABLE HERE, so no test can tell the two apart. With
             // `$minDays === 0` the comparison reduces to `announce > enforce`, and that is false
             // in every state this branch can be reached in:
             //
@@ -604,7 +604,7 @@ final readonly class LegalDocumentPublisher
      * ActiveReconsent in another, a subject bound by silence in the first would silently satisfy
      * the hard re-consent gate of the second: a weaker proof standing in for a stronger one.
      *
-     * ⚠️ THE ATOMIC RELEASER DID NOT MAKE THIS UNREACHABLE, and this paragraph used to say it did.
+     * THE ATOMIC RELEASER DID NOT MAKE THIS UNREACHABLE, and this paragraph used to say it did.
      * It publishes its locales one after another inside one transaction, so the first locale met
      * siblings still holding the version being replaced, under its old mode, and was refused.
      * Measured 2026-09-14: a major released as an active re-consent in `de` and `en`, then 1.1.0 as
@@ -618,7 +618,7 @@ final readonly class LegalDocumentPublisher
      */
     private function assertModeConsistentAcrossLocales(NoticeMode $mode, string $key, string $locale, Document $rendered, array $releasedTogether = []): void
     {
-        // ⚠️ A VERSION THAT CARRIES EXACTLY THE ACTIVE VERSION'S TEXT IS NOT A CHANGE, SO IT HAS
+        // A VERSION THAT CARRIES EXACTLY THE ACTIVE VERSION'S TEXT IS NOT A CHANGE, SO IT HAS
         // NOTHING TO BE CONSISTENT WITH. The presentation re-render publishes the identical source
         // — proven by the hash, not by a flag a caller could assert — under the next patch and the
         // silent mode: no gate, no notice, nothing announced. Without this the fix would be

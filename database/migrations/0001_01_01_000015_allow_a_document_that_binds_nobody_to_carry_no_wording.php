@@ -42,7 +42,7 @@ return new class extends Migration
             $table->text('ui_wording')->nullable()->change();
         });
 
-        // ⚠️ NOT optional, and not defensive coding. SQLite cannot alter a column in place, so
+        // NOT optional, and not defensive coding. SQLite cannot alter a column in place, so
         // the change above is Laravel's twelve-step rebuild: create a new table, copy, drop,
         // rename. Indexes survive that. TRIGGERS DO NOT — so without this line the proof guard
         // installed by 000011 is silently gone, on the one table whose entire purpose is being
