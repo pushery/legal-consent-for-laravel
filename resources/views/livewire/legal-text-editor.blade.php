@@ -92,6 +92,34 @@
             <label for="legal-deemed-enforce">{{ __('legal-consent::ui.admin_deemed_enforce') }}</label>
             <input id="legal-deemed-enforce" type="date" wire:model="enforceAt">
 
+            {{-- THE CLASSIFICATION, and it sits with the dates rather than apart from them because
+                 one release carries both. The five controls around it schedule the change; these
+                 two say what KIND of change it is, which is what a deemed release is later argued
+                 from. A `<select>` for the regime because the publisher refuses one it does not
+                 know, and free text for the class because the publisher takes any and the command
+                 line already calls it a tag. --}}
+            <label for="legal-deemed-regime">{{ __('legal-consent::ui.admin_deemed_regime') }}</label>
+            <select id="legal-deemed-regime" wire:model="regime">
+                <option value="">{{ __('legal-consent::ui.admin_deemed_regime_none') }}</option>
+                {{-- THE PUBLISHER'S OWN LIST, read from it rather than written out here: it
+                     refuses a regime it does not know, so a second vocabulary on this screen would
+                     be free to drift -- and the drift shows up as a refusal on a release somebody
+                     has already scheduled.
+
+                     ⚠️ READ AS THE CONSTANT, NOT THROUGH A COMPONENT METHOD. `$this` is bound only
+                     while Livewire renders this view; the package's own view tests render it
+                     directly, and `$this->regimes()` died there with "Using $this when not in
+                     object context" -- a published stub has to render wherever a consumer puts it.
+                     Measured on the integration gate, not guessed. --}}
+                @foreach (\Pushery\LegalConsent\Support\LegalDocumentPublisher::REGIMES as $available)
+                    <option value="{{ $available }}">{{ $available }}</option>
+                @endforeach
+            </select>
+
+            <label for="legal-deemed-change-class">{{ __('legal-consent::ui.admin_deemed_change_class') }}</label>
+            <input id="legal-deemed-change-class" type="text" wire:model="changeClass" aria-describedby="legal-deemed-change-class-hint">
+            <p id="legal-deemed-change-class-hint">{{ __('legal-consent::ui.admin_deemed_change_class_hint') }}</p>
+
             <label for="legal-deemed-termination">
                 <input id="legal-deemed-termination" type="checkbox" wire:model="offersTermination">
                 {{ __('legal-consent::ui.admin_deemed_offers_termination') }}

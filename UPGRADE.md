@@ -4,6 +4,30 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.36.0 → 0.36.1
+
+**One thing is required of you, and only if you turned the wording dialog on in 0.36.0.**
+
+### The dialog's Alpine component is published now, and has to be loaded
+
+The dialog shipped with its logic written inline in the template. Alpine's CSP build parses those attributes with its own grammar rather than `eval`, and that grammar refuses arrow functions, optional chaining and several statements in one attribute — all of which that expression had. On an installation with a policy without `unsafe-eval` the dialog therefore opened onto nothing, while the link was announced to a screen reader as opening a dialog.
+
+The logic moved into a component that is published and loaded as a file, which is also what such a policy expects:
+
+```
+php artisan vendor:publish --tag=legal-consent-assets
+```
+
+```html
+<script src="{{ asset('vendor/legal-consent/legal-consent.js') }}" defer></script>
+```
+
+Before Alpine, and that is all — it registers itself on `alpine:init` and needs no bundler.
+
+**If you leave it out, the dialog does not open.** The anchor is untouched and still carries the document's real address, so the text stays reachable either way; that was always the load-bearing half.
+
+**Nothing to do if `ui.wording_dialog` is off**, which is the shipped default.
+
 ## 0.35.0 → 0.36.0
 
 **Nothing is required of you. Two things changed that you may want, and one that removes a failure you may have been living with.**

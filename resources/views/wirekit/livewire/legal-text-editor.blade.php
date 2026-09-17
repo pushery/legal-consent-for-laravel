@@ -193,6 +193,33 @@
             <x-wirekit::date-picker wire:model="objectionDeadline" name="objectionDeadline" :label="__('legal-consent::ui.admin_deemed_deadline')" />
             <x-wirekit::date-picker wire:model="enforceAt" name="enforceAt" :label="__('legal-consent::ui.admin_deemed_enforce')" />
 
+            {{-- THE CLASSIFICATION, beside the dates rather than apart from them: one release
+                 carries both, and five of the seven fields were built here while the two that say
+                 what KIND of change it is were not. A release from this screen therefore froze a
+                 contract change with no regime and no class, and said nothing about it.
+
+                 The regime is a select over the publisher's own list, because it refuses one it
+                 does not know; the class is free text, because it takes any and the command line
+                 calls it a tag. --}}
+            <x-wirekit::select wire:model="regime" name="regime" :label="__('legal-consent::ui.admin_deemed_regime')">
+                <option value="">{{ __('legal-consent::ui.admin_deemed_regime_none') }}</option>
+                {{-- THE PUBLISHER'S OWN LIST, read from it rather than written out here: it
+                     refuses a regime it does not know, so a second vocabulary on this screen would
+                     be free to drift -- and the drift shows up as a refusal on a release somebody
+                     has already scheduled.
+
+                     ⚠️ READ AS THE CONSTANT, NOT THROUGH A COMPONENT METHOD. `$this` is bound only
+                     while Livewire renders this view; the package's own view tests render it
+                     directly, and `$this->regimes()` died there with "Using $this when not in
+                     object context" -- a published stub has to render wherever a consumer puts it.
+                     Measured on the integration gate, not guessed. --}}
+                @foreach (\Pushery\LegalConsent\Support\LegalDocumentPublisher::REGIMES as $available)
+                    <option value="{{ $available }}">{{ $available }}</option>
+                @endforeach
+            </x-wirekit::select>
+
+            <x-wirekit::input wire:model="changeClass" name="changeClass" :label="__('legal-consent::ui.admin_deemed_change_class')" :hint="__('legal-consent::ui.admin_deemed_change_class_hint')" />
+
             <x-wirekit::toggle wire:model="offersTermination" :label="__('legal-consent::ui.admin_deemed_offers_termination')" />
             <x-wirekit::toggle wire:model="keepsUnmodified" :label="__('legal-consent::ui.admin_deemed_keeps_unmodified')" />
 
