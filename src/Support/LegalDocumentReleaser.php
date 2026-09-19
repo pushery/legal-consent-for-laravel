@@ -6,9 +6,6 @@ namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use InvalidArgumentException;
-use Pushery\LegalConsent\Content\Drivers\DraftDocumentSource;
-use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
@@ -203,26 +200,14 @@ final readonly class LegalDocumentReleaser
         //
         // The console path is untouched: `legal-consent:publish` goes through the publisher
         // directly, which is the route a markdown document has always taken.
-        // The question is "is the source something OTHER than the draft store", never "is there
-        // one". A document with no resolvable source is a misconfiguration, and turning an unknown
-        // into this refusal would rename an error that already has an owner: the draft pre-flight
-        // below reports it as a missing draft, the publisher as a missing source, and a caller who
-        // has been catching one of those keeps catching it. Measured — a suite configuring no
-        // registry at all had a release start answering InvalidArgumentException where it used to
-        // answer LegalReleaseNotReady.
-        $source = null;
-
-        try {
-            $source = $this->publisher->sourceFor($key);
-        } catch (InvalidArgumentException) {
-            // Not this guard's case. Left exactly where it was.
-        }
-
-        // Written as an instanceof on the interface rather than `$source !== null`, and the two say
-        // the same thing here only by accident of the local being initialized to null. The positive
-        // form states the condition the branch actually needs — a source that RESOLVED and is not
-        // the draft store — so it keeps reading correctly if this ever stops being a nullable local.
-        if ($source instanceof LegalDocumentSource && ! $source instanceof DraftDocumentSource) {
+        //
+        // THE PREDICATE MOVED to {@see DocumentSourceKind}, because the admin overview has to ask
+        // the same thing to arm its button and used not to ask at all — so it armed one over a
+        // release this line then refused. The paragraph above is the argument for saying the
+        // source rather than the draft, and it was already written here; it simply never reached
+        // the second reader. The reasoning about the third state — a source that does not resolve,
+        // which is somebody else's error and stays theirs — lives with the predicate now.
+        if (DocumentSourceKind::isOutsideTheDraftStore($key)) {
             throw LegalReleaseNotReady::for($key, array_fill_keys($locales, BlockingReason::NotDraftBacked));
         }
 

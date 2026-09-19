@@ -152,29 +152,15 @@ final readonly class RegistrationAcknowledgment
     /**
      * One document's registry entry, or null when the key names none.
      *
-     * REBUILT RATHER THAN RETURNED, for the reason {@see LedgerChainRepair::toRow()} gives about a
-     * database row: `config()` hands back `mixed`, `is_array()` narrows it only to
-     * `array<mixed, mixed>`, and a registry entry never has integer keys — but nothing in the type
-     * system says so. An inline `@var` would ASSERT that; the loop ESTABLISHES it, and costs one
-     * pass over a handful of options.
+     * MOVED to {@see DocumentRegistryEntry}, which {@see RegistrationField} reads as well. This
+     * method stays as the thin call its four callers here already make, so nothing about them
+     * changes; the reasoning about narrowing a `mixed` config value lives with the reader now.
      *
      * @return array<string, mixed>|null
      */
     private static function entry(string $key): ?array
     {
-        $documents = config('legal-consent.documents', []);
-
-        if (! is_array($documents) || ! isset($documents[$key]) || ! is_array($documents[$key])) {
-            return null;
-        }
-
-        $entry = [];
-
-        foreach ($documents[$key] as $option => $value) {
-            $entry[(string) $option] = $value;
-        }
-
-        return $entry;
+        return DocumentRegistryEntry::for($key);
     }
 
     /**

@@ -4,6 +4,61 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.36.1 → 0.37.0
+
+**Nothing is required of you.** Everything below is opt-in or a wording change, and an installation
+that changes nothing behaves exactly as it did.
+
+### A document may name the form field that evidences it
+
+If your registration form shows ONE control for several documents — "I accept the terms and have
+read the privacy policy" is the ordinary shape — you can now say so per document, and the
+validation rules, the checklist your form is built from and the evidence check will all ask for the
+control you actually rendered:
+
+```php
+'terms'   => ['legal_basis' => 'contract',        'registration_field' => 'legal_terms'],
+'privacy' => ['legal_basis' => 'acknowledgement', 'registration_field' => 'legal_terms'],
+```
+
+Before this, such a form left you two options and both were bad: render a field nobody sees, or
+accept `recorded a mandatory consent with no registration-form field present` on every single
+registration, under a hint that names a completely different cause. If you were living with that
+warning, this is what removes it.
+
+**Documents behind one control must agree on their rule.** A mandatory document and a real consent
+cannot share one — the first needs `accepted`, and requiring the second is the coupling Art. 7(4)
+forbids — and such a registry is now refused where it is read, with both keys named. If you get
+that exception, give the consent its own control.
+
+**The hidden content-hash field is NOT renamed.** It stays `legal_{key}_hash`, because it carries
+one document's version fingerprint: four pages behind one checkbox render one control and, if you
+want the accept-time guard, four hidden fields.
+
+### The release overview stops arming a button over a refusal
+
+For a document whose text does not come from the draft store (`'source' => 'markdown'`), the
+overview used to report readiness from drafts, review and staleness alone — so with reviewed drafts
+present it said ready, armed the release button, and pressing it produced the refusal the releaser
+had all along. Both now read one predicate.
+
+**The no-draft row changes its wording as well**, deliberately: it used to say "no draft yet",
+which is true and points at the wrong thing, because writing one does not help. It now names the
+source. If you have built a screen on `BlockingReason`, expect `NotDraftBacked` where you
+previously saw `NoDraft` for these documents.
+
+### The matrix legend explains its two review words
+
+Two sentences under the legend, in both trees, saying what "Draft" and "Reviewed" mean — the second
+half of the first being the one that matters: reviewing publishes nothing. Override either with an
+empty string to drop it:
+
+```php
+// lang/xx/ui.php
+'review_state_reviewed_description' => '',
+'review_state_draft_description' => '',
+```
+
 ## 0.36.0 → 0.36.1
 
 **One thing is required of you, and only if you turned the wording dialog on in 0.36.0.**

@@ -15,14 +15,17 @@
     "require": {
         "php": "^8.4",
         "ext-dom": "*",
-        "ext-ctype": "*",
         "ext-filter": "*",
         "ext-hash": "*",
         "ext-json": "*",
         "ext-mbstring": "*",
         "ext-libxml": "*",
         "laravel/framework": "^13.0",
-        "league/commonmark": "^2.9"
+        "league/commonmark": "^2.9",
+        "nesbot/carbon": "^3.0",
+        "symfony/console": "^7.0 || ^8.0",
+        "symfony/http-foundation": "^7.0 || ^8.0",
+        "symfony/http-kernel": "^7.0 || ^8.0"
     },
     "require-dev": {
         "cweagans/composer-patches": "^2.0",
@@ -42,6 +45,7 @@
         "pestphp/pest-plugin-phpstan": "5.2.1",
         "pestphp/pest-plugin-rector": "^5.0",
         "pestphp/pest-plugin-type-coverage": "^5.0",
+        "phpstan/phpstan": "2.2.14",
         "pushery/wirekit": "^2.47.0",
         "rector/rector": "2.6.6",
         "spaze/phpstan-disallowed-calls": "4.14.0"
@@ -69,7 +73,8 @@
             "providers": [
                 "Pushery\\LegalConsent\\LegalConsentServiceProvider"
             ]
-        }
+        },
+        "composer-exit-on-patch-failure": true
     },
     "minimum-stability": "stable",
     "prefer-stable": true

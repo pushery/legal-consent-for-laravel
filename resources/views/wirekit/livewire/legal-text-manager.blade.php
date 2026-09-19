@@ -81,6 +81,19 @@
             @endforeach
         </x-wirekit::text>
 
+        {{-- The same two sentences as the plain twin, and for the same reason: the legend above
+             maps a short form onto a long one, so it explains "Draft" with "Draft". What a first
+             reader of this screen needs to hear is that REVIEWING PUBLISHES NOTHING, and then why
+             the release waits on languages other than their own. A capability in one tree and not
+             the other is exactly the drift a pair of shipped views invites. --}}
+        @foreach (['review_state_reviewed', 'review_state_draft'] as $state)
+            @if (__('legal-consent::ui.'.$state.'_description') !== '')
+                <x-wirekit::text size="sm" intent="muted" class="mb-[var(--space-wk-sm)]">
+                    {{ __('legal-consent::ui.'.$state) }}: {{ __('legal-consent::ui.'.$state.'_description') }}
+                </x-wirekit::text>
+            @endif
+        @endforeach
+
         <x-wirekit::table :tableLabel="__('legal-consent::ui.admin_heading')">
             <x-wirekit::table.head>
                 <x-wirekit::table.row>
