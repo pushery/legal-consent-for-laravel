@@ -53,12 +53,18 @@ final readonly class RegistrationChecklistItem
      * The form field this control must be named, so a form built from the checklist validates
      * against the rules without the consumer guessing the convention.
      *
-     * A document control is `legal_{key}`; an ATTESTATION (no document, hence no type — today the
-     * Art. 8 age gate) is named by its key directly.
+     * A document control is `legal_{key}`, or the name the document declares as
+     * `registration_field` when one control covers several pages ({@see RegistrationField}); an
+     * ATTESTATION (no document, hence no type — today the Art. 8 age gate) is named by its key
+     * directly.
+     *
+     * Reading the SAME seam the rules read is the point: a form built from this checklist must
+     * validate against the rules built beside it, and two independent derivations of one
+     * convention is how they stop matching.
      */
     public function field(): string
     {
-        return $this->type instanceof DocumentType ? "legal_{$this->key}" : $this->key;
+        return $this->type instanceof DocumentType ? RegistrationField::forDocument($this->key) : $this->key;
     }
 
     /**
@@ -70,10 +76,16 @@ final readonly class RegistrationChecklistItem
      * Rendering it is OPT-IN and adds no behavior by itself: a form that omits it keeps the prior
      * no-guard registration path (the recorder simply receives no expected hash). Empty for an
      * attestation, which has no document to guard.
+     *
+     * NAMED AFTER THE DOCUMENT, NOT AFTER THE CONTROL, and that is deliberate where a single
+     * control covers several pages: the fingerprint is one document's version, so four pages
+     * behind one checkbox render one control and four hidden fields. Naming these after the
+     * control would collapse four fingerprints into one name and guard whichever was written
+     * last.
      */
     public function hashField(): string
     {
-        return $this->type instanceof DocumentType ? "legal_{$this->key}_hash" : '';
+        return $this->type instanceof DocumentType ? RegistrationField::hashForDocument($this->key) : '';
     }
 
     /**

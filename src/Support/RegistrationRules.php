@@ -6,11 +6,13 @@ namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Database\Eloquent\Collection;
 use Pushery\LegalConsent\Enums\DocumentType;
+use Pushery\LegalConsent\Exceptions\AmbiguousRegistrationFieldException;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
  * Builds registration validation rules + messages for the documents that are ACTUALLY PUBLISHED.
- * Each becomes a `legal_{key}` field. Mandatory documents (contract/notice) must be `accepted`; a
+ * Each becomes a `legal_{key}` field, or the one the document declares as `registration_field`
+ * when a single control covers several pages ({@see RegistrationField}). Mandatory documents (contract/notice) must be `accepted`; a
  * real consent is NEVER required (Kopplungsverbot Art. 7(4)) — it is `nullable|boolean`.
  * Acknowledgment messages say "zur Kenntnis genommen", never "eingewilligt" (EDPB 05/2020 Rz. 122).
  *
@@ -58,11 +60,26 @@ final class RegistrationRules
     public function required(): array
     {
         $rules = [];
+        $claimedBy = [];
 
         foreach ($this->resolvedTypes() as $key => $type) {
-            $rules["legal_{$key}"] = $type->requiresExplicitOptin()
+            $field = RegistrationField::forDocument((string) $key);
+            $rule = $type->requiresExplicitOptin()
                 ? ['nullable', 'boolean']
                 : ['accepted'];
+
+            // Several documents behind ONE control collapse into one rule, which is the whole
+            // point of a collective line. They collapse only while they AGREE: a mandatory
+            // document and a real consent sharing a control have no truthful single rule, and
+            // silently keeping whichever came last would either drop a required acceptance or
+            // couple a consent to registration. Both are the kind of wrong this package refuses
+            // to write down.
+            if (isset($rules[$field]) && $rules[$field] !== $rule) {
+                throw AmbiguousRegistrationFieldException::for($field, $claimedBy[$field], (string) $key);
+            }
+
+            $rules[$field] = $rule;
+            $claimedBy[$field] = (string) $key;
         }
 
         if ($this->ageGateEnabled) {
@@ -84,7 +101,13 @@ final class RegistrationRules
                 continue; // an optional consent has no "required" message
             }
 
-            $messages["legal_{$key}.accepted"] = $this->message($type);
+            // First configured document wins where a control covers several. They are all
+            // mandatory by the time they share a rule (see required()), so every candidate is a
+            // "please accept this" sentence and none of them is wrong — only less complete than a
+            // line naming four pages deserves. Inventing a collective sentence here would put
+            // words in the operator's form that their form does not say; overriding the message is
+            // one array key on their side, and it is theirs to word.
+            $messages[RegistrationField::forDocument((string) $key).'.accepted'] ??= $this->message($type);
         }
 
         if ($this->ageGateEnabled) {

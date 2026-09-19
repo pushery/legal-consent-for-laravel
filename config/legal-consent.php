@@ -63,6 +63,31 @@ return [
         'privacy' => [
             'source' => 'markdown',
             'legal_basis' => 'acknowledgement',
+
+            // Does ONE control on your form cover this page together with others? "I accept the
+            // terms and have read the privacy policy" is an ordinary sign-up line, and then there
+            // is one checkbox, so there is one FIELD. Name it here, on every document behind it,
+            // and the validation rules, the checklist your form is built from and the evidence
+            // check all ask for the control you actually rendered.
+            //
+            // Without this, each document derives `legal_{key}`, and a collective line leaves you
+            // two bad options: render a field nobody sees, or take a warning on every single
+            // registration whose own hint names a completely different cause.
+            //
+            // Documents behind one control collapse into ONE rule while they agree. A mandatory
+            // document and a real consent cannot share one: the first needs `accepted`, and
+            // requiring the second is the coupling Art. 7(4) forbids, so that registry is refused
+            // at boot rather than resolved to whichever document was read last. Give the consent
+            // its own control.
+            //
+            // The validation MESSAGE of a shared control is the first configured document's. All
+            // of them are mandatory by then, so none is wrong — only less complete than a line
+            // naming four pages deserves. Word it yourself if that matters to you.
+            //
+            // The hidden content-hash field stays named after the DOCUMENT (`legal_{key}_hash`),
+            // because it carries one version's fingerprint: four pages behind one checkbox render
+            // one control and, if you want the accept-time guard, four hidden fields.
+            // 'registration_field' => 'legal_terms',
         ],
         'newsletter' => [
             'source' => 'drafts',
@@ -144,8 +169,8 @@ return [
     */
     'markdown' => [
         'html_input' => 'strip',
-        'allow_unsafe_links' => false,
-        'max_nesting_level' => 20,
+        'allow_unsafe_links' => filter_var(env('LEGAL_CONSENT_ALLOW_UNSAFE_LINKS', false), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
+        'max_nesting_level' => filter_var(env('LEGAL_CONSENT_MAX_NESTING_LEVEL', 20), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 20,
     ],
 
     /*
@@ -159,14 +184,14 @@ return [
     */
     'cache' => [
         'store' => env('LEGAL_CONSENT_CACHE_STORE'),
-        'ttl' => 86400,
+        'ttl' => filter_var(env('LEGAL_CONSENT_CACHE_TTL', 86400), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 86400,
         'prefix' => 'legal:doc',
 
         // How long the gate may keep its cached "which versions are enforceable" set. Only the
         // SET is cached, never a subject's satisfaction — so this bounds how late a scheduled
         // enforce_from boundary starts gating, nothing about what gets recorded. A publish
         // flushes it immediately; an out-of-band is_active write needs legal-consent:cache-flush.
-        'enforceable_ttl' => 60,
+        'enforceable_ttl' => filter_var(env('LEGAL_CONSENT_ENFORCEABLE_TTL', 60), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 60,
     ],
 
     /*
@@ -191,7 +216,7 @@ return [
         | P2B Art. 3(3) a change implemented without notice is VOID, while an oversized send is
         | merely expensive. Set it while you find your footing, then decide.
         */
-        'max_recipients_per_run' => null,
+        'max_recipients_per_run' => filter_var(env('LEGAL_CONSENT_MAX_RECIPIENTS_PER_RUN'), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE),
     ],
 
     /*
@@ -372,11 +397,11 @@ return [
         'api' => false,
         'api_prefix' => 'legal',
         'api_middleware' => ['api', 'auth'],
-        'api_throttle' => '60,1',
+        'api_throttle' => env('LEGAL_CONSENT_API_THROTTLE', '60,1'),
         'web' => false,
         'web_prefix' => 'legal',
         'web_middleware' => ['web', 'auth'],
-        'web_throttle' => '60,1',
+        'web_throttle' => env('LEGAL_CONSENT_WEB_THROTTLE', '60,1'),
 
         // Way D — the published text of one document as a FRAGMENT, so a dialog on your registration
         // form can hold it instead of navigating the reader away from a half-filled form.
@@ -543,7 +568,7 @@ return [
         | consent checkbox — an OAuth-only sign-in, for instance — where the alternative is
         | treating people as having accepted a text they were never shown.
         |
-        | ⚠️ IT IS OFF BY DEFAULT BECAUSE TURNING IT ON WITHOUT A SCREEN IS A DEAD END. The
+        | IT IS OFF BY DEFAULT BECAUSE TURNING IT ON WITHOUT A SCREEN IS A DEAD END. The
         | middleware sends the subject to `routes.consent_name`, which is allowlisted, so there is
         | no redirect loop — but if that page mounts only the re-consent form, it will tell them
         | "everything current, nothing to do" while the gate keeps stopping them. Mount the form

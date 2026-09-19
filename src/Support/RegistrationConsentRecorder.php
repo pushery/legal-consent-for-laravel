@@ -122,7 +122,7 @@ final readonly class RegistrationConsentRecorder
                 // the checkbox and there is no version to freeze. Silently skipping is exactly the
                 // hole this fix exists to close — a ticked box with an empty ledger is a consent the
                 // app believes it holds and cannot prove (Art. 7(1)). Fail loudly instead.
-                if ($this->isMandatoryByConfig((string) $key) && $this->wasGiven($input["legal_{$key}"] ?? null)) {
+                if ($this->isMandatoryByConfig((string) $key) && $this->wasGiven($input[RegistrationField::forDocument((string) $key)] ?? null)) {
                     throw UnrecordableConsentException::for((string) $key, $chain);
                 }
 
@@ -141,7 +141,7 @@ final readonly class RegistrationConsentRecorder
                 continue;
             }
 
-            if ($document->type->requiresExplicitOptin() && ! $this->wasGiven($input["legal_{$key}"] ?? null)) {
+            if ($document->type->requiresExplicitOptin() && ! $this->wasGiven($input[RegistrationField::forDocument((string) $key)] ?? null)) {
                 continue; // an optional consent that was not ticked
             }
 
@@ -151,7 +151,7 @@ final readonly class RegistrationConsentRecorder
             // the registration path's own TOCTOU, whose window is minutes. A missing field is null,
             // which `accept()` treats as "no check requested", so a form that does not render it keeps
             // the prior behavior exactly.
-            $expectedHash = $input["legal_{$key}_hash"] ?? null;
+            $expectedHash = $input[RegistrationField::hashForDocument((string) $key)] ?? null;
 
             // A mandatory document is accepted unconditionally, because RegistrationRules made its
             // box `required` and validation already ran. That reasoning holds only while a FORM ran
@@ -159,9 +159,15 @@ final readonly class RegistrationConsentRecorder
             // provider raises with no form at all. Then nothing validated anything, and the row whose
             // whole purpose is to prove a human acted gets written without one having.
             //
-            // The absence of `legal_{key}` in the input is not an inference about the application —
+            // The absence of that field in the input is not an inference about the application —
             // it is this request, observed. (Asking the ROUTE table whether a registration form
             // exists cannot be made reliable: an application may name that route anything.)
+            //
+            // WHICH field is asked for is now the registry's answer rather than a convention this
+            // site derives: a form with one control for four pages declares `registration_field`
+            // once per document, and this check looks for the control that was actually rendered.
+            // Before that existed, such a consumer had to accept a warning on every registration
+            // whose own hint named a different cause entirely.
             //
             // Whether that is reported or REFUSED is the operator's call, and the default is to
             // report: the check can only look for the field name RegistrationRules generates, so an
@@ -170,7 +176,7 @@ final readonly class RegistrationConsentRecorder
             // registrations into failures on the one path every current consumer uses. Where the
             // flag earns its keep is the case it was written for — an external identity provider
             // raising Registered with no form behind it at all.
-            if ($document->type->isMandatory() && ! array_key_exists("legal_{$key}", $input)) {
+            if ($document->type->isMandatory() && ! array_key_exists(RegistrationField::forDocument((string) $key), $input)) {
                 $unevidenced[] = (string) $key;
             }
 
@@ -223,10 +229,12 @@ final readonly class RegistrationConsentRecorder
                 'document_keys' => $unevidenced,
                 'subject_type' => $subject->getMorphClass(),
                 'method' => $context->method->value,
-                'hint' => 'Way B fires on Registered, which a sign-in through an external provider '
-                    .'raises with no form. Record the first acceptance at an interstitial with '
-                    .'ConsentMethod::FirstUseGate instead, turn off '
-                    .'legal-consent.registration.listen_to_registered_event, or set '
+                'hint' => 'If your form shows ONE control for several documents, declare '
+                    .'registration_field per document in the registry and this check looks for the '
+                    .'control you actually rendered. Otherwise: Way B fires on Registered, which a '
+                    .'sign-in through an external provider raises with no form. Record the first '
+                    .'acceptance at an interstitial with ConsentMethod::FirstUseGate instead, turn '
+                    .'off legal-consent.registration.listen_to_registered_event, or set '
                     .'legal-consent.registration.without_form_fields to \'refuse\' to make this a '
                     .'failed registration rather than a warning.',
             ]);

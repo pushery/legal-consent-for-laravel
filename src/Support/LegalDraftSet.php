@@ -172,11 +172,26 @@ final readonly class LegalDraftSet
      * The locales that would block a release right now, each with its reason — so a release screen
      * can say WHY instead of just refusing.
      *
+     * This is the readiness the admin overview arms its button from, and {@see
+     * LegalDocumentReleaser} refuses over the same set. The two must not drift: a button armed
+     * over a refusal is a control that answers with one.
+     *
      * @param  list<string>  $locales
      * @return array<string, BlockingReason>
      */
     public function blockingLocales(array $locales): array
     {
+        // THE SOURCE FIRST, BEFORE ANY QUESTION ABOUT DRAFTS. A document whose text does not come
+        // from the draft store cannot be released from here at all, so every other reason is
+        // beside the point — and one of them is actively misleading. With no drafts this used to
+        // answer "no draft yet", which is true and useless: an operator reads it, writes a draft,
+        // has it reviewed, watches the button go live, and meets the refusal. The reason that is
+        // ACTIONABLE is the source, and it is also exactly what the releaser refuses over, so the
+        // overview and the release now say the same sentence about the same state.
+        if (DocumentSourceKind::isOutsideTheDraftStore($this->key)) {
+            return array_fill_keys($locales, BlockingReason::NotDraftBacked);
+        }
+
         $blocking = [];
 
         foreach ($locales as $locale) {

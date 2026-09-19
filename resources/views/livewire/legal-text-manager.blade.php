@@ -56,6 +56,24 @@
             ] as $state){{ __('legal-consent::ui.'.$state.'_short') }} = {{ __('legal-consent::ui.'.$state) }}@if (! $loop->last) · @endif @endforeach
         </p>
 
+        {{-- What the two review words MEAN, which the line above cannot say: it maps a short form
+             onto a long one, so "Draft" explains itself with "Draft". The half that matters is the
+             second sentence of the first -- reviewing publishes NOTHING. On the one screen whose
+             product is that a person vouched for these exact bytes, "Reviewed" reading as "done,
+             live" is the most expensive confusion available, and it goes wrong in both directions:
+             a text believed live that is not, or a release pressed because it seemed to have
+             happened already. The second answers the question that follows immediately -- why the
+             release is held while my own language is finished -- and that answer lived only behind
+             the confirm dialog, which nobody opens while they still have the question.
+
+             Override either with an empty string to drop it, the same way every other ui.* key
+             here can be overridden. --}}
+        @foreach (['review_state_reviewed', 'review_state_draft'] as $state)
+            @if (__('legal-consent::ui.'.$state.'_description') !== '')
+                <p>{{ __('legal-consent::ui.'.$state) }}: {{ __('legal-consent::ui.'.$state.'_description') }}</p>
+            @endif
+        @endforeach
+
         <table>
             <thead>
                 <tr>

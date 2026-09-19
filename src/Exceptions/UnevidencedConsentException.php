@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Exceptions;
 
+use Pushery\LegalConsent\Support\RegistrationField;
 use RuntimeException;
 
 /**
@@ -36,11 +37,13 @@ final class UnevidencedConsentException extends RuntimeException
             'Refusing to record mandatory consent to [%s]: the request carries no %s field, so nothing '
             .'here evidences that the subject was asked. This is '
             .'legal-consent.registration.without_form_fields => \'refuse\'. If your registration form '
-            .'names its fields differently, set it back to \'warn\'; if you sign people in through an '
+            .'names its fields differently — one control for several pages, say — declare '
+            .'registration_field per document in the registry so this check asks for the control you '
+            .'rendered; if you sign people in through an '
             .'external provider, turn off registration.listen_to_registered_event and record the first '
             .'acceptance at an interstitial under ConsentMethod::FirstUseGate.',
             implode(', ', $documentKeys),
-            implode(' / ', array_map(static fn (string $key): string => "legal_{$key}", $documentKeys)),
+            implode(' / ', array_map(RegistrationField::forDocument(...), $documentKeys)),
         ));
     }
 }
