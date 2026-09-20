@@ -4,6 +4,12 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.38.0] - 2026-09-20
+
+### Fixed
+
+- **The WireKit stub emits its dialogs after the field stack, not inside it — one wrapper per document used to cost a full gap.** Every dialog was rendered where it was built, which made it a flex sibling of every field in the `gap="md"` stack. That is invisible in the markup and expensive on screen: WireKit's outer modal node carries the Alpine state and **no** `x-show` — what hides is the box inside it — so the wrapper is a *visible* child of height zero, and a flex container hands a zero-height child its whole gap anyway. Measured in a consumer that had built the same construction itself, on a form with six published documents: the space between the first checkbox and the second read `20` against `9` for the pair below it, because only a document **with a page** gets a dialog and the grouped sentence named four of them — four zero-height children and five gaps. It was reported from the screen twice, the second time as "still". ⚠️ **Moving them one level out is not enough, and that was measured too:** after the group but still inside a container that has a gap, the last pair went from `17` to `33` — one uneven gap traded for a coarser one. The only thing that fixes it is a container with **no** gap, so the view now brings its own root element; a published stub has no page root to reach for. That root replaces the stack as the view's single child, so a caller sees exactly what it saw before and `legal-consent-fields` stays where a consumer's CSS expects it. A dialog is addressed by **name**, so moving it changes nothing about opening one. ⚠️ **What the new arm proves is the nesting, which is what a render can answer** — whether a nesting costs pixels is a question for a layout engine, and this package already asks that in a real browser where it matters. The pixels above are the consumer's measurement; the arm holds the structure they came from, so it cannot quietly return.
+
 ## [0.37.0] - 2026-09-19
 
 ### Added
@@ -2752,7 +2758,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.37.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.36.1...v0.37.0
 [0.36.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.36.0...v0.36.1
 [0.36.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.35.0...v0.36.0

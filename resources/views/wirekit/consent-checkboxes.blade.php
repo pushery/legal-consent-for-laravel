@@ -39,7 +39,19 @@
      swallowed everything between. Describe it, do not spell it. --}}
 @php
     $bindTo = ($bind ?? '') !== '' ? $bind : null;
+
+    // Every dialog this view renders, collected while the fields are built and emitted after the
+    // stack closes. The reasoning is at the collector, where the markup used to be.
+    $deferredDialogs = [];
 @endphp
+{{-- ⚠️ A ROOT ELEMENT THAT IS NOT A FLEX CONTAINER, and it is the whole repair rather than
+     packaging. The dialogs have to be emitted somewhere with NO `gap`, and inside a published
+     stub there is no page root to reach for — so the view brings one. Block layout has no gap, so
+     a zero-height dialog wrapper costs nothing here.
+
+     It replaces the stack as this view's single root, so a caller still sees exactly one child
+     and the `legal-consent-fields` class stays where a consumer's CSS expects it. --}}
+<div class="legal-consent">
 <x-wirekit::stack gap="md" class="legal-consent-fields">
     @foreach ($documents as $document)
         @php($field = $document['field'] ?? 'legal_'.$document['key'])
@@ -203,26 +215,48 @@
             @endif
         </x-wirekit::stack>
 
-        {{-- THE TEXT, IN A DIALOG OVER THE FORM. Outside the field's stack and outside the label:
-             a dialog is not part of the checkbox's accessible name, and flow content inside a
-             label is invalid markup.
+        {{-- COLLECTED HERE, RENDERED AFTER THE STACK. The dialog markup used to sit right
+             here, which made every dialog a FLEX CHILD of the `gap="md"` stack above — a
+             sibling of every field.
 
-             The body is emitted unescaped because it is the frozen, already-sanitized HTML the
-             published page itself renders — one allowlist, applied when the text was stored, and
-             the same bytes the ledger records as accepted. Re-escaping here would show the reader
-             markup instead of a document.
+             ⚠️ THAT COSTS A FULL GAP EACH, AND IT IS NOT VISIBLE IN THE MARKUP. WireKit's outer
+             modal node is a `<div>` carrying the Alpine state and NO `x-show`; what hides is the
+             box inside it. So the wrapper is a VISIBLE flex child of height zero, and a flex
+             container gives a zero-height child its whole gap anyway. Measured in a consumer that
+             had built the same construction itself, on a form with six published documents:
 
-             It scrolls on its own and says so to a keyboard: a legal text outgrows any window, the
-             dialog opens with focus on the close control in the header, and that control sits
-             OUTSIDE this box — so without `tabindex` the arrow keys move the dialog and not the
-             prose, and the reader is asked to tick that they read a document they could see the
-             top of (WCAG 2.1.1). `role="region"` without an accessible name is worse than none, so
-             it carries the title. --}}
+               before:  pw→cb1 16   cb1→cb2 20   cb2→cb3 9   cb3→btn 17
+               after:   pw→cb1 16   cb1→cb2  4   cb2→cb3 5   cb3→btn 17
+
+             Uneven rather than merely wide, because only a document WITH a page gets a dialog:
+             four of them between the first checkbox and the second is four zero-height children
+             and five 4px gaps — the 20. It was reported from the screen twice.
+
+             ⚠️ AND MOVING THEM ONE LEVEL OUT IS NOT ENOUGH, which the same consumer measured:
+             after the group but still inside a container that has a gap, `cb3→btn` went from 17
+             to 33. One uneven pair traded for a coarser one. The only thing that fixes it is a
+             container with NO gap, which is what the root element below is.
+
+             A modal is addressed by NAME, so where it sits in the document changes nothing about
+             opening one. --}}
         @if ($dialog !== null)
-            <x-wirekit::modal :name="$dialogName" size="lg">
-                <x-wirekit::modal.header>{{ $document['title'] }}</x-wirekit::modal.header>
+            @php($deferredDialogs[] = [
+                'name' => $dialogName,
+                'title' => $document['title'],
+                'dialog' => $dialog,
+                'lang' => $lang,
+            ])
+        @endif
+    @endforeach
+</x-wirekit::stack>
 
-                <x-wirekit::modal.body class="max-h-[65vh] overflow-y-auto" tabindex="0" role="region" :aria-label="$document['title']">
+    {{-- The dialogs, outside every gapped container. See the collector above for what each one
+         costs when it is inside one, and for the measurement that ruled out the halfway fix. --}}
+    @foreach ($deferredDialogs as $deferred)
+            <x-wirekit::modal :name="$deferred['name']" size="lg">
+                <x-wirekit::modal.header>{{ $deferred['title'] }}</x-wirekit::modal.header>
+
+                <x-wirekit::modal.body class="max-h-[65vh] overflow-y-auto" tabindex="0" role="region" :aria-label="$deferred['title']">
                     {{-- FETCHED ON FIRST OPEN, and kept afterwards. The text is the published,
                          already-sanitized HTML the legal page itself renders — one allowlist, applied
                          when it was stored, and the same bytes the ledger records as accepted.
@@ -242,9 +276,9 @@
                          it would work. The logic lives in the published script now, where none of
                          those limits apply, and an expression reduced to a call parses under both
                          builds — one template, either policy. --}}
-                    <div x-data="legalConsentDialog(@js($dialogName), @js($dialog))"
+                    <div x-data="legalConsentDialog(@js($deferred['name']), @js($deferred['dialog']))"
                          x-on:wirekit-modal-show.window="load($event)"
-                         @if ($lang !== null) lang="{{ $lang }}" @endif>
+                         @if ($deferred['lang'] !== null) lang="{{ $deferred['lang'] }}" @endif>
                         <div x-show="state === 'ready'" x-html="body"></div>
                         <p x-show="state === 'loading'" x-cloak>{{ __('legal-consent::ui.dialog_loading') }}</p>
                         <p x-show="state === 'failed'" x-cloak>{{ __('legal-consent::ui.dialog_failed') }}</p>
@@ -257,6 +291,5 @@
                     </x-wirekit::modal.close>
                 </x-wirekit::modal.footer>
             </x-wirekit::modal>
-        @endif
     @endforeach
-</x-wirekit::stack>
+</div>

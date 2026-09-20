@@ -4,6 +4,32 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.37.0 → 0.38.0
+
+**One thing is required of you, and only if you publish the WireKit consent stub.**
+
+### Re-publish `consent-checkboxes.blade.php`, or port one change into your copy
+
+The WireKit stub used to render each document's dialog inside the field stack, where it cost a full
+flex gap per document — the wrapper is a visible child of height zero, and a flex container gives
+one its whole gap anyway. The dialogs are now collected and emitted after the stack, inside a root
+element that has no gap.
+
+**Publishing froze your copy**, so composer cannot bring this to you:
+
+```
+php artisan vendor:publish --tag=legal-consent-wirekit --force
+```
+
+⚠️ **`--force` overwrites your file.** If you changed it, diff first and port the three pieces by
+hand instead: the `$deferredDialogs` array declared beside `$bindTo`, the collector that replaces
+the in-loop `<x-wirekit::modal>` block, and the loop that emits them after `</x-wirekit::stack>`
+inside the new root `<div class="legal-consent">`.
+
+**Nothing else changes.** A dialog is addressed by name, so moving it changes nothing about opening
+one, and the root element replaces the stack as the view's single child — a caller still sees one
+child, and `legal-consent-fields` stays where your CSS expects it.
+
 ## 0.36.1 → 0.37.0
 
 **Nothing is required of you.** Everything below is opt-in or a wording change, and an installation
