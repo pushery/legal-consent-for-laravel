@@ -151,8 +151,10 @@ return [
 
     /** The button that closes the document dialog on a consent form. */
     'dialog_close' => 'Chiudi',
+    /** The link in the document dialog that opens the same text as its own page, in a new tab. */
+    'dialog_open_page' => 'Apri come pagina',
     'dialog_loading' => 'Caricamento del testo …',
-    'dialog_failed' => 'Non è stato possibile caricare il testo. Il link accanto apre la pagina.',
+    'dialog_failed' => 'Non è stato possibile caricare il testo.',
     'admin_status_reviewed' => 'Contrassegnato come revisionato. Questo testo ora è pubblicabile.',
     'admin_status_release_blocked' => '«:key» non è stato pubblicato: :reasons',
     'admin_status_released' => '«:key» pubblicato in :count lingua/e — riguarda :affects persona/e.',

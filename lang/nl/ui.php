@@ -151,8 +151,10 @@ return [
 
     /** The button that closes the document dialog on a consent form. */
     'dialog_close' => 'Sluiten',
+    /** The link in the document dialog that opens the same text as its own page, in a new tab. */
+    'dialog_open_page' => 'Openen als pagina',
     'dialog_loading' => 'De tekst wordt geladen …',
-    'dialog_failed' => 'De tekst kon niet worden geladen. De link ernaast opent de pagina.',
+    'dialog_failed' => 'De tekst kon niet worden geladen.',
     'admin_status_reviewed' => 'Als gecontroleerd gemarkeerd. Deze tekst kan nu gepubliceerd worden.',
     'admin_status_release_blocked' => '‘:key’ is niet gepubliceerd: :reasons',
     'admin_status_released' => '‘:key’ gepubliceerd in :count taal/talen — betreft :affects perso(o)n(en).',

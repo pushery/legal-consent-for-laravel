@@ -20,6 +20,14 @@
  * attribute reduced to a call — `load($event)` — parses under BOTH builds, so one template serves a
  * consumer with a strict policy and one without.
  *
+ * ## The text goes in through a ref, never through `x-html`
+ *
+ * The CSP build refuses the `x-html` DIRECTIVE outright, before it reads any expression: "Using the
+ * x-html directive is prohibited in the CSP build". 0.38.0 shipped `x-html="body"` in this dialog, and
+ * a consumer found the body empty in both engines while the trigger had already swallowed the click.
+ * The component sets the markup itself. The trust is unchanged: it is the published, already
+ * sanitized HTML the legal page renders, and `x-html` did nothing but assign `innerHTML` either.
+ *
  * ## It registers itself, so no build step is needed
  *
  * WireKit ships a prebuilt bundle precisely so that a consumer needs no bundler, and a package that
@@ -31,7 +39,6 @@ document.addEventListener('alpine:init', () => {
     window.Alpine.data('legalConsentDialog', (name, url) => ({
         name,
         url,
-        body: '',
         state: 'idle',
 
         /**
@@ -43,7 +50,7 @@ document.addEventListener('alpine:init', () => {
          *
          * A failure is reported rather than swallowed. A dialog that opens onto an empty box reads
          * as a document with no content — to somebody who is then asked to tick that they read it —
-         * so the failed state says so and points back at the link, which never stopped working.
+         * so the failed state says so, and the dialog's footer carries the page in every state.
          */
         load(event) {
             if (event.detail.name !== this.name || this.state !== 'idle') {
@@ -55,7 +62,7 @@ document.addEventListener('alpine:init', () => {
             fetch(this.url, { headers: { Accept: 'text/html' } })
                 .then((response) => (response.ok ? response.text() : Promise.reject(response.status)))
                 .then((html) => {
-                    this.body = html
+                    this.$refs.body.innerHTML = html
                     this.state = 'ready'
                 })
                 .catch(() => {

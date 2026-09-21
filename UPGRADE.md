@@ -4,6 +4,44 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.38.0 → 0.39.0
+
+**Two things are required of you, and only if the wording dialog is switched on** (`ui.wording_dialog` together with `routes.fragment`). Nothing changes for an installation that leaves it off, which is the shipped default.
+
+### Re-publish the dialog's script
+
+The dialog filled its body with `x-html`, and Alpine's CSP build refuses that directive outright: `Using the x-html directive is prohibited in the CSP build`. Every release since the dialog shipped in 0.36.0 opened onto an empty box under that build, and the link that opened it had already swallowed the click, so the reader could not reach the text at all. The view now leaves the body to the script, which puts the published text in through a ref.
+
+A published script is a copy, so composer cannot bring this one to you:
+
+```
+php artisan vendor:publish --tag=legal-consent-assets --force
+```
+
+⚠️ **Until you do, the dialog opens without its text, under either build.** The view no longer carries `x-html`, and the old script only ever set the value `x-html` read. The dialog's footer now carries a link that opens the document as a page, so the text stays reachable in the meantime — but that is the way out, not the dialog working.
+
+So the next change to the script cannot catch you the same way, publish it on every update:
+
+```json
+"scripts": {
+    "post-update-cmd": [
+        "@php artisan vendor:publish --tag=legal-consent-assets --force"
+    ]
+}
+```
+
+### Re-publish `consent-checkboxes.blade.php`, or port the changes into your copy
+
+Only if you published the WireKit stub. Your copy still carries `x-html`, so it stays empty under the CSP build, and with the new script it reports that the text could not be loaded under either build, because the ref the script fills is not there.
+
+```
+php artisan vendor:publish --tag=legal-consent-wirekit --force
+```
+
+⚠️ **`--force` overwrites your file.** If you changed it, port the changes by hand: `x-ref="body"` in place of `x-html="body"` on the dialog body, the `url` and `locale` entries in the `$deferredDialogs` collector, and the page link in the dialog's footer, in front of `<x-wirekit::modal.close>`. A grouped control also gives each member a dialog of its own now: the `$memberDialog`, `$memberDialogName` and `$memberTrigger` closures beside `$memberLinkId`, the trigger on each member link, and the loop after the collector that adds a dialog per member. Without that part your copy keeps working as before, with member links that go to the page.
+
+**The failed state is one sentence now.** `legal-consent::ui.dialog_failed` used to add that the link beside it opens the page, which was not true: that link is the one that opened the dialog. If you published the language files, shorten the entry and add `dialog_open_page`, the footer link's text.
+
 ## 0.37.0 → 0.38.0
 
 **One thing is required of you, and only if you publish the WireKit consent stub.**
@@ -105,7 +143,7 @@ php artisan vendor:publish --tag=legal-consent-assets
 
 Before Alpine, and that is all — it registers itself on `alpine:init` and needs no bundler.
 
-**If you leave it out, the dialog does not open.** The anchor is untouched and still carries the document's real address, so the text stays reachable either way; that was always the load-bearing half.
+**If you leave it out, the dialog opens without its text.** The anchor still carries the document's real address, but wherever Alpine runs it swallows the click to open the dialog, so the address is not where the reader ends up. This said the dialog does not open and that the text stays reachable either way; measured in a browser, it opens, and the only way on is to close it. Since 0.39.0 the dialog's footer carries a link to the page for exactly this case.
 
 **Nothing to do if `ui.wording_dialog` is off**, which is the shipped default.
 

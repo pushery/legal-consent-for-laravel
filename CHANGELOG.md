@@ -4,6 +4,13 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.39.0] - 2026-09-21
+
+### Fixed
+
+- **The wording dialog shows its text under Alpine's CSP build, where it never did, and it always carries a way to the page.** The dialog filled its body with `x-html`, which the CSP build refuses before it reads any expression (`Using the x-html directive is prohibited in the CSP build`), so every release since 0.36.0 opened onto an empty box under that build — and the anchor that opened it had already swallowed the click, so the text a consent rests on was out of reach before the reader agreed. The script now puts the published, already sanitized text in through a ref. The dialog's footer carries a link that opens the document as a page, in a new tab, in every state: while the text loads, after it failed, and when the body stays empty because the published script is missing or older than the view. `legal-consent::ui.dialog_failed` is one sentence in all seven locales, because the link it pointed at was the one that opened the dialog, and `legal-consent::ui.dialog_open_page` is new. **Re-publish the script** (`--tag=legal-consent-assets --force`), and the WireKit stub if you published it — until then the dialog opens without its text; see UPGRADE.md.
+- **Every document named in a grouped consent sentence opens in a dialog of its own.** The grouped control rendered its member links without the dialog trigger, so the one control that names several documents sent the reader out of a half-filled form to read them, while a document standing alone opened in a dialog. Each member now gets its own dialog and its own name, including a member the sentence does not name and that gets the separate link beside it.
+
 ## [0.38.0] - 2026-09-20
 
 ### Fixed
@@ -2758,7 +2765,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.38.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.39.0...HEAD
+[0.39.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.36.1...v0.37.0
 [0.36.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.36.0...v0.36.1

@@ -137,10 +137,17 @@
              The link is RENDERED by its component through a view of its own, never rebuilt here.
              That view says why it cannot be a string literal in this file. --}}
         @php($memberLinkId = static fn (array $member): string => $field.'_link_'.(string) ($member['key'] ?? ''))
-        @php($bareBag = new \Illuminate\View\ComponentAttributeBag([]))
+        {{-- A DIALOG PER MEMBER of a grouped control, asked the same questions a single document is.
+             The grouped sentence used to render its links with an empty bag, so the one control
+             that names several documents was the one that sent the reader out of a half-filled form
+             to read them, while a document standing alone opened in a dialog. The name is per
+             MEMBER: the control's own name would have given every text in the sentence one dialog. --}}
+        @php($memberDialog = static fn (array $member): ?string => config('legal-consent.ui.wording_dialog', false) && \Illuminate\Support\Facades\Route::has('legal-consent.document.fragment') && ($member['url'] ?? null) !== null && ($member['locale'] ?? '') !== '' && ($member['key'] ?? '') !== '' ? route('legal-consent.document.fragment', ['key' => $member['key'], 'locale' => $member['locale']]) : null)
+        @php($memberDialogName = static fn (array $member): string => $dialogName.'-'.(string) ($member['key'] ?? ''))
+        @php($memberTrigger = static fn (array $member): \Illuminate\View\ComponentAttributeBag => new \Illuminate\View\ComponentAttributeBag($memberDialog($member) !== null ? ['x-bind:aria-haspopup' => "'dialog'", 'x-on:click.prevent' => '$dispatch(\'wirekit-modal-show\', { name: \''.$memberDialogName($member).'\' })'] : []))
         @php($renderLink = static fn (array $target, string $text, ?string $id, \Illuminate\View\ComponentAttributeBag $extra): string => trim(view('legal-consent::wirekit.consent-link', ['id' => $id, 'href' => (string) ($target['url'] ?? ''), 'hreflang' => ($target['locale'] ?? '') !== '' ? $target['locale'] : null, 'extra' => $extra, 'text' => $text])->render()))
         @php($singleLabel = $wordingLink !== null ? e($wordingLink->before).$renderLink($document, $wordingLink->match, $field.'_link', $dialogTrigger).e($wordingLink->after) : e($document['wording']))
-        @php($label = $cut === null ? $singleLabel : implode('', array_map(static fn (array $segment): string => $segment['document'] !== null && ($segment['document']['url'] ?? null) !== null ? $renderLink($segment['document'], $segment['text'], null, $bareBag) : e($segment['text']), $cut->segments)))
+        @php($label = $cut === null ? $singleLabel : implode('', array_map(static fn (array $segment): string => $segment['document'] !== null && ($segment['document']['url'] ?? null) !== null ? $renderLink($segment['document'], $segment['text'], null, $memberTrigger($segment['document'])) : e($segment['text']), $cut->segments)))
         {{-- ONE attribute carrying every id: the field's own link where it is a sibling, every
              grouped member the sentence does not name, and the host's. Collapsed rather than only
              trimmed — the parts are joined with a separator whether or not they are there, so an
@@ -188,6 +195,7 @@
                         :href="$member['url']"
                         :hreflang="($member['locale'] ?? '') !== '' ? $member['locale'] : null"
                         external
+                        :attributes="$memberTrigger($member)"
                     >{{ $member['title'] ?? '' }}</x-wirekit::link>
                 @endif
             @endforeach
@@ -243,10 +251,24 @@
             @php($deferredDialogs[] = [
                 'name' => $dialogName,
                 'title' => $document['title'],
+                'url' => $document['url'],
+                'locale' => $document['locale'],
                 'dialog' => $dialog,
                 'lang' => $lang,
             ])
         @endif
+        @foreach ($members as $member)
+            @if ($memberDialog($member) !== null)
+                @php($deferredDialogs[] = [
+                    'name' => $memberDialogName($member),
+                    'title' => (string) ($member['title'] ?? ''),
+                    'url' => $member['url'],
+                    'locale' => $member['locale'],
+                    'dialog' => $memberDialog($member),
+                    'lang' => \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($member['locale']),
+                ])
+            @endif
+        @endforeach
     @endforeach
 </x-wirekit::stack>
 
@@ -259,13 +281,15 @@
                 <x-wirekit::modal.body class="max-h-[65vh] overflow-y-auto" tabindex="0" role="region" :aria-label="$deferred['title']">
                     {{-- FETCHED ON FIRST OPEN, and kept afterwards. The text is the published,
                          already-sanitized HTML the legal page itself renders — one allowlist, applied
-                         when it was stored, and the same bytes the ledger records as accepted.
-                         `x-html` is what puts it in as markup rather than as escaped source.
+                         when it was stored, and the same bytes the ledger records as accepted. The
+                         component puts it in as markup through the `body` ref: the CSP build refuses
+                         the `x-html` directive before it reads any expression, and 0.38.0 opened onto
+                         an empty box under it.
 
                          A failed fetch says so instead of leaving an empty box: a dialog that opens
                          onto nothing reads as a document with no content, and the reader is then
-                         asked to tick that they read it. The anchor behind this dialog is still a
-                         real link, so the sentence points at the way that always works. --}}
+                         asked to tick that they read it. The way out is the page link in the footer
+                         below, which is there in every state. --}}
                     {{-- TWO CALLS AND NOTHING ELSE, because Alpine's CSP build parses these
                          attributes with its own grammar rather than handing them to `eval`. That
                          grammar takes calls, member access, literals and operators — and refuses
@@ -279,13 +303,21 @@
                     <div x-data="legalConsentDialog(@js($deferred['name']), @js($deferred['dialog']))"
                          x-on:wirekit-modal-show.window="load($event)"
                          @if ($deferred['lang'] !== null) lang="{{ $deferred['lang'] }}" @endif>
-                        <div x-show="state === 'ready'" x-html="body"></div>
+                        <div x-show="state === 'ready'" x-ref="body"></div>
                         <p x-show="state === 'loading'" x-cloak>{{ __('legal-consent::ui.dialog_loading') }}</p>
                         <p x-show="state === 'failed'" x-cloak>{{ __('legal-consent::ui.dialog_failed') }}</p>
                     </div>
                 </x-wirekit::modal.body>
 
                 <x-wirekit::modal.footer>
+                    {{-- THE PAGE, FROM INSIDE THE DIALOG, IN EVERY STATE. The anchor that opened this
+                         dialog swallows its click to do so, so it can never be the way out of it —
+                         and a body can stay empty for reasons the component never sees: a published
+                         script older than this view, a script that is missing, a policy that refuses
+                         what it does. Rendered by the server and depending on no script, this link is
+                         what keeps the full text reachable before agreeing (§ 305 Abs. 2 BGB) whatever
+                         happened above it. A new tab, so the form behind it keeps what was typed. --}}
+                    <x-wirekit::link :href="$deferred['url']" :hreflang="$deferred['locale']" size="sm" external>{{ __('legal-consent::ui.dialog_open_page') }}</x-wirekit::link>
                     <x-wirekit::modal.close>
                         <x-wirekit::button size="sm" surface="soft">{{ __('legal-consent::ui.dialog_close') }}</x-wirekit::button>
                     </x-wirekit::modal.close>
