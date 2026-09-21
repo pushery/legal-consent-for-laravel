@@ -118,11 +118,15 @@ final readonly class LegalDraftSet
      *
      * A release is atomic across locales because a subject must never be bound in a language they
      * did not read: German gated while Italian lags would leave two populations under two majors of
-     * the same contract. That reasoning covers a contract, a privacy notice and a real opt-in, and
-     * it covers nothing at all for an INFORMATIONAL page — an imprint, a cookie notice, an
-     * accessibility statement. Those bind nobody and gate nobody, so there is no half-released state
-     * for the atomicity to prevent, and the read path already serves the source language under any
-     * other locale for exactly these rows ({@see PublishedDocumentReader::fallbackFor()}).
+     * the same contract. That reasoning covers a contract and a real opt-in, and it covers nothing
+     * at all for an INFORMATIONAL page — an imprint, a cookie notice, an accessibility statement.
+     * Those bind nobody and gate nobody, so there is no half-released state for the atomicity to
+     * prevent, and the read path serves another locale's version for exactly these rows.
+     *
+     * Nor for an ACKNOWLEDGMENT whose entry sets `locale_fallback`. The gate holds a reader of an
+     * untranslated locale to the version the chain finds, so there is one population under one
+     * major, and the read path shows that reader the same version. The rule for which document may
+     * fall back lives in {@see SourceLanguageFallback}, and this reads it rather than restating it.
      *
      * Without this, one missing translation kept such a page off the site entirely: the capability
      * was there and the route to it was closed. Measured in a consumer with three informational
@@ -148,7 +152,7 @@ final readonly class LegalDraftSet
      */
     public function releaseLocales(array $configured): array
     {
-        if ($this->type() !== DocumentType::Informational) {
+        if (! SourceLanguageFallback::allowedFor($this->key, $this->type())) {
             return $configured;
         }
 

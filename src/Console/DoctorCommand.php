@@ -8,36 +8,38 @@ use Closure;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
 use Illuminate\Routing\Exceptions\UrlGenerationException;
+use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Http\Middleware\EnsureLegalConsent;
 use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
+use Pushery\LegalConsent\Support\SourceLanguageFallback;
 use Pushery\WireKit\WireKitServiceProvider;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
+use ValueError;
 
 /**
  * Report how a PUBLISHED config file differs from the package's own — without touching it.
  *
- * Publishing `config/legal-consent.php` freezes a copy, and `mergeConfigFrom()` is a FLAT
- * `array_merge(package, published)` (Illuminate\Support\ServiceProvider). That produces an
- * asymmetry which is invisible until something does not work:
+ * Publishing `config/legal-consent.php` freezes a copy. The provider merges the shipped file under
+ * it recursively ({@see LegalConsentServiceProvider::mergeConfigRecursivelyFrom()}), so a key added
+ * inside a block the copy already declares still arrives. Two states are left that the merge cannot
+ * reach, and both are invisible until something does not work:
  *
- *  - a whole NEW top-level block reaches the consumer, because the merge supplies it;
- *  - a key added INSIDE a block the published file already declares never arrives at all.
- *    The published block wins wholesale, so at runtime the key is not "undocumented", it is
- *    GONE — with the package's default silently replaced by whatever the old file said.
- *
- * The reverse rots too: a key the package has since removed lives on in the published file and
- * still reads like valid configuration, including entries pointing at classes that no longer
- * exist.
+ *  - a STALE configuration cache. The provider does not merge while one exists, so a key the
+ *    package adds after the cache was built is not "undocumented" at runtime, it is GONE until
+ *    the cache is rebuilt;
+ *  - a key the package has since removed lives on in the published file and still reads like
+ *    valid configuration, including entries pointing at classes that no longer exist.
  *
  * This command names both, and deliberately changes nothing. Rewriting the file would discard
  * the operator's own values; `--force`-republishing does the same. Reporting is what a consumer
@@ -168,13 +170,104 @@ final class DoctorCommand extends Command
 
         foreach (DocumentMatrix::keys() as $key) {
             foreach (DocumentMatrix::locales() as $locale) {
-                if (! in_array("{$key}|{$locale}", $active, true)) {
+                if (! in_array("{$key}|{$locale}", $active, true) && ! $this->servedByStandIn($key, $locale, $active)) {
                     $missing[] = "{$key} ({$locale})";
                 }
             }
         }
 
         return $missing;
+    }
+
+    /**
+     * Is a reader of this locale shown another language's version, rather than an empty page?
+     *
+     * An informational page always is, and an acknowledgment that sets `locale_fallback` is. Both
+     * used to be reported here as rendering empty, which was false for the first from the day the
+     * fallback existed. The rule is asked, not restated: {@see SourceLanguageFallback}.
+     *
+     * @param  array<array-key, string>  $active  "key|locale" for every active row
+     */
+    private function servedByStandIn(string $key, string $locale, array $active): bool
+    {
+        $basis = config("legal-consent.documents.{$key}.legal_basis");
+
+        try {
+            $type = DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
+        } catch (ValueError) {
+            return false;
+        }
+
+        $default = config('legal-consent.default_locale', 'de');
+
+        return array_any(SourceLanguageFallback::standInLocales($key, $type, $locale, is_string($default) && $default !== '' ? $default : 'de'), fn (string $candidate): bool => in_array("{$key}|{$candidate}", $active, true));
+    }
+
+    /**
+     * `middleware.rights_routes` entries that name no registered route.
+     *
+     * The gate exempts a route by its NAME, so a typo exempts nothing, and the export or the
+     * deletion it was meant to keep open sits behind the gate with a configuration that says
+     * otherwise. That is a contradiction rather than a drift, so it fails the run. A value that is
+     * not a string cannot name a route either, and is returned as it is so the report can say what
+     * it was.
+     *
+     * @return list<mixed>
+     */
+    private function unknownRightsRoutes(): array
+    {
+        $names = config('legal-consent.middleware.rights_routes');
+
+        if (! is_array($names)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $names,
+            static fn (mixed $name): bool => ! is_string($name) || ! Route::has($name),
+        ));
+    }
+
+    /**
+     * Does the gate guard a route, while a document that gates is registered and no route is named
+     * where a subject exercises a data-protection right?
+     *
+     * A note rather than a failure. Whether the export and the deletion live behind the gate at all
+     * is the application's to know: one that answers such requests by mail, or on a route outside
+     * the guarded group, is right to name none. What the package owns is the QUESTION, because the
+     * gate is its own and nothing else would ask it.
+     */
+    private function gateWithoutRightsRoutes(): bool
+    {
+        $declared = config('legal-consent.middleware.rights_routes');
+
+        if (is_array($declared) && array_filter($declared, is_string(...)) !== []) {
+            return false;
+        }
+
+        $gates = false;
+
+        foreach (DocumentMatrix::keys() as $key) {
+            $gates = $gates || in_array(config("legal-consent.documents.{$key}.legal_basis"), ['contract', 'acknowledgement'], true);
+        }
+
+        return $gates && $this->gateGuardsARoute();
+    }
+
+    /** Is the enforcement middleware on at least one registered route, directly or through a group? */
+    private function gateGuardsARoute(): bool
+    {
+        $router = $this->laravel->make(Router::class);
+
+        foreach ($router->getRoutes()->getRoutes() as $route) {
+            foreach ($router->gatherRouteMiddleware($route) as $middleware) {
+                if (is_string($middleware) && str_starts_with($middleware, EnsureLegalConsent::class)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -613,6 +706,9 @@ final class DoctorCommand extends Command
         $unknownMode = $this->unknownRegistrationMode();
         $editorRoute = $this->unresolvableEditorRoute();
         $uncacheable = $this->uncacheableKeys();
+        $refusedFallbacks = SourceLanguageFallback::refusedKeys();
+        $unknownRightsRoutes = $this->unknownRightsRoutes();
+        $rightsUndeclared = $this->gateWithoutRightsRoutes();
 
         $database = $this->databaseFindings();
 
@@ -732,7 +828,8 @@ final class DoctorCommand extends Command
             $this->newLine();
             $this->warn('These documents are registered but have no published version:');
             $this->line('  A page reading `Consent::published()` renders EMPTY for them — no error, no log.');
-            $this->line('  The read path does not fall back to the source on purpose, so nothing else says it.');
+            $this->line('  Nothing is published in that language, and the document may not fall back to');
+            $this->line('  another, so nothing else says it.');
             $this->newLine();
 
             foreach ($unpublished as $combination) {
@@ -773,11 +870,56 @@ final class DoctorCommand extends Command
             $this->newLine();
         }
 
+        if ($rightsUndeclared) {
+            $this->newLine();
+            $this->warn('The consent gate guards your routes, and no route is named where a subject exports or deletes their data.');
+            $this->line('  While a subject owes a document, the gate stops every route it guards except its own');
+            $this->line('  ways out. Access, portability and erasure (Art. 15, 20, 17 GDPR) do not depend on');
+            $this->line('  accepting a new text, so name the routes that serve them — the page with the button as');
+            $this->line('  well as the action behind it:');
+            $this->newLine();
+            $this->line("      'middleware' => ['rights_routes' => ['profile.edit', 'profile.export']],");
+            $this->newLine();
+            $this->line('  If your application answers these requests outside the routes the gate guards, there');
+            $this->line('  is nothing to change, and this note stays because only you can know that.');
+            $this->newLine();
+        }
+
+        if ($refusedFallbacks !== []) {
+            $this->newLine();
+            $this->error('`locale_fallback` is set on a document that binds:');
+
+            foreach ($refusedFallbacks as $key) {
+                $this->line("  <fg=red>x</> legal-consent.documents.{$key}");
+            }
+
+            $this->line('  A contract and a consent never fall back to another language, so the key does nothing');
+            $this->line('  there: a release still covers every configured locale, and a reader of an untranslated');
+            $this->line('  one is shown nothing. Binding somebody to a text in a language they may not read is what');
+            $this->line('  that refusal prevents. Remove the key, or set the document\'s `legal_basis` to');
+            $this->line('  `acknowledgement` if taking notice is all it asks for.');
+            $this->newLine();
+        }
+
+        if ($unknownRightsRoutes !== []) {
+            $this->newLine();
+            $this->error('These `middleware.rights_routes` name no route:');
+
+            foreach ($unknownRightsRoutes as $name) {
+                $this->line('  <fg=red>x</> '.(is_string($name) ? $name : get_debug_type($name)));
+            }
+
+            $this->line('  The gate exempts a route by its name, so a name that matches nothing exempts nothing,');
+            $this->line('  and the export or the deletion it was meant to keep open is behind the gate. Use the');
+            $this->line('  name `php artisan route:list` shows.');
+            $this->newLine();
+        }
+
         // Every finding folds into ONE variable, and every return below reads it. Three separate
         // returns each restating the rule is how the legal contradiction fell out of the exit code
         // on the third one: the same deemed-consent-without-proof installation ended 1 or 0
         // depending on whether the published config happened to carry an unrelated stale key.
-        $failed = $incoherent;
+        $failed = $incoherent || $refusedFallbacks !== [] || $unknownRightsRoutes !== [];
 
         // $this->laravel->configPath(), never the config_path() helper: that one lives in
         // laravel/framework's Foundation, which this package does not import a symbol from. The

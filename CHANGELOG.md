@@ -4,6 +4,23 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.0] - 2026-09-21
+
+### Added
+
+- **An acknowledgment can fall back to another language.** Set `'locale_fallback' => true` on its entry and a reader of a language nobody has translated yet is shown the version the gate already holds them to, from `fallback_locale` and then `default_locale`, instead of an empty page next to a gate that points at it. A release of such a document covers the languages that have a text, and the dialog names the language the text is in. A contract and a consent bind, so they never fall back, whatever the entry says, and `legal-consent:doctor` fails on an entry that asks.
+- **The gate lets the routes named for data-protection rights through.** Name the routes where a subject exports or deletes their data in `middleware.rights_routes`, the page that holds the button as well as the action behind it. Access, portability and erasure do not depend on accepting a new text, and until now the gate stood in front of them while a document was outstanding. `legal-consent:doctor` notes a gate with none named and fails on a name that is no route.
+
+### Documentation
+
+- **The published config file now says how a copy of it is merged.** A note at its top lists what is worth knowing before a copy is shortened: a key added inside a published block arrives with its default, a list such as `routes.api_middleware` is taken whole rather than merged by index, the set of `documents` stays the one you published, an explicit `null` stays `null`, and a cached configuration is not merged at all until `config:cache` runs again. Two comments in the file, the route file, the doctor command and the doctor's page in the documentation still described the flat merge this package stopped using, and said that a key added inside a published block never arrives. They now name the one case where a new key really does not arrive: a configuration cache built before it existed. The doctor's page also advised copying a missing key into your file, which would freeze today's default there; it now says to rebuild the cache instead.
+
+### Fixed
+
+- **`legal-consent:publish --all` no longer fails over a translation its reader does not need.** An informational page published in one language, and now an acknowledgment that may fall back, made the run exit 1 for every other configured language, although their readers are shown the published version. Such a language is named with the one it reads from and not counted as a failure. A missing translation of a contract or a consent still fails, and so does a document with no text in any language.
+- **The doctor no longer reports a language as empty when its reader is shown another one.** An informational page's untranslated languages were listed under "no published version" although the read path serves the default-locale version, and the report said the read path never falls back.
+- **The wording dialog names its document once.** Its header carries the title, and the fragment inside it opened with the same title as a heading directly underneath. The dialog now asks the fragment route with `heading=0`, which leaves the title out and keeps the version line a reader agrees to. Without the parameter the fragment keeps its heading, so a caller showing it where nothing else names the document gets what it got before.
+
 ## [0.39.0] - 2026-09-21
 
 ### Fixed
@@ -2766,6 +2783,7 @@ its recorded row from the same resolution, so the consent section stays dormant 
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
 [Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.39.0...HEAD
+[0.40.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.36.1...v0.37.0

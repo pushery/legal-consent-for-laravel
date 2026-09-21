@@ -66,10 +66,11 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * ## What it deliberately does NOT change
  *
  * THE DOCUMENT TYPE STAYS `informational`, AND THAT IS THE POINT RATHER THAN A SHORTCUT. Moving
- * such a page to `acknowledgement` is the obvious alternative and it is the wrong one: the
- * source-locale fallback in {@see PublishedDocumentReader} is constrained to informational rows, so
- * an imprint published only in the source language would stop being reachable under every other
- * locale's URL, and a release would suddenly have to cover every configured locale.
+ * such a page to `acknowledgement` is a different decision, not a stronger version of this one: an
+ * acknowledgment GATES, so a new version stops every reader until they take notice. Where that is
+ * what an operator wants, `'locale_fallback' => true` on the entry keeps an imprint published only
+ * in the source language reachable under every other locale's URL ({@see SourceLanguageFallback});
+ * without it, a release has to cover every configured locale.
  *
  * AND IT NEVER BLOCKS. {@see ConsentGate} keeps asking `isConsentBearing()` and is not routed
  * through here, so a flagged page can go stale without locking anybody out of anything. A page that

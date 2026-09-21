@@ -12,7 +12,11 @@
      package's whole argument is that they should read it. --}}
 <x-wirekit::stack gap="md" class="lc-document" lang="{{ $document->locale }}">
     <x-wirekit::stack gap="xs">
-        <x-wirekit::heading :level="1" size="lg">{{ $document->title }}</x-wirekit::heading>
+        {{-- Left out when the caller asks for `heading=0`: the dialog names the document in its own
+             header, and the same title again directly under it reads as a stutter. --}}
+        @if ($heading ?? true)
+            <x-wirekit::heading :level="1" size="lg">{{ $document->title }}</x-wirekit::heading>
+        @endif
 
         {{-- The VERSION, and it is not a detail. Somebody reading this in a dialog is about to agree
              to it, and which version they read is the fact a ledger row will later claim. Muted
@@ -20,6 +24,14 @@
         <x-wirekit::text size="sm" intent="muted">
             {{ __('legal-consent::ui.document_version', ['version' => $document->version]) }}
         </x-wirekit::text>
+
+        {{-- Named when the text is not in the language the reader asked for or reads in: a text that
+             may fall back is otherwise a German page on an English site with nothing saying why. --}}
+        @if (($shownIn ?? null) !== null)
+            <x-wirekit::text size="sm" intent="muted">
+                {{ __('legal-consent::ui.document_language', ['language' => $shownIn]) }}
+            </x-wirekit::text>
+        @endif
     </x-wirekit::stack>
 
     {{-- The sanitizer's output, and the ONLY place this fragment trusts anything.

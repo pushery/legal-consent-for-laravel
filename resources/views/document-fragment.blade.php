@@ -15,11 +15,23 @@
      reader's side. --}}
 <article class="lc-document" lang="{{ $document->locale }}">
     <header class="lc-document__header">
-        <h1 class="lc-document__title">{{ $document->title }}</h1>
+        {{-- Left out when the caller asks for `heading=0`: a dialog names the document in its own
+             header, and the same title again directly under it reads as a stutter. --}}
+        @if ($heading ?? true)
+            <h1 class="lc-document__title">{{ $document->title }}</h1>
+        @endif
 
         <p class="lc-document__version">
             {{ __('legal-consent::ui.document_version', ['version' => $document->version]) }}
         </p>
+
+        {{-- Named when the text is not in the language the reader asked for or reads in: a text that
+             may fall back is otherwise a German page on an English site with nothing saying why. --}}
+        @if (($shownIn ?? null) !== null)
+            <p class="lc-document__language">
+                {{ __('legal-consent::ui.document_language', ['language' => $shownIn]) }}
+            </p>
+        @endif
     </header>
 
     {{-- The sanitizer's output, and the ONLY place this fragment trusts anything. `LegalHtmlSanitizer`

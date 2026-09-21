@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
-use Illuminate\Database\Eloquent\Builder;
 use Pushery\LegalConsent\Content\PublishedDocument;
-use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
@@ -21,11 +19,11 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * is not yet published, and would let a refusal be relabeled as a render failure by callers that
  * catch broadly.
  *
- * NO fallback locale for anything a subject agrees to, unlike the recording path: the page must
- * show the text of the locale it claims to be showing, or nothing. Silently serving another
- * language's contract under a `de` URL is the kind of quiet substitution this package exists to
- * prevent. An INFORMATIONAL page is the one exception, and only because the reasoning above does
- * not apply to it — see fallbackFor().
+ * NO fallback locale for a CONTRACT or a real CONSENT: the page must show the text of the locale it
+ * claims to be showing, or nothing. Serving another language's contract under an `en` URL is the
+ * kind of quiet substitution this package exists to prevent. An informational page and an
+ * acknowledgment that asks for it are the exceptions, decided in ONE place so this path, the
+ * release and the doctor cannot disagree: {@see SourceLanguageFallback}.
  */
 final readonly class PublishedDocumentReader
 {
@@ -41,29 +39,40 @@ final readonly class PublishedDocumentReader
     }
 
     /**
-     * The one case where serving another locale is right rather than dangerous.
+     * The cases where serving another locale is right rather than dangerous.
      *
-     * An informational page (Impressum, cookie policy, accessibility statement) is a legal duty
-     * to PUBLISH, not something a subject accepts. Nobody is bound by it, no hash of it is ever
-     * frozen into a ledger row, and there is no acceptance whose language could be misrepresented
-     * — the failure mode the no-fallback rule exists to prevent simply has no instance here. What
-     * remains is the operator's duty to be reachable, and a German Impressum shown to an English
-     * reader discharges that duty; an empty page does not (§ 5 DDG).
+     * An INFORMATIONAL page (Impressum, cookie policy, accessibility statement) is a legal duty to
+     * PUBLISH, not something a subject accepts. Nobody is bound by it, and there is no acceptance
+     * whose language could be misrepresented. What remains is the operator's duty to be reachable,
+     * and a German Impressum shown to an English reader discharges that duty; an empty page does not
+     * (§ 5 DDG). It comes from the default locale, as it always did.
      *
-     * The type is read from the ROW, not from the config registry, and the fallback query is
-     * therefore constrained to informational rows: a contract published only in `de` stays
-     * invisible under an `en` URL, exactly as before.
+     * An ACKNOWLEDGMENT whose entry sets `locale_fallback` comes along the chain the gate walks to
+     * decide what the same reader owes. The gate already holds a reader of an untranslated locale to
+     * the version found there, so this is the read path showing them the text they are held to,
+     * instead of an empty page next to a gate that points at it.
+     *
+     * The type is read from the ROW, not from the config registry: a contract published only in
+     * `de` stays invisible under an `en` URL, exactly as before.
      */
     private function fallbackFor(string $key, string $locale): ?LegalDocument
     {
-        if ($locale === $this->defaultLocale) {
-            return null;
+        foreach (RegistrationLocaleChain::resolve($locale, $this->defaultLocale) as $candidate) {
+            if ($candidate === $locale) {
+                continue;
+            }
+
+            $row = $this->activeRow($key, $candidate);
+
+            if ($row instanceof LegalDocument && in_array($candidate, SourceLanguageFallback::standInLocales($key, $row->type, $locale, $this->defaultLocale), true)) {
+                return $row;
+            }
         }
 
-        return $this->activeRow($key, $this->defaultLocale, informationalOnly: true);
+        return null;
     }
 
-    private function activeRow(string $key, string $locale, bool $informationalOnly = false): ?LegalDocument
+    private function activeRow(string $key, string $locale): ?LegalDocument
     {
         return LegalDocument::query()
             // `content` is explicitly selected: $hidden only affects serialization, but the column
@@ -80,7 +89,6 @@ final readonly class PublishedDocumentReader
             ->where('key', $key)
             ->where('locale', $locale)
             ->where('is_active', true)
-            ->when($informationalOnly, static fn (Builder $query): Builder => $query->where('type', DocumentType::Informational->value))
             ->first();
     }
 }

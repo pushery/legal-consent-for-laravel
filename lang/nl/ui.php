@@ -10,6 +10,7 @@ return [
     // row will later claim. A fragment showing the text and hiding the version would leave that row
     // unverifiable from the only side that matters — the reader's.
     'document_version' => 'Versie :version',
+    'document_language' => 'Taal van deze tekst: :language',
 
     'settings_heading' => 'Jouw toestemmingen',
     'contracts_heading' => 'Contracten',

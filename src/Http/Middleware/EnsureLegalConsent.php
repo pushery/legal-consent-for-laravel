@@ -122,6 +122,16 @@ final readonly class EnsureLegalConsent
             $names = array_merge($names, array_values(array_filter($extraRoutes, is_string(...))));
         }
 
+        // Where a subject exercises a data-protection right: its own key rather than a line in the
+        // allowlist, because this is the one exemption the package has to ASK about. Access,
+        // portability and erasure do not depend on accepting a new text, so a gate in front of the
+        // export or the deletion would make the acceptance a condition of the right.
+        $rightsRoutes = config('legal-consent.middleware.rights_routes');
+
+        if (is_array($rightsRoutes)) {
+            $names = array_merge($names, array_values(array_filter($rightsRoutes, is_string(...))));
+        }
+
         if ($request->routeIs(...$names)) {
             return true;
         }

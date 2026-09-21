@@ -8,13 +8,16 @@ use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Content\Document;
+use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
+use Pushery\LegalConsent\Support\SourceLanguageFallback;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
+use ValueError;
 
 /**
  * Freeze the current source text of a legal document into a new active, versioned row.
@@ -164,6 +167,7 @@ final class PublishDocumentCommand extends Command
         $unchanged = 0;
         $textless = [];
         $failures = [];
+        $missing = [];
 
         foreach (DocumentMatrix::keys() as $key) {
             foreach (DocumentMatrix::locales() as $locale) {
@@ -186,7 +190,9 @@ final class PublishDocumentCommand extends Command
                         continue;
                     }
 
-                    $failures[] = "{$key} ({$locale}): {$e->getMessage()}";
+                    // Decided after the run, not here: the version its reader would be shown may be
+                    // the one this same run publishes a moment later.
+                    $missing[] = [$key, $locale, $e->getMessage()];
 
                     continue;
                 } catch (Throwable $e) {
@@ -201,6 +207,18 @@ final class PublishDocumentCommand extends Command
                 } else {
                     $unchanged++;
                 }
+            }
+        }
+
+        $readsAnother = [];
+
+        foreach ($missing as [$key, $locale, $message]) {
+            $standIn = $this->standInFor($key, $locale);
+
+            if ($standIn === null) {
+                $failures[] = "{$key} ({$locale}): {$message}";
+            } else {
+                $readsAnother[] = "{$key} ({$locale}) reads {$standIn}";
             }
         }
 
@@ -219,6 +237,13 @@ final class PublishDocumentCommand extends Command
         // prevent, one level up.
         foreach ($textless as $skipped) {
             $this->warn('No text yet, left unpublished: '.$skipped);
+        }
+
+        // Neither published nor failed, and deliberately outside the summary above, whose shape deploy
+        // logs are searched for. A reader of this language is shown another one's version, so there
+        // is no empty page here to fail on.
+        foreach ($readsAnother as $entry) {
+            $this->line('No text of its own, its readers get another language: '.$entry);
         }
 
         foreach ($failures as $failure) {
@@ -253,6 +278,8 @@ final class PublishDocumentCommand extends Command
         $current = 0;
         $textless = 0;
         $failures = [];
+        $missing = [];
+        $available = [];
 
         foreach (DocumentMatrix::keys() as $key) {
             foreach (DocumentMatrix::locales() as $locale) {
@@ -260,6 +287,7 @@ final class PublishDocumentCommand extends Command
 
                 if ($onlyMissing && $active instanceof LegalDocument) {
                     $current++;
+                    $available[] = "{$key}|{$locale}";
                     $this->line("  = {$key} ({$locale}) — active v{$active->version} kept, source not read.");
 
                     continue;
@@ -275,8 +303,7 @@ final class PublishDocumentCommand extends Command
                         continue;
                     }
 
-                    $failures[] = "{$key} ({$locale}): {$e->getMessage()}";
-                    $this->error("  x {$key} ({$locale}) — no text: {$e->getMessage()}");
+                    $missing[] = [$key, $locale, $e->getMessage()];
 
                     continue;
                 } catch (Throwable $e) {
@@ -285,6 +312,8 @@ final class PublishDocumentCommand extends Command
 
                     continue;
                 }
+
+                $available[] = "{$key}|{$locale}";
 
                 if ($active instanceof LegalDocument && $active->content_hash === $rendered->contentHash) {
                     $current++;
@@ -300,9 +329,50 @@ final class PublishDocumentCommand extends Command
             }
         }
 
+        // The same decision the real run makes at its end, against what this run WOULD make active.
+        foreach ($missing as [$key, $locale, $message]) {
+            $standIn = $this->standInFor($key, $locale, $available);
+
+            if ($standIn === null) {
+                $failures[] = "{$key} ({$locale}): {$message}";
+                $this->error("  x {$key} ({$locale}) — no text: {$message}");
+            } else {
+                $this->line("  ~ {$key} ({$locale}) — no text of its own, its readers get the {$standIn} version.");
+            }
+        }
+
         $this->line("Dry run: {$would} would publish, {$current} already current, {$textless} without text, ".count($failures).' failed. Nothing was written.');
 
         return $failures === [] ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * The language a reader of this one is shown instead, or null when there is none.
+     *
+     * A document that may fall back ({@see SourceLanguageFallback}) has no empty page in a language
+     * without a text of its own, so a missing file there is not the configuration error this command
+     * otherwise reports. It is asked at the END of a run, because the version that reader gets may be
+     * the one the same run published later: a matrix listing `en` before `de` meets the missing
+     * English file first.
+     *
+     * @param  list<string>  $available  "key|locale" a dry run would make active; a real run asks the table
+     */
+    private function standInFor(string $key, string $locale, array $available = []): ?string
+    {
+        $basis = config("legal-consent.documents.{$key}.legal_basis");
+
+        try {
+            $type = DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
+        } catch (ValueError) {
+            return null;
+        }
+
+        $default = config('legal-consent.default_locale', 'de');
+
+        return array_find(
+            SourceLanguageFallback::standInLocales($key, $type, $locale, is_string($default) && $default !== '' ? $default : 'de'),
+            fn (string $candidate): bool => in_array("{$key}|{$candidate}", $available, true) || $this->hasActiveVersion($key, $candidate),
+        );
     }
 
     /**
