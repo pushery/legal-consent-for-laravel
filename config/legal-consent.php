@@ -5,6 +5,28 @@ declare(strict_types=1);
 use Pushery\LegalConsent\Content\Drivers\DraftDocumentSource;
 use Pushery\LegalConsent\Content\Drivers\MarkdownFilesDriver;
 
+/*
+|--------------------------------------------------------------------------
+| How a published copy of this file is merged
+|--------------------------------------------------------------------------
+|
+| This package merges the file it ships UNDER the one you published, and it descends
+| into maps. A key a later release adds inside a block you already published therefore
+| arrives with its default, instead of reading as null. Four things are worth knowing
+| before you shorten your copy:
+|
+|   - A LIST is yours whole. Recursion stops at any list on either side, because a list
+|     merged by index would give back what you removed: narrow `routes.api_middleware`
+|     to one entry and one entry is what runs. An empty array means "none".
+|   - `documents` is a registry, and which documents it holds is yours. One you deleted
+|     stays deleted, even while this file still ships it; one you kept still receives a
+|     field a later release adds to it.
+|   - An explicit null you wrote stays null.
+|   - A CACHED configuration is not merged at all. After an update, run
+|     `php artisan config:cache` again, or the cache keeps what it had.
+|
+*/
+
 return [
 
     /*
@@ -88,6 +110,18 @@ return [
             // because it carries one version's fingerprint: four pages behind one checkbox render
             // one control and, if you want the accept-time guard, four hidden fields.
             // 'registration_field' => 'legal_terms',
+
+            // Does a missing translation of this page fall back? Off by default: a release then
+            // covers every configured locale at once, and every reader reads their own language.
+            // On, and a reader of a locale nobody has translated yet is shown the version the
+            // gate already holds them to — `fallback_locale`, then `default_locale` — and a
+            // release covers the locales that have a text. The ledger row names the locale that
+            // was shown, and the dialog says which language the text is in.
+            //
+            // Only for an `acknowledgement`. A contract and a consent bind, and binding somebody to
+            // a text in a language they may not read is refused whatever this says;
+            // `legal-consent:doctor` reports an entry that asks.
+            // 'locale_fallback' => true,
         ],
         'newsletter' => [
             'source' => 'drafts',
@@ -428,9 +462,10 @@ return [
     | Change-notice mail
     |--------------------------------------------------------------------------
     |
-    | The seams on the three change notices. TOP-LEVEL and not inside `notifications`,
-    | because `mergeConfigFrom()` merges one level deep: a key added inside a block your
-    | published file already declares is ABSENT at runtime, not merely undocumented.
+    | The seams on the three change notices. TOP-LEVEL rather than inside `notifications`:
+    | they were placed here while this package merged one level deep, and moving them now
+    | would strand the value in every published copy that carries them at the top. How the
+    | merge works today is described at the top of this file.
     |
     | Every seam is inert by default except `view`. That matters more here than elsewhere:
     | the notice body is hashed into an append-only proof row, so a seam that changed the
@@ -512,9 +547,9 @@ return [
     | reproduces it. `legal-consent:doctor` reports a closure here for that reason.
     | A misconfigured value yields no link rather than a broken one.
     |
-    | This is a TOP-LEVEL key on purpose. `mergeConfigFrom()` merges one level deep, so
-    | a key added inside an already-published block is absent at runtime for every
-    | installation that published this file — not merely undocumented.
+    | A TOP-LEVEL key, placed here while this package merged one level deep, and kept here
+    | so a published copy that carries it goes on working. How the merge works today is
+    | described at the top of this file.
     |
     */
     'document_url' => null,
@@ -523,10 +558,24 @@ return [
     |--------------------------------------------------------------------------
     | Enforcement middleware
     |--------------------------------------------------------------------------
+    |
+    | While a subject owes a document, the gate stops every route it guards except its
+    | own ways out: `logout`, the consent screen, the withdrawal route and Livewire's
+    | endpoints. `allowlist_routes` and `allowlist_paths` add your own.
+    |
+    | `rights_routes` is the one list this package asks you to fill. Name the routes
+    | where a subject exports or deletes their data — the page that holds the button
+    | as well as the action behind it, because a Livewire action on a gated page is
+    | unreachable even though its endpoint is not. Access, portability and erasure
+    | (Art. 15, 20, 17 GDPR) do not depend on accepting a new text, and a gate standing
+    | in front of them makes the acceptance a condition of a right that has none.
+    | `legal-consent:doctor` reports a gate with none named, and a name that is no route.
+    |
     */
     'middleware' => [
         'allowlist_routes' => [],
         'allowlist_paths' => [],
+        'rights_routes' => [],
     ],
 
     /*

@@ -87,9 +87,9 @@ $stack = is_array($middleware) ? $middleware : ['api', 'auth'];
 //
 // It is a separate setting because both ways of arriving here have to be covered: a consumer who
 // replaces `api_middleware` wholesale — which the config invites, since they supply their own auth
-// — would drop a throttle bundled into that list, and an application whose PUBLISHED config
-// predates this key never receives it at all (`mergeConfigFrom()` is flat, and its `routes` block
-// wins whole). In that second case this default is the only value that runs.
+// — would drop a throttle bundled into that list, and an application whose CACHED config predates
+// this key does not receive it until the cache is rebuilt (the provider does not merge while a cache
+// exists). In that second case this default is the only value that runs.
 $throttle = config('legal-consent.routes.api_throttle', '60,1');
 
 if (is_string($throttle) && trim($throttle) !== '') {

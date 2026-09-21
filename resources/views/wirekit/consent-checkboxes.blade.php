@@ -102,7 +102,8 @@
             && \Illuminate\Support\Facades\Route::has('legal-consent.document.fragment')
             && ($document['url'] ?? null) !== null
             && ($document['locale'] ?? '') !== ''
-            ? route('legal-consent.document.fragment', ['key' => $document['key'], 'locale' => $document['locale']])
+            {{-- `heading=0`: this dialog's header names the document already. --}}
+            ? route('legal-consent.document.fragment', ['key' => $document['key'], 'locale' => $document['locale'], 'heading' => 0])
             : null)
         @php($dialogName = 'legal-consent-'.$field)
         {{-- ASSEMBLED rather than written as a Blade `@if` INSIDE the component tag. That form does
@@ -142,7 +143,7 @@
              that names several documents was the one that sent the reader out of a half-filled form
              to read them, while a document standing alone opened in a dialog. The name is per
              MEMBER: the control's own name would have given every text in the sentence one dialog. --}}
-        @php($memberDialog = static fn (array $member): ?string => config('legal-consent.ui.wording_dialog', false) && \Illuminate\Support\Facades\Route::has('legal-consent.document.fragment') && ($member['url'] ?? null) !== null && ($member['locale'] ?? '') !== '' && ($member['key'] ?? '') !== '' ? route('legal-consent.document.fragment', ['key' => $member['key'], 'locale' => $member['locale']]) : null)
+        @php($memberDialog = static fn (array $member): ?string => config('legal-consent.ui.wording_dialog', false) && \Illuminate\Support\Facades\Route::has('legal-consent.document.fragment') && ($member['url'] ?? null) !== null && ($member['locale'] ?? '') !== '' && ($member['key'] ?? '') !== '' ? route('legal-consent.document.fragment', ['key' => $member['key'], 'locale' => $member['locale'], 'heading' => 0]) : null)
         @php($memberDialogName = static fn (array $member): string => $dialogName.'-'.(string) ($member['key'] ?? ''))
         @php($memberTrigger = static fn (array $member): \Illuminate\View\ComponentAttributeBag => new \Illuminate\View\ComponentAttributeBag($memberDialog($member) !== null ? ['x-bind:aria-haspopup' => "'dialog'", 'x-on:click.prevent' => '$dispatch(\'wirekit-modal-show\', { name: \''.$memberDialogName($member).'\' })'] : []))
         @php($renderLink = static fn (array $target, string $text, ?string $id, \Illuminate\View\ComponentAttributeBag $extra): string => trim(view('legal-consent::wirekit.consent-link', ['id' => $id, 'href' => (string) ($target['url'] ?? ''), 'hreflang' => ($target['locale'] ?? '') !== '' ? $target['locale'] : null, 'extra' => $extra, 'text' => $text])->render()))

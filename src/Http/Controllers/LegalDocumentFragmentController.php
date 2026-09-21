@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Http\Controllers;
 
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\Request;
 use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Contracts\ConsentManager;
+use Pushery\LegalConsent\Contracts\NamesLegalTexts;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 
 /**
@@ -47,12 +49,19 @@ use Pushery\LegalConsent\Support\DocumentMatrix;
  * today: it opens the host's own page. That fallback is not a consolation prize — it is the half
  * that carries the clickwrap, because a consent binds only where the full text was reachable BEFORE
  * agreeing (§ 305 Abs. 2 BGB), and a dialog opened by script is not reachable without script.
+ *
+ * ## A dialog asks for it without the title
+ *
+ * `heading=0` leaves the title out and keeps everything else, the version included. The dialog's own
+ * header already names the document, and the fragment's heading directly under it read as the same
+ * title twice. Without the parameter the fragment keeps its heading, so a caller that shows the
+ * fragment somewhere with no title of its own gets exactly what it got before.
  */
 final readonly class LegalDocumentFragmentController
 {
-    public function __construct(private ConsentManager $consent) {}
+    public function __construct(private ConsentManager $consent, private NamesLegalTexts $names) {}
 
-    public function __invoke(string $key, string $locale): View
+    public function __invoke(Request $request, string $key, string $locale): View
     {
         $locales = config('legal-consent.locales', ['de']);
 
@@ -73,6 +82,27 @@ final readonly class LegalDocumentFragmentController
         // is the opposite of what an unpublished document means.
         abort_unless($document instanceof PublishedDocument, 404);
 
-        return view('legal-consent::document-fragment', ['document' => $document]);
+        return view('legal-consent::document-fragment', [
+            'document' => $document,
+            'heading' => $request->query('heading') !== '0',
+            'shownIn' => $this->shownIn($document, $locale),
+        ]);
+    }
+
+    /**
+     * The language to name above the text, or null when the reader gets the language they read in.
+     *
+     * A reader lands on another language's text two ways: the route falls back because the text was
+     * never published in the language it was asked for, or a dialog on an English page asks for the
+     * German version because that is the one the reader is held to. The `lang` attribute already
+     * tells assistive technology either way; this line tells the person reading.
+     */
+    private function shownIn(PublishedDocument $document, string $locale): ?string
+    {
+        if ($document->locale === $locale && $document->locale === app()->getLocale()) {
+            return null;
+        }
+
+        return $this->names->language($document->locale);
     }
 }

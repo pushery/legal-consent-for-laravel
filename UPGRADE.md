@@ -4,6 +4,32 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.39.0 → 0.40.0
+
+**Nothing is required of you.** Two new settings, both inert until you set them, and one of them is worth setting today.
+
+**Name the routes where a subject exports or deletes their data.** While a subject owes a document, the gate stops every route it guards, and until now that included these. Access, portability and erasure do not depend on accepting a new text:
+
+```php
+'middleware' => [
+    'allowlist_routes' => [],
+    'allowlist_paths' => [],
+    'rights_routes' => ['profile.edit', 'profile.export'],
+],
+```
+
+Name the page that holds the button as well as the action behind it: a Livewire action on a gated page is unreachable even though its endpoint is not. `legal-consent:doctor` now notes a gate with none named, and exits 0 on that, because only you can know whether those requests are served outside the routes the gate guards. A name that is no route fails it.
+
+**An acknowledgment can fall back to another language.** Set `'locale_fallback' => true` on its entry and a reader of an untranslated language is shown the version the gate already holds them to, and a release covers the languages that have a text. It is refused on a contract and a consent, and the doctor fails on an entry that asks.
+
+**The dialog names the language of a text that is not the reader's.** If you published the fragment stub, your copy shows no such line until you port the `$shownIn` block from the package's view. Nothing breaks either way.
+
+**The wording dialog asks the fragment route with `heading=0`**, so the document's title appears once, in the dialog's header. If you published the WireKit stub, your copy keeps the title twice until you add `'heading' => 0` to its two `route('legal-consent.document.fragment', …)` calls.
+
+**`legal-consent:publish --all` no longer fails over a language whose reader is shown another one's version.** A deploy that tolerated its exit 1 for an informational page published in one language turns green; the language is still named in the output.
+
+**The doctor no longer lists an informational page's untranslated languages** under "no published version", because their readers are shown the default-locale version. A deploy step that searched its output for them stops seeing them.
+
 ## 0.38.0 → 0.39.0
 
 **Two things are required of you, and only if the wording dialog is switched on** (`ui.wording_dialog` together with `routes.fragment`). Nothing changes for an installation that leaves it off, which is the shipped default.
