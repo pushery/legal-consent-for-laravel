@@ -154,8 +154,10 @@ return [
 
     /** The button that closes the document dialog on a consent form. */
     'dialog_close' => 'Close',
+    /** The link in the document dialog that opens the same text as its own page, in a new tab. */
+    'dialog_open_page' => 'Open as a page',
     'dialog_loading' => 'Loading the text …',
-    'dialog_failed' => 'The text could not be loaded. The link beside it opens the page.',
+    'dialog_failed' => 'The text could not be loaded.',
     'admin_status_reviewed' => 'Marked reviewed. This text is now publishable.',
     'admin_status_release_blocked' => '“:key” was not released: :reasons',
     'admin_status_released' => 'Released “:key” across :count locale(s) — affects :affects subject(s).',
