@@ -176,7 +176,7 @@ final class LegalHtmlSanitizer
         // observable -- for exactly as long as that stays true, and not one edit longer.
         //
         // Note what this means for the arm named "matches a dangerous tag regardless of how it is
-        // capitalised": the guarantee it asserts is real and worth having, but it passes with this
+        // capitalized": the guarantee it asserts is real and worth having, but it passes with this
         // call removed, so it is evidence about the PARSER rather than about this line. Read as
         // coverage of this line it would be misleading, which is why it is said here.
         $tag = strtolower($element->tagName);

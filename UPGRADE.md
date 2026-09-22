@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.41.0 → 0.41.1
+
+**Nothing is required of you.** One fix, and it needs no configuration.
+
+**A queued translation now runs as the admin who asked for it.** With `translation.queue` on, the job carries the identifier of the acting admin and the guard the editor read them from, and signs that user in for the call to your `LegalTextTranslator` alone. A translator that bills or limits per user therefore reads the acting user on a worker the way it does on a request; it read nobody before. `LegalTextTranslator` is unchanged, so no implementation of it has to move. An admin who is gone by the time the worker runs, or a job queued before this version, translates unattributed rather than failing.
+
 ## 0.40.0 → 0.41.0
 
 **Nothing is required of you.** One new setting, inert until you set it.
