@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Jobs;
 
+use Closure;
+use Illuminate\Auth\AuthManager;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -78,6 +81,7 @@ final class TranslateLegalDraft implements ShouldQueue
         private readonly string $locale,
         private readonly string $sourceLocale,
         private readonly ?string $actor = null,
+        private readonly ?string $guard = null,
     ) {
         // THE LANE IS SET HERE, on the properties the dispatcher reads.
         //
@@ -160,7 +164,9 @@ final class TranslateLegalDraft implements ShouldQueue
         }
 
         try {
-            $translated = app(LegalTextTranslator::class)->translate($source->body, $this->sourceLocale, $this->locale);
+            $translated = $this->asTheActor(
+                fn (): string => app(LegalTextTranslator::class)->translate($source->body, $this->sourceLocale, $this->locale),
+            );
 
             app(LegalDraftWriter::class)->applyTranslation($this->key, $this->locale, $translated, $source->content_hash, $this->actor);
         } catch (TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable $e) {
@@ -177,6 +183,63 @@ final class TranslateLegalDraft implements ShouldQueue
         // left to read, and a forget here would wipe it. Anything else that throws leaves the marker
         // alone on purpose — the job is retried or it fails, and `failed()` is what answers then.
         Cache::forget(self::markerFor($this->key, $this->locale));
+    }
+
+    /**
+     * Run the translator as the person who asked for the translation.
+     *
+     * A worker has nobody signed in. A translator that bills or limits per user reads the acting
+     * user the way it would on a request, and on a worker it read nobody: the translation ran
+     * unattributed and past any per-user limit, and nothing reported it. So the job carries the
+     * identifier and the guard the editor read them from, signs that user in on that guard for the
+     * translator call alone, and puts the worker back the way it found it afterwards, because a
+     * worker process outlives the job.
+     *
+     * A user who is gone by the time the worker runs is not an error: the translation runs as it
+     * did before, unattributed, rather than being refused. A job queued by a release that did not
+     * carry a guard yet runs the same way.
+     *
+     * @template TResult
+     *
+     * @param  Closure(): TResult  $call
+     * @return TResult
+     */
+    private function asTheActor(Closure $call): mixed
+    {
+        // A job serialized before the guard was carried has no value for it at all, and reading an
+        // uninitialized property throws. `??` answers for both that and null, as isset() does.
+        $guardName = $this->guard ?? null;
+
+        if ($this->actor === null || $guardName === null) {
+            return $call();
+        }
+
+        $auth = app(AuthManager::class);
+        $provider = Config::get("auth.guards.{$guardName}.provider");
+        $user = is_string($provider) ? $auth->createUserProvider($provider)?->retrieveById($this->actor) : null;
+
+        if (! $user instanceof Authenticatable) {
+            return $call();
+        }
+
+        $previousDefault = $auth->getDefaultDriver();
+        $guard = $auth->guard($guardName);
+        $previousUser = $guard->hasUser() ? $guard->user() : null;
+
+        $guard->setUser($user);
+        $auth->shouldUse($guardName);
+
+        try {
+            return $call();
+        } finally {
+            $auth->shouldUse($previousDefault);
+
+            if ($previousUser instanceof Authenticatable) {
+                $guard->setUser($previousUser);
+            } elseif (method_exists($guard, 'forgetUser')) {
+                $guard->forgetUser();
+            }
+        }
     }
 
     /**

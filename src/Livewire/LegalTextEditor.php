@@ -252,7 +252,9 @@ final class LegalTextEditor extends Component
         if ($this->queuesTranslation()) {
             Cache::put(TranslateLegalDraft::markerFor($this->key, $this->locale), true, now()->addHour());
 
-            TranslateLegalDraft::dispatch($this->key, $this->locale, $sourceLocale, $this->actor());
+            // The guard travels with the identifier: a worker has nobody signed in, and the job signs
+            // this user in again for the translator call, on the guard the identifier came from.
+            TranslateLegalDraft::dispatch($this->key, $this->locale, $sourceLocale, $this->actor(), auth()->getDefaultDriver());
 
             $this->awaitingTranslation = true;
             $this->setStatus(__('legal-consent::ui.admin_status_translation_queued'));

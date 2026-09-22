@@ -291,7 +291,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      * deleted (no live relationship remains). Superseded = a newer row exists for the same
      * (subject, document, locale) triple, so this older one is no longer the current standing.
      * The newest row per triple has no such successor and is kept, even past the cutoff, so an
-     * active subject's proof is never destroyed by age. The whole disjunction is parenthesised
+     * active subject's proof is never destroyed by age. The whole disjunction is parenthesized
      * so it binds under the cutoff, not beside it.
      *
      * @template TModel of LegalConsent|LegalNotice

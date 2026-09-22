@@ -4,6 +4,12 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.41.1] - 2026-09-22
+
+### Fixed
+
+- **A queued translation runs as the admin who asked for it.** A worker has nobody signed in, so a translator that bills or limits per user read nobody: the translation was attributed to no one and ran past any per-user limit. The job now carries the identifier of the acting admin and the guard the editor read them from, signs that user in for the translator call alone, and restores the worker afterwards. `LegalTextTranslator` is unchanged, so a translator that reads the signed-in user needs no new parameter. An admin who is gone by the time the worker runs, or a job queued before this release, translates unattributed rather than failing.
+
 ## [0.41.0] - 2026-09-22
 
 ### Added
@@ -2796,7 +2802,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.1...HEAD
+[0.41.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.38.0...v0.39.0
