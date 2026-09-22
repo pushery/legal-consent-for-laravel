@@ -186,7 +186,7 @@ final class RegistrationRules
      */
     private function activeByKey(string $locale): Collection
     {
-        return $this->activeByLocale[$locale] ??= LegalDocument::query()
+        return $this->activeByLocale[$locale] ??= LegalDocument::model()::query()
             ->select(['key', 'type'])
             ->where('locale', $locale)
             ->where('is_active', true)

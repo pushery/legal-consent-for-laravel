@@ -296,7 +296,7 @@ final class ConsentFake implements ConsentManager
         /** @var Collection<int, LegalDocument> $documents */
         // array_map over TWO arrays reindexes on its own, so the arranged keys arrive as a list
         // even when `owes()` was called with named arguments.
-        $documents = LegalDocument::hydrate(array_map(
+        $documents = LegalDocument::model()::hydrate(array_map(
             fn (int $index, string $key): array => [
                 'id' => $index + 1,
                 'key' => $key,
@@ -451,7 +451,7 @@ final class ConsentFake implements ConsentManager
             expectedContentHash: $expectedContentHash,
         );
 
-        $consent = new LegalConsent;
+        $consent = LegalConsent::resolve();
 
         // forceFill, because the model guards everything: the ledger is append-only and mass
         // assignment into it is exactly what that guard is for. An unsaved instance is the honest

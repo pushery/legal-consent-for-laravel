@@ -4,6 +4,22 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.40.0 → 0.41.0
+
+**Nothing is required of you.** One new setting, inert until you set it.
+
+**You can replace the package's models with your own.** Map one of the six to your subclass in `legal-consent.models`, keyed by the package class, and the package uses it on every path — every query, every row it writes, and the relations between its models:
+
+```php
+'models' => [
+    \Pushery\LegalConsent\Models\LegalConsent::class => \App\Models\LegalConsent::class,
+],
+```
+
+Keep the table, the tenant scope and the mass-assignment guard your subclass inherits. These rows are the proof of what a subject was told and agreed to, and the package writes them only through its own curated paths.
+
+**The six models are no longer `final`, and each names its table.** The names are the ones the migrations have always created, so there is nothing to migrate. If you referenced a model's table by deriving it from the class name, it is unchanged.
+
 ## 0.39.0 → 0.40.0
 
 **Nothing is required of you.** Two new settings, both inert until you set them, and one of them is worth setting today.

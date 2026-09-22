@@ -12,6 +12,7 @@ use Override;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LedgerImmutableException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Models\Concerns\Replaceable;
 
 /**
  * One append-only proof that a change notice was delivered to a subject on a durable
@@ -41,9 +42,12 @@ use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
  *                                                   that a lawful rewrite happened
  * @property CarbonImmutable|null $created_at
  */
-final class LegalNotice extends Model
+class LegalNotice extends Model
 {
     use BelongsToTenant;
+    use Replaceable;
+
+    protected $table = 'legal_notices';
 
     public $timestamps = false;
 
@@ -70,7 +74,7 @@ final class LegalNotice extends Model
      */
     public function document(): BelongsTo
     {
-        return $this->belongsTo(LegalDocument::class, 'document_id');
+        return $this->belongsTo(LegalDocument::model(), 'document_id');
     }
 
     #[Override]

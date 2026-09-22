@@ -39,8 +39,8 @@ final class SubjectToken
         // lookup would mint a SECOND token for the acceptance that follows. Two tokens for one
         // subject silently defeats the whole point: once an erasure has removed subject_id, the
         // delivery proof could no longer be tied to the consent it proves.
-        $existing = $this->tokenIn(LegalConsent::query(), $subject)
-            ?? $this->tokenIn(LegalNotice::query(), $subject);
+        $existing = $this->tokenIn(LegalConsent::model()::query(), $subject)
+            ?? $this->tokenIn(LegalNotice::model()::query(), $subject);
 
         return $existing ?? (string) Str::uuid();
     }

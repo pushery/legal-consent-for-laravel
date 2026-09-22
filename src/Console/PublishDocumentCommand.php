@@ -432,7 +432,7 @@ final class PublishDocumentCommand extends Command
 
     private function activeVersion(string $key, string $locale): ?LegalDocument
     {
-        return LegalDocument::query()
+        return LegalDocument::model()::query()
             // `id` is EQUIVALENT under mutation: every caller reads the version and the hash. Measured
             // 2026-09-14, the publish suites stay green without it and turn red without either of those.
             ->select(['id', 'version', 'content_hash'])

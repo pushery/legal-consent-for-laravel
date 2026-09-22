@@ -56,7 +56,7 @@
                     </x-wirekit::stack>
                 @endforeach
 
-                {{-- ⚠️ `loading-target` ALONE RENDERS NOTHING, AND THAT IS WHAT STOOD HERE. Read in
+                {{-- `loading-target` alone renders nothing, and that is what stood here. Read in
                      x-wirekit::button: the spinner sits behind `@if($declarativeLoading) … @elseif($loading)`
                      and `wire:loading.attr="disabled"` behind `@if($loading && …)`. Both gate on `loading`,
                      which this call never set — `loading-target` only SCOPES a spinner that was switched on

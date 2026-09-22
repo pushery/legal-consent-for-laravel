@@ -74,7 +74,7 @@ final readonly class PublishedDocumentReader
 
     private function activeRow(string $key, string $locale): ?LegalDocument
     {
-        return LegalDocument::query()
+        return LegalDocument::model()::query()
             // `content` is explicitly selected: $hidden only affects serialization, but the column
             // is excluded from the gate's own select for size, so name it here or it is absent.
             ->select([

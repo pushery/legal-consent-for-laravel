@@ -268,7 +268,7 @@ final readonly class ConsentBanner
     {
         $latest = [];
 
-        $rows = LegalConsent::query()
+        $rows = LegalConsent::model()::query()
             ->select(['document_key', 'action'])
             ->where('subject_type', $subject->getMorphClass())
             ->where('subject_id', SubjectKey::for($subject))

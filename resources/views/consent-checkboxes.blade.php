@@ -43,7 +43,7 @@
     box the visitor could tick and never satisfy. The fallback below keeps the minimal shape above
     working — that shape lists documents only, and a document IS `legal_{key}`.
 --}}
-{{-- ⚠️ BLOCK form on purpose. The inline one-line form strips its expression with
+{{-- Block form on purpose. The inline one-line form strips its expression with
      `trim('()')`, which removes EVERY leading and trailing parenthesis rather than the one pair
      it wrapped — so an expression that itself opens with a bracket loses that bracket and the
      view dies with `unexpected token "@"` pointing at the line below. Measured on this line.
@@ -187,14 +187,14 @@
             .$hostDescribedBy
         ));
     @endphp
-    {{-- ⚠️ THIS STUB SHIPS NO CSS, AND THIS IS THE SCREEN WHERE THAT COSTS THE MOST. Every class
+    {{-- This stub ships no CSS, and this is the screen where that costs the most. Every class
          here is a BEM hook with no declarations behind it, so whether these controls are usable on
          a phone is the host's decision — and the box below is a NATIVE checkbox. Measured in a real
          browser with no CSS applied: the input is 13 px and the `<label>` wrapping it is 18 px.
          BOTH are under the 24x24 CSS-pixel minimum (WCAG 2.5.8 AA), on the one screen a visitor
          cannot get past without hitting it.
 
-         ⚠️ SO THE LABEL DOES NOT RESCUE THIS ON ITS OWN, and an earlier draft of this note assumed
+         So the label does not rescue this on its own, and an earlier draft of this note assumed
          it did. The standard's "enclosed" exception is about the label's box — and by default that
          box is 18 px, not 24. The padding below is required, not merely convenient.
 
@@ -204,7 +204,7 @@
          because iOS zooms the page on focus below that and a zoomed registration form loses the
          submit button off-screen.
 
-         ⚠️ THE SAME PARAGRAPH LIVED ONLY IN THE ADMIN EDITOR STUB, which has one textarea and two
+         The same paragraph lived only in the admin editor stub, which has one textarea and two
          buttons and is seen by an operator on a desk. Here there is one touch target per document,
          it is the first view most consumers publish, and it had no guidance at all. --}}
     <div class="legal-consent-field">
@@ -238,7 +238,7 @@
                  Null when the title does not appear in the sentence at all (`die AGB` against
                  `Allgemeine Geschäftsbedingungen`) — then the separate link below stays, because a
                  text that cannot be reached breaks the clickwrap requirement (§ 305 Abs. 2 BGB). --}}
-            {{-- ⚠️ `lang` ON THE SPAN, NOT ONLY `hreflang` ON THE LINK. `hreflang` names the
+            {{-- `lang` on the span, not only `hreflang` on the link. `hreflang` names the
                  language at the far end of the link; assistive technology does not switch its
                  voice on it. The WORDING is the passage a screen reader has to pronounce, and it
                  is the sentence the entire consent rests on — spoken with the page's phonetics it

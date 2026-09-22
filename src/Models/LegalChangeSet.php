@@ -12,6 +12,7 @@ use Override;
 use Pushery\LegalConsent\Enums\ChangeSetState;
 use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Models\Concerns\Replaceable;
 
 /**
  * What one version of a legal text CHANGED, in the operator's own words, for one locale.
@@ -36,9 +37,12 @@ use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-final class LegalChangeSet extends Model
+class LegalChangeSet extends Model
 {
     use BelongsToTenant;
+    use Replaceable;
+
+    protected $table = 'legal_change_sets';
 
     /** The `version` value that marks the one editable draft. Empty string, never NULL — see the migration. */
     public const string DRAFT_VERSION = '';
@@ -56,7 +60,7 @@ final class LegalChangeSet extends Model
      */
     public function items(): HasMany
     {
-        return $this->hasMany(LegalChangeItem::class, 'change_set_id')->orderBy('position');
+        return $this->hasMany(LegalChangeItem::model(), 'change_set_id')->orderBy('position');
     }
 
     /**
@@ -64,7 +68,7 @@ final class LegalChangeSet extends Model
      */
     public function document(): BelongsTo
     {
-        return $this->belongsTo(LegalDocument::class, 'document_id');
+        return $this->belongsTo(LegalDocument::model(), 'document_id');
     }
 
     /**

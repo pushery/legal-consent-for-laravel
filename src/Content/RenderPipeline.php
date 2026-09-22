@@ -155,7 +155,7 @@ final readonly class RenderPipeline
             majorVersion: (int) $parts[0],
             // The two `?? 0` cannot fire: a version is either the '0.0.0' default or has passed
             // /^\d+\.\d+\.\d+$/ above, so all three parts exist. They stay for the type checker,
-            // which cannot see the pattern, and mutation reports both as survivors every run.
+            // which cannot see the pattern.
             minorVersion: (int) ($parts[1] ?? 0),
             patchVersion: (int) ($parts[2] ?? 0),
             isMaterial: $raw->isMaterial ?? true,   // unknown → treat as material (safe default)
@@ -323,7 +323,7 @@ final readonly class RenderPipeline
     {
         // Changing no hash on its own: both patterns below treat `\r` and `\n` as `\s`, so every
         // run of line endings collapses to one space with or without this line. It stays because
-        // it states the intent, and mutation reports its three variants as survivors every run.
+        // it states the intent.
         $html = str_replace(["\r\n", "\r"], "\n", $html);
         $html = (string) preg_replace('/>\s+</', '><', $html);
         $html = (string) preg_replace('/\s+/', ' ', $html);

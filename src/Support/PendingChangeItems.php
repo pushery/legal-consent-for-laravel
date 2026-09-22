@@ -104,12 +104,12 @@ final class PendingChangeItems
         // Located, then force-filled — never firstOrNew() with the identity as attributes. This
         // model guards every column on purpose (a frozen row is the record of what a subject was
         // told), so the convenience method's mass assignment is exactly what it is there to refuse.
-        $set = LegalChangeSet::query()
+        $set = LegalChangeSet::model()::query()
             ->where('key', $this->key)
             ->where('locale', $this->locale)
             ->where('tenant_id', $tenantId)
             ->where('version', LegalChangeSet::DRAFT_VERSION)
-            ->first() ?? new LegalChangeSet;
+            ->first() ?? LegalChangeSet::resolve();
 
         $set->forceFill([
             'key' => $this->key,
@@ -133,7 +133,7 @@ final class PendingChangeItems
         $set->items()->delete();
 
         foreach ($this->items as $position => $item) {
-            LegalChangeItem::query()->forceCreate([
+            LegalChangeItem::model()::query()->forceCreate([
                 'change_set_id' => $set->getKey(),
                 'state' => ChangeSetState::Draft,
                 'position' => $position,

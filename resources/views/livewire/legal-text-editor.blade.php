@@ -3,7 +3,7 @@
      polls. A dispatched job is invisible to the page that dispatched it, and without this the
      operator would click Translate, read that it is running, and have to guess when to reload.
 
-     ⚠️ `?? false` because this view is ALSO rendered standalone, by the tests that check its markup
+     `?? false` because this view is ALSO rendered standalone, by the tests that check its markup
      against real components. There is no Livewire component behind those, so the flag is absent —
      and absent means "do not poll", which is the only thing a render without a component could
      honestly mean. Calling `$this->translating()` here instead threw on every one of them. --}}
@@ -60,7 +60,7 @@
             {{-- Only where it can do something — a translation that has a draft. See the WireKit
                  twin for why the source is excluded.
 
-                 ⚠️ NO CONFIRMATION HERE, and that is stated rather than left to be discovered. This
+                 No confirmation here, and that is stated rather than left to be discovered. This
                  stub names no framework and needs no JavaScript, so it has no dialog to put one
                  behind, and `confirm()` renders outside any design system and is not something a
                  package should inject into a consumer's page. A host that wants the step wraps this
@@ -106,7 +106,7 @@
                      be free to drift -- and the drift shows up as a refusal on a release somebody
                      has already scheduled.
 
-                     ⚠️ READ AS THE CONSTANT, NOT THROUGH A COMPONENT METHOD. `$this` is bound only
+                     Read as the constant, not through a component method. `$this` is bound only
                      while Livewire renders this view; the package's own view tests render it
                      directly, and `$this->regimes()` died there with "Using $this when not in
                      object context" -- a published stub has to render wherever a consumer puts it.
@@ -136,7 +136,7 @@
         <h2>{{ __('legal-consent::ui.admin_preview') }}</h2>
         {{-- The preview renders the already-sanitized stored body — the exact bytes a publish freezes,
              so what you see here is what the subject will see and the ledger will prove. --}}
-        {{-- ⚠️ `role="region"`, BECAUSE A BARE `<div>` CANNOT BE NAMED. A div with no role maps to
+        {{-- `role="region"`, because a bare `<div>` cannot be named. A div with no role maps to
              `generic`, and ARIA forbids naming a generic element — so browsers and assistive
              technology DISCARD the label, and `admin_preview_label` reached nobody in any of the
              seven locales it is translated into. The preview is a block of rendered legal HTML

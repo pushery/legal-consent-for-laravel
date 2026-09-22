@@ -72,7 +72,7 @@ final class RenotifyVersionCommand extends Command
         $tenant = $this->option('tenant');
         $requested = $this->argument('version');
 
-        return LegalDocument::query()
+        return LegalDocument::model()::query()
             ->withoutGlobalScope(TenantScope::class) // an operator repairs a named version, not the ambient tenant's
             ->where('key', $this->argument('key'))
             ->where('locale', $this->argument('locale'))

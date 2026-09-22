@@ -54,7 +54,7 @@ final readonly class RetiredHoldings
 
         $tenant = app(TenantContext::class);
 
-        $versions = LegalDocument::query()
+        $versions = LegalDocument::model()::query()
             // The same column set the presenter selects for an active row, `id` included: these
             // rows reach the host's `document_url` resolver on exactly the same footing.
             ->select(['id', 'key', 'title', 'version', 'major_version', 'type', 'locale', 'requires_explicit_optin'])

@@ -241,7 +241,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
      */
     private function provedFor(LegalDocument $version): int
     {
-        return LegalNotice::query()
+        return LegalNotice::model()::query()
             ->withoutGlobalScope(TenantScope::class) // the sweep crosses tenants
             ->where('document_id', $version->getKey())
             ->count();
@@ -271,7 +271,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
      */
     private function dueVersions(): Collection
     {
-        return LegalDocument::query()
+        return LegalDocument::model()::query()
             ->withoutGlobalScope(TenantScope::class) // sweep every tenant's due versions
             ->where('is_active', true)
             ->whereIn('notice_mode', [

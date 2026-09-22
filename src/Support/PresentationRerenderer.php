@@ -44,7 +44,7 @@ final readonly class PresentationRerenderer
     {
         $rendered = $this->publisher->preview($key, $locale);
 
-        $active = LegalDocument::query()
+        $active = LegalDocument::model()::query()
             ->where('key', $key)
             ->where('locale', $locale)
             ->where('is_active', true)
@@ -93,7 +93,7 @@ final readonly class PresentationRerenderer
      */
     private function nextPatch(LegalDocument $active): int
     {
-        $highest = LegalDocument::query()
+        $highest = LegalDocument::model()::query()
             ->where('key', $active->key)
             ->where('locale', $active->locale)
             ->where('major_version', $active->major_version)

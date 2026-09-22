@@ -4,6 +4,20 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.41.0] - 2026-09-22
+
+### Added
+
+- **A registration form that builds its sentence per request can hand it to the recorder.** `recordRegistrationConsent($user, $input, shownWordings: [...])` and `RegistrationConsentRecorder::record()` take the sentence the form showed next to each document, and the proof freezes that sentence instead of the configured `registration_wording`. A line that names only the texts published in the reader's language differs per language, so one configured sentence was the wrong proof in all but one of them. A document you leave out keeps its configured sentence, and an informational page flagged `acknowledge_at_registration` needs no configured sentence of its own when the request carries one. The `Registered` listener has no request-time sentence and keeps freezing the configured ones.
+
+- **The package's models are replaceable.** Map any of the six models to your own subclass in the new `legal-consent.models` config key, and the package uses that class on every path: every query, every row it writes, and the relations between its models. A class that does not exist, or does not extend the package class, is ignored in favor of the package class. `LegalConsent::model()` and `LegalConsent::resolve()` give your own code the same answer.
+
+### Changed
+
+- **`acknowledge()` stores the sentence you pass without asking for a configured one.** A page flagged `acknowledgeable` no longer needs an `acknowledgment_wording` for the call to go through: the ledger stores the caller's sentence, so a configured one was a line it never held. A blank sentence is refused instead, with `NotAcknowledgeableException`. `RegistrationAcknowledgment::covers()` answers the flag alone, and the consent status map lists such a page like any other flagged one.
+
+- **The six models are no longer `final` and name their tables.** Without an explicit table Eloquent derives it from the class name, so a subclass called `HostConsent` would have looked for `host_consents`. The names are the ones the migrations have always created.
+
 ## [0.40.0] - 2026-09-21
 
 ### Added
@@ -2782,7 +2796,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.39.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.37.0...v0.38.0

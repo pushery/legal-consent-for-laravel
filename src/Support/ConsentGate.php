@@ -431,7 +431,7 @@ final class ConsentGate
      */
     public function latestActionFor(Model $subject, string $documentKey, ?string $locale = null): ?LegalConsent
     {
-        return LegalConsent::query()
+        return LegalConsent::model()::query()
             ->where('subject_type', $subject->getMorphClass())
             ->where('subject_id', SubjectKey::for($subject))
             ->where('document_key', $documentKey)

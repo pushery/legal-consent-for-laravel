@@ -13,12 +13,12 @@
      polls. A dispatched job is invisible to the page that dispatched it, and without this the
      operator would click Translate, read that it is running, and have to guess when to reload.
 
-     ⚠️ `?? false` because this view is ALSO rendered standalone, by the tests that check its markup
+     `?? false` because this view is ALSO rendered standalone, by the tests that check its markup
      against real components. There is no Livewire component behind those, so the flag is absent —
      and absent means "do not poll", which is the only thing a render without a component could
      honestly mean. Calling `$this->translating()` here instead threw on every one of them. --}}
 <div @if ($translating ?? false) wire:poll.3s @endif>
-    {{-- ⚠️ THE LABEL IS ASSEMBLED INTO AN ATTRIBUTE BAG, because a Blade `@if` INSIDE a component
+    {{-- The label is assembled into an attribute bag, because a Blade `@if` INSIDE a component
          tag does not compile — it is emitted as literal text into the rendered attribute list.
          The landmark takes its name directly when the heading is gone: `aria-labelledby` pointing
          at a missing id names nothing, and an unnamed region is not an improvement on a duplicated
@@ -108,7 +108,7 @@
             </x-wirekit::editor>
         </div>
 
-        {{-- ⚠️ A ROW THAT WRAPS, NOT A GROUP. `button.group` joins its children into one line at
+        {{-- A row that wraps, not a group. `button.group` joins its children into one line at
              every width, which is right for a segmented control and wrong for three separate acts.
              Measured at 390 px with German labels: the widest action ended at 548 px, 158 past the
              viewport. `row`'s own prop documents this case — "the per-page cure has been to add
@@ -165,7 +165,7 @@
                  for the same measured reason there: an empty region has no height but is still a
                  child of the stack, so it takes a gap.
 
-                 ⚠️ ON THIS REGION IT IS CONSISTENCY, NOT A MEASURED SAVING, and that is written here
+                 On this region it is consistency, not a measured saving, and that is written here
                  so nobody re-derives it. Measured at 390 px: with the hiding and without it, the
                  widest action ends at 390 px either way — this region sits AFTER the buttons now, so
                  an empty one has nothing to push. The stale region above is where it does act (96 px
@@ -208,7 +208,7 @@
                      be free to drift -- and the drift shows up as a refusal on a release somebody
                      has already scheduled.
 
-                     ⚠️ READ AS THE CONSTANT, NOT THROUGH A COMPONENT METHOD. `$this` is bound only
+                     Read as the constant, not through a component method. `$this` is bound only
                      while Livewire renders this view; the package's own view tests render it
                      directly, and `$this->regimes()` died there with "Using $this when not in
                      object context" -- a published stub has to render wherever a consumer puts it.

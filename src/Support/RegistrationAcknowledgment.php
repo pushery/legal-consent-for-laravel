@@ -44,6 +44,12 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * package never asks the reader for anything on such a page. Without it there is nothing truthful
  * to write down, and inventing one is the failure this whole design avoids.
  *
+ * A form that builds its sentence per request — naming only the pages published in the reader's
+ * language, say — hands that sentence to the recorder instead
+ * ({@see RegistrationConsentRecorder::record()}, `$shownWordings`). Then the sentence comes from the
+ * request, the flag is enough, and a configured one is only what a registration without that
+ * request falls back to.
+ *
  * ## …and the page that is never on that form
  *
  * A confirmation shown inside a CHECKOUT is the same kind of record and belongs nowhere near
@@ -112,6 +118,10 @@ final readonly class RegistrationAcknowledgment
      * Reads the registry rather than the row, so it answers for a key whose document is not
      * resolved yet — which is what the validation rules need, one step before a row exists.
      *
+     * It does not ask for a configured sentence. `acknowledge()` takes the sentence from its caller
+     * and refuses a blank one, so the sentence that reaches the ledger is always the one somebody
+     * was shown; a configured sentence on top of it would be stored nowhere.
+     *
      * Strictly `true`, never truthy: a key configured as `'yes'` or `1` is an operator typing
      * something this package does not define, and guessing what they meant is how a page ends up in
      * a ledger nobody asked to write to.
@@ -124,10 +134,27 @@ final readonly class RegistrationAcknowledgment
             return false;
         }
 
-        $flagged = ($entry['acknowledgeable'] ?? false) === true
-            || ($entry['acknowledge_at_registration'] ?? false) === true;
+        // The flag alone. A caller of acknowledge() hands over the sentence it showed and the ledger
+        // stores that one, so a configured sentence would be a line nobody reads, demanded only to
+        // unlock the call. Where no caller can hand one over, the registration flow asks for it
+        // itself: see coversRegistration().
+        return ($entry['acknowledgeable'] ?? false) === true
+            || self::isFlaggedForRegistration($key);
+    }
 
-        return $flagged && self::wordingFor($key) !== null;
+    /**
+     * Does the registry flag this key for the registration flow, whether or not it configures a
+     * sentence for it?
+     *
+     * The flag without the sentence. {@see coversRegistration()} needs both, because a listener
+     * raised by `Registered` has no request to take a sentence from. A form that builds its sentence
+     * per request hands it to the recorder instead, and then the flag is all the registry has to say.
+     */
+    public static function isFlaggedForRegistration(string $key): bool
+    {
+        $entry = self::entry($key);
+
+        return $entry !== null && ($entry['acknowledge_at_registration'] ?? false) === true;
     }
 
     /**
@@ -146,8 +173,7 @@ final readonly class RegistrationAcknowledgment
             return false;
         }
 
-        return ($entry['acknowledge_at_registration'] ?? false) === true
-            && self::wordingFor($key) !== null;
+        return self::isFlaggedForRegistration($key) && self::wordingFor($key) !== null;
     }
 
     /**

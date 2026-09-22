@@ -181,7 +181,7 @@ final class EnforceableDocumentCache
         // touched the database. The per-request memo above means once per (tenant, locale) rather
         // than once per read — it does not mean zero, and a listener counting queries will
         // over-count.
-        $documents = LegalDocument::hydrate($rows);
+        $documents = LegalDocument::model()::hydrate($rows);
 
         $this->memo[$key] = [$documents, $now + $this->ttl];
 
@@ -197,7 +197,7 @@ final class EnforceableDocumentCache
      */
     private function freshRows(string $locale): array
     {
-        return LegalDocument::query()
+        return LegalDocument::model()::query()
             ->select([
                 'id', 'key', 'locale', 'type', 'major_version', 'version', 'title', 'ui_wording',
                 'content_hash', 'requires_explicit_optin', 'requires_reconsent', 'notice_mode',
@@ -268,7 +268,7 @@ final class EnforceableDocumentCache
      */
     private function flushableLocales(): array
     {
-        $published = LegalDocument::query()
+        $published = LegalDocument::model()::query()
             ->select('locale')
             ->distinct()
             ->pluck('locale')

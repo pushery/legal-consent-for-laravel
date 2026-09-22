@@ -191,7 +191,7 @@ readonly class LegalDraftWriter
 
     protected function find(string $key, string $locale): ?LegalDraft
     {
-        return LegalDraft::query()->where('key', $key)->where('locale', $locale)->first();
+        return LegalDraft::model()::query()->where('key', $key)->where('locale', $locale)->first();
     }
 
     /**
@@ -218,7 +218,7 @@ readonly class LegalDraftWriter
                 // transaction into a SAVEPOINT, so this costs one savepoint and nothing else.
                 return DB::transaction(function () use ($key, $locale, $attributes): LegalDraft {
                     // Saved through the model so the tenant stamp (BelongsToTenant's creating hook) lands.
-                    $draft = new LegalDraft;
+                    $draft = LegalDraft::resolve();
                     $draft->forceFill(array_merge([
                         'key' => $key,
                         'locale' => $locale,
@@ -235,7 +235,7 @@ readonly class LegalDraftWriter
                 // this (key, locale, tenant) between the caller's read and this insert. The unique
                 // index — not a lost update — is the arbiter: re-read the row that won and converge
                 // to the update path below, instead of surfacing the violation to the caller.
-                $existing = LegalDraft::query()->where('key', $key)->where('locale', $locale)->firstOrFail();
+                $existing = LegalDraft::model()::query()->where('key', $key)->where('locale', $locale)->firstOrFail();
             }
         }
 

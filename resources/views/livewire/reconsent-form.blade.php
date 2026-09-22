@@ -24,7 +24,7 @@
                      cannot leave without agreeing (Art. 7(1)/(2), WCAG 3.1.2). See
                      ContentLanguage; null when it matches the page, and nothing is emitted. --}}
                 @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document->locale))
-                {{-- ⚠️ `wire:key` ON THE ONE LOOP THAT SHRINKS AND CARRIES STATE. Measured: `pending`
+                {{-- `wire:key` on the one loop that shrinks and carries state. Measured: `pending`
                      goes [marketing, privacy, terms] → [privacy, terms] after a submit, so the node
                      at index 0 changes identity from `legal_marketing` to `legal_privacy`. And the
                      server renders NO `checked` attribute — a ticked box lives only as a DOM
@@ -56,7 +56,7 @@
                 </div>
             @endforeach
 
-            {{-- ⚠️ `aria-busy`, NOT `disabled`, AND THE FOCUS IS WHY. `wire:loading.attr="disabled"` is the
+            {{-- `aria-busy`, not `disabled`, and the focus is why. `wire:loading.attr="disabled"` is the
                  common idiom, but it blurs the very button the subject just activated, so focus falls to
                  <body> for the whole in-flight window — the same WCAG 2.4.3 failure the status region's
                  focus move exists to prevent, except here it would happen on EVERY request rather than

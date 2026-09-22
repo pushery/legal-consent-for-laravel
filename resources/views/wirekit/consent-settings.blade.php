@@ -18,7 +18,7 @@
     title becomes a link: a settings screen on which the document being withdrawn cannot be read
     is silent exactly where Art. 7(3) assumes the subject knows what they are deciding about.
 
-    ⚠️ THIS IS THE TWIN OF THE FRAMEWORK-AGNOSTIC STUB, NOT OF THE LIVEWIRE VIEW. It is rendered on
+    This is the twin of the framework-agnostic stub, not of the Livewire view. It is rendered on
     an ordinary page, so it withdraws with a FORM POST to `withdraw_url` — the bundled session
     route, switched on with `legal-consent.routes.web`. It used to carry `wire:click="withdraw(…)"`,
     copied from the Livewire twin, which on a page with no Livewire component behind it is inert:
@@ -31,7 +31,7 @@
 
     {{-- The result of the redirect the withdrawal route answers with.
 
-         ⚠️ THE REGION IS INERT ON THIS PATH, and this comment used to claim the reverse. The
+         The region is inert on this path, and this comment used to claim the reverse. The
          withdrawal route answers POST with a redirect, so the message and the region carrying it
          arrive in the same fresh document — and a live region present at page load has no
          mutation to announce. That rationale belongs to the Livewire twin, which morphs its

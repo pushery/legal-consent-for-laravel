@@ -49,7 +49,7 @@ final class VerifyDocumentsCommand extends Command
         /** @var list<string> $advisories */
         $advisories = [];
 
-        $active = LegalDocument::query()
+        $active = LegalDocument::model()::query()
             ->withoutGlobalScope(TenantScope::class) // audit every tenant's documents
             ->where('is_active', true)
             ->orderBy('key')

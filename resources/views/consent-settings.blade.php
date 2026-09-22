@@ -33,7 +33,7 @@
 
     {{-- The result of the redirect the bundled withdrawal route answers with.
 
-         ⚠️ ON THIS PATH THE LIVE REGION ANNOUNCES NOTHING, and the comment here used to claim the
+         On this path the live region announces nothing, and the comment here used to claim the
          opposite. Withdrawal is POST -> Redirect -> GET, so the message arrives in a FRESH
          document together with the region that carries it — and a live region present at page
          load never announces, because there is no mutation for it to report. The "always in the

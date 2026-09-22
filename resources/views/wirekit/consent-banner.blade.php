@@ -48,14 +48,14 @@
                     </x-wirekit::text>
 
                     @if (! empty($item['enforce_from']))
-                        {{-- ⚠️ `show-seconds="false"`, AND THE DEFAULT IS `true`. The threshold two
+                        {{-- `show-seconds="false"`, and the default is `true`. The threshold two
                              lines up is a WEEK and the value on screen is "N days left", so a
                              seconds place would render a digit nobody reads while re-rendering the
                              element once a second — a DOM write and a CSS transition per tick, per
                              open change, on every authenticated page. It is the only continuous
                              client work this package ships, and it buys nothing here.
 
-                             ⚠️ It does NOT stop the timer, and saying so matters: `countdown.js`
+                             It does NOT stop the timer, and saying so matters: `countdown.js`
                              calls `setInterval(…, 1000)` in `init()` unconditionally, whatever this
                              prop says. What goes away is the rendered change per tick — the string
                              stops moving, so Alpine writes the same value and the DOM stays put.

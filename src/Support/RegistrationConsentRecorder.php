@@ -51,8 +51,17 @@ final readonly class RegistrationConsentRecorder
 
     /**
      * @param  array<string, mixed>  $input
+     * @param  array<array-key, mixed>  $shownWordings  the sentence the form showed next to each
+     *                                                  document in this request, keyed by document
+     *                                                  key. A form that builds its sentence per
+     *                                                  request (naming only the texts published in the
+     *                                                  reader's language, for instance) passes it here,
+     *                                                  and the proof freezes that sentence instead of
+     *                                                  a configured one. A key it leaves out, or a
+     *                                                  value that is not a non-blank string, keeps the
+     *                                                  configured sentence.
      */
-    public function record(Model $subject, array $input, ConsentContext $context, ?string $locale = null): void
+    public function record(Model $subject, array $input, ConsentContext $context, ?string $locale = null, array $shownWordings = []): void
     {
         // The locale the subject actually SAW, when a caller passes it (Way A's argument, or the
         // context). Falling straight to default_locale — as this did — is how a validated checkbox
@@ -137,7 +146,14 @@ final readonly class RegistrationConsentRecorder
             // was ticked over four pages and a ledger naming one of them is the misleading record.
             // The predicate is asked rather than the type, so this site and RegistrationRules
             // cannot drift into disagreeing about which pages the form covers.
-            if (! RegistrationAcknowledgment::isRecordedAtRegistration($document)) {
+            //
+            // A page flagged for registration with no configured sentence is recorded too when the
+            // form handed over the one it showed: then the request carries the only sentence that
+            // could be true, and the flag says the form showed the page.
+            $shown = $this->shownWording($shownWordings, (string) $key);
+
+            if (! RegistrationAcknowledgment::isRecordedAtRegistration($document)
+                && ($shown === null || ! RegistrationAcknowledgment::isFlaggedForRegistration((string) $key))) {
                 continue;
             }
 
@@ -191,11 +207,15 @@ final readonly class RegistrationConsentRecorder
             // the loop would route it to accept(). That made the sentence unreachable for the one
             // document where it matters most — a binding text folded into a line that names four,
             // whose proof then froze words the subject never read.
+            //
+            // The sentence this request showed wins over the configured one: a form that names the
+            // texts published in the reader's language shows a different line per language, and a
+            // configured line would be the wrong proof in every language but one.
             $pending[] = [
                 (string) $key,
                 $document->locale,
                 is_string($expectedHash) ? $expectedHash : null,
-                RegistrationAcknowledgment::wordingFor((string) $key),
+                $shown ?? RegistrationAcknowledgment::wordingFor((string) $key),
                 $document->type->isConsentBearing(),
             ];
         }
@@ -211,8 +231,8 @@ final readonly class RegistrationConsentRecorder
             // `accept()` would refuse it — rightly, because the sentence it guards is one this
             // document does not have.
             if (! $bindsSomebody) {
-                // Narrowing a type, not inventing a value: `isRecordedAtRegistration()` lets a
-                // non-binding page through only when `coversRegistration()` found it a sentence.
+                // Narrowing a type, not inventing a value: a non-binding page gets this far only
+                // with a sentence, the request's or the one `coversRegistration()` found.
                 $this->consent->acknowledge($subject, $key, $context, (string) $registrationWording, $documentLocale, $expectedHash);
 
                 continue;
@@ -242,11 +262,28 @@ final readonly class RegistrationConsentRecorder
     }
 
     /**
+     * The sentence the form showed next to this document in this request, or null when the caller
+     * passed none.
+     *
+     * Strictly a non-blank string: anything else is a caller who meant to pass something and did
+     * not, and the configured sentence is what they had before they tried. Trimmed, like the
+     * configured one, so the two cannot differ by whitespace alone.
+     *
+     * @param  array<array-key, mixed>  $shownWordings
+     */
+    private function shownWording(array $shownWordings, string $key): ?string
+    {
+        $shown = $shownWordings[$key] ?? null;
+
+        return is_string($shown) && trim($shown) !== '' ? trim($shown) : null;
+    }
+
+    /**
      * @return Collection<string, LegalDocument>
      */
     private function activeByKey(string $locale): Collection
     {
-        return LegalDocument::query()
+        return LegalDocument::model()::query()
             ->select(['key', 'type', 'locale'])
             ->where('locale', $locale)
             ->where('is_active', true)

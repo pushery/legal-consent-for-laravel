@@ -11,6 +11,7 @@ use Override;
 use Pushery\LegalConsent\Enums\ChangeItemType;
 use Pushery\LegalConsent\Enums\ChangeSetState;
 use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
+use Pushery\LegalConsent\Models\Concerns\Replaceable;
 
 /**
  * One typed entry in a change description: a clause added, a processor removed, a right narrowed.
@@ -33,8 +34,12 @@ use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-final class LegalChangeItem extends Model
+class LegalChangeItem extends Model
 {
+    use Replaceable;
+
+    protected $table = 'legal_change_items';
+
     /**
      * @var list<string>
      */
@@ -45,7 +50,7 @@ final class LegalChangeItem extends Model
      */
     public function changeSet(): BelongsTo
     {
-        return $this->belongsTo(LegalChangeSet::class, 'change_set_id');
+        return $this->belongsTo(LegalChangeSet::model(), 'change_set_id');
     }
 
     /**

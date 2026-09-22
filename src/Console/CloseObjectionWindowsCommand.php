@@ -91,7 +91,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
         // (measured 2026-09-14).
         $maxConsentId = is_numeric($latestConsentId) ? (int) $latestConsentId : 0;
 
-        $versions = LegalDocument::query()
+        $versions = LegalDocument::model()::query()
             ->withoutGlobalScope(TenantScope::class) // close every tenant's due windows
             ->where('is_active', true)
             ->where('notice_mode', NoticeMode::DeemedConsent->value)
@@ -214,7 +214,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
         // No empty-collection guard: chunk() never yields an empty chunk, so this cannot be called
         // with one, and `whereIn(…, [])` is valid SQL anyway. A branch that cannot run is not
         // defense — it is a line that can never be shown to work.
-        $rows = LegalNotice::query()
+        $rows = LegalNotice::model()::query()
             ->withoutGlobalScope(TenantScope::class) // the sweep crosses tenants and runs unauthenticated
             ->where('document_id', $version->getKey())
             ->where('mandatory_content_ok', true)
