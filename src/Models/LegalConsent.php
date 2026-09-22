@@ -14,6 +14,7 @@ use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Exceptions\LedgerImmutableException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Models\Concerns\Replaceable;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
 
 /**
@@ -49,9 +50,12 @@ use Pushery\LegalConsent\Support\DefaultConsentManager;
  *                                                   LedgerHashChain::PROOF_FIELDS
  * @property CarbonImmutable|null $created_at
  */
-final class LegalConsent extends Model
+class LegalConsent extends Model
 {
     use BelongsToTenant;
+    use Replaceable;
+
+    protected $table = 'legal_consents';
 
     public $timestamps = false;
 
@@ -80,7 +84,7 @@ final class LegalConsent extends Model
      */
     public function document(): BelongsTo
     {
-        return $this->belongsTo(LegalDocument::class, 'document_id');
+        return $this->belongsTo(LegalDocument::model(), 'document_id');
     }
 
     #[Override]

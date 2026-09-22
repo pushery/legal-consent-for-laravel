@@ -74,8 +74,8 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
 
         $brokenTokens = [];
 
-        $consents = $this->prune(LegalConsent::query(), 'legal_consents', 'accepted_at', $cutoff, $brokenTokens, chained: true);
-        $notices = $this->prune(LegalNotice::query(), 'legal_notices', 'sent_at', $cutoff);
+        $consents = $this->prune(LegalConsent::model()::query(), 'legal_consents', 'accepted_at', $cutoff, $brokenTokens, chained: true);
+        $notices = $this->prune(LegalNotice::model()::query(), 'legal_notices', 'sent_at', $cutoff);
 
         // Report even a zero sweep: this is the one scheduled task whose SILENCE is the failure.
         // A dispatch that stops running leaves visibly missing mail; a prune that stops running

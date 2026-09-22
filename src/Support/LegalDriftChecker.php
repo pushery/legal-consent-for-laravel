@@ -40,7 +40,7 @@ final readonly class LegalDriftChecker
      */
     public function driftFor(string $key, string $locale): ?string
     {
-        $active = LegalDocument::query()
+        $active = LegalDocument::model()::query()
             ->select(['id', 'version', 'content_hash', 'source_hash', 'render_fingerprint'])
             ->where('key', $key)
             ->where('locale', $locale)

@@ -207,7 +207,7 @@ readonly class DefaultConsentManager implements ConsentManager
      */
     private function checklistRows(string $locale): Collection
     {
-        return LegalDocument::query()
+        return LegalDocument::model()::query()
             ->select(['id', 'key', 'type', 'title', 'ui_wording', 'version', 'locale', 'requires_explicit_optin', 'content_hash'])
             ->where('locale', $locale)
             ->where('is_active', true)
@@ -320,6 +320,13 @@ readonly class DefaultConsentManager implements ConsentManager
 
         if (! RegistrationAcknowledgment::covers($documentKey)) {
             throw NotAcknowledgeableException::notFlagged($documentKey);
+        }
+
+        // The sentence is the caller's, so a blank one is refused here rather than written: the
+        // column is NOT NULL, and an empty sentence reads exactly like a page nobody was shown a
+        // control for.
+        if (trim($acknowledgmentWording) === '') {
+            throw NotAcknowledgeableException::withoutWording($documentKey);
         }
 
         if ($expectedContentHash !== null && $expectedContentHash !== $document->content_hash) {
@@ -596,7 +603,7 @@ readonly class DefaultConsentManager implements ConsentManager
 
     public function history(Model $subject): array
     {
-        $rows = LegalConsent::query()
+        $rows = LegalConsent::model()::query()
             ->where('subject_type', $subject->getMorphClass())
             ->where('subject_id', SubjectKey::for($subject))
             ->orderBy('accepted_at')
@@ -695,7 +702,7 @@ readonly class DefaultConsentManager implements ConsentManager
 
         $consent = $this->tamperEvidenceEnabled()
             ? $this->appendChained($token, $attributes)
-            : DB::transaction(fn (): LegalConsent => LegalConsent::query()->forceCreate($attributes));
+            : DB::transaction(fn (): LegalConsent => LegalConsent::model()::query()->forceCreate($attributes));
 
         event(match ($action) {
             ConsentAction::Withdrawn => new ConsentWithdrawn($consent),
@@ -756,7 +763,7 @@ readonly class DefaultConsentManager implements ConsentManager
                     // (prev_record_hash is set here), which create()'s shaped-array type would reject —
                     // and the model is guarded against mass assignment ($guarded = ['*']), so filling a
                     // proof row is deliberately something only this curated write path may do.
-                    $consent = new LegalConsent;
+                    $consent = LegalConsent::resolve();
                     $consent->forceFill($attributes)->save();
 
                     // THE ROW IS RE-READ HERE, AND THE ID IS ALL THAT IS HANDED OVER. Until
@@ -886,7 +893,7 @@ readonly class DefaultConsentManager implements ConsentManager
         }
 
         if ($latest->document_id !== null) {
-            $document = LegalDocument::query()->whereKey($latest->document_id)->first();
+            $document = LegalDocument::model()::query()->whereKey($latest->document_id)->first();
 
             if ($document instanceof LegalDocument) {
                 return $document;
@@ -897,7 +904,7 @@ readonly class DefaultConsentManager implements ConsentManager
         // fresh id by a lawful rewrite: the denormalized (key, locale, version) triple identifies
         // the same version just as exactly, which is why migration 000008 could drop the foreign
         // key in the first place.
-        return LegalDocument::query()
+        return LegalDocument::model()::query()
             ->where('key', $latest->document_key)
             ->where('locale', $latest->locale)
             ->where('version', $latest->document_version)
@@ -954,7 +961,7 @@ readonly class DefaultConsentManager implements ConsentManager
 
     private function activeDocumentIn(string $documentKey, string $locale): ?LegalDocument
     {
-        return LegalDocument::query()
+        return LegalDocument::model()::query()
             ->where('key', $documentKey)
             ->where('locale', $locale)
             ->where('is_active', true)

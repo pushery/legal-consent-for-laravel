@@ -21,7 +21,7 @@
              always present and Livewire morphs it rather than replacing it, so nothing re-runs.
              x-effect re-runs whenever $wire.statusNonce changes — exactly when a release sets it.
              Same pattern as consent-settings and reconsent-form; this screen was the one left out. --}}
-        {{-- ⚠️ `status`/`polite`, NOT `alert`/`assertive`, AND THE FOCUS MOVE IS WHY. `role="alert"`
+        {{-- `status`/`polite`, not `alert`/`assertive`, and the focus move is why. `role="alert"`
              implies an assertive live region, and this same element also receives focus — so
              assistive technology says the message TWICE: once as a live-region interruption, once
              as the name of the newly focused element. Dropping the focus move instead would send a
@@ -126,8 +126,8 @@
                             </td>
                         @endforeach
                     </tr>
-                    {{-- ⚠️ ITS OWN ROW, ACROSS ALL COLUMNS, AND THE REASON IS A VIEWPORT NOBODY HAD
-                         MEASURED. As the last COLUMN of a grid that is documents x locales, the only
+                    {{-- Its own row, across all columns, and the reason is a viewport nobody had
+                         measured. As the last COLUMN of a grid that is documents x locales, the only
                          control on this screen sat 200 px past the right edge of the visible table at
                          390 px wide — reachable solely by scrolling the table sideways, with the
                          reasons a blocked release gives sitting out there beside it.
@@ -140,7 +140,7 @@
                          column header is gone with the cell — which is also what shrank the grid: at
                          seven locales it now overflows its scroller by 35 px instead of 530.
 
-                         ⚠️ A `position: sticky` hold was here and is GONE, because a red probe showed
+                         A `position: sticky` hold was here and is GONE, because a red probe showed
                          it did nothing. Measured at fourteen locales, scrolled to the far end: the
                          control sat at -115 px with the hold in place, exactly as without it. Shipping
                          a declaration that cannot be shown to act is worse than shipping none. --}}

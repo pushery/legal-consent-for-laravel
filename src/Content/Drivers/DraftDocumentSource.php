@@ -82,7 +82,7 @@ final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocume
      */
     public function fingerprint(string $type, string $locale): string
     {
-        $draft = LegalDraft::query()
+        $draft = LegalDraft::model()::query()
             ->select(['id', 'revision'])
             ->where('key', $type)
             ->where('locale', $locale)

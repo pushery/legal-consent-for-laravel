@@ -34,7 +34,7 @@ final readonly class PublishedTitleNames implements NamesLegalTexts
 {
     public function document(string $key): string
     {
-        $preferred = LegalDocument::query()
+        $preferred = LegalDocument::model()::query()
             ->where('key', $key)
             ->where('is_active', true)
             ->where('locale', app()->getLocale())

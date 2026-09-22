@@ -98,7 +98,7 @@ final class DoctorCommand extends Command
         }
 
         try {
-            return LegalDocument::query()
+            return LegalDocument::model()::query()
                 ->withoutGlobalScope(TenantScope::class)
                 ->where('is_active', true)
                 ->where('notice_mode', NoticeMode::DeemedConsent->value)
@@ -153,7 +153,7 @@ final class DoctorCommand extends Command
     private function unpublishedCombinations(): array
     {
         try {
-            $active = LegalDocument::query()
+            $active = LegalDocument::model()::query()
                 ->withoutGlobalScope(TenantScope::class)
                 ->where('is_active', true)
                 ->get(['key', 'locale'])
@@ -278,7 +278,7 @@ final class DoctorCommand extends Command
     private function publishedMandatoryKeys(): array
     {
         try {
-            $keys = LegalDocument::query()
+            $keys = LegalDocument::model()::query()
                 ->withoutGlobalScope(TenantScope::class)
                 ->where('is_active', true)
                 ->where('requires_explicit_optin', false)

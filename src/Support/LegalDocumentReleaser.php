@@ -128,7 +128,7 @@ final readonly class LegalDocumentReleaser
      */
     public function nextVersionFor(string $key, NoticeMode $mode): string
     {
-        $active = LegalDocument::query()
+        $active = LegalDocument::model()::query()
             ->where('key', $key)
             ->where('is_active', true)
             ->orderByDesc('major_version')

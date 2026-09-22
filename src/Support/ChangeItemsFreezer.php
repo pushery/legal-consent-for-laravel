@@ -42,7 +42,7 @@ final class ChangeItemsFreezer
         // publish then looks like it simply had no description to freeze.
         $tenantId = $document->tenant_id ?? '';
 
-        $draft = LegalChangeSet::query()
+        $draft = LegalChangeSet::model()::query()
             ->withoutGlobalScope(TenantScope::class) // the publish runs under the operator's session, the row under its own tenant
             ->where('key', $document->key)
             ->where('locale', $document->locale)
@@ -54,7 +54,7 @@ final class ChangeItemsFreezer
             return null;
         }
 
-        $items = LegalChangeItem::query()
+        $items = LegalChangeItem::model()::query()
             ->where('change_set_id', $draft->getKey())
             ->orderBy('position')
             ->get();
@@ -72,7 +72,7 @@ final class ChangeItemsFreezer
         // The children carry the state too, so the database trigger can decide on one row. Written
         // with a bulk update rather than through the model, because the model hook would refuse the
         // very transition it is there to protect.
-        LegalChangeItem::query()
+        LegalChangeItem::model()::query()
             ->where('change_set_id', $draft->getKey())
             ->update(['state' => ChangeSetState::Published->value]);
 

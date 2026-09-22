@@ -149,14 +149,17 @@ return [
             // stored verbatim, because this page carries none of its own: nothing here asks the
             // reader for anything, so the only truthful sentence is the one you showed. Set the
             // flag without it and this document is simply not covered — a configuration that does
-            // nothing, which you find, rather than a registration that fails, which they do.
+            // nothing, which you find, rather than a registration that fails, which they do. The
+            // exception is a form that builds its sentence per request and hands it to
+            // recordRegistrationConsent() as `shownWordings`: then the flag is enough.
             // 'acknowledge_at_registration' => true,
             // 'registration_wording' => 'I have read the imprint.',
             //
             // For a page that is NEVER on your sign-up form — a confirmation inside a checkout,
             // shown before every purchase — use the general pair instead. It says the same thing
             // about the ledger and nothing at all about registration, so the sign-up flow leaves
-            // it alone. `acknowledge_at_registration` above implies this one.
+            // it alone. `acknowledge_at_registration` above implies this one. The wording is optional
+            // here: acknowledge() stores the sentence you pass it.
             // 'acknowledgeable' => true,
             // 'acknowledgment_wording' => 'I understand the creator provides this service.',
         ],
@@ -886,6 +889,31 @@ return [
          * than turning the overview into an error page; `legal-consent:doctor` reports it.
          */
         'editor_route' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Replacing the package's models
+    |--------------------------------------------------------------------------
+    |
+    | A host that needs its own relations, scopes or casts on a consent, document, notice, draft
+    | or change row subclasses the model and maps it here, keyed by the package class. The package
+    | then uses the subclass on every path: every query, every row it writes, and the relations
+    | between its models.
+    |
+    | The subclass inherits the package's table, its tenant scope and its mass-assignment guard.
+    | Keep all three: these rows are the proof of what a subject was told and agreed to, and the
+    | package writes them only through its own curated paths.
+    |
+    | A class that does not exist, or does not extend the package class, is ignored and the
+    | package class is used instead. Obeying it would fail in the middle of a request, a queued
+    | notice sweep or a consent being recorded.
+    |
+    */
+
+    'models' => [
+        // \Pushery\LegalConsent\Models\LegalConsent::class => \App\Models\LegalConsent::class,
+        // \Pushery\LegalConsent\Models\LegalDocument::class => \App\Models\LegalDocument::class,
     ],
 
 ];

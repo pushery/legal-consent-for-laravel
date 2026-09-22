@@ -94,7 +94,7 @@ final readonly class WriteNoticeDeliveryProof
         $this->tenant->forTenant($tenantId, function () use ($subject, $version, $notification, $tenantId): void {
             $proof = $this->render($notification, $version, $subject);
 
-            LegalNotice::query()->forceCreate([
+            LegalNotice::model()::query()->forceCreate([
                 'subject_type' => $subject->getMorphClass(),
                 'subject_id' => SubjectKey::for($subject),
                 'subject_token' => $this->tokens->forSubject($subject),

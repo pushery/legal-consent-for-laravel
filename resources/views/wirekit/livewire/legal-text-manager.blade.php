@@ -6,7 +6,7 @@
     `@wirekitScripts` in the layout (Release all locales confirms via an alert-dialog).
 --}}
 <div>
-    {{-- ⚠️ THE LABEL IS ASSEMBLED INTO AN ATTRIBUTE BAG, because a Blade `@if` INSIDE a component
+    {{-- The label is assembled into an attribute bag, because a Blade `@if` INSIDE a component
          tag does not compile — it is emitted as literal text into the rendered attribute list.
          The landmark takes its name directly when the heading is gone: `aria-labelledby` pointing
          at a missing id names nothing, and an unnamed region is not an improvement on a duplicated
@@ -25,7 +25,7 @@
              x-wirekit::alert: the alert is itself a role="status" region, and nesting a live region
              in this one would double-announce.
 
-             ⚠️ POLITE, MATCHING THE PLAIN TWIN — and this comment used to say the opposite, having
+             Polite, matching the plain twin — and this comment used to say the opposite, having
              raised it to `assertive` so the two would agree. The agreement was right and the
              direction was wrong: `role="alert"` implies assertive, and this same element also
              receives focus, so assistive technology says the message twice — once as a live-region

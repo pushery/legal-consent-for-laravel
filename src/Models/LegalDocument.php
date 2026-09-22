@@ -18,6 +18,7 @@ use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentInEvidenceException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Models\Concerns\Replaceable;
 use Pushery\LegalConsent\Support\ActivationLock;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
@@ -71,9 +72,12 @@ use Pushery\LegalConsent\Support\TenantContext;
  *
  * @method static Builder<LegalDocument> active()
  */
-final class LegalDocument extends Model
+class LegalDocument extends Model
 {
     use BelongsToTenant;
+    use Replaceable;
+
+    protected $table = 'legal_documents';
 
     /**
      * Nothing is mass-assignable. A published row is the frozen text every acceptance is proved
@@ -237,7 +241,7 @@ final class LegalDocument extends Model
      */
     public function consents(): HasMany
     {
-        return $this->hasMany(LegalConsent::class, 'document_id');
+        return $this->hasMany(LegalConsent::model(), 'document_id');
     }
 
     /**

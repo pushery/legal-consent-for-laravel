@@ -1,6 +1,6 @@
 {{-- The published text of one document, as a fragment a dialog can hold.
 
-     ⚠️ NO LAYOUT, NO `<html>`, NO STYLESHEET, and that is the whole point. This is served to a
+     No layout, no `<html>`, no stylesheet, and that is the whole point. This is served to a
      caller that already has a page — a dialog on the host's registration form — and a full document
      inserted there is a document inside a document. Publish this stub (tag `legal-consent-views`)
      and wrap it in whatever the host's own reader uses.

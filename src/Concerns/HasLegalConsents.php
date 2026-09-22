@@ -47,7 +47,7 @@ trait HasLegalConsents
         // Built here rather than by overriding `newMorphMany()`, because that hook is shared: it would
         // silently change every OTHER morphMany on a consumer's model too. The column names are
         // written out, because this package ships the migration that creates them.
-        $instance = $this->newRelatedInstance(LegalConsent::class);
+        $instance = $this->newRelatedInstance(LegalConsent::model());
 
         $relation = new StringKeyedMorphMany(
             $instance->newQuery(),

@@ -33,7 +33,7 @@ final readonly class ChangeItemsAuthor
      */
     public function draft(string $key, string $locale): ?LegalChangeSet
     {
-        return LegalChangeSet::query()
+        return LegalChangeSet::model()::query()
             ->where('key', $key)
             ->where('locale', $locale)
             ->where('version', LegalChangeSet::DRAFT_VERSION)
@@ -50,7 +50,7 @@ final readonly class ChangeItemsAuthor
      */
     public function published(int $documentId): ?LegalChangeSet
     {
-        return LegalChangeSet::query()
+        return LegalChangeSet::model()::query()
             ->withoutGlobalScope(TenantScope::class) // notices are rendered by a cross-tenant sweep
             ->where('document_id', $documentId)
             ->where('state', ChangeSetState::Published->value)

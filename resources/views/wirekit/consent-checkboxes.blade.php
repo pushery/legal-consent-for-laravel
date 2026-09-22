@@ -28,7 +28,7 @@
     `field` is the input name and comes from the item, never from this template — see the plain
     stub for why building it as `legal_{key}` broke the age attestation.
 --}}
-{{-- ⚠️ BLOCK form on purpose. The inline one-line form strips its expression with
+{{-- Block form on purpose. The inline one-line form strips its expression with
      `trim('()')`, which removes EVERY leading and trailing parenthesis rather than the one pair
      it wrapped — so an expression that itself opens with a bracket loses that bracket and the
      view dies with `unexpected token "@"` pointing at the line below. Measured on this line.
@@ -44,7 +44,7 @@
     // stack closes. The reasoning is at the collector, where the markup used to be.
     $deferredDialogs = [];
 @endphp
-{{-- ⚠️ A ROOT ELEMENT THAT IS NOT A FLEX CONTAINER, and it is the whole repair rather than
+{{-- A root element that is not a flex container, and it is the whole repair rather than
      packaging. The dialogs have to be emitted somewhere with NO `gap`, and inside a published
      stub there is no page root to reach for — so the view brings one. Block layout has no gap, so
      a zero-height dialog wrapper costs nothing here.
@@ -59,7 +59,7 @@
              attribute list itself and runs no directives inside it — a conditional written there
              would land in the markup as text.
 
-             ⚠️ And it is handed over as `:attributes`, not echoed into the tag. The compiler
+             And it is handed over as `:attributes`, not echoed into the tag. The compiler
              recognizes an echoed bag only when the variable is literally named `$attributes`
              (`parseAttributeBag` matches that name and nothing else); any other name survives
              into the attribute string as garbage and the view dies at the next `@endif`.
@@ -129,7 +129,7 @@
              the accessible NAME of the control, and a space landing between a title and the comma
              after it is visible in the sentence a consent rests on.
 
-             ⚠️ AND IT IS BUILT WITH THE ONE-LINE FORM, NOT A BLOCK. This file already uses the
+             And it is built with the one-line form, not a block. This file already uses the
              one-line form above, and the raw-block scanner pairs the first of those with the end
              of any block opened later — swallowing everything between and failing far from here
              with a syntax error in a compiled file. Measured: adding a block broke the view at its
@@ -228,7 +228,7 @@
              here, which made every dialog a FLEX CHILD of the `gap="md"` stack above — a
              sibling of every field.
 
-             ⚠️ THAT COSTS A FULL GAP EACH, AND IT IS NOT VISIBLE IN THE MARKUP. WireKit's outer
+             That costs a full gap each, and it is not visible in the markup. WireKit's outer
              modal node is a `<div>` carrying the Alpine state and NO `x-show`; what hides is the
              box inside it. So the wrapper is a VISIBLE flex child of height zero, and a flex
              container gives a zero-height child its whole gap anyway. Measured in a consumer that
@@ -241,7 +241,7 @@
              four of them between the first checkbox and the second is four zero-height children
              and five 4px gaps — the 20. It was reported from the screen twice.
 
-             ⚠️ AND MOVING THEM ONE LEVEL OUT IS NOT ENOUGH, which the same consumer measured:
+             And moving them one level out is not enough, which the same consumer measured:
              after the group but still inside a container that has a gap, `cb3→btn` went from 17
              to 33. One uneven pair traded for a coarser one. The only thing that fixes it is a
              container with NO gap, which is what the root element below is.

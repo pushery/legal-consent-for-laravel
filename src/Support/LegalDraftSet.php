@@ -52,7 +52,7 @@ final readonly class LegalDraftSet
 
         return new self(
             $key,
-            LegalDraft::query()->where('key', $key)->get(),
+            LegalDraft::model()::query()->where('key', $key)->get(),
             $sourceLocale ?? (is_string($configured) ? $configured : 'de'),
         );
     }
@@ -240,7 +240,7 @@ final readonly class LegalDraftSet
      */
     public function unpublishedChanges(array $locales): array
     {
-        $active = LegalDocument::query()
+        $active = LegalDocument::model()::query()
             ->where('key', $this->key)
             ->whereIn('locale', $locales)
             ->where('is_active', true)

@@ -37,8 +37,12 @@ trait RecordsRegistrationConsent
 
     /**
      * @param  array<string, mixed>  $input
+     * @param  array<string, string>  $shownWordings  the sentence your form showed next to each
+     *                                                document for this request, keyed by document
+     *                                                key, when you build it per request. Leave it
+     *                                                out and the configured sentences are frozen.
      */
-    protected function recordRegistrationConsent(Model $user, array $input, ?string $locale = null): void
+    protected function recordRegistrationConsent(Model $user, array $input, ?string $locale = null, array $shownWordings = []): void
     {
         $request = request();
 
@@ -54,6 +58,7 @@ trait RecordsRegistrationConsent
             $input,
             ConsentContext::fromRequest($request, ConsentMethod::RegistrationCheckbox),
             $locale,
+            $shownWordings,
         );
     }
 }

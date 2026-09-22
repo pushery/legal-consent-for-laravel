@@ -228,7 +228,7 @@ final readonly class LegalDocumentPublisher
             $key, $locale, $type, $mode, $regime, $rendered, $changeClass, $offersTermination,
             $keepsUnmodified, $now, $announce, $enforce, $objectionDeadline, $describesNoChange
         ): LegalDocument {
-            $document = LegalDocument::query()->forceCreate([
+            $document = LegalDocument::model()::query()->forceCreate([
                 'key' => $key,
                 'type' => $type,
                 'requires_explicit_optin' => $type->requiresExplicitOptin(),
@@ -398,7 +398,7 @@ final readonly class LegalDocumentPublisher
     /** The row this version would collide with, if one is already on file. */
     private function existingVersion(string $key, string $locale, string $version): ?LegalDocument
     {
-        return LegalDocument::query()
+        return LegalDocument::model()::query()
             ->where('key', $key)
             ->where('locale', $locale)
             ->where('version', $version)
@@ -440,7 +440,7 @@ final readonly class LegalDocumentPublisher
     /** The major version active for (key, locale), or null before the first publication. */
     private function activeMajor(string $key, string $locale): ?int
     {
-        $major = LegalDocument::query()
+        $major = LegalDocument::model()::query()
             ->where('key', $key)
             ->where('locale', $locale)
             ->where('is_active', true)
@@ -554,7 +554,7 @@ final readonly class LegalDocumentPublisher
      */
     private function assertNotDowngrade(string $key, string $locale, Document $rendered): void
     {
-        $active = LegalDocument::query()
+        $active = LegalDocument::model()::query()
             ->select(['type', 'major_version', 'minor_version', 'patch_version', 'version'])
             ->where('key', $key)
             ->where('locale', $locale)
@@ -633,7 +633,7 @@ final readonly class LegalDocumentPublisher
             return;
         }
 
-        $siblings = LegalDocument::query()
+        $siblings = LegalDocument::model()::query()
             ->select(['locale', 'notice_mode', 'requires_reconsent'])
             ->where('key', $key)
             ->where('major_version', $rendered->majorVersion)
@@ -671,7 +671,7 @@ final readonly class LegalDocumentPublisher
     /** Whether the live source is byte-for-byte the text the active version was rendered from. */
     private function refreezesActiveText(string $key, string $locale, Document $rendered): bool
     {
-        $published = LegalDocument::query()
+        $published = LegalDocument::model()::query()
             ->where('key', $key)
             ->where('locale', $locale)
             ->where('is_active', true)

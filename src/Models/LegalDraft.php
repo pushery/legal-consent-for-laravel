@@ -10,6 +10,7 @@ use Override;
 use Pushery\LegalConsent\Enums\DraftOrigin;
 use Pushery\LegalConsent\Enums\ReviewState;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Models\Concerns\Replaceable;
 use Pushery\LegalConsent\Support\LegalDraftSet;
 
 /**
@@ -34,9 +35,12 @@ use Pushery\LegalConsent\Support\LegalDraftSet;
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-final class LegalDraft extends Model
+class LegalDraft extends Model
 {
     use BelongsToTenant;
+    use Replaceable;
+
+    protected $table = 'legal_drafts';
 
     /**
      * Nothing is mass-assignable. `body` is the sole input to the editor's raw-HTML `{!! !!}`

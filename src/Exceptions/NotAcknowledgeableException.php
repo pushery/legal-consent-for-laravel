@@ -31,6 +31,15 @@ final class NotAcknowledgeableException extends RuntimeException
         );
     }
 
+    public static function withoutWording(string $key): self
+    {
+        return new self(
+            "'{$key}' was acknowledged with an empty sentence. The ledger stores the sentence your "
+            .'form showed next to the page, so pass that sentence; there is nothing truthful to '
+            .'store in its place.'
+        );
+    }
+
     public static function notFlagged(string $key): self
     {
         return new self(
