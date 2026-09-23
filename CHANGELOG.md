@@ -4,6 +4,18 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.2] - 2026-09-23
+
+### Fixed
+
+- **A page opened while its draft is being translated takes the translation when it lands.** Only the page that pressed Translate used to wait for it. A second admin's editor, or the same one after a reload, kept the text it had opened with while its preview already showed the translation, and a save wrote that text back over the translation. Every page open on the draft now takes the result, or says that the run failed. A page also tells from the draft's revision whether the run wrote anything, so a run that ended without writing is no longer announced as a translation when another page read its failure first or its marker ran out.
+
+- **Translate no longer starts a second run of the same draft.** The button stayed enabled while a queued translation ran, and a second press dispatched a second job, which a translator that bills per call charges twice. Both views disable the button while a translation runs and label it with the wait, and a press that arrives anyway is answered with a sentence instead of a job. The two new lines exist in all seven languages.
+
+- **The WireKit editor saves only what a person typed.** WireKit's editor writes its own serialization of the text into the field once it has loaded and reports that as input, so the first save stored the engine's version even when nobody had edited anything. Where the two differed, the draft went back to unreviewed and to authored. The WireKit view now holds back an input that no key, pointer, paste or drop preceded, under both Alpine builds.
+
+- **The discard confirmation names the language.** It read "The draft for es will be deleted" under a heading that names the language through `NamesLegalTexts`.
+
 ## [0.42.1] - 2026-09-23
 
 ### Fixed
@@ -2830,7 +2842,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.1...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.2...HEAD
+[0.42.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.1...v0.42.2
 [0.42.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.2...v0.42.0
 [0.41.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.1...v0.41.2

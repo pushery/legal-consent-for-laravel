@@ -110,6 +110,7 @@ return [
     'admin_stale_unconfirmed' => 'Cette traduction n’a jamais été confirmée par rapport au texte source — relis-la avant de publier.',
     'admin_save' => 'Enregistrer',
     'admin_translate' => 'Traduire depuis :locale',
+    'admin_translate_running' => 'Traduction en cours…',
     'admin_mark_reviewed' => 'Marquer comme relu',
     'admin_review_state' => 'État de relecture :',
     'admin_discard' => 'Supprimer le brouillon',
@@ -146,6 +147,7 @@ return [
     // asking the reader to do anything, because there is nothing for them to do: the page polls
     // while the job runs and stops when it stops.
     'admin_status_translation_queued' => 'La traduction est en cours. Elle apparaîtra ici une fois terminée.',
+    'admin_status_translation_running' => 'Une traduction de ce brouillon est déjà en cours. Le résultat apparaîtra ici une fois qu\'elle sera terminée.',
 
     'admin_status_machine_translated' => 'Traduit automatiquement. Une personne doit le relire avant toute publication.',
     'admin_status_translation_failed' => 'La traduction n\'est pas allée à son terme. Le brouillon est inchangé, vous pouvez réessayer.',

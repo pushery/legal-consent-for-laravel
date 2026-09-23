@@ -46,8 +46,12 @@
         <div>
             <button type="button" wire:click="save" wire:loading.attr="aria-busy" wire:target="save">{{ __('legal-consent::ui.admin_save') }}</button>
 
+            {{-- Disabled while a translation of this draft runs, and it names the wait: a second press
+                 would pay a per-call translator again for the same text. A press that arrives inside
+                 the round trip is answered by the component instead. `?? false` for the standalone
+                 render, as on the poll above. --}}
             @unless ($isSource)
-                <button type="button" wire:click="translate" wire:loading.attr="aria-busy" wire:target="translate">{{ __('legal-consent::ui.admin_translate', ['locale' => $sourceLanguage]) }}</button>
+                <button type="button" wire:click="translate" wire:loading.attr="aria-busy" wire:target="translate" @disabled($translating ?? false)>{{ ($translating ?? false) ? __('legal-consent::ui.admin_translate_running') : __('legal-consent::ui.admin_translate', ['locale' => $sourceLanguage]) }}</button>
             @endunless
 
             {{-- Only while there is something to stamp — see the WireKit twin for why. Both views

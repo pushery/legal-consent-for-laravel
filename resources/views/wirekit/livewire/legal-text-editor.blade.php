@@ -77,8 +77,28 @@
              `$bodyNonce ?? 0` for the same reason as `$translating ?? false` above: this view is
              also rendered standalone by the tests that check its markup against real components,
              where no component supplies it. A constant is the honest answer there — a render with
-             no component behind it has no replacement to report. --}}
-        <div wire:ignore wire:key="lc-editor-body-{{ $bodyNonce ?? 0 }}">
+             no component behind it has no replacement to report.
+
+             ONLY A PERSON'S EDIT REACHES `body`. The editor writes its own serialization into the
+             field once it has loaded and reports that as an `input` event, before anybody has done
+             anything. Bound directly, that became a pending change to `body`, and the next save
+             stored the engine's version of the text over the stored bytes: wherever the two
+             differed, the draft fell back to unreviewed and to authored, over an edit nobody made.
+             A consumer lost a table that way, by opening a document and saving it.
+
+             So the wrapper holds back an `input` event that nothing a person did preceded: no key,
+             no pointer, no paste, no drop, no `beforeinput`. It stops the event on its way down,
+             before the binding on the field sees it. A trusted `input` passes on its own, which is
+             what a browser that types into the plain field without the engine produces. Every
+             expression here is one the CSP build parses; the audit in the suite holds that. --}}
+        <div wire:ignore wire:key="lc-editor-body-{{ $bodyNonce ?? 0 }}"
+            x-data="{ edited: false }"
+            x-on:keydown.capture="edited = true"
+            x-on:pointerdown.capture="edited = true"
+            x-on:paste.capture="edited = true"
+            x-on:drop.capture="edited = true"
+            x-on:beforeinput.capture="edited = true"
+            x-on:input.capture="edited || $event.isTrusted || $event.stopPropagation()">
             {{-- The current draft body seeds the editor via :value (the component reads the `value`
                  prop, never a slot — a slot here would silently render nothing on edit). Content
                  flows back through a plain wire:model: WireKit routes it to the inner
@@ -116,8 +136,11 @@
         <x-wirekit::row wrap gap="sm">
             <x-wirekit::button wire:click="save" loading-target="save" :disable-on-loading="false">{{ __('legal-consent::ui.admin_save') }}</x-wirekit::button>
 
+            {{-- Disabled while a translation of this draft runs, and it names the wait: a second press
+                 would pay a per-call translator again for the same text. A press that arrives inside
+                 the round trip is answered by the component instead. --}}
             @unless ($isSource)
-                <x-wirekit::button surface="outline" wire:click="translate" loading-target="translate" :disable-on-loading="false">{{ __('legal-consent::ui.admin_translate', ['locale' => $sourceLanguage]) }}</x-wirekit::button>
+                <x-wirekit::button surface="outline" wire:click="translate" loading-target="translate" :disable-on-loading="false" :disabled="$translating ?? false">{{ ($translating ?? false) ? __('legal-consent::ui.admin_translate_running') : __('legal-consent::ui.admin_translate', ['locale' => $sourceLanguage]) }}</x-wirekit::button>
             @endunless
 
             {{-- Only while there is something to stamp. Offered on an already-reviewed draft it
@@ -145,7 +168,8 @@
 
                     <x-wirekit::alert-dialog.title>{{ __('legal-consent::ui.admin_discard_confirm_title') }}</x-wirekit::alert-dialog.title>
 
-                    <x-wirekit::alert-dialog.description>{{ __('legal-consent::ui.admin_discard_confirm_body', ['locale' => $locale]) }}</x-wirekit::alert-dialog.description>
+                    {{-- The language by its name, as the heading above names it. --}}
+                    <x-wirekit::alert-dialog.description>{{ __('legal-consent::ui.admin_discard_confirm_body', ['locale' => $languageName ?? $locale]) }}</x-wirekit::alert-dialog.description>
 
                     <x-wirekit::alert-dialog.actions>
                         <x-wirekit::alert-dialog.cancel>{{ __('legal-consent::ui.cancel') }}</x-wirekit::alert-dialog.cancel>

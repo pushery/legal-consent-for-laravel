@@ -4,6 +4,14 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.42.1 → 0.42.2
+
+**Nothing is required of you**, unless you published the editor views.
+
+**Three fixes live in the views.** The translate button is disabled and names the wait while a translation of the draft runs, the WireKit editor holds back the input its engine reports on load, and the WireKit discard confirmation names the language. A view you published earlier has none of them; publish it again with `php artisan vendor:publish --tag=legal-consent-views --force`, or the `legal-consent-wirekit` tag for the WireKit ones. If you keep a changed copy of the WireKit editor, carry over the element around `<x-wirekit::editor>` with its `x-data` and `x-on:*.capture` attributes: without it, opening a text and saving it can store the engine's version of the text.
+
+**Two lines are new.** `admin_translate_running` labels the disabled button and `admin_status_translation_running` answers a press while a translation runs. A language file you published earlier keeps working, because the package's own lines fill in every key an override does not carry.
+
 ## 0.42.0 → 0.42.1
 
 **Nothing is required of you**, unless you published the editor views.
