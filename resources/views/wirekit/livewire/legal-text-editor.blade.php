@@ -179,6 +179,10 @@
             </div>
         </x-wirekit::row>
 
+        {{-- Only where silence can bind: an informational page binds nobody, and the publisher
+             refuses every mode for it but the silent one. A caller that passes no such value
+             keeps the form, as before. --}}
+        @if ($offersDeemedRelease ?? true)
         {{-- RELEASE WITH AN OBJECTION WINDOW — the WireKit twin of the plain stub's form.
              Same placement decision and the same reason: a deemed-consent release binds people by
              their SILENCE (§ 308 Nr. 5 BGB), so it belongs where somebody has actually read the
@@ -225,6 +229,7 @@
 
             <x-wirekit::button wire:click="releaseDeemed" loading-target="releaseDeemed" :disable-on-loading="false">{{ __('legal-consent::ui.admin_deemed_submit') }}</x-wirekit::button>
         </x-wirekit::stack>
+        @endif
 
         <x-wirekit::heading :level="2">{{ __('legal-consent::ui.admin_preview') }}</x-wirekit::heading>
         {{-- The already-sanitized stored bytes — a true fixpoint of what a publish will freeze. --}}

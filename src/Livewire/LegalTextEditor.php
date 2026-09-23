@@ -13,6 +13,7 @@ use Livewire\Component;
 use Pushery\LegalConsent\Contracts\LegalTextTranslator;
 use Pushery\LegalConsent\Contracts\NamesLegalTexts;
 use Pushery\LegalConsent\Enums\BlockingReason;
+use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
@@ -585,7 +586,19 @@ final class LegalTextEditor extends Component
             // The preview renders exactly what a publish would freeze — the already-sanitized body,
             // not a re-render — so it is a true fixpoint of what the subject will see.
             'preview' => $draft instanceof LegalDraft ? $draft->body : '',
+            // Whether a release with an objection window can apply to this document at all. An
+            // informational page binds nobody, and the publisher refuses every mode for it except
+            // the silent one, so the block could only ever fail there.
+            'offersDeemedRelease' => $this->documentType()->isConsentBearing(),
         ]);
+    }
+
+    /** The document type this key is registered under, from the documents registry. */
+    private function documentType(): DocumentType
+    {
+        $basis = config("legal-consent.documents.{$this->key}.legal_basis");
+
+        return DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
     }
 
     /**
