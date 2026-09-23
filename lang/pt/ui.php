@@ -177,4 +177,11 @@ return [
     'lead_time_too_short' => 'uma alteração substancial em «:document» exige pelo menos :days dias entre o anúncio (:announce) e a entrada em vigor (:enforce)',
     'lead_time_too_short_objection' => 'uma alteração substancial em «:document» exige pelo menos :days dias entre o anúncio (:announce) e o prazo para oposição (:deadline)',
     'notice_timeline_inverted' => 'o anúncio de «:document» (:announce) é posterior à sua entrada em vigor (:enforce); uma alteração tem de ser anunciada antes de entrar em vigor',
+    'publish_refused_version_taken_in_another_mode' => 'a versão :version já está publicada em :language com este texto noutro modo de aviso; um modo diferente precisa de uma nova versão',
+    'publish_refused_binding_document_became_informational' => 'está agora registada como página informativa, mas a sua versão ativa :active_version em :language pede a aceitação das pessoas; mantenha a base jurídica ou registe a página com uma nova chave',
+    'publish_refused_version_lower_than_active' => 'a versão :version é inferior à versão ativa :active_version em :language; publique antes uma versão superior com o texto anterior',
+    'publish_refused_mode_differs_across_languages' => 'a versão principal :major já está ativa em :other_language noutro modo de aviso, e :language sairia neste; todas as línguas de uma mesma alteração precisam do mesmo modo',
+    'publish_refused_major_needs_reconsent' => 'a versão :version sobe a versão principal em :language, o que pede a todos que aceitem de novo a alteração; publique-a como novo consentimento ativo',
+    'publish_refused_gating_mode_keeps_the_major' => 'a versão :version mantém a versão principal :major em :language, pelo que um novo consentimento não chegaria a ninguém que já aceitou; publique-a como :next',
+    'publish_refused_objection_deadline_not_before_effective_date' => 'o prazo de oposição (:deadline) tem de terminar antes do dia em que a alteração entra em vigor (:enforce)',
 ];

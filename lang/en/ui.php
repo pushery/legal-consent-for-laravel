@@ -180,4 +180,11 @@ return [
     'lead_time_too_short' => 'a material change to “:document” needs at least :days days between the announcement (:announce) and enforcement (:enforce)',
     'lead_time_too_short_objection' => 'a material change to “:document” needs at least :days days between the announcement (:announce) and the deadline for objections (:deadline)',
     'notice_timeline_inverted' => 'the announcement of “:document” (:announce) falls after the date it takes effect (:enforce); a change has to be announced before it takes effect',
+    'publish_refused_version_taken_in_another_mode' => 'version :version is already released in :language with this text under another notice mode; a different mode needs a new version',
+    'publish_refused_binding_document_became_informational' => 'it is registered as an informational page now, while its active version :active_version in :language asks people to accept it; keep its legal basis, or register the page under a new key',
+    'publish_refused_version_lower_than_active' => 'version :version is lower than the active version :active_version in :language; release a higher version with the older text instead',
+    'publish_refused_mode_differs_across_languages' => 'major version :major is already active in :other_language under another notice mode, and :language would go out under this one; every language of one change needs the same mode',
+    'publish_refused_major_needs_reconsent' => 'version :version raises the major version in :language, which asks everybody to accept the change again; release it as an active re-consent',
+    'publish_refused_gating_mode_keeps_the_major' => 'version :version keeps major version :major in :language, so a re-consent would reach nobody who accepted it; release it as :next',
+    'publish_refused_objection_deadline_not_before_effective_date' => 'the objection deadline (:deadline) has to fall before the day the change takes effect (:enforce)',
 ];

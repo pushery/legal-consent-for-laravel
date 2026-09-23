@@ -177,4 +177,11 @@ return [
     'lead_time_too_short' => 'een wezenlijke wijziging van ‘:document’ vereist minstens :days dagen tussen de aankondiging (:announce) en de inwerkingtreding (:enforce)',
     'lead_time_too_short_objection' => 'een wezenlijke wijziging van ‘:document’ vereist minstens :days dagen tussen de aankondiging (:announce) en de bezwaartermijn (:deadline)',
     'notice_timeline_inverted' => 'de aankondiging van ‘:document’ (:announce) valt na de inwerkingtreding (:enforce); een wijziging moet worden aangekondigd voordat die ingaat',
+    'publish_refused_version_taken_in_another_mode' => 'versie :version is voor :language al met deze tekst gepubliceerd onder een andere mededelingsvorm; een andere vorm vraagt om een nieuwe versie',
+    'publish_refused_binding_document_became_informational' => 'de pagina staat nu als informatieve pagina geregistreerd, terwijl haar actieve versie :active_version voor :language om instemming vraagt; houd de rechtsgrond aan of registreer de pagina onder een nieuwe sleutel',
+    'publish_refused_version_lower_than_active' => 'versie :version is lager dan de actieve versie :active_version voor :language; publiceer in plaats daarvan een hogere versie met de oudere tekst',
+    'publish_refused_mode_differs_across_languages' => 'hoofdversie :major is voor :other_language al actief onder een andere mededelingsvorm, en :language zou onder deze vorm uitgaan; alle talen van één wijziging vragen om dezelfde vorm',
+    'publish_refused_major_needs_reconsent' => 'versie :version verhoogt voor :language de hoofdversie en vraagt daarmee iedereen opnieuw in te stemmen; publiceer haar als actieve nieuwe instemming',
+    'publish_refused_gating_mode_keeps_the_major' => 'versie :version houdt voor :language hoofdversie :major, dus een nieuwe instemming bereikt niemand die al heeft ingestemd; publiceer haar als :next',
+    'publish_refused_objection_deadline_not_before_effective_date' => 'de uiterste bezwaardatum (:deadline) moet vóór de dag van inwerkingtreding (:enforce) liggen',
 ];

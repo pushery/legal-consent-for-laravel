@@ -177,4 +177,11 @@ return [
     'lead_time_too_short' => 'un cambio sustancial en «:document» necesita al menos :days días entre el anuncio (:announce) y la entrada en vigor (:enforce)',
     'lead_time_too_short_objection' => 'un cambio sustancial en «:document» necesita al menos :days días entre el anuncio (:announce) y el plazo para oponerse (:deadline)',
     'notice_timeline_inverted' => 'el anuncio de «:document» (:announce) es posterior a su entrada en vigor (:enforce); un cambio debe anunciarse antes de entrar en vigor',
+    'publish_refused_version_taken_in_another_mode' => 'la versión :version ya está publicada en :language con este texto bajo otro modo de aviso; un modo distinto necesita una versión nueva',
+    'publish_refused_binding_document_became_informational' => 'ahora está registrada como página informativa, pero su versión activa :active_version en :language pide la aceptación de las personas; mantenga su base jurídica o registre la página con una clave nueva',
+    'publish_refused_version_lower_than_active' => 'la versión :version es inferior a la versión activa :active_version en :language; publique en su lugar una versión superior con el texto anterior',
+    'publish_refused_mode_differs_across_languages' => 'la versión principal :major ya está activa en :other_language bajo otro modo de aviso, y :language saldría bajo este; todos los idiomas de un mismo cambio necesitan el mismo modo',
+    'publish_refused_major_needs_reconsent' => 'la versión :version sube la versión principal en :language, lo que pide a todos aceptar de nuevo el cambio; publíquela como nuevo consentimiento activo',
+    'publish_refused_gating_mode_keeps_the_major' => 'la versión :version mantiene la versión principal :major en :language, así que un nuevo consentimiento no llegaría a nadie que ya aceptó; publíquela como :next',
+    'publish_refused_objection_deadline_not_before_effective_date' => 'el plazo de oposición (:deadline) tiene que terminar antes del día en que el cambio entra en vigor (:enforce)',
 ];

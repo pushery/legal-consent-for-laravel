@@ -18,6 +18,7 @@ use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
+use Pushery\LegalConsent\Livewire\Concerns\WordsPublishRefusals;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
@@ -37,6 +38,7 @@ final class LegalTextManager extends Component
 {
     use AnnouncesStatus;
     use AuthorizesLegalAdmin;
+    use WordsPublishRefusals;
 
     /**
      * Whether the screen opens with its own page title.
@@ -113,12 +115,12 @@ final class LegalTextManager extends Component
 
             return;
         } catch (LegalPublishRefused $e) {
-            // A refusal of the version itself rather than of the set. The message names the version
-            // and what to publish instead, and nothing was written, because the release is one
-            // transaction.
+            // A refusal of the version itself rather than of the set. It names the version and what
+            // to publish instead, worded in this screen's language where it carries its reason, and
+            // nothing was written, because the release is one transaction.
             $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
                 'key' => app(NamesLegalTexts::class)->document($key),
-                'reasons' => $e->getMessage(),
+                'reasons' => $this->publishRefusalReason($e),
             ]));
 
             return;

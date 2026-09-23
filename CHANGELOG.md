@@ -4,6 +4,14 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.1] - 2026-09-23
+
+### Fixed
+
+- **The text editor offers a release with an objection window only for a contract's terms.** It offered the form for a privacy notice and a consent as well, and the publisher refuses a deemed change for both: a privacy notice is acknowledged, and a consent is never deemed. So the button could only fail there. `DocumentType::allowsDeemedConsent()` holds the rule, and the editor and the publisher both read it. A view published before this release keeps showing the form until it is published again.
+
+- **The admin screens word the publisher's refusals in their own language.** A refusal the editor or the overview can reach appeared as the publisher's English sentence, with the document's configuration key: a version below the active one, a re-consent that keeps the major, a major raised under a release with an objection window, the same text released again in another mode, a major another language carries under another mode, a document whose registry entry turned informational, and an objection deadline on the effective date. `LegalPublishRefused` now carries a `PublishRefusal` reason and the values it was built from, the screens word it from those and name each language through `NamesLegalTexts`, and the seven new lines exist in all seven languages. The exception message for logs is unchanged, and a refusal only the command line can meet keeps its English sentence.
+
 ## [0.42.0] - 2026-09-23
 
 ### Changed
@@ -2822,7 +2830,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.1...HEAD
+[0.42.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.2...v0.42.0
 [0.41.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.1...v0.41.2
 [0.41.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.0...v0.41.1

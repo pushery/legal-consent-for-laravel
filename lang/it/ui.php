@@ -177,4 +177,11 @@ return [
     'lead_time_too_short' => 'una modifica sostanziale a «:document» richiede almeno :days giorni tra l’annuncio (:announce) e l’entrata in vigore (:enforce)',
     'lead_time_too_short_objection' => 'una modifica sostanziale a «:document» richiede almeno :days giorni tra l’annuncio (:announce) e il termine per opporsi (:deadline)',
     'notice_timeline_inverted' => 'l’annuncio di «:document» (:announce) cade dopo la sua entrata in vigore (:enforce); una modifica va annunciata prima di entrare in vigore',
+    'publish_refused_version_taken_in_another_mode' => 'la versione :version è già pubblicata in :language con questo testo in un’altra modalità di avviso; una modalità diversa richiede una nuova versione',
+    'publish_refused_binding_document_became_informational' => 'ora è registrata come pagina informativa, ma la sua versione attiva :active_version in :language chiede l’accettazione delle persone; mantenete la sua base giuridica o registrate la pagina con una nuova chiave',
+    'publish_refused_version_lower_than_active' => 'la versione :version è inferiore alla versione attiva :active_version in :language; pubblicate invece una versione superiore con il testo precedente',
+    'publish_refused_mode_differs_across_languages' => 'la versione principale :major è già attiva in :other_language in un’altra modalità di avviso, e :language uscirebbe in questa; tutte le lingue di una stessa modifica richiedono la stessa modalità',
+    'publish_refused_major_needs_reconsent' => 'la versione :version aumenta la versione principale in :language, il che chiede a tutti di accettare di nuovo la modifica; pubblicatela come nuovo consenso attivo',
+    'publish_refused_gating_mode_keeps_the_major' => 'la versione :version mantiene la versione principale :major in :language, quindi un nuovo consenso non raggiungerebbe nessuno che ha già accettato; pubblicatela come :next',
+    'publish_refused_objection_deadline_not_before_effective_date' => 'il termine di opposizione (:deadline) deve scadere prima del giorno in cui la modifica entra in vigore (:enforce)',
 ];

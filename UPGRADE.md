@@ -4,6 +4,14 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.42.0 → 0.42.1
+
+**Nothing is required of you**, unless you published the editor views.
+
+**The editor offers a release with an objection window only for a contract's terms.** The component passes `offersDeemedRelease` as false for a privacy notice and a consent now, since the publisher refuses a deemed change for both. A view you published earlier reads the value only if it was published from 0.41.2 on; publish it again with `php artisan vendor:publish --tag=legal-consent-views --force`, or the `legal-consent-wirekit` tag for the WireKit ones.
+
+**The admin screens word the publisher's refusals themselves.** `LegalPublishRefused` gains a `reason` (a `PublishRefusal`, or null) and the `values` it was built from; its message is unchanged. If your own screen shows these refusals, the new `LegalPublishRefused::$reason` and the `legal-consent::ui.publish_refused_*` lines let it word them the way the package's screens do. A language file you published earlier keeps working, because the package's own lines fill in every key an override does not carry.
+
 ## 0.41.2 → 0.42.0
 
 **Nothing is required of you**, unless you release with an objection window from the editor, or you published the editor views.
