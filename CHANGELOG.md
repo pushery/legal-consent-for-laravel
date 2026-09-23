@@ -4,6 +4,12 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.3] - 2026-09-23
+
+### Fixed
+
+- **Under Octane, the package's services build from the request's container.** The service provider wired its shared services from the application as it was at boot, while Octane resolves each request in a copy of it. A custom content source a request bound, or any service it replaced, was therefore invisible to them. The services now take the container Laravel hands their binding. `SourceFactory` is no longer shared: each resolution builds a fresh one, bound to the container that asked for it. Outside Octane the services behave as before.
+
 ## [0.42.2] - 2026-09-23
 
 ### Fixed
@@ -2842,7 +2848,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.2...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.3...HEAD
+[0.42.3]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.2...v0.42.3
 [0.42.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.1...v0.42.2
 [0.42.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.2...v0.42.0

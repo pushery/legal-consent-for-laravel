@@ -174,9 +174,15 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         $view = NoticeMailConfig::view();
 
         if ($view !== null) {
+            // The name is the host's, from config, and nothing here can prove the view exists.
+            // Laravel resolves it when the notice renders and throws if it does not, which is the
+            // failure a legal notice should have: loud and before anything is sent, rather than a
+            // silent fall back to the global template.
+            //
             // ->markdown(), NEVER ->view(). A plain view nulls $markdown and leaves introLines and
             // outroLines empty, so the proof body would collapse to the subject line while
             // mandatory_content_ok kept saying true.
+            /** @var view-string $view */
             $mail->markdown($view, [
                 'identity' => $identity,
                 'document' => $this->document,

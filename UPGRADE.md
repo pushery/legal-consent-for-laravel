@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.42.2 → 0.42.3
+
+**Nothing is required of you**, unless your application keeps its own reference to `SourceFactory`.
+
+**`SourceFactory` is no longer shared.** The container builds a fresh one for each resolution, bound to the container that asked for it, so that under Octane a request's own bindings reach the content sources it builds. If you rebind `SourceFactory` yourself, that binding still wins. If your code resolved the factory once and kept the instance, it keeps working, but it holds the container it was resolved from.
+
 ## 0.42.1 → 0.42.2
 
 **Nothing is required of you**, unless you published the editor views.
