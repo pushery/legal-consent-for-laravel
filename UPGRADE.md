@@ -4,6 +4,18 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.41.2 → 0.42.0
+
+**Nothing is required of you**, unless you release with an objection window from the editor, or you published the editor views.
+
+**A release with an objection window needs all three dates and a regime.** The editor used to leave an empty announcement date to the publisher, which took the moment of the click, and a change without a regime was measured against the tunable default alone. It now refuses the release and names every empty field. Fill in the announcement date, the objection deadline, the effective date and the regime; the change class and the two switches stay optional. The shipped views mark the four fields as required. A view you published earlier does not, and the refusal still names them; publish it again with `php artisan vendor:publish --tag=legal-consent-views --force`, or the `legal-consent-wirekit` tag for the WireKit ones.
+
+**Three lines are new.** `admin_status_deemed_window_incomplete` names the empty fields and `admin_status_deemed_dates_unreadable` the dates the editor cannot read, both with a `:fields` placeholder. `notice_timeline_inverted` words a window whose announcement falls after its effective date, with `:document`, `:announce` and `:enforce`. A language file you published earlier keeps working, because the package's own lines fill in every key an override does not carry. Add the keys there only for wording of your own.
+
+**An informational page is released in the languages that are ready.** A translation that is written but not reviewed, or whose source moved on after its review, no longer holds the page back: that language keeps the version it has live. When the source is not ready, the release covers the source alone. If your own screens call `LegalDraftSet::releaseLocales()`, they get the same answer. An acknowledgment with `locale_fallback` is released the same way.
+
+**A release replaces a version number that was already used for another text.** A number on the source draft that a released language already carries with other text used to be refused; the release now derives the next one instead. A number you set with `LegalDraftWriter::setVersion()` that no release has used yet is kept.
+
 ## 0.41.1 → 0.41.2
 
 **Nothing is required of you**, unless you published the editor views. One fix, in the text editor.

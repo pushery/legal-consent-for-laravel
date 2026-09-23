@@ -172,6 +172,9 @@ return [
     'admin_deemed_keeps_unmodified' => 'Hält die unveränderte Fassung weiter bereit',
     'admin_deemed_submit' => 'Mit Widerspruchsfenster freigeben',
     'admin_status_deemed_window_rejected' => 'Nicht freigegeben — das Widerspruchsfenster wurde abgelehnt: :reason',
+    'admin_status_deemed_window_incomplete' => 'Nicht freigegeben — eine Freigabe mit Widerspruchsfenster braucht diese Felder: :fields',
+    'admin_status_deemed_dates_unreadable' => 'Nicht freigegeben — diese Daten sind nicht lesbar: :fields. Erwartet wird JJJJ-MM-TT.',
     'lead_time_too_short' => 'eine wesentliche Änderung an „:document“ braucht mindestens :days Tage zwischen der Ankündigung (:announce) und dem Inkrafttreten (:enforce)',
     'lead_time_too_short_objection' => 'eine wesentliche Änderung an „:document“ braucht mindestens :days Tage zwischen der Ankündigung (:announce) und der Widerspruchsfrist (:deadline)',
+    'notice_timeline_inverted' => 'die Ankündigung von „:document“ (:announce) liegt nach dem Inkrafttreten (:enforce); eine Änderung muss angekündigt sein, bevor sie in Kraft tritt',
 ];

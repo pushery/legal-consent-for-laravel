@@ -82,19 +82,23 @@
              in-app path to a capability this package implements end to end.
 
              Plain form controls with no JavaScript: `type="date"` is what a browser already gives
-             a keyboard and a screen reader for free, and this stub ships no CSS or JS by design. --}}
+             a keyboard and a screen reader for free, and this stub ships no CSS or JS by design.
+
+             The three dates and the regime are required, and they say so through `aria-required`
+             rather than `required`: there is no form here for a browser to hold back, and the
+             component names every empty field itself when the button is pressed. --}}
         <h2>{{ __('legal-consent::ui.admin_deemed_heading') }}</h2>
         <p>{{ __('legal-consent::ui.admin_deemed_explainer') }}</p>
 
         <div>
             <label for="legal-deemed-announce">{{ __('legal-consent::ui.admin_deemed_announce') }}</label>
-            <input id="legal-deemed-announce" type="date" wire:model="announceAt">
+            <input id="legal-deemed-announce" type="date" wire:model="announceAt" aria-required="true">
 
             <label for="legal-deemed-deadline">{{ __('legal-consent::ui.admin_deemed_deadline') }}</label>
-            <input id="legal-deemed-deadline" type="date" wire:model="objectionDeadline">
+            <input id="legal-deemed-deadline" type="date" wire:model="objectionDeadline" aria-required="true">
 
             <label for="legal-deemed-enforce">{{ __('legal-consent::ui.admin_deemed_enforce') }}</label>
-            <input id="legal-deemed-enforce" type="date" wire:model="enforceAt">
+            <input id="legal-deemed-enforce" type="date" wire:model="enforceAt" aria-required="true">
 
             {{-- THE CLASSIFICATION, and it sits with the dates rather than apart from them because
                  one release carries both. The five controls around it schedule the change; these
@@ -103,7 +107,7 @@
                  know, and free text for the class because the publisher takes any and the command
                  line already calls it a tag. --}}
             <label for="legal-deemed-regime">{{ __('legal-consent::ui.admin_deemed_regime') }}</label>
-            <select id="legal-deemed-regime" wire:model="regime">
+            <select id="legal-deemed-regime" wire:model="regime" aria-required="true">
                 <option value="">{{ __('legal-consent::ui.admin_deemed_regime_none') }}</option>
                 {{-- THE PUBLISHER'S OWN LIST, read from it rather than written out here: it
                      refuses a regime it does not know, so a second vocabulary on this screen would

@@ -193,9 +193,9 @@
         <x-wirekit::text>{{ __('legal-consent::ui.admin_deemed_explainer') }}</x-wirekit::text>
 
         <x-wirekit::stack gap="sm">
-            <x-wirekit::date-picker wire:model="announceAt" name="announceAt" :label="__('legal-consent::ui.admin_deemed_announce')" />
-            <x-wirekit::date-picker wire:model="objectionDeadline" name="objectionDeadline" :label="__('legal-consent::ui.admin_deemed_deadline')" />
-            <x-wirekit::date-picker wire:model="enforceAt" name="enforceAt" :label="__('legal-consent::ui.admin_deemed_enforce')" />
+            <x-wirekit::date-picker wire:model="announceAt" name="announceAt" required :label="__('legal-consent::ui.admin_deemed_announce')" />
+            <x-wirekit::date-picker wire:model="objectionDeadline" name="objectionDeadline" required :label="__('legal-consent::ui.admin_deemed_deadline')" />
+            <x-wirekit::date-picker wire:model="enforceAt" name="enforceAt" required :label="__('legal-consent::ui.admin_deemed_enforce')" />
 
             {{-- THE CLASSIFICATION, beside the dates rather than apart from them: one release
                  carries both, and five of the seven fields were built here while the two that say
@@ -205,7 +205,7 @@
                  The regime is a select over the publisher's own list, because it refuses one it
                  does not know; the class is free text, because it takes any and the command line
                  calls it a tag. --}}
-            <x-wirekit::select wire:model="regime" name="regime" :label="__('legal-consent::ui.admin_deemed_regime')">
+            <x-wirekit::select wire:model="regime" name="regime" required :label="__('legal-consent::ui.admin_deemed_regime')">
                 <option value="">{{ __('legal-consent::ui.admin_deemed_regime_none') }}</option>
                 {{-- THE PUBLISHER'S OWN LIST, read from it rather than written out here: it
                      refuses a regime it does not know, so a second vocabulary on this screen would

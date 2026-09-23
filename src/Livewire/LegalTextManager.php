@@ -22,7 +22,6 @@ use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDraftSet;
-use Pushery\LegalConsent\Support\LegalDraftWriter;
 
 /**
  * The admin overview: one row per (document key × locale), plus a per-key "release all locales".
@@ -84,9 +83,10 @@ final class LegalTextManager extends Component
         // true rather than aspirational. The placement stands on its own reasons: a deemed release
         // binds people by their SILENCE, and the editor is per (key, locale) — the context of "this
         // one change" is already there, and somebody has read the text.
-        try {
-            $this->stampDerivedVersion($key);
 
+        // No version is set here. The release derives it inside its own transaction, for this
+        // screen and the editor alike ({@see LegalDocumentReleaser::nextVersionFor()}).
+        try {
             $released = app(LegalDocumentReleaser::class)->release($key, $this->modeFor($key), $this->releaseLocalesFor($key));
         } catch (LegalReleaseNotReady $e) {
             // A polite live-region message — never a fatal — so a screen reader hears WHY the
@@ -303,46 +303,6 @@ final class LegalTextManager extends Component
     private function releaseLocalesFor(string $key): array
     {
         return LegalDraftSet::for($key)->releaseLocales($this->locales());
-    }
-
-    /**
-     * Give the release the version this package derives, unless somebody has written one.
-     *
-     * {@see LegalDocumentReleaser::nextVersionFor()} answers what the next version has to be — the
-     * next major for a mode that gates, the next minor for one that does not. It has existed since
-     * the release that added it, and this screen did not call it: the version came off the draft
-     * row, and nothing shipped here ever wrote that row. So the field stayed null unless a consuming
-     * application reached for `LegalDraftWriter::setVersion()` itself, which is exactly the wrapper
-     * this package exists to make unnecessary.
-     *
-     * The difference is not convenience, and it was measured in a consuming application rather than
-     * argued here: its own derivation always took the next MAJOR. A privacy notice goes out under a
-     * mode that gates nobody, its major rose anyway, and every account then showed as having
-     * accepted an older version — over a change nobody was asked about. A number chosen by hand is
-     * the same class of mistake, one operator at a time.
-     *
-     * IT STAMPS, IT DOES NOT ENFORCE. A version already on the row is a deliberate answer and is
-     * left alone; the publisher is what refuses an impossible one, and it still does. What changes
-     * is only which answer arrives when nobody gave one — the package's, instead of none.
-     */
-    private function stampDerivedVersion(string $key): void
-    {
-        $source = LegalDraftSet::for($key)->source();
-
-        // No source row at all is not this method's problem: the release pre-flight refuses it by
-        // name a moment later, and stamping a version onto nothing would only change the error.
-        if (! $source instanceof LegalDraft) {
-            return;
-        }
-
-        if (is_string($source->version) && $source->version !== '') {
-            return;
-        }
-
-        app(LegalDraftWriter::class)->setVersion(
-            $key,
-            app(LegalDocumentReleaser::class)->nextVersionFor($key, $this->modeFor($key)),
-        );
     }
 
     /** The mode a material change of this key's document type takes, from the documents registry. */

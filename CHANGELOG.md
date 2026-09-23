@@ -4,6 +4,20 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.0] - 2026-09-23
+
+### Changed
+
+- **The editor's release with an objection window needs all three dates and a regime.** An empty announcement date used to default to the moment of the click, and a change without a regime was measured against the tunable default alone, so a window nobody chose could go out for a change that binds people by their silence. The editor now refuses the release and names every empty field in the screen's language. A date it cannot read is named the same way, where the line used to carry English field names inside a translated sentence. The change class and the two switches stay optional, and both views mark the four required fields.
+
+- **An informational page is released in the languages whose draft is ready, and always in its source language.** A translation that was written but not reviewed, or whose source moved on after its review, used to hold the whole page back, so a corrected imprint stayed off the site until somebody reviewed a translation nobody was waiting for. Such a language now keeps the version it has live, or serves the default locale where it has none. When the source itself is not ready, the release covers the source alone and names its reason, and a page with no text at all blocks on its source instead of on every configured language. The same holds for an acknowledgment with `locale_fallback`, and `LegalDraftSet::releaseLocales()` gives your own screens the same answer.
+
+### Fixed
+
+- **The editor's refusal of an objection window names the document the way your application does, and in the screen's language.** A window too short to bind named the document by the package's title, the one line on the screen that did not ask your `NamesLegalTexts` binding. A window whose announcement falls after its effective date showed the refusal's English sentence inside a translated line. Both are worded from the refusal's values now: `NoticeTimelineInvertedException` gains `label()` and `replacements()` like `LeadTimeTooShortException`, and the new `notice_timeline_inverted` line exists in all seven languages. The exception messages for logs are unchanged.
+
+- **A text can be released more than once from the package's screens.** The editor's release with an objection window derived no version, so a first release went out as `0.0.0`. The overview derived one and left it on the source draft, and the next release of a changed text was refused with `Version 1.0.0 … already exists with different content`, while neither screen has a field to change the number. The release now derives the version inside its own transaction whenever the draft carries none, or carries one that a released language already has with other text. A version you set with `LegalDraftWriter::setVersion()` and have not released yet is kept, releasing an unchanged text again publishes the version it already has, and a refused release leaves no version behind.
+
 ## [0.41.2] - 2026-09-23
 
 ### Fixed
@@ -2808,7 +2822,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.2...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.2...v0.42.0
 [0.41.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.1...v0.41.2
 [0.41.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.40.0...v0.41.0
