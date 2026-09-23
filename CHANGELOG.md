@@ -4,6 +4,12 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.41.2] - 2026-09-23
+
+### Fixed
+
+- **The text editor offers a release with an objection window only where silence can bind.** For an informational page (`legal_basis => 'informational'`, such as an imprint or a cookie policy) the editor showed the whole form under the text: three dates, the regime, the change class, two switches and the button. The publisher refuses every such release, because an informational page binds nobody, so the button could only fail. Both the plain and the WireKit view now leave the form out for those documents and keep it for every other one. The component passes the views a new value, `offersDeemedRelease`, and a view published before this release does not read it.
+
 ## [0.41.1] - 2026-09-22
 
 ### Fixed
@@ -2802,7 +2808,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.1...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.2...HEAD
+[0.41.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.1...v0.41.2
 [0.41.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.39.0...v0.40.0

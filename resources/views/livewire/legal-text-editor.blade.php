@@ -70,6 +70,10 @@
             @endif
         </div>
 
+        {{-- Only where silence can bind: an informational page binds nobody, and the publisher
+             refuses every mode for it but the silent one. A caller that passes no such value
+             keeps the form, as before. --}}
+        @if ($offersDeemedRelease ?? true)
         {{-- RELEASE WITH AN OBJECTION WINDOW — a deemed-consent change (§ 308 Nr. 5 BGB).
              It lives HERE and not on the manager grid, and that is the manager's own stated
              position: a release that binds people by their SILENCE is a per-change legal call, not
@@ -132,6 +136,7 @@
 
             <button type="button" wire:click="releaseDeemed" wire:loading.attr="aria-busy" wire:target="releaseDeemed">{{ __('legal-consent::ui.admin_deemed_submit') }}</button>
         </div>
+        @endif
 
         <h2>{{ __('legal-consent::ui.admin_preview') }}</h2>
         {{-- The preview renders the already-sanitized stored body — the exact bytes a publish freezes,

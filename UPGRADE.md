@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.41.1 → 0.41.2
+
+**Nothing is required of you**, unless you published the editor views. One fix, in the text editor.
+
+**The editor leaves the objection-window form out for an informational page.** The publisher refuses a release with an objection window for a document with `legal_basis => 'informational'`, so the form could only fail there. The editor now passes its views `offersDeemedRelease`, and both shipped views render the form only when it is true. A view you published earlier does not read the value and keeps showing the form; publish it again to take the fix, with `php artisan vendor:publish --tag=legal-consent-views --force` for the plain views or the `legal-consent-wirekit` tag for the WireKit ones.
+
 ## 0.41.0 → 0.41.1
 
 **Nothing is required of you.** One fix, and it needs no configuration.
