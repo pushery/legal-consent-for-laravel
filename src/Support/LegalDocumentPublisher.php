@@ -13,6 +13,7 @@ use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\LeadTimeSpan;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Enums\PublishRefusal;
 use Pushery\LegalConsent\Events\LegalDocumentPublished;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
 use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
@@ -423,8 +424,10 @@ final readonly class LegalDocumentPublisher
         }
 
         if ($existing->noticeMode() !== $mode) {
-            throw new LegalPublishRefused(
-                "Version {$rendered->version} of '{$key}' ({$locale}) already exists as {$existing->noticeMode()->value}; re-publishing identical content cannot re-classify it as {$mode->value} — bump the version before publishing."
+            throw LegalPublishRefused::because(
+                PublishRefusal::VersionTakenInAnotherMode,
+                "Version {$rendered->version} of '{$key}' ({$locale}) already exists as {$existing->noticeMode()->value}; re-publishing identical content cannot re-classify it as {$mode->value} — bump the version before publishing.",
+                ['version' => $rendered->version, 'language' => $locale],
             );
         }
     }
@@ -573,8 +576,10 @@ final readonly class LegalDocumentPublisher
         // This is the same class of silent legal downgrade the version check below prevents, and
         // it fails just as loudly. The reverse direction stays allowed: becoming stricter is safe.
         if ($active->type->isConsentBearing() && ! $this->typeFor($key)->isConsentBearing()) {
-            throw new LegalPublishRefused(
-                "Cannot publish '{$key}' ({$locale}) as informational: its active version {$active->version} is a {$active->type->value} that subjects have been asked to accept. An informational page binds nobody, so this would silently remove the gate while their recorded acceptances stay on file. Publish it under its existing legal basis, or retire the document and register the page under a new key."
+            throw LegalPublishRefused::because(
+                PublishRefusal::BindingDocumentBecameInformational,
+                "Cannot publish '{$key}' ({$locale}) as informational: its active version {$active->version} is a {$active->type->value} that subjects have been asked to accept. An informational page binds nobody, so this would silently remove the gate while their recorded acceptances stay on file. Publish it under its existing legal basis, or retire the document and register the page under a new key.",
+                ['active_version' => (string) $active->version, 'language' => $locale],
             );
         }
 
@@ -590,8 +595,10 @@ final readonly class LegalDocumentPublisher
         $incoming = [$rendered->majorVersion, $rendered->minorVersion, $rendered->patchVersion];
 
         if ($incoming < $current) {
-            throw new LegalPublishRefused(
-                "Cannot publish version {$rendered->version} of '{$key}' ({$locale}): it is lower than the active version {$active->version}. Versions are monotonic — publish a higher version carrying the reverted text instead of re-activating an old one."
+            throw LegalPublishRefused::because(
+                PublishRefusal::VersionLowerThanActive,
+                "Cannot publish version {$rendered->version} of '{$key}' ({$locale}): it is lower than the active version {$active->version}. Versions are monotonic — publish a higher version carrying the reverted text instead of re-activating an old one.",
+                ['version' => $rendered->version, 'active_version' => (string) $active->version, 'language' => $locale],
             );
         }
     }
@@ -643,8 +650,10 @@ final readonly class LegalDocumentPublisher
 
         foreach ($siblings as $sibling) {
             if ($sibling->noticeMode() !== $mode) {
-                throw new LegalPublishRefused(
-                    "'{$key}' major {$rendered->majorVersion} is already active in '{$sibling->locale}' as {$sibling->noticeMode()->value}; publishing '{$locale}' as {$mode->value} would make one change bind by two different standards. Acceptance is identity-keyed, so the weaker one would satisfy the stronger one's gate — release every locale of a version with the same notice mode."
+                throw LegalPublishRefused::because(
+                    PublishRefusal::ModeDiffersAcrossLanguages,
+                    "'{$key}' major {$rendered->majorVersion} is already active in '{$sibling->locale}' as {$sibling->noticeMode()->value}; publishing '{$locale}' as {$mode->value} would make one change bind by two different standards. Acceptance is identity-keyed, so the weaker one would satisfy the stronger one's gate — release every locale of a version with the same notice mode.",
+                    ['major' => $rendered->majorVersion, 'other_language' => $sibling->locale, 'language' => $locale],
                 );
             }
         }
@@ -701,7 +710,7 @@ final readonly class LegalDocumentPublisher
         // Zustimmungsfiktion (silence = consent) is lawful only for a contract/terms change
         // (§ 308 Nr. 5 BGB; BGH XI ZR 26/20). A privacy notice is acknowledged, and a real
         // consent can never be deemed (EDPB 05/2020 Rz. 79).
-        if ($mode === NoticeMode::DeemedConsent && $type !== DocumentType::ContractTerms) {
+        if ($mode === NoticeMode::DeemedConsent && ! $type->allowsDeemedConsent()) {
             throw new LegalPublishRefused(
                 "A deemed-consent (Zustimmungsfiktion) change is lawful only for a contract/terms document; '{$key}' is a {$type->value}. A privacy notice is acknowledged — publish it info-only; a consent is never deemed — publish it as active re-consent."
             );
@@ -743,8 +752,10 @@ final readonly class LegalDocumentPublisher
         }
 
         if (! $mode->gates()) {
-            throw new LegalPublishRefused(
-                "Version {$version} of '{$key}' ({$locale}) increases the major version, which forces re-consent — publish it as an active re-consent. A material core change cannot ride on silence or mere information (BGH XI ZR 26/20)."
+            throw LegalPublishRefused::because(
+                PublishRefusal::MajorNeedsReconsent,
+                "Version {$version} of '{$key}' ({$locale}) increases the major version, which forces re-consent — publish it as an active re-consent. A material core change cannot ride on silence or mere information (BGH XI ZR 26/20).",
+                ['version' => $version, 'language' => $locale],
             );
         }
     }
@@ -772,8 +783,10 @@ final readonly class LegalDocumentPublisher
 
         $next = $activeMajor + 1;
 
-        throw new LegalPublishRefused(
-            "Version {$version} of '{$key}' ({$locale}) keeps major {$activeMajor}, so an active re-consent would gate nobody who accepted it: the gate compares major versions. Publish it as {$next}.0.0 to ask for re-consent, or choose a mode that does not gate."
+        throw LegalPublishRefused::because(
+            PublishRefusal::GatingModeKeepsTheMajor,
+            "Version {$version} of '{$key}' ({$locale}) keeps major {$activeMajor}, so an active re-consent would gate nobody who accepted it: the gate compares major versions. Publish it as {$next}.0.0 to ask for re-consent, or choose a mode that does not gate.",
+            ['version' => $version, 'major' => $activeMajor, 'next' => "{$next}.0.0", 'language' => $locale],
         );
     }
 
@@ -850,8 +863,10 @@ final readonly class LegalDocumentPublisher
         }
 
         if ($objectionDeadline->greaterThanOrEqualTo($enforce)) {
-            throw new LegalPublishRefused(
-                "The objection deadline ({$objectionDeadline->toDateString()}) for '{$key}' must fall before the effective date ({$enforce->toDateString()}) — the subject must be able to object before the change takes effect."
+            throw LegalPublishRefused::because(
+                PublishRefusal::ObjectionDeadlineNotBeforeEffectiveDate,
+                "The objection deadline ({$objectionDeadline->toDateString()}) for '{$key}' must fall before the effective date ({$enforce->toDateString()}) — the subject must be able to object before the change takes effect.",
+                ['deadline' => $objectionDeadline->toDateString(), 'enforce' => $enforce->toDateString()],
             );
         }
 

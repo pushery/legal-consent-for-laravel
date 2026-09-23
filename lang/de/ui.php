@@ -177,4 +177,11 @@ return [
     'lead_time_too_short' => 'eine wesentliche Änderung an „:document“ braucht mindestens :days Tage zwischen der Ankündigung (:announce) und dem Inkrafttreten (:enforce)',
     'lead_time_too_short_objection' => 'eine wesentliche Änderung an „:document“ braucht mindestens :days Tage zwischen der Ankündigung (:announce) und der Widerspruchsfrist (:deadline)',
     'notice_timeline_inverted' => 'die Ankündigung von „:document“ (:announce) liegt nach dem Inkrafttreten (:enforce); eine Änderung muss angekündigt sein, bevor sie in Kraft tritt',
+    'publish_refused_version_taken_in_another_mode' => 'Version :version ist in :language mit diesem Text schon unter einem anderen Mitteilungsmodus veröffentlicht; ein anderer Modus braucht eine neue Version',
+    'publish_refused_binding_document_became_informational' => 'die Seite ist jetzt als Informationsseite eingetragen, ihre aktive Version :active_version in :language verlangt aber eine Zustimmung; die Rechtsgrundlage beibehalten oder die Seite unter einem neuen Schlüssel eintragen',
+    'publish_refused_version_lower_than_active' => 'Version :version liegt unter der aktiven Version :active_version in :language; stattdessen eine höhere Version mit dem älteren Text veröffentlichen',
+    'publish_refused_mode_differs_across_languages' => 'die Hauptversion :major ist in :other_language schon unter einem anderen Mitteilungsmodus aktiv, und :language ginge unter diesem hinaus; alle Sprachen einer Änderung brauchen denselben Modus',
+    'publish_refused_major_needs_reconsent' => 'Version :version hebt in :language die Hauptversion an und verlangt damit von allen eine erneute Zustimmung; als aktive erneute Zustimmung veröffentlichen',
+    'publish_refused_gating_mode_keeps_the_major' => 'Version :version behält in :language die Hauptversion :major, eine erneute Zustimmung erreicht damit niemanden, der schon zugestimmt hat; als :next veröffentlichen',
+    'publish_refused_objection_deadline_not_before_effective_date' => 'die Widerspruchsfrist (:deadline) muss vor dem Inkrafttreten (:enforce) enden',
 ];

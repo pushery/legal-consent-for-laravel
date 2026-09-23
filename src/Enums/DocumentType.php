@@ -95,6 +95,22 @@ enum DocumentType: string
     }
 
     /**
+     * May a change to this document bind its subjects by their silence (Zustimmungsfiktion)?
+     *
+     * Only a contract's terms may (§ 308 Nr. 5 BGB; BGH XI ZR 26/20). A privacy notice is
+     * acknowledged rather than agreed to, and a real consent is never deemed (EDPB 05/2020 Rz. 79).
+     *
+     * The publisher refuses a deemed change for every other type, and the editor offers the release
+     * with an objection window only where this answers true. Both read it here: the editor used to ask
+     * `isConsentBearing()` instead, which is also true for a privacy notice and a consent, so it offered
+     * a form whose release could only be refused.
+     */
+    public function allowsDeemedConsent(): bool
+    {
+        return $this === self::ContractTerms;
+    }
+
+    /**
      * Only a real consent (Art. 6(1)(a)) needs an explicit, active opt-in. Terms
      * and privacy are mandatory and are accepted/acknowledged, not opted into; an
      * informational page is never opted into either, because it is never shown as a

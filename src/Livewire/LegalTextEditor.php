@@ -27,6 +27,7 @@ use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
 use Pushery\LegalConsent\Jobs\TranslateLegalDraft;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
+use Pushery\LegalConsent\Livewire\Concerns\WordsPublishRefusals;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
@@ -48,6 +49,7 @@ final class LegalTextEditor extends Component
 {
     use AnnouncesStatus;
     use AuthorizesLegalAdmin;
+    use WordsPublishRefusals;
 
     /**
      * The draft identity this editor was opened on — one document key, one locale.
@@ -109,8 +111,9 @@ final class LegalTextEditor extends Component
      * It matters most exactly where it is quietest. A deemed-consent release binds people by their
      * silence, and the classification is what that binding is later argued from.
      *
-     * An empty string means the operator said nothing, which is the shipped state and stays legal;
-     * it is passed on as null rather than as "".
+     * An empty string means the operator has not said yet. A release with an objection window
+     * needs a regime, so the screen names it among the missing fields ({@see missingWindowFields()})
+     * rather than passing on "not classified".
      */
     public string $regime = '';
 
@@ -533,12 +536,12 @@ final class LegalTextEditor extends Component
 
             return;
         } catch (LegalPublishRefused $e) {
-            // Every other refusal the publisher makes: a major that must gate, a missing objection
-            // deadline, a version lower than the active one. The message names the version and what
-            // to publish instead, so it is shown whole.
+            // Every other refusal the publisher makes: a major that must gate, an objection deadline
+            // on the effective date, a version lower than the active one. It names the version and
+            // what to publish instead, worded in this screen's language where it carries its reason.
             $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
                 'key' => app(NamesLegalTexts::class)->document($this->key),
-                'reasons' => $e->getMessage(),
+                'reasons' => $this->publishRefusalReason($e),
             ]));
 
             return;
@@ -598,10 +601,11 @@ final class LegalTextEditor extends Component
             // The preview renders exactly what a publish would freeze — the already-sanitized body,
             // not a re-render — so it is a true fixpoint of what the subject will see.
             'preview' => $draft instanceof LegalDraft ? $draft->body : '',
-            // Whether a release with an objection window can apply to this document at all. An
-            // informational page binds nobody, and the publisher refuses every mode for it except
-            // the silent one, so the block could only ever fail there.
-            'offersDeemedRelease' => $this->documentType()->isConsentBearing(),
+            // Whether a release with an objection window can apply to this document at all. Only a
+            // contract's terms can bind by silence, and the publisher refuses the mode for every other
+            // type, so the block could only fail there. It was offered wherever a document asks
+            // anything, which left it on a privacy notice and a consent as well.
+            'offersDeemedRelease' => $this->documentType()->allowsDeemedConsent(),
         ]);
     }
 
