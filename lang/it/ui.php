@@ -110,6 +110,7 @@ return [
     'admin_stale_unconfirmed' => 'Questa traduzione non è mai stata confermata rispetto al testo di origine — rivedila prima di pubblicare.',
     'admin_save' => 'Salva',
     'admin_translate' => 'Traduci da :locale',
+    'admin_translate_running' => 'Traduzione in corso…',
     'admin_mark_reviewed' => 'Segna come rivisto',
     'admin_review_state' => 'Stato di revisione:',
     'admin_discard' => 'Elimina bozza',
@@ -146,6 +147,7 @@ return [
     // asking the reader to do anything, because there is nothing for them to do: the page polls
     // while the job runs and stops when it stops.
     'admin_status_translation_queued' => 'La traduzione è in corso. Comparirà qui non appena sarà pronta.',
+    'admin_status_translation_running' => 'Per questa bozza è già in corso una traduzione. Il risultato comparirà qui non appena sarà pronta.',
 
     'admin_status_machine_translated' => 'Tradotto automaticamente. Una persona deve revisionarlo prima della pubblicazione.',
     'admin_status_translation_failed' => 'La traduzione non è arrivata alla fine. La bozza è invariata e puoi riprovare.',

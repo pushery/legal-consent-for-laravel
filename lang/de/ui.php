@@ -110,6 +110,7 @@ return [
     'admin_stale_unconfirmed' => 'Diese Übersetzung wurde nie gegen den Quelltext bestätigt — prüfe sie vor der Freigabe.',
     'admin_save' => 'Speichern',
     'admin_translate' => 'Aus :locale übersetzen',
+    'admin_translate_running' => 'Übersetzung läuft…',
     'admin_mark_reviewed' => 'Als geprüft markieren',
     'admin_review_state' => 'Prüfstand:',
     'admin_discard' => 'Entwurf verwerfen',
@@ -146,6 +147,7 @@ return [
     // asking the reader to do anything, because there is nothing for them to do: the page polls
     // while the job runs and stops when it stops.
     'admin_status_translation_queued' => 'Die Übersetzung läuft. Sie erscheint hier, sobald sie fertig ist.',
+    'admin_status_translation_running' => 'Für diesen Entwurf läuft schon eine Übersetzung. Ihr Ergebnis erscheint hier, sobald sie fertig ist.',
 
     'admin_status_machine_translated' => 'Maschinell übersetzt. Ein Mensch muss den Text prüfen, bevor er veröffentlicht werden kann.',
     'admin_status_translation_failed' => 'Die Übersetzung ist nicht zu Ende gekommen. Der Entwurf ist unverändert; du kannst es erneut versuchen.',

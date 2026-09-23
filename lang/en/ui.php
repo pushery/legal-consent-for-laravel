@@ -113,6 +113,9 @@ return [
     'admin_stale_unconfirmed' => 'This translation has never been confirmed against the source text — review it before releasing.',
     'admin_save' => 'Save',
     'admin_translate' => 'Translate from :locale',
+    // The same button while a translation of this draft runs, disabled: it names the wait
+    // instead of offering a second run of the same text.
+    'admin_translate_running' => 'Translation running…',
     'admin_mark_reviewed' => 'Mark reviewed',
     'admin_review_state' => 'Review state:',
     'admin_discard' => 'Discard draft',
@@ -149,6 +152,7 @@ return [
     // asking the reader to do anything, because there is nothing for them to do: the page polls
     // while the job runs and stops when it stops.
     'admin_status_translation_queued' => 'The translation is running. It appears here once it is done.',
+    'admin_status_translation_running' => 'A translation of this draft is already running. Its result appears here once it is done.',
 
     'admin_status_machine_translated' => 'Machine-translated. A human must review it before it can be published.',
     'admin_status_translation_failed' => 'The translation did not finish. The draft is unchanged, and you can try again.',

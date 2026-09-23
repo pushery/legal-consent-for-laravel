@@ -110,6 +110,7 @@ return [
     'admin_stale_unconfirmed' => 'Deze vertaling is nooit tegen de brontekst bevestigd — controleer haar voor vrijgave.',
     'admin_save' => 'Opslaan',
     'admin_translate' => 'Vertalen vanuit :locale',
+    'admin_translate_running' => 'Vertaling loopt…',
     'admin_mark_reviewed' => 'Als gecontroleerd markeren',
     'admin_review_state' => 'Beoordelingsstatus:',
     'admin_discard' => 'Concept verwijderen',
@@ -146,6 +147,7 @@ return [
     // asking the reader to do anything, because there is nothing for them to do: the page polls
     // while the job runs and stops when it stops.
     'admin_status_translation_queued' => 'De vertaling loopt. Hij verschijnt hier zodra hij klaar is.',
+    'admin_status_translation_running' => 'Voor dit concept loopt al een vertaling. Het resultaat verschijnt hier zodra die klaar is.',
 
     'admin_status_machine_translated' => 'Machinaal vertaald. Iemand moet de tekst controleren voordat die gepubliceerd kan worden.',
     'admin_status_translation_failed' => 'De vertaling is niet afgerond. Het concept is ongewijzigd en je kunt het opnieuw proberen.',

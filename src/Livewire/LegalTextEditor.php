@@ -168,6 +168,23 @@ final class LegalTextEditor extends Component
     public bool $awaitingTranslation = false;
 
     /**
+     * The row and revision of the draft whose text this page holds, or '' when it holds none.
+     *
+     * This is how a page tells that a finished translation WROTE something, and it needs evidence
+     * of its own for that. A failure is read once, by whichever page polls first, and a marker that
+     * ran out its hour leaves nothing behind at all, so a page that found neither announced a
+     * machine translation over the text it already had. Every write moves the revision, a
+     * translation that answered with the stored text included: a draft whose revision differs from
+     * this one has been written since this page read or wrote it.
+     *
+     * Kept where the page and the stored draft meet: on mount, after the page's own save and
+     * sign-off, and when it takes a translation. Locked for the reason {@see $awaitingTranslation}
+     * is.
+     */
+    #[Locked]
+    public string $heldRevision = '';
+
+    /**
      * The document key arrives as `documentKey`, never `key`: Livewire reserves `key` for its own
      * DOM-diffing identity and strips it before mount(), so `<livewire:… :key="'terms'" />` — the
      * form the docs used to show — could never reach this method. Mount it as
@@ -204,14 +221,25 @@ final class LegalTextEditor extends Component
         $this->locale = $locale;
         $this->heading = $heading;
 
+        // A page opened on a translation that is already running takes its result when it lands,
+        // the same as the page that started it. Waiting only where the translation started, a
+        // second admin, or the same one after a reload, kept the text from before, and a save
+        // wrote it back over the translation.
+        //
+        // The marker is read BEFORE the draft. A translation that lands between the two reads then
+        // shows its text here and at worst is reported as not finished; read the other way round,
+        // the old text would be on screen with nothing waiting for the new one.
+        $this->awaitingTranslation = $this->translating();
+
         $draft = LegalDraftSet::for($documentKey)->draft($locale);
+        $this->heldRevision = $this->revisionOf($draft);
         $this->replaceBody($draft instanceof LegalDraft ? $draft->body : '');
     }
 
     public function save(): void
     {
         try {
-            app(LegalDraftWriter::class)->save($this->key, $this->locale, $this->body, $this->actor());
+            $draft = app(LegalDraftWriter::class)->save($this->key, $this->locale, $this->body, $this->actor());
         } catch (LegalDocumentTooLarge|LegalDocumentUnparsable $e) {
             // Both refusals come from the render pipeline and both are the operator's input, so
             // they belong on the screen rather than in a 500. The unparsable one is the sharper
@@ -221,6 +249,9 @@ final class LegalTextEditor extends Component
 
             return;
         }
+
+        // This page's own write is not the translation it may be waiting on.
+        $this->heldRevision = $this->revisionOf($draft);
 
         // A status message after a save, and after the two acts below — WCAG 4.1.3: an action that
         // changes the record must announce its result, not leave a screen reader in silence.
@@ -254,6 +285,18 @@ final class LegalTextEditor extends Component
         // dispatch and the worker picking the job up there is a window, and a screen that polled
         // through it would see no marker and conclude the translation had already finished.
         if ($this->queuesTranslation()) {
+            // A SECOND PRESS WHILE THIS DRAFT IS BEING TRANSLATED STARTS NOTHING. The views disable the
+            // button while a translation runs, but a press inside the round trip never sees that, and
+            // a translator that bills per call would be paid again for the same text. Still not a
+            // lock (see the job): the page waits on the run that is already going, which is also how
+            // a page that did not start it comes to take the result.
+            if ($this->translating()) {
+                $this->awaitingTranslation = true;
+                $this->setStatus(__('legal-consent::ui.admin_status_translation_running'));
+
+                return;
+            }
+
             Cache::put(TranslateLegalDraft::markerFor($this->key, $this->locale), true, now()->addHour());
 
             // The guard travels with the identifier: a worker has nobody signed in, and the job signs
@@ -324,11 +367,11 @@ final class LegalTextEditor extends Component
      * inline path has always overwritten `$body` with the translation, and the status says which
      * text is now on screen.
      *
-     * ANNOUNCED ONLY WHEN THE DRAFT ACTUALLY MOVED. A job that gave up — a translator that threw,
-     * a source that vanished — clears the same marker, and claiming a machine translation there
-     * would be a report about something that did not happen. What such a run leaves behind is a
-     * page still reading "queued" and no way to learn it failed; that needs a durable failure
-     * record and is filed rather than guessed at here.
+     * ANNOUNCED ONLY WHEN THE DRAFT WAS WRITTEN. A job that gave up, a translator that threw or a
+     * source that vanished, leaves a failure record rather than a translation, and claiming a
+     * machine translation there would be a report about something that did not happen. The record
+     * is read once, though, and a page that finds none still needs to know whether the run wrote:
+     * {@see $heldRevision} answers that.
      */
     private function takeQueuedTranslation(?LegalDraft $draft): void
     {
@@ -351,15 +394,18 @@ final class LegalTextEditor extends Component
             return;
         }
 
-        // NO DRAFT AND NO RECORDED FAILURE means the run is over and left nothing — the marker
-        // reached its time-to-live, or a worker was replaced before it wrote one. It is the last
-        // path that could end in silence, and silence here reads as the run still being underway,
-        // which is exactly the hour this whole mechanism was built to stop.
-        if (! $draft instanceof LegalDraft) {
+        // NOTHING WRITTEN AND NO RECORDED FAILURE means the run is over and left nothing: the marker
+        // reached its time-to-live, a worker was replaced before it wrote, or another page open on
+        // the same draft read the failure first. No draft at all, or the one this page already
+        // holds. It is the last path that could end in silence, and silence here reads as the run
+        // still being underway, which is exactly the hour this whole mechanism was built to stop.
+        if (! $draft instanceof LegalDraft || $this->revisionOf($draft) === $this->heldRevision) {
             $this->setStatus(__('legal-consent::ui.admin_status_translation_failed'));
 
             return;
         }
+
+        $this->heldRevision = $this->revisionOf($draft);
 
         // The bytes move only when they differ, because replacing them tears the editor down and
         // rebuilds it. The SENTENCE is not conditional on that: a translator that answered with the
@@ -370,6 +416,12 @@ final class LegalTextEditor extends Component
         }
 
         $this->setStatus(__('legal-consent::ui.admin_status_machine_translated'));
+    }
+
+    /** A draft's row and revision, the pair every write moves; '' for no draft. */
+    private function revisionOf(?LegalDraft $draft): string
+    {
+        return $draft instanceof LegalDraft ? $draft->id.':'.$draft->revision : '';
     }
 
     /**
@@ -434,7 +486,10 @@ final class LegalTextEditor extends Component
 
     public function markReviewed(): void
     {
-        app(LegalDraftWriter::class)->markReviewed($this->key, $this->locale, $this->actor());
+        $draft = app(LegalDraftWriter::class)->markReviewed($this->key, $this->locale, $this->actor());
+
+        // The sign-off writes the row as well, and it is not the translation either.
+        $this->heldRevision = $this->revisionOf($draft);
         $this->setStatus(__('legal-consent::ui.admin_status_reviewed'));
     }
 
