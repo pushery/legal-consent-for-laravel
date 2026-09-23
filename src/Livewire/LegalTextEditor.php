@@ -439,14 +439,16 @@ final class LegalTextEditor extends Component
      * Release this document across its locales as a DEEMED-CONSENT change, on a stated objection
      * window.
      *
-     * Every failure here is a status message, never a fatal. Four kinds can happen and they mean
+     * Every failure here is a status message, never a fatal. Five kinds can happen and they mean
      * different things to the person clicking:
      *
+     *  - a date or the regime is empty, or a date cannot be read — {@see missingWindowFields()},
+     *    {@see unreadableDates()}, each field named by its label
      *  - the set is not ready (a locale unwritten or unreviewed) — {@see LegalReleaseNotReady}
      *  - the window runs backwards — {@see NoticeTimelineInvertedException}
      *  - the window is shorter than the statutory lead time — {@see LeadTimeTooShortException}
-     *  - the publisher refuses the version itself: a major that must gate, a missing objection
-     *    deadline, a version lower than the active one — {@see LegalPublishRefused}
+     *  - the publisher refuses the version itself: a major that must gate, an objection deadline
+     *    on or after the effective date, a version lower than the active one — {@see LegalPublishRefused}
      *
      * The last two are the ones that make this surface worth shipping rather than leaving to the
      * CLI: an operator picking dates in a form finds out immediately, in their own language, that
@@ -455,11 +457,21 @@ final class LegalTextEditor extends Component
      */
     public function releaseDeemed(): void
     {
+        $missing = $this->missingWindowFields();
+
+        if ($missing !== []) {
+            $this->setStatus(__('legal-consent::ui.admin_status_deemed_window_incomplete', [
+                'fields' => implode(', ', $missing),
+            ]));
+
+            return;
+        }
+
         $unreadable = $this->unreadableDates();
 
         if ($unreadable !== []) {
-            $this->setStatus(__('legal-consent::ui.admin_status_deemed_window_rejected', [
-                'reason' => 'unreadable date in '.implode(', ', $unreadable).' — expected YYYY-MM-DD',
+            $this->setStatus(__('legal-consent::ui.admin_status_deemed_dates_unreadable', [
+                'fields' => implode(', ', $unreadable),
             ]));
 
             return;
@@ -475,15 +487,15 @@ final class LegalTextEditor extends Component
                 // nobody — while the same page released from the grid went through.
                 LegalDraftSet::for($this->key)->releaseLocales($this->locales()),
                 new ReleaseOptions(
-                    // Empty means unsaid, and unsaid is null rather than "". The publisher reads a
-                    // regime it does not know as a refusal, so an empty string would turn "the
-                    // operator classified nothing" into "the operator named a regime that does not
-                    // exist" -- two different states, one of which is allowed.
+                    // An unsaid change class is null rather than "". The publisher freezes any
+                    // string it is given, and an empty one would read as a class somebody chose.
                     changeClass: $this->changeClass === '' ? null : $this->changeClass,
-                    regime: $this->regime === '' ? null : $this->regime,
-                    announceAt: $this->date($this->announceAt),
-                    enforceAt: $this->date($this->enforceAt),
-                    objectionDeadline: $this->date($this->objectionDeadline),
+                    // The regime and the three dates are present and readable by this point
+                    // (missingWindowFields(), unreadableDates()), so they go through as they are.
+                    regime: $this->regime,
+                    announceAt: $this->parseDate($this->announceAt),
+                    enforceAt: $this->parseDate($this->enforceAt),
+                    objectionDeadline: $this->parseDate($this->objectionDeadline),
                     offersTermination: $this->offersTermination,
                     keepsUnmodified: $this->keepsUnmodified,
                 ),
@@ -504,19 +516,19 @@ final class LegalTextEditor extends Component
 
             return;
         } catch (LeadTimeTooShortException $e) {
-            // Worded in the screen's own language from the values the refusal carries, with the
-            // document named by its title. The minimum and both dates are what an operator needs to
-            // fix it, so they stay in the sentence.
+            // Worded in the screen's own language from the values the refusal carries. The minimum
+            // and both dates are what an operator needs to fix it, so they stay in the sentence.
             $this->setStatus(__('legal-consent::ui.admin_status_deemed_window_rejected', [
-                'reason' => __($e->label(), $e->replacements()),
+                'reason' => __($e->label(), $this->namedByTheScreen($e->replacements())),
             ]));
 
             return;
         } catch (NoticeTimelineInvertedException $e) {
-            // The message carries the package's own numbers (which minimum, which dates), so it is
-            // shown rather than replaced by a vaguer sentence of our own.
+            // The same form, and it used to be missing here: the refusal's English sentence went
+            // into the status line whole, so a German screen showed an English sentence inside a
+            // German one.
             $this->setStatus(__('legal-consent::ui.admin_status_deemed_window_rejected', [
-                'reason' => $e->getMessage(),
+                'reason' => __($e->label(), $this->namedByTheScreen($e->replacements())),
             ]));
 
             return;
@@ -602,18 +614,67 @@ final class LegalTextEditor extends Component
     }
 
     /**
-     * A date input's value as a Carbon, or null when it was left empty.
+     * A refusal's placeholders, with the document named the way the rest of this screen names it.
      *
-     * Null rather than "today": an omitted date means the operator did not state one, and the
-     * publisher's own defaults are the right answer to that. Substituting now() here would invent
-     * a window nobody chose and freeze it into a proof row.
+     * The refusals name the document by its package title, because they are also read where no
+     * screen is. On a screen that is the one place the name differs: an application that binds
+     * {@see NamesLegalTexts} so a document reads the same everywhere saw every other line say its
+     * own name and the refusal say the package's.
+     *
+     * @param  array<string, int|string>  $replacements
+     * @return array<string, int|string>
      */
-    private function date(string $value): ?CarbonImmutable
+    private function namedByTheScreen(array $replacements): array
     {
-        // The empty check is EQUIVALENT under mutation, measured 2026-09-14: Carbon refuses an empty
-        // string with InvalidFormatException, which parseDate() turns into null as well. It stays so
-        // that "left blank means not stated" does not rest on a parser's error path.
-        return $value === '' ? null : $this->parseDate($value);
+        $replacements['document'] = app(NamesLegalTexts::class)->document($this->key);
+
+        return $replacements;
+    }
+
+    /**
+     * The three dates of the window, each under the label the form shows for it.
+     *
+     * Keyed by the label's translation key, so a refusal names a field in the words the operator
+     * is looking at rather than in this class's property names.
+     *
+     * @return array<string, string>
+     */
+    private function windowDates(): array
+    {
+        return [
+            'legal-consent::ui.admin_deemed_announce' => $this->announceAt,
+            'legal-consent::ui.admin_deemed_deadline' => $this->objectionDeadline,
+            'legal-consent::ui.admin_deemed_enforce' => $this->enforceAt,
+        ];
+    }
+
+    /**
+     * The fields a release with an objection window was asked for without, by their labels.
+     *
+     * All three dates and the regime are required here, and the reason is the mode. A deemed
+     * release binds people by their silence, and the window is the statement that binding rests
+     * on. Left empty, the announcement defaulted to the moment of the click, and a change released
+     * without a regime was measured against the tunable default alone: a configuration or a
+     * per-document override that shortens it applied, where the regime would have held the
+     * statutory floor (two months for a payment contract under § 675g BGB). Both are windows
+     * nobody chose. The publisher already refused a missing objection deadline, one field at a time
+     * and in its own English sentence; this names every empty field at once, in the reader's
+     * language. A consumer that wrapped this screen made all four fields required before it would
+     * adopt it.
+     *
+     * The change class and the two switches stay optional: they describe the change, and an
+     * operator who leaves them unset has not left a date to a default.
+     *
+     * @return list<string>
+     */
+    private function missingWindowFields(): array
+    {
+        $fields = [...$this->windowDates(), 'legal-consent::ui.admin_deemed_regime' => $this->regime];
+
+        return array_map(
+            static fn (string $label): string => (string) __($label),
+            array_keys(array_filter($fields, static fn (string $value): bool => $value === '')),
+        );
     }
 
     /**
@@ -658,27 +719,22 @@ final class LegalTextEditor extends Component
     }
 
     /**
-     * The date fields carrying something this screen cannot read.
+     * The date fields carrying something this screen cannot read, by their labels.
      *
-     * Returned rather than thrown: the caller turns them into the same status line the package
-     * already uses for a rejected window, so an operator who mistyped a date sees WHICH field —
-     * not a 500, and not a silently dropped value that releases with no deadline at all.
+     * Returned rather than thrown: the caller turns them into a status line, so an operator who
+     * mistyped a date sees WHICH field, not a 500, and not a silently dropped value that releases
+     * with no deadline at all. The line used to carry the field names in English inside a
+     * translated sentence; it names them as the form labels them now.
      *
      * @return list<string>
      */
     private function unreadableDates(): array
     {
-        $fields = [
-            'announce date' => $this->announceAt,
-            'objection deadline' => $this->objectionDeadline,
-            'effective date' => $this->enforceAt,
-        ];
-
         $unreadable = [];
 
-        foreach ($fields as $label => $value) {
+        foreach ($this->windowDates() as $label => $value) {
             if ($value !== '' && ! $this->parseDate($value) instanceof CarbonImmutable) {
-                $unreadable[] = $label;
+                $unreadable[] = (string) __($label);
             }
         }
 

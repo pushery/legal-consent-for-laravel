@@ -10,6 +10,7 @@ use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Models\LegalDocument;
+use Pushery\LegalConsent\Models\LegalDraft;
 
 /**
  * Publishes EVERY locale of a legal text as one change — all of them, or none.
@@ -108,7 +109,8 @@ final readonly class LegalDocumentReleaser
      * because the gate asks whether a subject holds a document's major: an active re-consent
      * published as `1.1.0` reached nobody who had accepted `1.0.0`. That refusal names what is
      * wrong and, on its own, leaves the operator with the question it raises. The version still
-     * comes from the draft row, which is typed by a person.
+     * comes from the draft row, and a release stamps this answer onto it when nobody wrote one
+     * there ({@see stampVersion()}).
      *
      * So this answers it, and it ENFORCES NOTHING: a caller that has its own numbering keeps it.
      * What it removes is every consumer writing the same four lines — one of them did, measured
@@ -240,6 +242,8 @@ final readonly class LegalDocumentReleaser
         $published = new Collection;
 
         DB::transaction(function () use ($key, $mode, $locales, $options, $published): void {
+            $this->stampVersion($key, $mode, $locales);
+
             foreach ($locales as $locale) {
                 $published->push($this->publisher->publishWithMode(
                     $key,
@@ -258,5 +262,71 @@ final readonly class LegalDocumentReleaser
         });
 
         return $published;
+    }
+
+    /**
+     * Give the release the version this package derives, unless the row already answers for it.
+     *
+     * {@see nextVersionFor()} answers what the next version has to be. The version itself is read
+     * off the source draft row, and neither admin screen has a field to type one into. So the
+     * release stamps the derived answer onto that row whenever nobody gave one, and that is what
+     * lets the screens release a text more than once.
+     *
+     * A VERSION ON THE ROW IS AN ANSWER UNTIL IT HAS BEEN RELEASED WITH OTHER BYTES. A release
+     * leaves its own number on the row, and the next release used to read it as a deliberate
+     * answer: the text changed, the row still said 1.0.0, and the publisher refused "already exists
+     * with different content" with no field on either screen to type another number into. A
+     * consumer measured it: through the package's screens, every text could be released once. So a
+     * number that one of the released languages already carries with other bytes belongs to the
+     * previous release and is replaced. The same number over the same bytes stays. Pressing release
+     * twice then publishes what is live again instead of minting a new version of an unchanged
+     * text, which under a mode that gates would ask everybody to accept it once more.
+     *
+     * A number nobody has released yet is kept, whoever wrote it. The publisher refuses one that
+     * this mode cannot carry, and it still does.
+     *
+     * The stamp is written INSIDE the release's transaction, and that is the other half of the fix.
+     * The overview used to stamp before it called the release, so a release that was then refused
+     * left a number behind that nobody had chosen, and the next attempt read it as deliberate,
+     * possibly in another mode from the other screen. Written here, a refusal rolls it back.
+     *
+     * A document with no source row has nowhere to keep a version. The source is outside the
+     * released languages there, and the rest of the release goes on as it did.
+     *
+     * @param  list<string>  $locales
+     */
+    private function stampVersion(string $key, NoticeMode $mode, array $locales): void
+    {
+        $set = LegalDraftSet::for($key);
+
+        if (! $set->source() instanceof LegalDraft) {
+            return;
+        }
+
+        $stamped = $set->version();
+
+        if (is_string($stamped) && $stamped !== '' && ! $this->releasedWithOtherBytes($set, $stamped, $locales)) {
+            return;
+        }
+
+        app(LegalDraftWriter::class)->setVersion($key, $this->nextVersionFor($key, $mode));
+    }
+
+    /**
+     * Whether one of these languages already carries this version with bytes other than its draft's.
+     *
+     * The same comparison the publisher refuses over, asked before it so that the refusal is never
+     * met for a number the release chose itself.
+     *
+     * @param  list<string>  $locales
+     */
+    private function releasedWithOtherBytes(LegalDraftSet $set, string $version, array $locales): bool
+    {
+        return LegalDocument::model()::query()
+            ->where('key', $set->key)
+            ->whereIn('locale', $locales)
+            ->where('version', $version)
+            ->get(['locale', 'content_hash'])
+            ->contains(static fn (LegalDocument $row): bool => $set->draft($row->locale)?->content_hash !== $row->content_hash);
     }
 }

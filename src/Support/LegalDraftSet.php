@@ -132,12 +132,25 @@ final readonly class LegalDraftSet
      * was there and the route to it was closed. Measured in a consumer with three informational
      * documents out of six, which narrowed the list itself rather than go without an imprint.
      *
-     * Only a locale with NO DRAFT AT ALL is dropped, never one whose draft is merely unreviewed.
-     * "Nothing has been written here" is what the fallback answers for; "it is written and nobody
-     * has looked at it" is a reason an operator can act on, and swallowing it would publish the
-     * other locales and leave that one silently behind. When no locale has a draft, the full list
-     * goes through — so the refusal still names every language and why, instead of releasing an
-     * empty set.
+     * A LANGUAGE COMES ALONG ONLY WHEN ITS DRAFT COULD GO OUT, and the source always comes along.
+     * This used to drop only a language with no draft at all and keep one whose draft was written
+     * but not reviewed, on the argument that an unreviewed translation is work an operator can act
+     * on. It is, and it was also the only way forward: an unreviewed English draft held back the
+     * corrected German imprint, and nothing released it except reviewing a translation nobody was
+     * waiting for. The same state was reported from the screen and measured in a consumer, which
+     * narrowed the list itself. A language whose draft is not ready keeps the version it already
+     * has live, or serves the default locale where it has none — what a language without any draft
+     * has always done.
+     *
+     * The source is the exception in the other direction. Every other language falls back to it,
+     * so a release without it has nothing to fall back to. When the source is not ready the release
+     * is the source alone, and the refusal names the source and its reason rather than publishing
+     * the translations around it. The same holds when nothing is written at all: the page blocks on
+     * its source, the one language that can hold it back, rather than on every configured one.
+     *
+     * An application whose default locale is not among its configured ones has no source in this
+     * list to anchor on, and keeps the narrowing without it: whatever is ready, or every configured
+     * language when nothing is, so the refusal still names them.
      *
      * IT LIVES HERE BECAUSE THREE PLACES ASK IT AND THEY DISAGREED. Until it moved here, the answer
      * sat in a PRIVATE method of the admin grid's component, so it reached the release button and
@@ -156,12 +169,16 @@ final readonly class LegalDraftSet
             return $configured;
         }
 
-        $written = array_values(array_filter(
+        $ready = array_values(array_filter(
             $configured,
-            fn (string $locale): bool => $this->draft($locale) instanceof LegalDraft,
+            fn (string $locale): bool => ($draft = $this->draft($locale)) instanceof LegalDraft && $this->isPublishable($draft),
         ));
 
-        return $written === [] ? $configured : $written;
+        if (! in_array($this->sourceLocale, $configured, true)) {
+            return $ready === [] ? $configured : $ready;
+        }
+
+        return in_array($this->sourceLocale, $ready, true) ? $ready : [$this->sourceLocale];
     }
 
     /** This document's type, from the registry entry its key names. */

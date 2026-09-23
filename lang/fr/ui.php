@@ -172,6 +172,9 @@ return [
     'admin_deemed_keeps_unmodified' => 'Garde la version inchangée disponible',
     'admin_deemed_submit' => 'Publier avec un délai d’opposition',
     'admin_status_deemed_window_rejected' => 'Non publié — le délai d’opposition a été refusé : :reason',
+    'admin_status_deemed_window_incomplete' => 'Non publié — une publication avec un délai d’opposition exige ces champs : :fields',
+    'admin_status_deemed_dates_unreadable' => 'Non publié — ces dates sont illisibles : :fields. Format attendu : AAAA-MM-JJ.',
     'lead_time_too_short' => 'une modification substantielle de « :document » exige au moins :days jours entre l’annonce (:announce) et l’entrée en vigueur (:enforce)',
     'lead_time_too_short_objection' => 'une modification substantielle de « :document » exige au moins :days jours entre l’annonce (:announce) et le délai d’opposition (:deadline)',
+    'notice_timeline_inverted' => 'l’annonce de « :document » (:announce) tombe après son entrée en vigueur (:enforce) ; une modification doit être annoncée avant d’entrer en vigueur',
 ];

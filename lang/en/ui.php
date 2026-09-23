@@ -175,6 +175,9 @@ return [
     'admin_deemed_keeps_unmodified' => 'Keeps the unmodified version on offer',
     'admin_deemed_submit' => 'Release with an objection window',
     'admin_status_deemed_window_rejected' => 'Not released — the objection window was rejected: :reason',
+    'admin_status_deemed_window_incomplete' => 'Not released — a release with an objection window needs these fields: :fields',
+    'admin_status_deemed_dates_unreadable' => 'Not released — these dates could not be read: :fields. Expected YYYY-MM-DD.',
     'lead_time_too_short' => 'a material change to “:document” needs at least :days days between the announcement (:announce) and enforcement (:enforce)',
     'lead_time_too_short_objection' => 'a material change to “:document” needs at least :days days between the announcement (:announce) and the deadline for objections (:deadline)',
+    'notice_timeline_inverted' => 'the announcement of “:document” (:announce) falls after the date it takes effect (:enforce); a change has to be announced before it takes effect',
 ];

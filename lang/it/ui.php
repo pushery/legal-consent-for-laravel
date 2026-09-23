@@ -172,6 +172,9 @@ return [
     'admin_deemed_keeps_unmodified' => 'Mantiene disponibile la versione non modificata',
     'admin_deemed_submit' => 'Pubblica con termine di opposizione',
     'admin_status_deemed_window_rejected' => 'Non pubblicato — il termine di opposizione è stato rifiutato: :reason',
+    'admin_status_deemed_window_incomplete' => 'Non pubblicato — una pubblicazione con termine di opposizione richiede questi campi: :fields',
+    'admin_status_deemed_dates_unreadable' => 'Non pubblicato — queste date non sono leggibili: :fields. Formato atteso: AAAA-MM-GG.',
     'lead_time_too_short' => 'una modifica sostanziale a «:document» richiede almeno :days giorni tra l’annuncio (:announce) e l’entrata in vigore (:enforce)',
     'lead_time_too_short_objection' => 'una modifica sostanziale a «:document» richiede almeno :days giorni tra l’annuncio (:announce) e il termine per opporsi (:deadline)',
+    'notice_timeline_inverted' => 'l’annuncio di «:document» (:announce) cade dopo la sua entrata in vigore (:enforce); una modifica va annunciata prima di entrare in vigore',
 ];

@@ -172,6 +172,9 @@ return [
     'admin_deemed_keeps_unmodified' => 'Mantém disponível a versão não alterada',
     'admin_deemed_submit' => 'Publicar com prazo de oposição',
     'admin_status_deemed_window_rejected' => 'Não publicado — o prazo de oposição foi recusado: :reason',
+    'admin_status_deemed_window_incomplete' => 'Não publicado — uma publicação com prazo de oposição precisa destes campos: :fields',
+    'admin_status_deemed_dates_unreadable' => 'Não publicado — estas datas não podem ser lidas: :fields. Formato esperado: AAAA-MM-DD.',
     'lead_time_too_short' => 'uma alteração substancial em «:document» exige pelo menos :days dias entre o anúncio (:announce) e a entrada em vigor (:enforce)',
     'lead_time_too_short_objection' => 'uma alteração substancial em «:document» exige pelo menos :days dias entre o anúncio (:announce) e o prazo para oposição (:deadline)',
+    'notice_timeline_inverted' => 'o anúncio de «:document» (:announce) é posterior à sua entrada em vigor (:enforce); uma alteração tem de ser anunciada antes de entrar em vigor',
 ];
