@@ -9,6 +9,7 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
 use Illuminate\Notifications\Events\NotificationFailed;
 use Illuminate\Notifications\Events\NotificationSent;
@@ -198,8 +199,8 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->defaultLocale(),
         ));
 
-        $this->app->singleton(RegistrationConsentRecorder::class, fn (): RegistrationConsentRecorder => new RegistrationConsentRecorder(
-            $this->app->make(ConsentManager::class),
+        $this->app->singleton(RegistrationConsentRecorder::class, fn (Application $app): RegistrationConsentRecorder => new RegistrationConsentRecorder(
+            $app->make(ConsentManager::class),
             $this->registrationDocumentsConfig(),
             $this->defaultLocale(),
             // The literal, not RegistrationConsentRecorder::WITHOUT_FORM_FIELDS_WARN.
@@ -211,7 +212,12 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->stringConfig('legal-consent.registration.without_form_fields', 'warn'),
         ));
 
-        $this->app->singleton(SourceFactory::class, fn (): SourceFactory => new SourceFactory($this->app, $this->documentsConfig(), $this->sourcesConfig()));
+        // bind, not singleton. The factory holds nothing but the two config maps and the container
+        // it resolves custom drivers through, so one instance per resolution costs nothing, and it
+        // then carries the container that resolved it rather than the one this provider was handed
+        // at boot. Under Octane those are different objects: the provider's is the base application,
+        // the resolving one is the request's sandbox.
+        $this->app->bind(SourceFactory::class, fn (Application $app): SourceFactory => new SourceFactory($app, $this->documentsConfig(), $this->sourcesConfig()));
 
         // The registry goes in so the pipeline can tell an `informational` page (which binds
         // nobody, and therefore has no acceptance sentence) from a document that does ask
@@ -223,28 +229,28 @@ final class LegalConsentServiceProvider extends ServiceProvider
             documents: $this->documentsConfig(),
         ));
 
-        $this->app->singleton(LegalSourceRenderer::class, fn (): LegalSourceRenderer => new LegalSourceRenderer(
-            $this->app->make(SourceFactory::class),
-            $this->app->make(RenderPipeline::class),
+        $this->app->singleton(LegalSourceRenderer::class, fn (Application $app): LegalSourceRenderer => new LegalSourceRenderer(
+            $app->make(SourceFactory::class),
+            $app->make(RenderPipeline::class),
             $this->cacheStore(),
             $this->intConfig('legal-consent.cache.ttl', 86400),
             $this->stringConfig('legal-consent.cache.prefix', 'legal:doc'),
-            $this->app->make(TenantContext::class),
+            $app->make(TenantContext::class),
         ));
 
-        $this->app->singleton(ChangeItemsAuthor::class, fn (): ChangeItemsAuthor => new ChangeItemsAuthor($this->app->make(TenantContext::class)));
+        $this->app->singleton(ChangeItemsAuthor::class, fn (Application $app): ChangeItemsAuthor => new ChangeItemsAuthor($app->make(TenantContext::class)));
 
         $this->app->singleton(ChangeItemsFreezer::class, fn (): ChangeItemsFreezer => new ChangeItemsFreezer);
 
-        $this->app->singleton(LegalDocumentPublisher::class, fn (): LegalDocumentPublisher => new LegalDocumentPublisher(
-            $this->app->make(SourceFactory::class),
-            $this->app->make(RenderPipeline::class),
+        $this->app->singleton(LegalDocumentPublisher::class, fn (Application $app): LegalDocumentPublisher => new LegalDocumentPublisher(
+            $app->make(SourceFactory::class),
+            $app->make(RenderPipeline::class),
             $this->documentsConfig(),
         ));
 
-        $this->app->singleton(LegalDriftChecker::class, fn (): LegalDriftChecker => new LegalDriftChecker(
-            $this->app->make(SourceFactory::class),
-            $this->app->make(RenderPipeline::class),
+        $this->app->singleton(LegalDriftChecker::class, fn (Application $app): LegalDriftChecker => new LegalDriftChecker(
+            $app->make(SourceFactory::class),
+            $app->make(RenderPipeline::class),
         ));
 
         $this->app->singleton(ConsentBanner::class, fn (): ConsentBanner => new ConsentBanner(new ConsentGate, $this->defaultLocale()));
@@ -257,16 +263,16 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // either way. What `scoped` buys is that the lifetime is stated by the binding instead of
         // being an internal detail a reader has to go and check, and that the two memoizing
         // bindings in this provider are declared the same way.
-        $this->app->scoped(EnforceableDocumentCache::class, fn (): EnforceableDocumentCache => new EnforceableDocumentCache(
+        $this->app->scoped(EnforceableDocumentCache::class, fn (Application $app): EnforceableDocumentCache => new EnforceableDocumentCache(
             $this->cacheStore(),
-            $this->app->make(TenantContext::class),
+            $app->make(TenantContext::class),
             $this->intConfig('legal-consent.cache.enforceable_ttl', 60),
             $this->defaultLocale(),
         ));
 
-        $this->app->singleton(LegalDocumentReleaser::class, fn (): LegalDocumentReleaser => new LegalDocumentReleaser(
-            $this->app->make(LegalDocumentPublisher::class),
-            $this->app->make(AffectedSubjectResolver::class),
+        $this->app->singleton(LegalDocumentReleaser::class, fn (Application $app): LegalDocumentReleaser => new LegalDocumentReleaser(
+            $app->make(LegalDocumentPublisher::class),
+            $app->make(AffectedSubjectResolver::class),
         ));
     }
 
