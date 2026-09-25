@@ -657,9 +657,13 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $normalized = [];
 
         foreach ($documents as $key => $config) {
-            if (is_string($key) && is_array($config)) {
+            // Decided by the VALUE, as {@see DocumentMatrix::keys()} decides it. A document whose key
+            // looks like a number, `'2025' => [...]`, is an int once PHP holds it as an array key and is
+            // still a document with a definition; an entry of a config written as a list is a bare
+            // name. Every reader that walks these keys casts them back to the string they were.
+            if (is_array($config)) {
                 /** @var array<string, mixed> $config */
-                $normalized[$key] = $config;
+                $normalized[(string) $key] = $config;
             }
         }
 

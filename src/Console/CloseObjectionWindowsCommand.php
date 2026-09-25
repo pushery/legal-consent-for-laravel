@@ -85,10 +85,9 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
         // resolver's `HAVING MAX(major) < …` set mid-stream and make the LIMIT/OFFSET paging skip
         // subjects it never returns — who would then be locked out for good by objection_closed_at.
         $latestConsentId = DB::table('legal_consents')->max('id');
-        // The cast and the 0 are EQUIVALENT under mutation: the watermark only bounds `id <=` in SQL,
-        // where a numeric string compares the same, and an empty ledger owes nobody below any number.
-        // The cast stays for forVersion()'s int parameter; static analysis rejects the removal
-        // (measured 2026-09-14).
+        // The cast makes the watermark the int forVersion() takes: through a connection that
+        // stringifies fetched values, the highest id arrives as a string. The 0 is the watermark of
+        // an empty ledger, which owes nobody below any number.
         $maxConsentId = is_numeric($latestConsentId) ? (int) $latestConsentId : 0;
 
         $versions = LegalDocument::model()::query()

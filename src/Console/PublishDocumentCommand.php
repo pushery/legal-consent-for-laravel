@@ -14,6 +14,7 @@ use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
+use Pushery\LegalConsent\Support\PublishedDocumentReader;
 use Pushery\LegalConsent\Support\SourceLanguageFallback;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
@@ -213,6 +214,14 @@ final class PublishDocumentCommand extends Command
         $readsAnother = [];
 
         foreach ($missing as [$key, $locale, $message]) {
+            $kept = $this->activeVersion($key, $locale);
+
+            if ($kept instanceof LegalDocument) {
+                $failures[] = "{$key} ({$locale}): {$message}".$this->keptVersion($kept);
+
+                continue;
+            }
+
             $standIn = $this->standInFor($key, $locale);
 
             if ($standIn === null) {
@@ -331,6 +340,15 @@ final class PublishDocumentCommand extends Command
 
         // The same decision the real run makes at its end, against what this run WOULD make active.
         foreach ($missing as [$key, $locale, $message]) {
+            $kept = $this->activeVersion($key, $locale);
+
+            if ($kept instanceof LegalDocument) {
+                $failures[] = "{$key} ({$locale}): {$message}";
+                $this->error("  x {$key} ({$locale}) — no text: {$message}".$this->keptVersion($kept));
+
+                continue;
+            }
+
             $standIn = $this->standInFor($key, $locale, $available);
 
             if ($standIn === null) {
@@ -423,6 +441,18 @@ final class PublishDocumentCommand extends Command
             : "Dry run: {$key} ({$locale}) would publish v{$rendered->version} as the first version. Nothing was written.");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Why a language that lost its file fails even where the document may fall back.
+     *
+     * The read path answers a reader from their own language first ({@see PublishedDocumentReader::read()}),
+     * so while a version of it is active no stand-in reaches them. The file is what the next change
+     * of that text would be published from, and without it the readers keep this version for good.
+     */
+    private function keptVersion(LegalDocument $kept): string
+    {
+        return " Its readers are still shown the active v{$kept->version}, and no other language reaches them while it is active.";
     }
 
     private function hasActiveVersion(string $key, string $locale): bool
