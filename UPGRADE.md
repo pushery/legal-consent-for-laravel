@@ -4,6 +4,14 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.42.3 → 0.42.4
+
+**Nothing is required of you**, unless a deploy runs `legal-consent:publish --all` over sources from which the file of a published translation was removed, or a document in `legal-consent.documents` has a key made of digits.
+
+**A translation whose file is gone now fails the run.** Its readers are still shown the version published last, because a reader is answered from their own language first. The run used to report the stand-in language, which none of them saw, and exit 0. It now exits 1 and names the version those readers keep. Restore the file to publish that language again.
+
+**A document whose key is a number now reaches registration.** The registration rules, the checklist and the recorder used to leave out a document registered under a key like `'2025'`. They include it now, so a registration form needs its control where the document is mandatory: `legal_2025`, unless the entry declares a `registration_field`.
+
 ## 0.42.2 → 0.42.3
 
 **Nothing is required of you**, unless your application keeps its own reference to `SourceFactory`.

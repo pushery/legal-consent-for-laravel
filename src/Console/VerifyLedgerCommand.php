@@ -335,9 +335,6 @@ final class VerifyLedgerCommand extends Command
 
         $ceiling = $highest;
 
-        // Dropping an engine from this list is EQUIVALENT under mutation in this suite, and not
-        // because the choice is free: both seek forms return the same rows, so only the query plan
-        // differs, and the seek itself runs only from the second page on (see below).
         $rowValueSeek = in_array(DB::connection()->getDriverName(), ['pgsql', 'sqlite'], true);
 
         $lastToken = null;
@@ -369,18 +366,11 @@ final class VerifyLedgerCommand extends Command
                 yield $row;
             }
 
-            // THE TWO `instanceof` CHECKS ARE REACHABLE ONLY AT AN EXACT PAGE BOUNDARY, so a
-            // run that never lands on one cannot tell them from `true`. `$page->last()` is
-            // null only for an EMPTY page, and the loop below re-queries only when the previous
-            // page was exactly full -- so a null here needs a chained-row count that is an exact
-            // multiple of PAGE. Measured: on an empty ledger the generator is not entered at all,
-            // so that cheap case does not reach them either.
-            //
-            // Not tested, and that is a decision rather than a gap: the fixture would be a
-            // thousand chained rows built to hit one boundary, tied to a constant one edit away
-            // from moving. The guards stay because the boundary is real and the failure without
-            // them is a fatal in a verifier -- the one command whose whole job is to report
-            // trouble rather than become it.
+            // `$page->last()` is null only for an empty page, and the loop asks for another page
+            // only after a full one, so a null here is a ledger whose chained rows are an exact
+            // multiple of PAGE. Without the two checks that ledger would end the walk on a property
+            // read of null, in the one command whose job is to report trouble rather than become
+            // it. An empty ledger never gets this far: the generator returns before the first page.
             $last = $page->last();
             $lastToken = $last instanceof stdClass ? $last->subject_token : null;
             $lastId = $last instanceof stdClass ? $last->id : null;
@@ -604,10 +594,11 @@ final class VerifyLedgerCommand extends Command
             // touches. A perfectly clean two-tenant ledger therefore reported a fabricated chain,
             // and a multi-tenant installation could never verify green.
             //
-            // Reordering the parts of this identity, or of the subject below, is EQUIVALENT under
-            // mutation: both are only ever compared, never read apart. Dropping a part or a separator
-            // is not, and tests hold each one. The empty `tokens` list is equivalent too, because the
-            // append below creates it; it stays to spell out the shape.
+            // This identity and the subject below are only ever compared, never read apart, so the
+            // order of their parts is free as long as a separator stands between every two of them.
+            // Without one, a type runs into an id, or a tenant into a type, and two subjects become
+            // one. The empty `tokens` list is what the append below would create anyway; it stays to
+            // spell out the shape.
             $identity = $type."\0".$id."\0".$tenant;
 
             $tokensPerSubject[$identity] ??= ['type' => $type, 'id' => $id, 'tokens' => []];
@@ -619,9 +610,10 @@ final class VerifyLedgerCommand extends Command
             $subjectsPerToken[$token][] = $type."\0".$id;
         }
 
-        // Both array_unique() calls are EQUIVALENT under mutation for every ledger this package
-        // writes: the query groups by all four columns and tenant_id is never NULL, so no token
-        // repeats within an identity, and a subject is minted one token per tenant.
+        // The pairs are grouped by all four columns and tenant_id is never NULL, so within one
+        // identity every token is already distinct, and the first array_unique() only states what is
+        // counted. The second one carries weight: a subject whose token turns up in two tenants
+        // arrives once per tenant, and it is still one subject.
         //
         // One subject, several tokens — the shape a fabricated chain creates.
         foreach ($tokensPerSubject as $subject) {

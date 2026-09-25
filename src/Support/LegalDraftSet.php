@@ -29,7 +29,7 @@ use Pushery\LegalConsent\Models\LegalDraft;
  *   hasUnpublishedChanges() approved text is not live yet
  *
  * Precision comes free from the pipeline: `canonicalize()` runs inside the hash, so reformatting
- * the source stales nothing. Accepted caveat: that canonicalisation's `\s` is not Unicode-aware,
+ * the source stales nothing. Accepted caveat: that canonicalization's `\s` is not Unicode-aware,
  * so a non-breaking space (U+00A0) survives and DOES move the hash — pasting from a word processor
  * can stale every translation with no visible diff. Package semantics, documented, not papered
  * over with a second normalizer (that would be two canonical forms, and the ledger hashes one).

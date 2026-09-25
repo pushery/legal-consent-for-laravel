@@ -4,6 +4,14 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.4] - 2026-09-25
+
+### Fixed
+
+- **`publish --all` no longer reports a stand-in that no reader is shown.** When the file of a published translation was gone, the command said its readers get another language's version and exited 0. They were still shown the translation's active version, because a reader is answered from their own language first, and no later change of the text could reach them. The run now fails that language with exit 1 and names the version its readers keep, and the dry run does the same.
+
+- **A document whose key is a number reaches registration.** A registry key like `'2025'` is an int once PHP holds it as an array key, and the service provider dropped it from the registry it hands the registration rules, the checklist, the recorder and the content sources, without a word. The document could be published and enforced while registration never asked for it. The provider now keeps every entry that has a definition, as the bulk publish and the doctor already did.
+
 ## [0.42.3] - 2026-09-23
 
 ### Fixed
@@ -2848,7 +2856,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.3...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.4...HEAD
+[0.42.4]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.3...v0.42.4
 [0.42.3]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.2...v0.42.3
 [0.42.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.1...v0.42.2
 [0.42.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.0...v0.42.1
