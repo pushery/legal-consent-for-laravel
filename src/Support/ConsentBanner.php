@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Enums\NoticeMode;
-use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
@@ -136,15 +135,17 @@ final readonly class ConsentBanner
     }
 
     /**
-     * Deemed-consent (Zustimmungsfiktion) changes still within their objection window that
-     * this subject holds an older major of and has not yet objected to or terminated — the
-     * banner that surfaces the objection / free-termination options while the subject can
-     * still exercise them (§ 308 Nr. 5 lit. a BGB). `days_left` counts down to the objection
-     * deadline, not the effective date.
+     * Deemed-consent (Zustimmungsfiktion) changes still within their objection window, for a
+     * subject who is a party to the contract, holds an older version of it and has not yet
+     * objected to or terminated — the banner that surfaces the objection / free-termination
+     * options while the subject can still exercise them (§ 308 Nr. 5 lit. a BGB). The fiction
+     * binds the parties and nobody else, so nobody else is offered an objection. `days_left`
+     * counts down to the objection deadline, not the effective date.
      *
      * @param  array<string, int>|null  $accepted  the subject's CURRENT holdings — a presence map, see
      *                                             ConsentGate::currentHoldings() — folded here when null and
-     *                                             handed back so a sibling banner can reuse it
+     *                                             handed back so a sibling banner can reuse it. A key
+     *                                             present in it is a contract the subject is a party to
      * @return list<array{key: string, version: string, title: string, objection_deadline: ?string, objection_date: ?string, enforce_from: ?string, days_left: int}>
      */
     public function deemedFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array &$accepted = null): array
@@ -170,22 +171,35 @@ final readonly class ConsentBanner
         // This runs on every authenticated page render, and asking per document put one ledger
         // query inside the loop — 1 + N per render, where N is the number of objection windows open
         // at the same time. Those windows stay open for weeks and several contracts run in
-        // parallel, so N is routinely more than one. Still lazy: a subject who already holds every
-        // announced version pays nothing, which is what the loop's first `continue` used to buy.
+        // parallel, so N is routinely more than one. Still lazy: a subject who is a party to none
+        // of the changes pays nothing beyond the holdings.
         $keys = array_values($upcoming->map(fn (LegalDocument $document): string => $document->key)->all());
-        $latestActions = null;
+        $standing = null;
 
         foreach ($upcoming as $document) {
-            if (ConsentGate::holds($accepted, $document->key, $document->major_version)) {
+            if (! isset($accepted[$document->key])) {
+                continue; // not a party to this contract, so its silence binds nothing
+            }
+
+            // The version held and the latest action per key, from ONE read of the subject's
+            // ledger for every key with an open window.
+            $standing ??= $this->gate->standingFor($subject, $keys);
+            $held = $standing['version'][$document->key] ?? null;
+
+            // The VERSION, not the major. The publisher refuses a deemed change on a major bump of a
+            // contract, so every party already holds the change's major, and comparing majors hid
+            // the banner from exactly the subjects whose silence the window turns into agreement.
+            // Compared by order rather than for equality: a later version accepted in another
+            // locale is not an older one.
+            if ($held === null || version_compare($held, $document->version, '>=')) {
                 continue; // subject already holds this version
             }
 
             // Cross-locale: an objection/termination rebuts the change (key, major), whichever
             // locale's banner it was exercised through, so it suppresses the banner everywhere.
-            $latestActions ??= $this->latestActionsFor($subject, $keys);
-            $latest = $latestActions[$document->key] ?? null;
+            $latest = $standing['latest'][$document->key]['action'] ?? null;
 
-            if ($latest === ConsentAction::Objected || $latest === ConsentAction::Terminated) {
+            if ($latest === ConsentAction::Objected->value || $latest === ConsentAction::Terminated->value) {
                 continue; // the subject already objected or terminated
             }
 
@@ -245,44 +259,6 @@ final readonly class ConsentBanner
     private function resolvedFor(string $locale): Collection
     {
         return app(EnforceableDocumentCache::class)->resolvedFor($locale);
-    }
-
-    /**
-     * The subject's LAST ledger action per document key, for a whole set of keys in one read.
-     *
-     * Same answer as the gate's single-key lookup, arrived at from the same rows: that one orders
-     * descending and takes the first, this one orders ascending and keeps overwriting, so the row
-     * that wins is the same row. Cross-locale in both, because an objection rebuts the change
-     * (key, major) whichever language it was exercised in.
-     *
-     * There is deliberately no early return for an empty key set. The only caller derives the keys
-     * from the announced set it is already iterating and returns before the loop when that set is
-     * empty, so it cannot ask this question about nothing: a guard here would be a branch no run
-     * can enter, saving a query nobody requests. An empty set would answer correctly anyway — the
-     * `whereIn` matches no row and the fold below yields nothing.
-     *
-     * @param  list<string>  $keys
-     * @return array<string, ConsentAction>
-     */
-    private function latestActionsFor(Model $subject, array $keys): array
-    {
-        $latest = [];
-
-        $rows = LegalConsent::model()::query()
-            ->select(['document_key', 'action'])
-            ->where('subject_type', $subject->getMorphClass())
-            ->where('subject_id', SubjectKey::for($subject))
-            ->whereIn('document_key', $keys)
-            ->orderBy('document_key')
-            ->orderBy('accepted_at')
-            ->orderBy('id')
-            ->get();
-
-        foreach ($rows as $row) {
-            $latest[$row->document_key] = $row->action;
-        }
-
-        return $latest;
     }
 
     /** Whether the document's announce window has opened. */

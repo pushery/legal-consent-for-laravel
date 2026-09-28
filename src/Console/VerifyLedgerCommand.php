@@ -10,6 +10,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
+use Pushery\LegalConsent\Support\LedgerBoundaryCensus;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\LedgerRecordMacs;
 use Pushery\LegalConsent\Support\LedgerRootBoundary;
@@ -76,6 +77,37 @@ final class VerifyLedgerCommand extends Command
 
         if ($macBoundary instanceof LedgerRootBoundary && ! hash_equals($macBoundary->proof, $macs->boundaryProof($macBoundary->id))) {
             $breaks[] = "record-mac boundary marker #{$macBoundary->id}: proof does not verify — the marker was altered, or this environment holds a different tamper_evidence_key";
+        }
+
+        // A marker that is gone while the evidence it bounds exists was deleted: the package writes
+        // each marker before the first root proof and the first mac, and no longer stamps one again
+        // once evidence exists, since a new one would sit above every row written since and exempt
+        // what was slipped in among them. Missing, it can only mean that somebody removed it.
+        $rootRemoved = $chain->rootBoundaryRemoved();
+        $macRemoved = $macs->boundaryRemoved();
+
+        if ($rootRemoved) {
+            $breaks[] = 'chain-root boundary marker is missing although rows carry root proofs — it was deleted, and the rows it bounded can no longer be told from rows added since';
+        }
+
+        if ($macRemoved) {
+            $breaks[] = 'record-mac boundary marker is missing although macs were recorded — it was deleted, and the rows it bounded can no longer be told from rows added since';
+        }
+
+        // The rows below a boundary are exempt because they were there when it was stamped, and an
+        // id is chosen by whoever inserts. The census says how many there were: lawful work only
+        // ever removes rows there or rewrites them under their own ids, so more than it names were
+        // inserted there. And the package never writes an id below 1.
+        $census = new LedgerBoundaryCensus($chain);
+
+        foreach ([LedgerHashChain::ROOT_BOUNDARY_MARKER => 'chain-root', LedgerRecordMacs::BOUNDARY_MARKER => 'record-mac'] as $marker => $label) {
+            foreach ($census->breaks($marker, $label) as $break) {
+                $breaks[] = $break;
+            }
+        }
+
+        foreach ($census->impossibleIds() as $break) {
+            $breaks[] = $break;
         }
 
         // The TAIL of each chain — the only row a mac has anything to say about, and the reason is
@@ -231,11 +263,11 @@ final class VerifyLedgerCommand extends Command
         // root proof, a mac is recorded whether or not a secret exists, so its absence is a real
         // state to report either way. Said on both outcomes for the reason given above: a break
         // list is exactly where the absence of a check gets read as the absence of its findings.
-        if (! $macBoundary instanceof LedgerRootBoundary) {
+        if (! $macBoundary instanceof LedgerRootBoundary && ! $macRemoved) {
             $this->warn('The record-mac boundary is NOT stamped, so the newest row of each chain was not checked: that row has no successor whose link covers it, and a replacement of it cannot be detected here. Run the package migrations — 000031 creates the table and stamps the boundary, and every row already in the ledger then counts as history.');
         }
 
-        if ($keyed && ! $boundary instanceof LedgerRootBoundary) {
+        if ($keyed && ! $boundary instanceof LedgerRootBoundary && ! $rootRemoved) {
             $this->warn('The chain-root boundary is NOT stamped, so the root-proof check did not run: a chain opened by a direct insert cannot be detected here. Not migrated yet: run the package migrations with the key set, and 000024 stamps it. Already migrated: running them again changes nothing; the first consent recorded with the key stamps it, and every row already in the ledger then counts as history.');
         }
 

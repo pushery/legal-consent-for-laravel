@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Content\ContentFormat;
@@ -14,6 +15,7 @@ use Pushery\LegalConsent\Enums\ReviewState;
 use Pushery\LegalConsent\Events\LegalDraftDiscarded;
 use Pushery\LegalConsent\Events\LegalDraftReviewed;
 use Pushery\LegalConsent\Events\LegalDraftSaved;
+use Pushery\LegalConsent\Exceptions\LegalDraftChanged;
 use Pushery\LegalConsent\Exceptions\LegalDraftNotFound;
 use Pushery\LegalConsent\Exceptions\LegalSourceDraftCannotBeDiscarded;
 use Pushery\LegalConsent\Models\LegalDraft;
@@ -82,8 +84,17 @@ readonly class LegalDraftWriter
      * The explicit human sign-off on these EXACT bytes — the only writer of Reviewed, and the only
      * path to a publishable draft. Stamps the source hash: reviewing a translation is asserting it
      * says what the source says right now.
+     *
+     * `$shownRevision` is the {@see revisionOf()} of the draft the reviewer was shown. When it is
+     * given, a draft written since then is not signed off: a translation that landed, or a second
+     * editor's save, between reading and pressing the button would otherwise carry an approval
+     * nobody gave it. Either way the sign-off only stamps the revision it read here, so a write
+     * racing the stamp itself is refused as well.
+     *
+     * @throws LegalDraftNotFound when the locale has no draft
+     * @throws LegalDraftChanged when the draft was written after it was shown, or during the stamp
      */
-    public function markReviewed(string $key, string $locale, ?string $actor = null): LegalDraft
+    public function markReviewed(string $key, string $locale, ?string $actor = null, ?string $shownRevision = null): LegalDraft
     {
         $set = LegalDraftSet::for($key);
         $draft = $set->draft($locale);
@@ -92,12 +103,16 @@ readonly class LegalDraftWriter
             throw LegalDraftNotFound::for($key, $locale);
         }
 
+        if ($shownRevision !== null && self::revisionOf($draft) !== $shownRevision) {
+            throw LegalDraftChanged::sinceShown($key, $locale);
+        }
+
         $sourceHash = $draft->locale === $this->sourceLocale() ? null : $set->source()?->content_hash;
 
         $draft = $this->persist($key, $locale, [
             'review_state' => ReviewState::Reviewed->value,
             'source_hash' => $sourceHash,
-        ], $draft);
+        ], $draft, expectedRevision: $draft->revision);
 
         event(new LegalDraftReviewed($draft, $actor));
 
@@ -189,6 +204,17 @@ readonly class LegalDraftWriter
         ))->html;
     }
 
+    /**
+     * A stored draft state: its row and its revision, the pair every write moves. '' for no draft.
+     *
+     * The row is part of it because a draft that was discarded and written again starts over at
+     * revision 1, and the same number would then name a different text.
+     */
+    public static function revisionOf(?LegalDraft $draft): string
+    {
+        return $draft instanceof LegalDraft ? $draft->id.':'.$draft->revision : '';
+    }
+
     protected function find(string $key, string $locale): ?LegalDraft
     {
         return LegalDraft::model()::query()->where('key', $key)->where('locale', $locale)->first();
@@ -199,9 +225,12 @@ readonly class LegalDraftWriter
      * read-modify-write: `lockForUpdate()` compiles away on SQLite, so a read-then-increment
      * would silently race there while looking safe.
      *
+     * `$expectedRevision` makes the update conditional on the row still being at that revision; a
+     * row that moved in between is left alone and reported with {@see LegalDraftChanged}.
+     *
      * @param  array<string, mixed>  $attributes
      */
-    private function persist(string $key, string $locale, array $attributes, ?LegalDraft $existing): LegalDraft
+    private function persist(string $key, string $locale, array $attributes, ?LegalDraft $existing, ?int $expectedRevision = null): LegalDraft
     {
         if (! $existing instanceof LegalDraft) {
             try {
@@ -241,12 +270,17 @@ readonly class LegalDraftWriter
 
         // The query builder, not the model: `revision + 1` must be one atomic statement, and this
         // row is already identified by its primary key, so no scope is needed to find it.
-        DB::table('legal_drafts')
+        $updated = DB::table('legal_drafts')
             ->where('id', $existing->getKey())
+            ->when($expectedRevision !== null, fn (Builder $query): Builder => $query->where('revision', $expectedRevision))
             ->update(array_merge($attributes, [
                 'revision' => DB::raw('revision + 1'),
                 'updated_at' => now(),
             ]));
+
+        if ($expectedRevision !== null && $updated === 0) {
+            throw LegalDraftChanged::sinceShown($key, $locale);
+        }
 
         return $existing->refresh();
     }

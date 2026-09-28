@@ -80,7 +80,9 @@ return new class extends Migration
             );
         }
 
-        if ($driver === 'mysql' || $driver === 'mariadb') {
+        // MySQL only. MariaDB is not a supported engine and is refused on install, so this side
+        // does not name it; down() still does, so a database that took the index can shed it.
+        if ($driver === 'mysql') {
             // The separator is a character no identifier can contain, so ('a|b','c') and
             // ('a','b|c') cannot produce the same value — the same collision the activation lock
             // name had to be fixed for.
@@ -103,6 +105,13 @@ return new class extends Migration
                     "ALTER TABLE {$table} ADD COLUMN active_identity VARCHAR(600) COLLATE utf8mb4_bin "
                     .'GENERATED ALWAYS AS (IF(is_active, CONCAT(`key`, 0x1f, locale, 0x1f, tenant_id), NULL)) STORED'
                 );
+            }
+
+            // Its own check, not the column's. MySQL does not roll DDL back, so an index that fails
+            // after the column was added (two active versions of one document, 1062) leaves the
+            // column behind. Behind the column's check, the run after the clean-up skipped the
+            // index as well, and the migration was recorded with the index missing.
+            if (! Schema::hasIndex('legal_documents', $index)) {
                 DB::statement("CREATE UNIQUE INDEX {$index} ON {$table} (active_identity)");
             }
         }
@@ -119,9 +128,13 @@ return new class extends Migration
         }
 
         if ($driver === 'mysql' || $driver === 'mariadb') {
-            // The index goes first: MySQL refuses to drop a column an index still references.
-            if (Schema::hasColumn('legal_documents', 'active_identity')) {
+            // The index goes first: MySQL refuses to drop a column an index still references. Each
+            // is checked on its own, because a failed up() can leave the column without the index.
+            if (Schema::hasIndex('legal_documents', $index)) {
                 DB::statement("DROP INDEX {$index} ON {$table}");
+            }
+
+            if (Schema::hasColumn('legal_documents', 'active_identity')) {
                 DB::statement("ALTER TABLE {$table} DROP COLUMN active_identity");
             }
         }

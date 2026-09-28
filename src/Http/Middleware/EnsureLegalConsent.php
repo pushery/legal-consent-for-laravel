@@ -16,12 +16,12 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Blocks an authenticated subject with outstanding mandatory re-consent. JSON requests
  * get a 409 `legal_consent_required` (with the document keys); browser requests are
- * redirected to the consent route. The consent route, `logout`, the bundled withdrawal route and
- * Livewire's own endpoints are always allowlisted, so there is no redirect loop, the subject can
- * always leave, they can always withdraw a voluntary consent (Art. 7(3)) without first accepting
- * something new (Art. 7(4)), and the bundled Livewire re-consent form can actually submit (its
- * POST goes to Livewire's update channel, whose path is resolved from the installation rather than
- * assumed).
+ * redirected to the consent route. The consent route, `logout`, the bundled withdrawal route, the
+ * document fragment and Livewire's own endpoints are always allowlisted, so there is no redirect
+ * loop, the subject can always leave, they can always withdraw a voluntary consent (Art. 7(3))
+ * without first accepting something new (Art. 7(4)), they can read a text before agreeing to it,
+ * and the bundled Livewire re-consent form can actually submit (its POST goes to Livewire's update
+ * channel, whose path is resolved from the installation rather than assumed).
  */
 final readonly class EnsureLegalConsent
 {
@@ -92,7 +92,12 @@ final readonly class EnsureLegalConsent
         // only after accepting a new mandatory version would condition one on the other, which is
         // the coupling Art. 7(4) prohibits. The name is inert when `routes.web` is off — nothing
         // matches a route that was never registered.
-        $names = ['logout', 'legal-consent.web.withdraw'];
+        //
+        // `legal-consent.document.fragment` for the reason the consent screen is: the wording dialog
+        // opens there, for a subject who owes a text, and reads that text from this route. Behind
+        // the gate, the dialog's request was sent to the consent screen, the dialog showed that
+        // screen instead of the text, and the intercepted URL became the fragment's.
+        $names = ['logout', 'legal-consent.web.withdraw', 'legal-consent.document.fragment'];
 
         $consentName = config('legal-consent.routes.consent_name');
 
@@ -179,21 +184,7 @@ final readonly class EnsureLegalConsent
      */
     private function matchesResolvedLivewireEndpoint(Request $request): bool
     {
-        $manager = app(LivewireManager::class);
-
-        // Neither accessor declares a return type, so both are `mixed` to a static analyzer. The
-        // filter is the narrowing — a non-string simply contributes no pattern, which is the same
-        // outcome as an installation without Livewire.
-        //
-        // Removing this filter would change no outcome, because no reachable Livewire
-        // configuration makes either accessor return a non-string: both are read off a registered
-        // route. It is narrowing against a `mixed` signature, not against an observed value, and
-        // it is kept for the same reason as the one in isAllowlisted() above. Dropping either
-        // ENDPOINT is a different matter and is covered -- `Livewire::setUpdateRoute()` moves the
-        // update endpoint off the prefix, which is the whole reason both are consulted.
-        $endpoints = array_filter([$manager->getUriPrefix(), $manager->getUpdateUri()], is_string(...));
-
-        foreach ($endpoints as $endpoint) {
+        foreach ($this->livewireEndpoints(app(LivewireManager::class)) as $endpoint) {
             $path = mb_trim($endpoint, '/');
 
             // The `!== ''` is EQUIVALENT under mutation: no reachable Livewire endpoint trims to an
@@ -204,6 +195,32 @@ final readonly class EnsureLegalConsent
         }
 
         return false;
+    }
+
+    /**
+     * The endpoints the installed Livewire mounts, read off its manager.
+     *
+     * The parameter is an `object` because the manager's shape depends on the installed major, not
+     * on the one this package is built against. `getUriPrefix()` arrived with Livewire 4, and
+     * Livewire 3 runs on Laravel 13 as well: calling it there ended every gated request of a
+     * signed-in subject with an Error, before anything was asked about consent. So each accessor is
+     * asked for only where the manager has it. Livewire 3 mounts its endpoints under the literal
+     * `livewire/` prefix, which the pattern in isLivewireEndpoint() already covers.
+     *
+     * Neither accessor declares a return type, and the filter is the narrowing: a non-string
+     * contributes no pattern, which is the same outcome as an installation without Livewire. No
+     * reachable Livewire configuration returns one, since both are read off a registered route.
+     * Both endpoints are consulted because `Livewire::setUpdateRoute()` moves the update endpoint
+     * off the prefix.
+     *
+     * @return list<string>
+     */
+    private function livewireEndpoints(object $manager): array
+    {
+        $prefix = method_exists($manager, 'getUriPrefix') ? $manager->getUriPrefix() : null;
+        $update = method_exists($manager, 'getUpdateUri') ? $manager->getUpdateUri() : null;
+
+        return array_values(array_filter([$prefix, $update], is_string(...)));
     }
 
     private function matchesAllowlistedPath(Request $request): bool

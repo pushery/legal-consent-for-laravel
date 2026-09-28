@@ -30,7 +30,7 @@ final readonly class RecordedConsent
 
     public function isFor(Model $subject): bool
     {
-        return $subject::class === $this->subjectType && self::keyOf($subject) === $this->subjectKey;
+        return (string) $subject->getMorphClass() === $this->subjectType && self::keyOf($subject) === $this->subjectKey;
     }
 
     /**

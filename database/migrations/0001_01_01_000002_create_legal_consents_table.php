@@ -67,7 +67,9 @@ return new class extends Migration
             $table->timestampTz('created_at')->nullable();
 
             $table->index(['subject_type', 'subject_id', 'document_key', 'accepted_at'], 'legal_consents_subject_doc_time_idx');
-            $table->index(['document_key', 'document_major_version', 'action']);
+            // Named, because the name Laravel would generate is 63 characters before a connection's
+            // table prefix is put in front of it, and MySQL refuses an identifier over 64.
+            $table->index(['document_key', 'document_major_version', 'action'], 'legal_consents_doc_major_action_idx');
             $table->index('subject_token');
         });
 

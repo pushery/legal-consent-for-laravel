@@ -276,9 +276,10 @@ final readonly class RenderPipeline
     /**
      * The exact acceptance sentence, always resolved in the DOCUMENT's own locale. The
      * source's own wording wins; otherwise the type-keyed translation, then the `default`
-     * key — both in `$raw->locale`, never the ambient app/session locale (publishing `de`
-     * from an English session must not freeze an English sentence into a German document's
-     * ledger rows). Fails loud rather than substituting a hardcoded fallback in the wrong
+     * key — both in `$raw->locale` or its language, never the ambient app/session locale and
+     * never `app.fallback_locale` (publishing `de` from an English session, or `pl` in an
+     * application falling back to English, must not freeze an English sentence into the
+     * document's ledger rows). Fails loud rather than substituting a sentence in the wrong
      * language. Never invents "ich willige ein" for a mandatory document — that is the
      * translator's responsibility (EDPB Rz. 122).
      */
@@ -288,31 +289,15 @@ final readonly class RenderPipeline
             return $raw->uiWording;
         }
 
-        // Both branches below must reject an EMPTY translation as well as a missing one, exactly
-        // as the source branch above does. `trans()` returns the key itself when nothing is
-        // registered, so `!== $key` alone only catches "absent" — a published `'terms' => ''`
-        // is a perfectly present translation and would sail through. That matters more here than
-        // it looks: ui_wording is frozen proof. It is NOT in MUTABLE_AFTER_PUBLISH, the
-        // BEFORE UPDATE trigger rejects changing it, it is copied verbatim into every ledger row
-        // and folded into the hash chain. An empty sentence is therefore permanent — in the
-        // document AND in every consent that points at it — and renders as a required checkbox
-        // with no accessible name, which blocks submission for a reason nobody can see.
-        // Falling through to `wording.default` and finally to the exception is the whole point of
-        // this chain: fail loud, never publish a nameless consent.
-        $key = "legal-consent::wording.{$raw->type}";
-        $translated = trans($key, [], $raw->locale);
-
-        if (is_string($translated) && $translated !== $key && trim($translated) !== '') {
-            return $translated;
-        }
-
-        $default = trans('legal-consent::wording.default', [], $raw->locale);
-
-        if (is_string($default) && $default !== 'legal-consent::wording.default' && trim($default) !== '') {
-            return $default;
-        }
-
-        throw MissingAcceptanceWording::for($raw->type, $raw->locale);
+        // The translations are read in the document's language only, never through
+        // `app.fallback_locale`, and an empty line counts as none ({@see AcceptanceWording}).
+        // ui_wording is frozen proof: it is NOT in MUTABLE_AFTER_PUBLISH, the BEFORE UPDATE
+        // trigger rejects changing it, and it is copied verbatim into every ledger row and folded
+        // into the hash chain. A sentence in another language, or an empty one, would be
+        // permanent — in the document AND in every consent that points at it. Failing loud is the
+        // whole point: never publish a sentence the subject could not read, or a nameless consent.
+        return AcceptanceWording::for($raw->type, $raw->locale)
+            ?? throw MissingAcceptanceWording::for($raw->type, $raw->locale);
     }
 
     /**

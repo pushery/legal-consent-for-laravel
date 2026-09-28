@@ -164,6 +164,8 @@ return [
     'dialog_loading' => 'Loading the text …',
     'dialog_failed' => 'The text could not be loaded.',
     'admin_status_reviewed' => 'Marked reviewed. This text is now publishable.',
+    'admin_status_no_draft_to_review' => 'There is no draft for this locale, so there is nothing to mark reviewed.',
+    'admin_status_changed_before_review' => 'The text was written after it was shown here, so it was not marked reviewed. Reload it and review the current text.',
     'admin_status_release_blocked' => '“:key” was not released: :reasons',
     'admin_status_released' => 'Released “:key” across :count locale(s) — affects :affects subject(s).',
     'admin_deemed_heading' => 'Release with an objection window',

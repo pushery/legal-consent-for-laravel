@@ -37,7 +37,12 @@ final readonly class ConsentPresenter
         // manager's statusFor(): one fold, one document query, the comparison in PHP. `held` keeps
         // its withdrawal/objection-aware semantics — it is the same fold hasCurrent() used.
         $standing = $this->gate->standingFor($subject);
-        $held = $standing['held'];
+
+        // What the subject holds NOW, as the gate reads it. The fold keeps a 0 for a key whose
+        // latest action ended it (a withdrawal, a termination) and for one only ever declined, and
+        // `isset()` is true for 0: read raw, the screen offered to withdraw a consent already
+        // withdrawn, and at major 0 it called a withdrawn or terminated document held.
+        $held = ConsentGate::holdingsOf($standing);
 
         // Resolved ONCE, outside the loop: the bundled withdrawal route takes the document key as
         // a form field, so every entry that has one has the same URL. `Route::has()` rather than a
@@ -128,22 +133,6 @@ final readonly class ConsentPresenter
                 // read it in, which puts a German title on an English page BY DESIGN. See
                 // {@see ContentLanguage} for what the views do with it.
                 'locale' => $document->locale,
-                // THIS READS `true` FOR EVERYONE WHEN `major_version` IS 0, and the two lines
-                // below have the mirror of the same problem. `?? 0` cannot tell three states
-                // apart — never acted, withdrawn (the fold drops an ENDING action to 0), and
-                // genuinely holding major 0 — and at major 0 the comparison `x >= 0` is true for
-                // all of them while `x < 0` is false for all of them.
-                //
-                // A document published as `0.9.0` therefore gates NOBODY: measured, outstanding()
-                // returns an empty set for a subject with an empty ledger, while this screen tells
-                // them they hold the contract. `major_version` is an unsignedInteger with no floor
-                // at 1, and the draft writer accepts `0.9.0`, so it is reachable through the
-                // ordinary publish path rather than only by hand.
-                //
-                // NOT fixed here on purpose, and the three lines below are deliberately NOT
-                // written off as unobservable: repairing this changes whether real people are
-                // blocked on an upgrade, which is a decision about enforcement rather than a
-                // refactor. It is written up for the maintainer with the measurement.
                 'held' => ConsentGate::holds($held, $document->key, $document->major_version),
                 // `held === false` covers two different positions, and only one of them asks the
                 // subject for anything: never accepted at all, versus a NEW MAJOR waiting. The

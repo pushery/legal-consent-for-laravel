@@ -6,7 +6,6 @@ namespace Pushery\LegalConsent\Support;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use stdClass;
 
@@ -80,34 +79,69 @@ final readonly class LedgerSubjectEraser
      */
     private const array NOTICE_PERSONAL_COLUMNS = ['subject_type', 'subject_id'];
 
+    /**
+     * How many times an erasure is tried when the database rolls it back as a deadlock, the count
+     * every ledger write retries with.
+     */
+    private const int ATTEMPTS = 5;
+
     public function __construct(private LedgerChainRepair $repair = new LedgerChainRepair) {}
 
     public function forget(Model $subject): SubjectErasure
     {
-        $type = $subject->getMorphClass();
+        $type = (string) $subject->getMorphClass();
         $id = SubjectKey::for($subject);
 
         if ($id === null) {
             return new SubjectErasure;
         }
 
-        return DB::transaction(function () use ($type, $id): SubjectErasure {
+        // Asked before the transaction begins. On MySQL a transaction reads from the snapshot of its
+        // first read, and the registry rows below are taken before any.
+        $tokens = new SubjectToken;
+        $registered = $tokens->registered();
+
+        return DB::transaction(function () use ($type, $id, $tokens, $registered): SubjectErasure {
+            // First: a write for the subject that is under way holds their registry row, so this
+            // waits for it to commit, and no write for them starts until this one has committed.
+            // The ledgers are read with locking reads below, which see what such a write stored.
+            if ($registered) {
+                $tokens->hold($type, $id);
+            }
+
             $erasedAt = CarbonImmutable::now();
 
-            [$consents, $rechained] = $this->eraseConsents($type, $id, $erasedAt);
+            [$consents, $rechained, $unverified] = $this->eraseConsents($type, $id, $erasedAt);
+
+            // Operational state, not evidence: which notices were on their way to this subject and
+            // which failed. It names the subject and nothing needs it once they are gone.
+            NoticeAttempts::forgetSubject($type, $id);
+
+            $notices = $this->eraseNotices($type, $id, $erasedAt);
+
+            // The rows tie the subject to their token, the tie the erasure exists to cut.
+            if ($registered) {
+                $tokens->forget($type, $id);
+            }
 
             return new SubjectErasure(
                 consents: $consents,
-                notices: $this->eraseNotices($type, $id, $erasedAt),
+                notices: $notices,
                 rechained: $rechained,
+                unverifiedChains: $unverified,
             );
-        });
+        }, self::ATTEMPTS);
     }
 
     /**
      * The consent ledger, which is the one that carries a chain.
      *
-     * @return array{0: int, 1: int} rows erased, rows re-linked
+     * A chain that no longer verifies as this package wrote it is erased like any other and NOT
+     * re-linked: re-linking recomputes every link with the key and records fresh macs, which would
+     * give rows written through SQL the key's approval. Its links stay as they are, so the verifier
+     * goes on reporting what changed it, and the count goes back to the caller.
+     *
+     * @return array{0: int, 1: int, 2: int} rows erased, rows re-linked, chains left unverified
      */
     private function eraseConsents(string $type, string $id, CarbonImmutable $erasedAt): array
     {
@@ -115,29 +149,41 @@ final readonly class LedgerSubjectEraser
         // erasure leaves rows with a null subject and the same token, and their hashes are inputs
         // to the links of everything after them — walking only the still-named rows would rebuild
         // half a chain onto the other half's stale values.
-        $tokens = DB::table('legal_consents')
-            ->where('subject_type', $type)
-            ->where('subject_id', $id)
-            ->whereNotNull('subject_token')
-            ->distinct()
-            ->pluck('subject_token')
-            ->all();
+        //
+        // Read with locking reads, until two reads agree ({@see LockedRows}): a row written while
+        // the erasure reads would keep naming the subject, and link to a hash the erasure changes.
+        // The subject's rows and their chains are asked for separately, each on its own index, so
+        // the locks stay on those rows rather than on whatever a combined condition scans.
+        $rows = LockedRows::settled(static function () use ($type, $id): array {
+            $named = DB::table('legal_consents')
+                ->where('subject_type', $type)
+                ->where('subject_id', $id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
 
-        $rows = DB::table('legal_consents')
-            ->where(function (Builder $query) use ($type, $id, $tokens): void {
-                $query->where(fn (Builder $named): Builder => $named->where('subject_type', $type)->where('subject_id', $id));
+            $tokens = $named->pluck('subject_token')->filter(static fn (mixed $token): bool => is_string($token))->unique()->values()->all();
 
-                if ($tokens !== []) {
-                    $query->orWhereIn('subject_token', $tokens);
-                }
-            })
-            ->orderBy('id')
-            ->get()
-            ->all();
+            if ($tokens === []) {
+                return array_values($named->all());
+            }
+
+            $chained = DB::table('legal_consents')
+                ->whereIn('subject_token', $tokens)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            return array_values($named->merge($chained)->unique('id')->sortBy('id')->all());
+        });
 
         if ($rows === []) {
-            return [0, 0];
+            return [0, 0, 0];
         }
+
+        // Checked on the rows as read, before a column is cleared: clearing changes every hash, so
+        // afterwards there is nothing left to check against.
+        $unverified = $this->unverifiedTokens($rows);
 
         $erased = 0;
         $rewritten = [];
@@ -161,8 +207,20 @@ final readonly class LedgerSubjectEraser
         // it runs AFTER the columns are cleared, because those columns are inputs to every hash
         // it computes. Doing it the other way round would link each row to a value that the very
         // next statement invalidates.
-        $rechained = $this->repair->chainedCount($rewritten);
-        $rewritten = $this->relinkPerToken($rewritten);
+        $verified = array_values(array_filter(
+            $rewritten,
+            static fn (array $row): bool => ! isset($unverified[is_string($row['subject_token'] ?? null) ? $row['subject_token'] : '']),
+        ));
+
+        $rechained = $this->repair->chainedCount($verified);
+        $read = $rewritten;
+        $rewritten = $this->relinkPerToken($rewritten, $unverified);
+
+        // The writer stamps the chain-root boundary before the first root proof it writes, and the
+        // re-link gives the opener of a keyed chain one where it had none.
+        if ($this->repair->writesARootProof($read, $rewritten)) {
+            (new LedgerHashChain)->stampRootBoundary();
+        }
 
         // Delete before insert, in one transaction, so the unique chain-link index from 000012 is
         // never asked to hold two rows with the same (token, prev_record_hash) at once.
@@ -178,9 +236,46 @@ final readonly class LedgerSubjectEraser
         // The ids are read from the rewritten rows rather than kept from before: a rewrite
         // preserves `id` by contract ({@see LedgerHashChain::UNHASHED_COLUMNS}), and reading them
         // from what was actually written is what holds that contract rather than assuming it.
-        (new LedgerRecordMacs)->record(array_column($rewritten, 'id'));
+        //
+        // Not for a chain left unverified: its rows keep the links they had, and a fresh mac would
+        // vouch for them.
+        //
+        // The macs recorded before go first, for every rewritten row. Each is a hash over the row
+        // as it was, personal data included, and unkeyed it can be reversed by trying subject ids
+        // against it: kept, it would undo the erasure it sits next to.
+        $macs = new LedgerRecordMacs;
+        $macs->forget(array_column($rewritten, 'id'));
+        $macs->record(array_column($verified, 'id'));
 
-        return [$erased, $rechained];
+        return [$erased, $rechained, count($unverified)];
+    }
+
+    /**
+     * The tokens among these rows whose chain does not verify as this package wrote it.
+     *
+     * @param  array<int, stdClass>  $rows
+     * @return array<string, true>
+     */
+    private function unverifiedTokens(array $rows): array
+    {
+        $byToken = [];
+
+        foreach ($rows as $row) {
+            if (is_string($row->subject_token ?? null) && $row->subject_token !== '') {
+                $byToken[$row->subject_token][] = $row;
+            }
+        }
+
+        $soundness = new LedgerChainSoundness;
+        $unverified = [];
+
+        foreach ($byToken as $token => $group) {
+            if (! $soundness->sound($group)) {
+                $unverified[$token] = true;
+            }
+        }
+
+        return $unverified;
     }
 
     /**
@@ -204,10 +299,13 @@ final readonly class LedgerSubjectEraser
      * hand the result straight to {@see insertRows()} without proving all over again that a
      * non-empty read of the ledger is still non-empty.
      *
+     * A token in `$unverified` is left as it is, see {@see eraseConsents()}.
+     *
      * @param  non-empty-list<array<string, mixed>>  $rows  in id order
+     * @param  array<string, true>  $unverified
      * @return non-empty-list<array<string, mixed>>
      */
-    private function relinkPerToken(array $rows): array
+    private function relinkPerToken(array $rows, array $unverified = []): array
     {
         /** @var array<string, array<int, array<string, mixed>>> $groups */
         $groups = [];
@@ -215,7 +313,7 @@ final readonly class LedgerSubjectEraser
         foreach ($rows as $index => $row) {
             $token = $row['subject_token'] ?? null;
 
-            if (is_string($token) && $token !== '') {
+            if (is_string($token) && $token !== '' && ! isset($unverified[$token])) {
                 $groups[$token][$index] = $row;
             }
         }
@@ -260,18 +358,19 @@ final readonly class LedgerSubjectEraser
     /** The notice ledger, which carries no chain — so the rewrite is the erasure and nothing more. */
     private function eraseNotices(string $type, string $id, CarbonImmutable $erasedAt): int
     {
-        $rows = DB::table('legal_notices')
+        $rows = LockedRows::settled(static fn (): array => array_values(DB::table('legal_notices')
             ->where('subject_type', $type)
             ->where('subject_id', $id)
             ->orderBy('id')
+            ->lockForUpdate()
             ->get()
-            ->all();
+            ->all()));
 
         if ($rows === []) {
             return 0;
         }
 
-        $rewritten = array_values(array_map(function (stdClass $row) use ($erasedAt): array {
+        $rewritten = array_map(function (stdClass $row) use ($erasedAt): array {
             $attributes = $this->repair->toRow($row);
 
             foreach (self::NOTICE_PERSONAL_COLUMNS as $column) {
@@ -281,7 +380,7 @@ final readonly class LedgerSubjectEraser
             $attributes['subject_erased_at'] = $erasedAt;
 
             return $attributes;
-        }, $rows));
+        }, $rows);
 
         DB::table('legal_notices')->whereIn('id', array_column($rewritten, 'id'))->delete();
 

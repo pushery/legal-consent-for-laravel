@@ -279,7 +279,12 @@
             <x-wirekit::modal :name="$deferred['name']" size="lg">
                 <x-wirekit::modal.header>{{ $deferred['title'] }}</x-wirekit::modal.header>
 
-                <x-wirekit::modal.body class="max-h-[65vh] overflow-y-auto" tabindex="0" role="region" :aria-label="$deferred['title']">
+                {{-- `max-h-[70vh]` because WireKit's own views use it. A host's Tailwind build scans
+                     WireKit's views and not this package's, so it only generates a utility the kit
+                     carries too. From WireKit 2.50.0 the modal panel also caps itself; before that
+                     this cap is what keeps the header and the footer of a long text on a phone's
+                     screen. --}}
+                <x-wirekit::modal.body class="max-h-[70vh] overflow-y-auto" tabindex="0" role="region" :aria-label="$deferred['title']">
                     {{-- FETCHED ON FIRST OPEN, and kept afterwards. The text is the published,
                          already-sanitized HTML the legal page itself renders — one allowlist, applied
                          when it was stored, and the same bytes the ledger records as accepted. The

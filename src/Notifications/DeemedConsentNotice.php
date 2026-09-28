@@ -41,8 +41,15 @@ class DeemedConsentNotice extends ChangeNotification
         $this->addChangeItems($mail, $this->document);
 
         $mail->line($this->line('warning', $replace)) // § 308 Nr. 5 lit. b — silence = consent by :deadline
-            ->action($this->line('cta', $replace), $this->ctaUrl())
-            ->line($this->line('termination', $replace));
+            ->action($this->line('cta', $replace), $this->ctaUrl());
+
+        // Only where the version offers termination or an adverse entry owes it, the condition the
+        // certification below reads. Sent to every recipient of a version that offers none, the line
+        // was a promise on a durable medium that the operator never made and every other surface
+        // contradicted.
+        if ($this->terminationOwed()) {
+            $mail->line($this->line('termination', $replace));
+        }
 
         return $this->envelope($mail);
     }
@@ -79,18 +86,25 @@ class DeemedConsentNotice extends ChangeNotification
         // unfilled still leaves a non-empty line, and only presence is asked.
         $blank = ['deadline' => '', 'effective' => '', 'title' => ''];
 
-        // An adverse entry makes the termination line owed whether or not the operator set the
-        // flag: § 675g Abs. 2 Satz 3 BGB ties the notice to the change being disadvantageous, not
-        // to a checkbox. Removing something, narrowing a right or widening a purpose is exactly
-        // that, and a fiction that binds silence to it without naming the way out is not valid.
-        $terminationOwed = $this->document->offers_termination || $this->hasAdverseChangeItem($this->document);
-
-        if ($terminationOwed && $this->line('termination', $blank) === '') {
+        if ($this->terminationOwed() && $this->line('termination', $blank) === '') {
             return false;
         }
 
         return $this->line('warning', $blank) !== ''
             && $this->line('subject') !== '';
+    }
+
+    /**
+     * Whether the notice owes the free-termination line.
+     *
+     * An adverse entry makes it owed whether or not the operator set the flag: § 675g Abs. 2 Satz 3
+     * BGB ties the notice to the change being disadvantageous, not to a checkbox. Removing
+     * something, narrowing a right or widening a purpose is exactly that, and a fiction that binds
+     * silence to it without naming the way out is not valid.
+     */
+    private function terminationOwed(): bool
+    {
+        return $this->document->offers_termination || $this->hasAdverseChangeItem($this->document);
     }
 
     /**

@@ -51,6 +51,7 @@ use Pushery\LegalConsent\Support\TenantContext;
  * @property string|null $change_class
  * @property string|null $regime
  * @property int|null $notice_period_days
+ * @property int|null $objection_min_days
  * @property bool $offers_termination
  * @property bool $keeps_unmodified_offered
  * @property string|null $change_summary SUPERSEDED by legal_change_sets / legal_change_items. Never
@@ -383,6 +384,7 @@ class LegalDocument extends Model
             'requires_reconsent' => 'boolean',
             'notice_mode' => NoticeMode::class,
             'notice_period_days' => 'integer',
+            'objection_min_days' => 'integer',
             'offers_termination' => 'boolean',
             'keeps_unmodified_offered' => 'boolean',
             'is_active' => 'boolean',

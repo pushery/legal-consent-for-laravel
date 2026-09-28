@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Livewire;
 
 use Carbon\CarbonImmutable;
-use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
@@ -18,6 +17,7 @@ use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\LegalDocumentUnparsable;
+use Pushery\LegalConsent\Exceptions\LegalDraftChanged;
 use Pushery\LegalConsent\Exceptions\LegalDraftNotFound;
 use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
@@ -29,11 +29,13 @@ use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
 use Pushery\LegalConsent\Livewire\Concerns\WordsPublishRefusals;
 use Pushery\LegalConsent\Models\LegalDraft;
+use Pushery\LegalConsent\Support\CalendarDate;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDraftSet;
 use Pushery\LegalConsent\Support\LegalDraftWriter;
 use Pushery\LegalConsent\Support\ReleaseOptions;
+use Pushery\LegalConsent\Support\TenantContext;
 
 /**
  * Edits ONE draft — one document key, one locale.
@@ -297,11 +299,15 @@ final class LegalTextEditor extends Component
                 return;
             }
 
-            Cache::put(TranslateLegalDraft::markerFor($this->key, $this->locale), true, now()->addHour());
+            $tenant = app(TenantContext::class)->current();
+
+            Cache::put(TranslateLegalDraft::markerFor($this->key, $this->locale, $tenant), true, now()->addHour());
 
             // The guard travels with the identifier: a worker has nobody signed in, and the job signs
-            // this user in again for the translator call, on the guard the identifier came from.
-            TranslateLegalDraft::dispatch($this->key, $this->locale, $sourceLocale, $this->actor(), auth()->getDefaultDriver());
+            // this user in again for the translator call, on the guard the identifier came from. The
+            // tenant travels for the same reason: the worker reads and writes the drafts of the tenant
+            // this page shows, not the shared ones.
+            TranslateLegalDraft::dispatch($this->key, $this->locale, $sourceLocale, $this->actor(), auth()->getDefaultDriver(), $tenant);
 
             $this->awaitingTranslation = true;
             $this->setStatus(__('legal-consent::ui.admin_status_translation_queued'));
@@ -351,7 +357,7 @@ final class LegalTextEditor extends Component
     private function translating(): bool
     {
         return $this->queuesTranslation()
-            && Cache::get(TranslateLegalDraft::markerFor($this->key, $this->locale)) === true;
+            && Cache::get(TranslateLegalDraft::markerFor($this->key, $this->locale, app(TenantContext::class)->current())) === true;
     }
 
     /**
@@ -384,7 +390,7 @@ final class LegalTextEditor extends Component
         // A failure is read before the draft, because it is the more specific answer: a run that
         // recorded one left the draft exactly as it was, so the check below would end in silence
         // and the operator would be left to infer the failure from a text that never appeared.
-        $failure = TranslateLegalDraft::takeFailure($this->key, $this->locale);
+        $failure = TranslateLegalDraft::takeFailure($this->key, $this->locale, app(TenantContext::class)->current());
 
         if ($failure !== null) {
             $this->setStatus($failure !== ''
@@ -421,7 +427,7 @@ final class LegalTextEditor extends Component
     /** A draft's row and revision, the pair every write moves; '' for no draft. */
     private function revisionOf(?LegalDraft $draft): string
     {
-        return $draft instanceof LegalDraft ? $draft->id.':'.$draft->revision : '';
+        return LegalDraftWriter::revisionOf($draft);
     }
 
     /**
@@ -486,7 +492,24 @@ final class LegalTextEditor extends Component
 
     public function markReviewed(): void
     {
-        $draft = app(LegalDraftWriter::class)->markReviewed($this->key, $this->locale, $this->actor());
+        // The control is only offered for a locale that has a draft; the catch is there because a
+        // Livewire action is client-callable, and a screen answers a call it cannot serve with a
+        // status line, never an error page, as discard() does.
+        //
+        // The sign-off is for the draft this page holds, named by its revision: a translation that
+        // landed, or a second editor's save, since this page read the draft would otherwise become
+        // publishable under this reviewer's name without anyone having read it.
+        try {
+            $draft = app(LegalDraftWriter::class)->markReviewed($this->key, $this->locale, $this->actor(), $this->heldRevision);
+        } catch (LegalDraftNotFound) {
+            $this->setStatus(__('legal-consent::ui.admin_status_no_draft_to_review'));
+
+            return;
+        } catch (LegalDraftChanged) {
+            $this->setStatus(__('legal-consent::ui.admin_status_changed_before_review'));
+
+            return;
+        }
 
         // The sign-off writes the row as well, and it is not the translation either.
         $this->heldRevision = $this->revisionOf($draft);
@@ -551,9 +574,9 @@ final class LegalTextEditor extends Component
                     // The regime and the three dates are present and readable by this point
                     // (missingWindowFields(), unreadableDates()), so they go through as they are.
                     regime: $this->regime,
-                    announceAt: $this->parseDate($this->announceAt),
-                    enforceAt: $this->parseDate($this->enforceAt),
-                    objectionDeadline: $this->parseDate($this->objectionDeadline),
+                    announceAt: CalendarDate::parse($this->announceAt),
+                    enforceAt: CalendarDate::parse($this->enforceAt),
+                    objectionDeadline: CalendarDate::parse($this->objectionDeadline),
                     offersTermination: $this->offersTermination,
                     keepsUnmodified: $this->keepsUnmodified,
                 ),
@@ -737,47 +760,6 @@ final class LegalTextEditor extends Component
     }
 
     /**
-     * One date-input value, or null when this screen cannot read it as the date it claims to be.
-     *
-     * NOT CarbonImmutable::parse(), AND NOT createFromFormat ALONE — measured, both let a wrong
-     * date through, in different ways:
-     *
-     * - `parse()` never refuses. 'x' becomes TODAY and '31.02.2026' becomes 2026-03-03, silently.
-     *   And when it does refuse, it throws InvalidFormatException, which extends
-     *   InvalidArgumentException — no catch in releaseDeemed() takes it, so the operator gets a
-     *   500 from a method whose own docblock promises never a fatal.
-     * - `createFromFormat('!Y-m-d', …)` refuses 'x' and '31.02.2026' (by throwing, in Carbon's
-     *   default strict mode) but STILL ROLLS OVER a well-formed impossible date: '2026-02-31'
-     *   comes back as 2026-03-03 and '2026-13-01' as 2027-01-01. Both were measured here, and
-     *   both are the shape a date field actually receives when someone types a day too far.
-     *
-     * So the format parse is the first half and the round-trip is the second: a date that does not
-     * print back as what was typed is a date the input did not mean. The leading `!` resets the
-     * time so two dates written the same way compare the same way.
-     *
-     * This matters because the value is the objection deadline of a deemed-consent release — the
-     * moment silence starts binding people — frozen into an append-only proof row. A wrong one
-     * cannot be corrected, only superseded by a new version.
-     */
-    private function parseDate(string $value): ?CarbonImmutable
-    {
-        try {
-            $date = CarbonImmutable::createFromFormat('!Y-m-d', $value);
-        } catch (InvalidFormatException) {
-            return null;
-        }
-
-        // The instanceof is EQUIVALENT under mutation: createFromFormat() throws rather than returning
-        // null, measured 2026-09-14 for an empty string and for garbage. Static analysis types the
-        // result as nullable, which is why the guard stays.
-        if (! $date instanceof CarbonImmutable || $date->format('Y-m-d') !== $value) {
-            return null;
-        }
-
-        return $date;
-    }
-
-    /**
      * The date fields carrying something this screen cannot read, by their labels.
      *
      * Returned rather than thrown: the caller turns them into a status line, so an operator who
@@ -792,7 +774,7 @@ final class LegalTextEditor extends Component
         $unreadable = [];
 
         foreach ($this->windowDates() as $label => $value) {
-            if ($value !== '' && ! $this->parseDate($value) instanceof CarbonImmutable) {
+            if ($value !== '' && ! CalendarDate::parse($value) instanceof CarbonImmutable) {
                 $unreadable[] = (string) __($label);
             }
         }

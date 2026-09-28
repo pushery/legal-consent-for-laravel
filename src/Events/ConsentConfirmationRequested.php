@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Events;
 
+use Illuminate\Queue\SerializesModels;
 use Pushery\LegalConsent\Models\LegalConsent;
 
 /**
@@ -22,5 +23,7 @@ use Pushery\LegalConsent\Models\LegalConsent;
  */
 final readonly class ConsentConfirmationRequested
 {
+    use SerializesModels;
+
     public function __construct(public LegalConsent $consent) {}
 }

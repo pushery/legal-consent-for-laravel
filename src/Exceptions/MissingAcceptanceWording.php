@@ -14,14 +14,15 @@ use RuntimeException;
  * to. Resolving it against the wrong locale — or silently substituting a hardcoded
  * fallback in another language — would freeze a sentence the subject never saw into an
  * append-only, unfixable ledger row. When neither the type-specific key nor the
- * `default` key resolves in the document's locale, the pipeline fails loud instead.
+ * `default` key resolves in the document's locale or its language, the pipeline fails loud
+ * instead; the application's `app.fallback_locale` is not consulted.
  */
 final class MissingAcceptanceWording extends RuntimeException
 {
     public static function for(string $type, string $locale): self
     {
         return new self(
-            "No acceptance wording for '{$type}' in '{$locale}'. Add 'legal-consent::wording.{$type}' or 'legal-consent::wording.default' for that locale — the acceptance sentence is frozen into the consent ledger and must be in the subject's own language."
+            "No acceptance wording for '{$type}' in '{$locale}'. Add 'legal-consent::wording.{$type}' or 'legal-consent::wording.default' for that locale or its language (`de` for `de_AT`) — the acceptance sentence is frozen into the consent ledger and must be in the subject's own language, so the application's fallback locale is not consulted."
         );
     }
 }

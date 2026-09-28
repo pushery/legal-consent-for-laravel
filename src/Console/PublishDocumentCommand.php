@@ -6,12 +6,14 @@ namespace Pushery\LegalConsent\Console;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Pushery\LegalConsent\Console\Concerns\RunsPerTenant;
 use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Content\Document;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Models\LegalDocument;
+use Pushery\LegalConsent\Support\CalendarDate;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\PublishedDocumentReader;
@@ -48,6 +50,8 @@ use ValueError;
 #[AsCommand(name: 'legal-consent:publish')]
 final class PublishDocumentCommand extends Command
 {
+    use RunsPerTenant;
+
     protected $signature = 'legal-consent:publish
         {key? : The document key (e.g. terms) — omit it and pass --all for the whole registry}
         {locale? : The locale (defaults to the configured default_locale)}
@@ -65,16 +69,44 @@ final class PublishDocumentCommand extends Command
         {--enforce-at= : When enforcement begins (ISO date)}
         {--objection-at= : Objection deadline for a deemed-consent change (ISO date)}
         {--offers-termination : The notice offers a free right to terminate before the effective date}
-        {--keeps-unmodified : The subject may keep the unmodified version (DCD / §327r escape hatch)}';
+        {--keeps-unmodified : The subject may keep the unmodified version (DCD / §327r escape hatch)}
+        {--tenant= : With tenancy on, publish into this tenant rather than the shared bucket}';
 
     protected $description = 'Freeze the current source text of a legal document into a new active, versioned row.';
 
     public function handle(LegalDocumentPublisher $publisher): int
     {
+        $named = $this->namedTenant();
+
+        if ($named === false) {
+            return self::FAILURE;
+        }
+
+        $this->noteSharedBucket($named);
+
+        return $this->inTenant($named, fn (): int => $this->publishHere($publisher));
+    }
+
+    /**
+     * The publish itself, in whichever tenant is current.
+     */
+    private function publishHere(LegalDocumentPublisher $publisher): int
+    {
         $mode = $this->resolveMode();
 
         if (! $mode instanceof NoticeMode) {
             $this->error('Pass exactly one change classification: --editorial, --info, --deemed, or --active (--material is the legacy alias of --active). A publisher must classify the change — there is no default.');
+
+            return self::FAILURE;
+        }
+
+        // Each of these dates is frozen into the published row and cannot be corrected afterwards,
+        // so one this command cannot read as the calendar date it names stops the run before any
+        // document is touched, rather than being rolled over to a day nobody typed.
+        $unreadable = $this->unreadableDateOptions();
+
+        if ($unreadable !== []) {
+            $this->error('Dates are calendar dates written as YYYY-MM-DD, and these are not: '.implode(', ', $unreadable).'. Nothing was published.');
 
             return self::FAILURE;
         }
@@ -563,10 +595,35 @@ final class PublishDocumentCommand extends Command
         return is_string($value) && $value !== '' ? $value : null;
     }
 
+    /**
+     * A date option as the date it names, or null when it is not given. handle() has already
+     * refused a value that is not a calendar date written as YYYY-MM-DD.
+     */
     private function dateOption(string $name): ?CarbonImmutable
     {
         $value = $this->option($name);
 
-        return is_string($value) && $value !== '' ? CarbonImmutable::parse($value) : null;
+        return is_string($value) && $value !== '' ? CalendarDate::parse($value) : null;
+    }
+
+    /**
+     * The date options carrying a value that is not a calendar date written as YYYY-MM-DD, as
+     * `--name=value`.
+     *
+     * @return list<string>
+     */
+    private function unreadableDateOptions(): array
+    {
+        $unreadable = [];
+
+        foreach (['announce-at', 'enforce-at', 'objection-at'] as $name) {
+            $value = $this->option($name);
+
+            if (is_string($value) && $value !== '' && ! CalendarDate::parse($value) instanceof CarbonImmutable) {
+                $unreadable[] = "--{$name}={$value}";
+            }
+        }
+
+        return $unreadable;
     }
 }

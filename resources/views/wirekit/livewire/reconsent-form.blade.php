@@ -56,19 +56,19 @@
                     </x-wirekit::stack>
                 @endforeach
 
-                {{-- `loading-target` alone renders nothing, and that is what stood here. Read in
-                     x-wirekit::button: the spinner sits behind `@if($declarativeLoading) … @elseif($loading)`
-                     and `wire:loading.attr="disabled"` behind `@if($loading && …)`. Both gate on `loading`,
-                     which this call never set — `loading-target` only SCOPES a spinner that was switched on
-                     elsewhere. So the twin looked like it had a busy state and had none.
+                {{-- This button has no Livewire action of its own: the <form> carries `wire:submit`. On
+                     such a button x-wirekit::button reads `loading`, which `loading-target` implies, as a
+                     declarative state that nothing on the tag can switch off. It would render a spinner
+                     and `aria-busy="true"` from the first paint, and, on every WireKit this package
+                     supports, a `disabled` submit on the one screen a subject cannot leave without
+                     it.
 
-                     Not repaired by adding `loading`, because the kit's busy state disables the button, and
-                     `disabled` blurs the control the subject just activated: focus falls to <body> for the
-                     whole in-flight window, on the one screen a subject cannot leave (WCAG 2.4.3). Instead
-                     the same contract as the plain twin — `aria-busy` through the attribute bag, which
-                     x-wirekit::button renders verbatim (`$attributes->except('rel')`), plus a visible label
-                     beside it. Twins must not disagree about how a wait is reported. --}}
-                <x-wirekit::button type="submit" intent="primary" loading-target="submit" :disable-on-loading="false">
+                     So the wait is reported the way the plain twin reports it: `aria-busy` through the
+                     attribute bag, which x-wirekit::button renders as written, only while `submit` is in
+                     flight, and the visible label beside it. `disabled` stays out on purpose, because it
+                     blurs the control the subject just activated and focus falls to <body> for the whole
+                     request (WCAG 2.4.3). --}}
+                <x-wirekit::button type="submit" intent="primary" wire:loading.attr="aria-busy" wire:target="submit">
                     {{ __('legal-consent::ui.submit') }}
                 </x-wirekit::button>
                 <x-wirekit::text wire:loading wire:target="submit" class="legal-consent-busy">{{ __('legal-consent::ui.working') }}</x-wirekit::text>

@@ -129,6 +129,30 @@ final class ChangeSetFreezeGuard
         return $driver;
     }
 
+    /**
+     * Re-create the PostgreSQL trigger functions in place, where they exist.
+     *
+     * The triggers stay bound to them, so an installation gets the current body without a trigger
+     * being dropped. A function that is not there is left alone: a consumer may have dropped a
+     * guard on purpose, and re-installing it from here would overrule that.
+     */
+    public static function replaceFunctions(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        foreach (['legal_change_sets', 'legal_change_items'] as $table) {
+            $function = self::qualify($table.'_guard_frozen');
+
+            if (data_get(DB::selectOne('SELECT to_regprocedure(?) AS oid', [$function.'()']), 'oid') === null) {
+                continue;
+            }
+
+            self::postgresFunction($table);
+        }
+    }
+
     public static function drop(): void
     {
         self::dropFor('legal_change_sets', self::SET_TRIGGER_UPDATE, self::SET_TRIGGER_DELETE, 'legal_change_sets_guard_frozen');
@@ -186,24 +210,14 @@ final class ChangeSetFreezeGuard
      */
     private static function installPostgres(string $table, string $updateTrigger, string $deleteTrigger): void
     {
+        self::postgresFunction($table);
+
         $function = self::qualify($table.'_guard_frozen');
-        $message = self::MESSAGE;
         $table = self::qualify($table);
         $updateTrigger = self::qualify($updateTrigger);
         $deleteTrigger = self::qualify($deleteTrigger);
 
-        // OLD.state, never NEW.state: the question is whether the row WAS frozen, and reading the
-        // incoming value would let an update that also rewrites `state` walk straight past the guard.
         self::execute(<<<SQL
-            CREATE OR REPLACE FUNCTION {$function}() RETURNS trigger SET search_path FROM CURRENT AS \$\$
-            BEGIN
-                IF OLD.state = 'published' THEN
-                    RAISE EXCEPTION '{$message}';
-                END IF;
-                RETURN NEW;
-            END;
-            \$\$ LANGUAGE plpgsql;
-
             CREATE TRIGGER {$updateTrigger}
                 BEFORE UPDATE ON {$table}
                 FOR EACH ROW EXECUTE FUNCTION {$function}();
@@ -211,6 +225,40 @@ final class ChangeSetFreezeGuard
             CREATE TRIGGER {$deleteTrigger}
                 BEFORE DELETE ON {$table}
                 FOR EACH ROW EXECUTE FUNCTION {$function}();
+            SQL);
+    }
+
+    /**
+     * The one function both triggers of a table run.
+     *
+     * OLD.state, never NEW.state: the question is whether the row WAS frozen, and reading the
+     * incoming value would let an update that also rewrites `state` walk straight past the guard.
+     *
+     * A BEFORE row trigger that returns null skips the row, and `NEW` is null in a DELETE, so the
+     * delete branch returns `OLD`, as the delete guard of {@see ProofColumnGuard} does. With `NEW`
+     * for both, every delete of a draft did nothing on PostgreSQL.
+     *
+     * @param  literal-string  $table
+     */
+    private static function postgresFunction(string $table): void
+    {
+        $function = self::qualify($table.'_guard_frozen');
+        $message = self::MESSAGE;
+
+        self::execute(<<<SQL
+            CREATE OR REPLACE FUNCTION {$function}() RETURNS trigger SET search_path FROM CURRENT AS \$\$
+            BEGIN
+                IF OLD.state = 'published' THEN
+                    RAISE EXCEPTION '{$message}';
+                END IF;
+
+                IF TG_OP = 'DELETE' THEN
+                    RETURN OLD;
+                END IF;
+
+                RETURN NEW;
+            END;
+            \$\$ LANGUAGE plpgsql;
             SQL);
     }
 

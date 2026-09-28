@@ -15,10 +15,10 @@ use Pushery\LegalConsent\Models\LegalChangeSet;
  *
  * Everything here is PLAIN TEXT, and that is a decision rather than an omission. A draft body is
  * deliberately sanitized HTML because it is a legal text rendered as a document; a change item is
- * rendered into a mail line and into `{{ }}`-escaped Blade, so markup in it cannot be displayed —
- * it can only be shown to the reader as literal angle brackets. Running it through
- * `LegalHtmlSanitizer` would produce markup that survives the sanitizer and then leaks as visible
- * source, so it is stripped instead.
+ * rendered into a mail line and into `{{ }}`-escaped Blade, so an angle bracket in it reaches the
+ * reader as the character it is. It is therefore kept as written. Stripping tags took the `<` of
+ * "sinkt auf <100 EUR" for the start of one and dropped the rest of the sentence from a notice the
+ * law requires, silently and without leaving the line empty.
  */
 final class PendingChangeItems
 {
@@ -166,9 +166,9 @@ final class PendingChangeItems
     }
 
     /**
-     * Strip markup and collapse whitespace. Both halves matter: the first because this text is
-     * rendered escaped, the second because a value pasted out of a document arrives carrying line
-     * breaks that would split a mail line in the middle of a sentence.
+     * Collapse whitespace, because a value pasted out of a document arrives carrying line breaks
+     * that would split a mail line in the middle of a sentence. Nothing else is taken out: see the
+     * class docblock for why an angle bracket stays.
      */
     private function plain(string $value): string
     {
@@ -180,7 +180,7 @@ final class PendingChangeItems
         // It matters here more than in ordinary prose: this text goes into a change notice whose
         // body is HASHED into an append-only proof row. A line nobody can see, certified as what
         // was communicated, is the failure this package exists to prevent.
-        return Str::squish(strip_tags($value));
+        return Str::squish($value);
     }
 
     private function plainOrNull(?string $value): ?string

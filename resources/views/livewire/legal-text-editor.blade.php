@@ -57,7 +57,7 @@
             {{-- Only while there is something to stamp — see the WireKit twin for why. Both views
                  carry the same capability: a consumer on the plain stub is reading the same sign-off
                  screen. --}}
-            @if ($reviewState !== 'reviewed')
+            @if ($reviewState !== null && $reviewState !== 'reviewed' && ! ($translating ?? false))
                 <button type="button" wire:click="markReviewed" wire:loading.attr="aria-busy" wire:target="markReviewed">{{ __('legal-consent::ui.admin_mark_reviewed') }}</button>
             @endif
 

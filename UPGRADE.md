@@ -4,6 +4,26 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.42.4 → 0.43.0
+
+**Run `php artisan migrate` before anything else of the release runs.** It brings migrations 000032 to 000038, and publishing and the queued change notices already read and write `legal_documents.objection_min_days`, the column 000038 adds.
+
+**Raise `pushery/wirekit` to `^2.49.0` if you use the WireKit views.** The release dialog of the admin screen closes through the kit's `close-on-confirm`, first released in 2.49.0. With 2.47.x or 2.48.x installed, the default `auto` variant serves the plain views.
+
+**Publish again what you published.** Three WireKit views changed, the re-consent screen, the legal text manager and the wording dialog: `php artisan vendor:publish --tag=legal-consent-wirekit --force`. The script changed too: `php artisan vendor:publish --tag=legal-consent-assets --force`.
+
+**`legal-consent:prune` refuses a retention period it would misread, and deletes nothing.** A `retention_after_end` such as `3 Jahre`, `3y`, `12 hours` or `-3 years` now stops the run with a message naming the value. Use a relative date that lies at least a day in the past, such as `3 years`, or an ISO 8601 duration such as `P3Y`. `legal-consent:doctor` reports a value the sweep refuses.
+
+**A document in a language without an acceptance sentence is refused at publishing.** The sentence used to come from `app.fallback_locale` and was frozen into the version. A locale the package's translations do not cover now stops the publish with `MissingAcceptanceWording`: add `lang/vendor/legal-consent/{locale}/wording.php`, or give the source its own `ui_wording`.
+
+**A queued listener of a ledger event reads the row back when it runs.** The consent events, `LegalDocumentPublished` and `NoticeDispatched` serialize their model by its key. After the retention sweep removed the row, the job fails with `ModelNotFoundException`, unless the listener is marked `#[DeleteWhenMissingModels]`.
+
+**Under multi-tenancy with a resolver that reads the signed-in user, register `TenantContext::resolveSubjectUsing()`.** It tells the package the tenant of the account being registered, which is not signed in yet while its registration consents are recorded. A resolver that reads the tenant from the request, such as a domain, needs nothing more.
+
+**Tests with `Consent::fake()` see a subject and a locale as the real manager does.** A subject is recorded under its morph alias, and a write without a locale records the context's locale or `legal-consent.default_locale`. An assertion that named the model class or expected German by default needs the alias or the configured locale.
+
+**Two settings are new.** `notifications.max_attempts` (default 3) and `notifications.requeue_after_minutes` (default 1440) bound how often a notice is tried. Their defaults apply where your published configuration does not name them.
+
 ## 0.42.3 → 0.42.4
 
 **Nothing is required of you**, unless a deploy runs `legal-consent:publish --all` over sources from which the file of a published translation was removed, or a document in `legal-consent.documents` has a key made of digits.

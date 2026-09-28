@@ -76,7 +76,7 @@ final readonly class RetiredHoldings
                 ->whereColumn('legal_consents.document_key', 'legal_documents.key')
                 ->whereColumn('legal_consents.locale', 'legal_documents.locale')
                 ->whereColumn('legal_consents.document_version', 'legal_documents.version')
-                ->where('legal_consents.subject_type', $subject->getMorphClass())
+                ->where('legal_consents.subject_type', (string) $subject->getMorphClass())
                 ->where('legal_consents.subject_id', SubjectKey::for($subject))
                 ->when($tenant->enabled(), fn (QueryBuilder $scoped): QueryBuilder => $scoped->where('legal_consents.tenant_id', $tenant->current())))
             // Deterministic, and `locale` is part of it: a retired row is shown in the language the

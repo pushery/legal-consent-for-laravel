@@ -300,12 +300,14 @@ readonly class AffectedSubjectResolver
 
     /**
      * RESUMABILITY (notice sweep): skip subjects who already have a durable-medium proof row for
-     * THIS version. A run killed or overtaken mid-sweep (the 120-min lock can expire on a large
-     * population) resumes on the subjects still owed a notice instead of re-sending from the top —
-     * and, crucially, it stops the concurrent/re-run case from writing a SECOND proof row for a
-     * subject already notified. Delivery stays at-least-once (a proof written by a genuinely
-     * simultaneous sweep in the same window is still tolerated — see the command docblock); this
-     * removes the bulk of the duplication, not a unique constraint.
+     * THIS version, and those whose notice is still on its way or has failed
+     * `notifications.max_attempts` times ({@see NoticeAttempts}). A run killed or overtaken
+     * mid-sweep (the 120-min lock can expire on a large population) resumes on the subjects still
+     * owed a notice instead of re-sending from the top — and, crucially, it stops the
+     * concurrent/re-run case from writing a SECOND proof row for a subject already notified.
+     * Delivery stays at-least-once (a proof written by a genuinely simultaneous sweep in the same
+     * window is still tolerated — see the command docblock); this removes the bulk of the
+     * duplication, not a unique constraint.
      *
      * ONE method, applied to both the streaming query and the counting one, because the whole point
      * of counting is to predict what the stream will serve. Two copies of this predicate would be
@@ -313,12 +315,18 @@ readonly class AffectedSubjectResolver
      */
     private function withoutAlreadyNotified(QueryBuilder $query, LegalDocument $version): QueryBuilder
     {
-        return $query->whereNotExists(
+        $query->whereNotExists(
             fn (QueryBuilder $sub): QueryBuilder => $sub->from('legal_notices')
                 ->whereColumn('legal_notices.subject_type', 'legal_consents.subject_type')
                 ->whereColumn('legal_notices.subject_id', 'legal_consents.subject_id')
                 ->where('legal_notices.document_id', $version->getKey())
         );
+
+        // A proof row is written on delivery, so a subject whose notice is still in the queue has
+        // none yet, and neither has one the mail transport refuses every time. Without the attempts
+        // a run started over a backlog queued the backlog again, and a refused address was sent a
+        // fresh notice on every run.
+        return NoticeAttempts::whereStillOwed($query, $version);
     }
 
     /**

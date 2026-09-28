@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Database\QueryException;
 use Pushery\LegalConsent\Content\LegalSourceRenderer;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
@@ -31,7 +32,19 @@ final class FlushDocumentCacheCommand extends Command
         // by neither, and this command is the documented escape hatch for exactly that, so it must
         // clear that set too. Flush every locale even when one was named: the enforceable set is a
         // global fact, and a half-flushed gate is worse than a fully cold one.
-        $enforceable->flushAll();
+        //
+        // The published locales come from `legal_documents`, and `optimize:clear` runs this
+        // command where there may be no such table yet, before the first `migrate` of a fresh
+        // install, or no database at all, in a build step. An exception there failed the
+        // framework's command and every task after this one. The declared locales are flushed all
+        // the same, and the run says what it could not read.
+        try {
+            $enforceable->flushAll();
+        } catch (QueryException $e) {
+            $enforceable->flushDeclared();
+
+            $this->warn('The published locales could not be read from `legal_documents`, so only the configured locales were flushed: '.$e->getMessage());
+        }
 
         // `DocumentMatrix::keys()` rather than `array_keys()`, and it takes nothing away from this
         // command: the matrix drops only an INT key whose definition is not an array — the

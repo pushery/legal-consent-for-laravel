@@ -8,7 +8,9 @@ use Carbon\CarbonImmutable;
 use Pushery\LegalConsent\Content\ContentFormat;
 use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Content\RawDocument;
+use Pushery\LegalConsent\Exceptions\InvalidDocumentDate;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
+use Pushery\LegalConsent\Support\CalendarDate;
 
 /**
  * The recommended default source: legal texts as git-diffable, PR-reviewable Markdown
@@ -24,7 +26,8 @@ use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
  *   ---
  *   # Markdown body …
  *
- * Only a flat frontmatter is supported (no nested YAML), so no symfony/yaml dependency.
+ * Only a flat frontmatter is supported (no nested YAML), so no symfony/yaml dependency. Dates are
+ * calendar dates written as YYYY-MM-DD; any other form is refused with InvalidDocumentDate.
  */
 final readonly class MarkdownFilesDriver implements LegalDocumentSource
 {
@@ -47,8 +50,10 @@ final readonly class MarkdownFilesDriver implements LegalDocumentSource
             body: $body,
             format: ContentFormat::Markdown,
             version: $meta['version'] ?? null,
-            announceAt: $this->toDate($meta['announce_at'] ?? null),
-            enforceAt: $this->toDate($meta['enforce_at'] ?? ($meta['effective_at'] ?? null)),
+            announceAt: $this->toDate($type, $locale, 'announce_at', $meta['announce_at'] ?? null),
+            enforceAt: isset($meta['enforce_at'])
+                ? $this->toDate($type, $locale, 'enforce_at', $meta['enforce_at'])
+                : $this->toDate($type, $locale, 'effective_at', $meta['effective_at'] ?? null),
             isMaterial: $this->toBool($meta['material'] ?? null),
             uiWording: $meta['ui_wording'] ?? null,
             sourceRef: $path,
@@ -137,12 +142,17 @@ final readonly class MarkdownFilesDriver implements LegalDocumentSource
         return in_array(strtolower($value), ['true', '1', 'yes'], true);
     }
 
-    private function toDate(?string $value): ?CarbonImmutable
+    /**
+     * A frontmatter date, read as a calendar date written as YYYY-MM-DD. A date that is not one
+     * stops the resolve with the field named, because the value becomes a date of the published
+     * version and could not be corrected afterwards.
+     */
+    private function toDate(string $type, string $locale, string $field, ?string $value): ?CarbonImmutable
     {
         if ($value === null || $value === '') {
             return null;
         }
 
-        return CarbonImmutable::parse($value);
+        return CalendarDate::parse($value) ?? throw InvalidDocumentDate::for($type, $locale, $field, $value);
     }
 }

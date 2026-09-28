@@ -7,7 +7,9 @@ namespace Pushery\LegalConsent\Console;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\Isolatable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notification as BaseNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -24,6 +26,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
+use Pushery\LegalConsent\Support\NoticeAttempts;
 use Pushery\LegalConsent\Support\NoticeMailConfig;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -36,6 +39,12 @@ use Symfony\Component\Console\Attribute\AsCommand;
  *
  * Routing: ActiveReconsent → ReconsentRequired, InfoPush → LegalChangeInformational,
  * DeemedConsent → DeemedConsentNotice. A voluntary consent is never swept (Art. 7(4)).
+ *
+ * A deemed-consent notice names the objection deadline, and § 308 Nr. 5 lit. b BGB wants its
+ * warning at the start of the period to object. Once that deadline has passed, the notice can found
+ * no acceptance and would tell its reader about a chance that is gone, so it is not sent: the
+ * subjects it did not reach need a new version with a new deadline, and the run says so until one
+ * replaces it.
  *
  * THIS RUN QUEUES; IT DOES NOT DELIVER, and it no longer says otherwise. The notifications are
  * `ShouldQueue`, so `Notification::send()` returns once the jobs are on the queue. The
@@ -51,11 +60,14 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * § 675g notice is never risked. A process killed mid-sweep — or a run overtaken when the 120-min
  * `withoutOverlapping` lock expires on a large population — RESUMES: with durable-medium proof on,
  * {@see AffectedSubjectResolver::forVersion()} skips subjects that already carry a proof row for the
- * version, so the retry serves only those still owed a notice and does not write a second proof for
- * one already notified. This removes the bulk of duplication without a unique constraint; a proof
- * written by a genuinely simultaneous sweep in the same window is still tolerated (a duplicate email
- * is acceptable, a missed notice is not). A channel that FAILS re-opens the version rather than
- * leaving it stamped — see {@see ReopenVersionOnNoticeFailure}.
+ * version, and those whose notice is still on its way ({@see NoticeAttempts}), so the retry serves
+ * only those still owed a notice and does not write a second proof for one already notified. This
+ * removes the bulk of duplication without a unique constraint; a proof written by a genuinely
+ * simultaneous sweep in the same window is still tolerated (a duplicate email is acceptable, a
+ * missed notice is not). A notice that FAILS is counted against its subject and brings the version
+ * back while the subject has attempts left — see {@see ReopenVersionOnNoticeFailure}. A subject that
+ * has none left is reported on every run, and the run exits non-zero, because its notice is still
+ * owed.
  */
 #[AsCommand(name: 'legal-consent:dispatch-notices')]
 final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
@@ -90,12 +102,15 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
         $notified = 0;
         $held = 0;
         $deficient = 0;
+        $expired = 0;
 
         foreach ($versions as $version) {
             // Count BEFORE sending, always — not only when a limit is configured. The size of a
             // send is the one number an operator can never recover afterwards, and the aggregate
-            // line at the end cannot say which version it belonged to.
-            $audience = $resolver->countForVersion($version);
+            // line at the end cannot say which version it belonged to. It counts whom this run will
+            // send to, the same subjects the stream below serves: a version re-opened for a handful
+            // of failed notices is not held back because its whole audience exceeds the brake.
+            $audience = $resolver->countForVersion($version, skipNotified: $proofEnabled);
 
             $this->line(sprintf(
                 '%s %s (%s): %d recipient(s).',
@@ -104,6 +119,20 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
                 $version->locale,
                 $audience,
             ));
+
+            $deadline = $this->passedDeadline($version);
+
+            if ($deadline instanceof CarbonImmutable && $audience > 0) {
+                // Skipped WITHOUT stamping, like the two hold-backs below, so every run names the
+                // version until a new one replaces it.
+                $expired++;
+                $this->error(sprintf(
+                    '  its objection deadline %s has passed, so a deemed-consent notice can no longer found an acceptance. Nothing was sent; the subjects it did not reach need a new version with a new objection deadline.',
+                    $deadline->toIso8601String(),
+                ));
+
+                continue;
+            }
 
             if ($this->exceedsLimit($audience)) {
                 // Skip WITHOUT stamping. The version stays due, so nothing is lost and the next run
@@ -167,8 +196,20 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // emails under at-least-once), it simply writes no duplicate proof row.
             $resolver->forVersion($version, skipNotified: $proofEnabled)
                 ->chunk(self::CHUNK)
-                ->each(function (LazyCollection $chunk) use ($notification, &$notified): void {
+                ->each(function (LazyCollection $chunk) use ($notification, $version, $proofEnabled, &$notified): void {
                     $subjects = $chunk->collect();
+
+                    // Recorded BEFORE the send: with a synchronous queue the notice is delivered or
+                    // fails inside send(), and its outcome has to find the row already there. Only a
+                    // notice that goes out by mail ever comes back as delivered or failed; one that
+                    // does not would count as on its way until the window ends, and then be queued
+                    // again as lost.
+                    if ($proofEnabled) {
+                        NoticeAttempts::queued($version, $subjects->filter(
+                            static fn (Model $subject): bool => method_exists($notification, 'via')
+                                && in_array('mail', (array) $notification->via($subject), true),
+                        )->values());
+                    }
 
                     // One send() for the whole chunk — still one queued job per subject. The locale
                     // is already pinned on the notification itself, which matters because the
@@ -211,7 +252,54 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             $monitor->heartbeat('legal-consent:dispatch-notices.held', $held);
         }
 
-        return $held > 0 || $deficient > 0 ? self::FAILURE : self::SUCCESS;
+        if ($expired > 0) {
+            $this->error("{$expired} deemed-consent version(s) still owed a notice after their objection deadline had passed. Nothing was sent for them: silence cannot bind on a notice that arrives after the deadline it names, so publish a new version with a new objection deadline.");
+            $monitor->heartbeat('legal-consent:dispatch-notices.expired', $expired);
+        }
+
+        $unreachable = $this->reportUnreachable();
+
+        if ($unreachable > 0) {
+            $monitor->heartbeat('legal-consent:dispatch-notices.unreachable', $unreachable);
+        }
+
+        return $held > 0 || $deficient > 0 || $expired > 0 || $unreachable > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * Names every version with subjects whose notice failed `notifications.max_attempts` times, and
+     * returns how many subjects that is.
+     *
+     * Reported on every run, not only the one that gave up, because each of those notices is still
+     * owed and nothing else in the schedule says so. The way out is to reach the subject: correct the
+     * address and run `legal-consent:renotify`, which tries every subject of the version again, or
+     * erase a subject that is gone.
+     */
+    private function reportUnreachable(): int
+    {
+        $unreachable = NoticeAttempts::unreachable();
+
+        if ($unreachable === []) {
+            return 0;
+        }
+
+        $versions = LegalDocument::model()::query()
+            ->withoutGlobalScope(TenantScope::class) // the sweep crosses tenants
+            ->whereKey(array_keys($unreachable))
+            ->get();
+
+        foreach ($unreachable as $documentId => $subjects) {
+            $version = $versions->find($documentId);
+
+            $this->error(sprintf(
+                '  %s: %d subject(s) could not be reached after %d attempt(s), and their notice is still owed. Correct the address and run `legal-consent:renotify`, or erase a subject that is gone.',
+                $version instanceof LegalDocument ? "{$version->key} {$version->version} ({$version->locale})" : "version #{$documentId}",
+                $subjects,
+                NoticeAttempts::maxAttempts(),
+            ));
+        }
+
+        return array_sum($unreachable);
     }
 
     /**
@@ -282,7 +370,9 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             ->where('requires_explicit_optin', false) // mandatory docs only — never nag a voluntary consent (Art. 7(4))
             ->whereNotNull('announce_from')
             ->where('announce_from', '<=', CarbonImmutable::now())
-            ->whereNull('notified_at')
+            // Not yet swept, or swept and owing a notice to try again: one that failed while the
+            // sweep was still running, or one lost on its way.
+            ->where(fn (Builder $query): Builder => NoticeAttempts::orWhereRetryDue($query->whereNull('notified_at')))
             ->get();
     }
 
@@ -303,6 +393,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
     {
         $proofEnabled = (bool) config('legal-consent.durable_medium.proof', true);
         $held = 0;
+        $expired = 0;
 
         foreach ($this->dueVersions() as $version) {
             $total = $resolver->countForVersion($version);
@@ -334,13 +425,32 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // negative.
             $proofed = max(0, $total - $remaining);
 
-            // The real sweep measures the brake against the RAW audience, before the resume
+            $deadline = $this->passedDeadline($version);
+
+            if ($deadline instanceof CarbonImmutable && $remaining > 0) {
+                $expired++;
+
+                $this->line(sprintf(
+                    '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, queued or given up, 0 would be sent — its objection deadline %s has passed.',
+                    $version->key,
+                    $version->version,
+                    $version->locale,
+                    $version->tenant_id === '' ? '-' : $version->tenant_id,
+                    $total,
+                    $proofed,
+                    $deadline->toIso8601String(),
+                ));
+
+                continue;
+            }
+
+            // The real sweep measures the brake against whom it will send to, after the resume
             // discount, so this has to as well or the two would disagree on the boundary.
-            if ($this->exceedsLimit($total)) {
+            if ($this->exceedsLimit($remaining)) {
                 $held++;
 
                 $this->line(sprintf(
-                    '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, 0 would be sent — held back by notifications.max_recipients_per_run.',
+                    '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, queued or given up, 0 would be sent — held back by notifications.max_recipients_per_run.',
                     $version->key,
                     $version->version,
                     $version->locale,
@@ -353,7 +463,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             }
 
             $this->line(sprintf(
-                '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, %d would be sent.',
+                '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, queued or given up, %d would be sent.',
                 $version->key,
                 $version->version,
                 $version->locale,
@@ -368,11 +478,29 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
 
         if ($held > 0) {
             $this->error("{$held} version(s) would be held back by notifications.max_recipients_per_run. Re-run with --force or raise the limit.");
-
-            return self::FAILURE;
         }
 
-        return self::SUCCESS;
+        if ($expired > 0) {
+            $this->error("{$expired} deemed-consent version(s) would not be sent: their objection deadline has passed. Publish a new version with a new objection deadline.");
+        }
+
+        // The subjects the real run gives up on are owed a notice whether or not anything is sent,
+        // so the preview names them on the same exit code.
+        $unreachable = $this->reportUnreachable();
+
+        return $held > 0 || $expired > 0 || $unreachable > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    /** The objection deadline of a deemed-consent version, when it has already passed. */
+    private function passedDeadline(LegalDocument $version): ?CarbonImmutable
+    {
+        $deadline = $version->objection_deadline;
+
+        return $version->noticeMode() === NoticeMode::DeemedConsent
+            && $deadline instanceof CarbonImmutable
+            && $deadline->lessThanOrEqualTo(CarbonImmutable::now())
+            ? $deadline
+            : null;
     }
 
     private function notificationFor(LegalDocument $version): BaseNotification&SendsNoticeMail

@@ -21,6 +21,7 @@ use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\LegalDraftSet;
 use Pushery\LegalConsent\Support\LegalDraftWriter;
+use Pushery\LegalConsent\Support\TenantContext;
 use Throwable;
 
 /**
@@ -82,6 +83,7 @@ final class TranslateLegalDraft implements ShouldQueue
         private readonly string $sourceLocale,
         private readonly ?string $actor = null,
         private readonly ?string $guard = null,
+        private readonly ?string $tenant = null,
     ) {
         // THE LANE IS SET HERE, on the properties the dispatcher reads.
         //
@@ -111,10 +113,18 @@ final class TranslateLegalDraft implements ShouldQueue
         return is_string($value) && $value !== '' ? $value : null;
     }
 
-    /** The cache key under which a translation of this draft reports itself as running. */
-    public static function markerFor(string $key, string $locale): string
+    /**
+     * The cache key under which a translation of this draft reports itself as running.
+     *
+     * Per tenant, because a draft is: two tenants translating the same `(key, locale)` translate two
+     * drafts, and one marker for both would tell the second that the first one's run is theirs. The
+     * shared bucket keeps the key it always had.
+     */
+    public static function markerFor(string $key, string $locale, string $tenant = ''): string
     {
-        return "legal-consent:translating:{$key}:{$locale}";
+        return $tenant === ''
+            ? "legal-consent:translating:{$key}:{$locale}"
+            : "legal-consent:translating:{$tenant}:{$key}:{$locale}";
     }
 
     /**
@@ -125,9 +135,9 @@ final class TranslateLegalDraft implements ShouldQueue
      * message on an admin screen says nothing to the person reading it and can carry more than it
      * should.
      */
-    public static function markFailed(string $key, string $locale, string $reason = ''): void
+    public static function markFailed(string $key, string $locale, string $reason = '', string $tenant = ''): void
     {
-        Cache::put(self::markerFor($key, $locale), ['failed' => $reason], now()->addHour());
+        Cache::put(self::markerFor($key, $locale, $tenant), ['failed' => $reason], now()->addHour());
     }
 
     /**
@@ -137,20 +147,46 @@ final class TranslateLegalDraft implements ShouldQueue
      * on. Read once, because a failure already spoken is not news on the next render — the TTL is
      * only there for the reader who never comes back.
      */
-    public static function takeFailure(string $key, string $locale): ?string
+    public static function takeFailure(string $key, string $locale, string $tenant = ''): ?string
     {
-        $marker = Cache::get(self::markerFor($key, $locale));
+        $marker = Cache::get(self::markerFor($key, $locale, $tenant));
 
         if (! is_array($marker) || ! array_key_exists('failed', $marker)) {
             return null;
         }
 
-        Cache::forget(self::markerFor($key, $locale));
+        Cache::forget(self::markerFor($key, $locale, $tenant));
 
         return is_string($marker['failed']) ? $marker['failed'] : '';
     }
 
+    /**
+     * Translate the draft in the tenant it was asked for in.
+     *
+     * A worker has nobody signed in, so a resolver that reads the signed-in user places every read
+     * and write in the shared '' bucket: the source was looked up there, and a translation landed on
+     * the operator's shared draft, set back to unreviewed, while the tenant got nothing. The tenant
+     * travels with the job and is pinned around the whole run, as the sweeps pin a version's. A job
+     * queued by a release that did not carry it runs as it did before.
+     */
     public function handle(): void
+    {
+        // Read through `??`: a job serialized before the tenant was carried has no value for it, and
+        // reading an uninitialized property throws.
+        $tenant = $this->tenant ?? null;
+
+        if ($tenant === null) {
+            $this->translate('');
+
+            return;
+        }
+
+        app(TenantContext::class)->forTenant($tenant, function () use ($tenant): void {
+            $this->translate($tenant);
+        });
+    }
+
+    private function translate(string $tenant): void
     {
         $source = LegalDraftSet::for($this->key)->draft($this->sourceLocale);
 
@@ -158,7 +194,7 @@ final class TranslateLegalDraft implements ShouldQueue
             // The source went away between dispatch and execution. Nothing to translate — and the
             // screen is still waiting, so it is told the run ended rather than left to notice that
             // no text ever arrived. No sentence: the source may well have been discarded on purpose.
-            self::markFailed($this->key, $this->locale);
+            self::markFailed($this->key, $this->locale, tenant: $tenant);
 
             return;
         }
@@ -174,7 +210,7 @@ final class TranslateLegalDraft implements ShouldQueue
             // reason rather than out of tidiness: putting "your translator is not configured" in
             // `failed_jobs` is right for a defect and wrong for a state somebody can fix on the
             // screen they are already looking at. Their message travels to that screen instead.
-            self::markFailed($this->key, $this->locale, $e->getMessage());
+            self::markFailed($this->key, $this->locale, $e->getMessage(), $tenant);
 
             return;
         }
@@ -182,7 +218,7 @@ final class TranslateLegalDraft implements ShouldQueue
         // Only now, and NOT in a `finally`: a failure recorded above is the thing the screen has
         // left to read, and a forget here would wipe it. Anything else that throws leaves the marker
         // alone on purpose — the job is retried or it fails, and `failed()` is what answers then.
-        Cache::forget(self::markerFor($this->key, $this->locale));
+        Cache::forget(self::markerFor($this->key, $this->locale, $tenant));
     }
 
     /**
@@ -259,6 +295,6 @@ final class TranslateLegalDraft implements ShouldQueue
      */
     public function failed(?Throwable $throwable): void
     {
-        self::markFailed($this->key, $this->locale);
+        self::markFailed($this->key, $this->locale, tenant: $this->tenant ?? '');
     }
 }

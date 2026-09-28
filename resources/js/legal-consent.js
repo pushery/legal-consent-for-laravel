@@ -59,8 +59,10 @@ document.addEventListener('alpine:init', () => {
 
             this.state = 'loading'
 
+            // A redirected answer counts as a failure: the route serves the text itself, so anything
+            // that arrives through a redirect is another page, such as a login or consent screen.
             fetch(this.url, { headers: { Accept: 'text/html' } })
-                .then((response) => (response.ok ? response.text() : Promise.reject(response.status)))
+                .then((response) => (response.ok && !response.redirected ? response.text() : Promise.reject(response.status)))
                 .then((html) => {
                     this.$refs.body.innerHTML = html
                     this.state = 'ready'
