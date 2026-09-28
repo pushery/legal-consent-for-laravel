@@ -67,7 +67,9 @@ return new class extends Migration
             $table->timestampsTz();
 
             $table->unique(['key', 'locale', 'version', 'tenant_id']);
-            $table->index(['key', 'locale', 'is_active', 'enforce_from']);
+            // Named for the same reason as the index on legal_consents: the generated name is 55
+            // characters before the prefix, and MySQL stops at 64.
+            $table->index(['key', 'locale', 'is_active', 'enforce_from'], 'legal_documents_key_locale_active_idx');
             $table->index(['key', 'locale', 'major_version']);
             $table->index(['key', 'content_hash']);
         });

@@ -149,7 +149,7 @@
 
                  It comes back on its own: every write to a draft's body resets the state to Draft,
                  so a save puts the button back with the work it applies to. --}}
-            @if ($reviewState !== 'reviewed')
+            @if ($reviewState !== null && $reviewState !== 'reviewed' && ! ($translating ?? false))
                 <x-wirekit::button surface="outline" wire:click="markReviewed" loading-target="markReviewed" :disable-on-loading="false">{{ __('legal-consent::ui.admin_mark_reviewed') }}</x-wirekit::button>
             @endif
 

@@ -29,11 +29,16 @@ use Illuminate\Support\Facades\Schema;
  * connection's offset and from MySQL and SQLite carrying none. A first attempt hashed the
  * pre-save shape, passed the whole SQLite suite, and broke every Postgres engine suite at once.
  *
- * APPEND-ONLY BY USE, not by trigger. A row is never corrected: the two lawful rewriters — an
- * Art. 17 erasure and the retention sweep, both through {@see LedgerChainRepair::relink()} —
- * change a row's link and therefore its hash, and each simply records the new mac beside the old
- * one. {@see newestFor()} reads the last one, so the history of lawful rewrites is kept rather
- * than overwritten, and an operator can see that a row was rewritten and when.
+ * APPEND-ONLY BY USE, not by trigger. A row is never corrected: the retention sweep, which
+ * re-links through {@see LedgerChainRepair::relink()}, changes a row's link and therefore its hash,
+ * and records the new mac beside the old one. {@see newestFor()} reads the last one, so the history
+ * of lawful rewrites is kept rather than overwritten, and an operator can see that a row was
+ * rewritten and when.
+ *
+ * The Art. 17 erasure is the exception: it removes the macs of the rows it rewrites before it
+ * records new ones ({@see forget()}). An old mac is a hash over the personal data the erasure
+ * cleared, and unkeyed it can be reversed by trying subject ids against it, which would undo the
+ * erasure. The trace the erasure leaves is `subject_erased_at` on the row.
  *
  * WHAT THIS IS WORTH, EXACTLY. Keyed, a table-write attacker cannot produce the mac for a row they
  * substituted, so the replacement is reported. Unkeyed they can compute one — exactly as they can
@@ -127,6 +132,30 @@ final readonly class LedgerRecordMacs
     }
 
     /**
+     * Remove every mac recorded for these consent rows.
+     *
+     * Only the erasure calls it, for the rows it rewrites: their old macs are hashes over the
+     * personal data it cleared. See the class docblock.
+     *
+     * @param  list<mixed>  $consentIds
+     */
+    public function forget(array $consentIds): void
+    {
+        $consentIds = array_values(array_filter(
+            $consentIds,
+            static fn (mixed $id): bool => is_int($id) || is_string($id),
+        ));
+
+        if ($consentIds === [] || ! $this->available()) {
+            return;
+        }
+
+        foreach (array_chunk($consentIds, LedgerChainRepair::MAX_BOUND_PARAMETERS) as $chunk) {
+            DB::table(self::TABLE)->whereIn('consent_id', $chunk)->delete();
+        }
+    }
+
+    /**
      * Record where macs begin, the first time one is written.
      *
      * NOT IN THE MIGRATION, AND THAT IS THE WHOLE POINT OF THE METHOD. Migration 000024 learned
@@ -144,7 +173,8 @@ final readonly class LedgerRecordMacs
      * boundary below every untouched row in a ledger whose first macs come from an erasure, and
      * demand a mac from each of them.
      *
-     * The `exists()` costs one indexed lookup on a two-row table per consent write. Said out loud
+     * The check costs one indexed lookup on a two-row table per consent write, and a second, locking
+     * one only while the marker is missing ({@see LedgerHashChain::markerStamped()}). Said out loud
      * rather than optimized away: the obvious cache is a cache of database state, and the write
      * path already does four statements.
      */
@@ -154,7 +184,10 @@ final readonly class LedgerRecordMacs
             return;
         }
 
-        if (DB::table('legal_ledger_markers')->where('name', self::BOUNDARY_MARKER)->exists()) {
+        // A marker that is gone while macs exist was removed: this method stamps it before the first
+        // mac is written. Stamped again it would sit above every row written since and exempt what
+        // was slipped in among them, so it is left missing and the verifier reports it.
+        if (LedgerHashChain::markerStamped(self::BOUNDARY_MARKER) || DB::table(self::TABLE)->exists()) {
             return;
         }
 
@@ -167,6 +200,8 @@ final readonly class LedgerRecordMacs
             'proof' => $this->boundaryProof($boundary),
             'created_at' => now(),
         ]);
+
+        new LedgerBoundaryCensus($this->chain)->stamp(self::BOUNDARY_MARKER, $boundary);
     }
 
     /**
@@ -235,6 +270,18 @@ final readonly class LedgerRecordMacs
             is_int($id) || is_string($id) ? (int) $id : 0,
             is_string($proof) ? $proof : '',
         );
+    }
+
+    /**
+     * Whether the boundary marker was removed: the markers table is there, the marker row is not,
+     * and macs exist, which are only ever written after the marker.
+     */
+    public function boundaryRemoved(): bool
+    {
+        return Schema::hasTable('legal_ledger_markers')
+            && $this->available()
+            && ! DB::table('legal_ledger_markers')->where('name', self::BOUNDARY_MARKER)->exists()
+            && DB::table(self::TABLE)->exists();
     }
 
     /**

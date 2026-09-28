@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Illuminate\Database\Eloquent\Model;
 use Pushery\LegalConsent\Enums\ConsentAction;
+use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 
@@ -77,5 +79,56 @@ final class DeemedAcceptanceDecision
         // refuses a downgrade, so a subject cannot hold anything newer: "not this version" is
         // exactly "older than this version" here.
         return $latest->document_version !== $version->version;
+    }
+
+    /**
+     * The subject's most recent action for $version's document and locale that has a say in whether
+     * silence binds them to it, read live.
+     *
+     * An objection has one when it was recorded against $version itself, or when it was a
+     * Widerspruch against an earlier deemed change, declared inside that change's objection window:
+     * that subject never took the version $version builds on, and silence must not bind them to
+     * what they rejected. An objection recorded while no change was open to it answered nothing
+     * (§ 308 Nr. 5 BGB: the period to object begins with the notice). It is passed over, and the
+     * action before it decides, so a subject who ended the contract before objecting stays ended.
+     */
+    public function latestThatCounts(Model $subject, LegalDocument $version): ?LegalConsent
+    {
+        $rows = LegalConsent::model()::query()
+            ->where('subject_type', (string) $subject->getMorphClass())
+            ->where('subject_id', SubjectKey::for($subject))
+            ->where('document_key', $version->key)
+            ->where('locale', $version->locale)
+            ->orderByDesc('accepted_at')
+            ->orderByDesc('id')
+            ->cursor();
+
+        foreach ($rows as $row) {
+            if ($row->action !== ConsentAction::Objected || $this->answersAChange($row, $version)) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    private function answersAChange(LegalConsent $objection, LegalDocument $version): bool
+    {
+        // An objection whose version cannot be read is kept: passing over one that did answer a
+        // change would bind its subject by silence.
+        if ($objection->document_id === null || $objection->document_id === $version->id) {
+            return true;
+        }
+
+        $objected = LegalDocument::model()::query()->withoutGlobalScopes()->find($objection->document_id);
+
+        if (! $objected instanceof LegalDocument) {
+            return true;
+        }
+
+        return $objected->notice_mode === NoticeMode::DeemedConsent
+            && $objected->announce_from !== null
+            && $objected->objection_deadline !== null
+            && $objection->accepted_at->betweenIncluded($objected->announce_from, $objected->objection_deadline);
     }
 }

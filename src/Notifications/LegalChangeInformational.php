@@ -63,13 +63,21 @@ class LegalChangeInformational extends ChangeNotification
         ];
     }
 
+    /**
+     * Whether the notice states a right: the Art. 21 objection for a privacy notice, always, and the
+     * free termination for a contract where it is offered or an adverse entry owes it.
+     *
+     * An information-only contract change binds on silence as a deemed-consent change does, so the
+     * same rule applies to it: § 675g Abs. 2 Satz 3 BGB ties the termination notice to the change
+     * being disadvantageous, not to a flag the operator set ({@see DeemedConsentNotice}).
+     */
     private function rightApplies(): bool
     {
         if ($this->basis() === 'acknowledgement') {
             return true;
         }
 
-        return $this->document->offers_termination;
+        return $this->document->offers_termination || $this->hasAdverseChangeItem($this->document);
     }
 
     /**
@@ -93,6 +101,13 @@ class LegalChangeInformational extends ChangeNotification
      */
     public function mandatoryContentPresent(): bool
     {
+        // The free-termination line of a contract is owed where rightApplies() says so, and a notice
+        // that owes it and does not carry it is not complete. The privacy notice's objection line is
+        // not asked for here: it is not what this rule is about.
+        if ($this->basis() === 'contract' && $this->rightApplies() && $this->line('objection', ['deadline' => '']) === '') {
+            return false;
+        }
+
         // The replacements handed in here are EQUIVALENT under mutation: a placeholder left unfilled
         // still leaves a non-empty line, and the check only asks whether each line is there.
         return $this->line('intro', ['title' => '']) !== ''

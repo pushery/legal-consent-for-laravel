@@ -44,7 +44,9 @@ php artisan vendor:publish --tag=legal-consent-lang
 php artisan migrate
 ```
 
-There is an umbrella tag, `--tag=legal-consent`, which adds migrations and views to those two.
+There is an umbrella tag, `--tag=legal-consent`, which adds the migrations
+(`legal-consent-migrations`), the views (`legal-consent-views`) and the script of the document
+dialog (`legal-consent-assets`, copied to `public/vendor/legal-consent`) to those two.
 **Do NOT reach for it on an application that has WireKit installed.** It copies the whole view
 tree into `resources/views/vendor/legal-consent/`, whose top level is the PLAIN stubs, and a
 published view is resolved before either of the package's own sets — so the umbrella publish
@@ -52,6 +54,18 @@ silently turns `ui.variant => 'auto'` into plain, unstyled consent screens. Noth
 `legal-consent:doctor` cannot see it. If views are already published on such an app, run
 `php artisan vendor:publish --tag=legal-consent-wirekit --force` to pull the WireKit twins over
 the published copies (`--force` is required; the files exist).
+
+The document dialog needs its script on the page. Publish it on its own with
+`php artisan vendor:publish --tag=legal-consent-assets` and load it before Alpine:
+
+```blade
+<script src="{{ asset('vendor/legal-consent/legal-consent.js') }}" defer></script>
+```
+
+The file in `public/` is a copy that Composer does not update, so add
+`@php artisan vendor:publish --tag=legal-consent-assets --force` to the app's `post-update-cmd`
+scripts. To brand the change-notice mail without copying the consent screens, publish
+`legal-consent-mail` (the notice view and its theme); the views tag carries the same two files.
 
 Every option in `config/legal-consent.php` is documented inline. The ones that usually matter first:
 
@@ -84,7 +98,7 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   every session-backed ledger write — that route and the Livewire components' grant, withdraw,
   object and terminate actions. Same shape as `routes.api_throttle`; `null` switches it off.
 - `ui.variant` — `auto` by default: the WireKit-native views are served when `pushery/wirekit`
-  ≥ 2.47.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
+  ≥ 2.49.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
 - `notice_mail` — the change-notice mail. `identity.declarant` names the declaring legal person
   (§ 126b BGB) and is appended to the notice AND to its append-only proof row; leave it null and
   the notice is byte-for-byte what it was. Multi-tenant apps bind `ResolvesNoticeIdentity` instead
@@ -108,6 +122,7 @@ php artisan legal-consent:publish --all --editorial      # the whole matrix, ide
 php artisan legal-consent:publish --all --only-missing --editorial   # gap-fill only — use THIS in a deploy script
 php artisan legal-consent:publish --all --dry-run --editorial        # what would a run do? writes nothing
 php artisan legal-consent:check-drift                    # source changed since it was published?
+php artisan legal-consent:publish terms de --active --tenant=acme   # tenancy on: the console resolves no tenant, so name it
 ```
 
 The mode is the legal classification of the change, so it is never guessed: `--active` (the subject
@@ -214,11 +229,11 @@ acceptance in an interstitial shown after authentication and before first use, a
 ```
 
 **Drop in the optional UI** (needs `livewire/livewire`. The WireKit-native views are served
-automatically when `pushery/wirekit` ≥ 2.47.0 is installed — `legal-consent.ui.variant` defaults to
+automatically when `pushery/wirekit` ≥ 2.49.0 is installed — `legal-consent.ui.variant` defaults to
 `auto`; publish `legal-consent-wirekit` only to customize them. The floor is part of the automatic
 choice rather than advice because the views name components that must exist: WireKit's own localized
-screen-reader strings landed in 2.26.0, and the busy-state props these stubs now use landed in
-2.47.0):
+screen-reader strings landed in 2.26.0, the busy-state props these stubs use landed in 2.47.0, and
+the release dialog's close on confirm landed in 2.49.0):
 
 ```blade
 <livewire:legal-consent.reconsent-form />
@@ -300,18 +315,28 @@ $held = $user->hasAcceptedCurrentLegalMany(['terms', 'privacy']);
 **Alert on the scheduled sweeps.** Bind `Pushery\LegalConsent\Contracts\LegalConsentMonitor` (the
 default binding discards everything) and each sweep calls `heartbeat(string $task, int $processed)`.
 Three task names are the ordinary beat — `legal-consent:prune`, `legal-consent:dispatch-notices`,
-`legal-consent:close-objection-windows` — and three are sent ONLY when a run failed:
+`legal-consent:close-objection-windows` — and six are sent ONLY when a run failed:
 
 - `legal-consent:dispatch-notices.deficient` — a version went out WITHOUT its mandatory notice
   content. § 308 Nr. 5 lit. b makes the silence warning a validity condition, so silence cannot bind
   against those notices at all: the wording has to be fixed and the notice re-sent.
 - `legal-consent:dispatch-notices.held` — a notice still owed because the audience exceeded
   `notifications.max_recipients_per_run`.
+- `legal-consent:dispatch-notices.unreachable` — subjects whose notice failed
+  `notifications.max_attempts` times. It is still owed: correct the address and run
+  `legal-consent:renotify`, or erase the subject.
+- `legal-consent:dispatch-notices.expired` — a deemed-consent version still owed its notice after
+  the objection deadline had passed. Such a notice can found no acceptance, so nothing is sent: the
+  subjects it did not reach need a new version with a new objection deadline.
 - `legal-consent:close-objection-windows.unproved` — subjects that could not be deemed for want of a
-  delivered § 308 Nr. 5 lit. b warning.
+  § 308 Nr. 5 lit. b warning delivered by the objection deadline.
+- `legal-consent:close-objection-windows.late` — subjects whose notice arrived only after the
+  objection deadline, which left them no period to object; they need a new version.
 
-**Alert on those three by name.** The ordinary heartbeat is sent BEFORE the failure branch, so a run
+**Alert on those six by name.** The ordinary heartbeat is sent BEFORE the failure branch, so a run
 that held a legally required notice back still beats as usual with the count it managed.
+`legal-consent:prune` is the exception: it beats last, after it has re-linked the tamper chain it
+broke, so a sweep that dies anywhere, the repair included, sends no beat.
 
 ## Testing your own app against it
 

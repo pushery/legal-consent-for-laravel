@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Pushery\LegalConsent\Models\LegalConsent;
@@ -25,12 +27,218 @@ use Pushery\LegalConsent\Models\LegalNotice;
  * that name the person, inside one transaction, re-linking the chain as it goes. The token is what
  * survives that: it is the only thing left tying a delivery proof to the consent it proves.
  *
- * Reuses the subject's existing token and mints one only when they have none yet. Callers under
- * multi-tenancy must run this inside the right tenant (the lookup is tenant-scoped like every
- * other LegalConsent read).
+ * Reuses the subject's existing token and mints one only when they have none yet. A write that
+ * stores the token gets it from {@see whileLocked}, which holds one row per subject and tenant, or
+ * two first writes at the same moment mint one each. Callers under multi-tenancy must run this
+ * inside the right tenant (the lookup is tenant-scoped like every other LegalConsent read).
  */
 final class SubjectToken
 {
+    /**
+     * The registry: one row per subject and tenant, holding the subject's token. Migration 000037
+     * creates it.
+     */
+    public const string REGISTRY = 'legal_subject_tokens';
+
+    /**
+     * How many times a write under {@see whileLocked} is tried when the database rolls it back as a
+     * deadlock, the count every ledger write retries with.
+     */
+    private const int ATTEMPTS = 5;
+
+    /**
+     * Runs a write that stores the subject's token, hands it the token, and returns what the write
+     * returns.
+     *
+     * Finding the token and storing the first row that carries it are two statements. Two first
+     * writes for one subject at the same moment, a consent in a request and a notice in a queue
+     * worker, each found no token and minted one of their own, which left the subject with two
+     * chains that nothing ties together once an erasure has removed the subject reference.
+     *
+     * So the token has a row of its own in the registry, and every write takes that row first, in
+     * the transaction it writes in. A second writer for the same subject waits there until the first
+     * has committed. It then reads the token from the row with a locking read, which returns the
+     * committed value even in a transaction whose snapshot is older, as a MySQL transaction's is once
+     * it has read anything.
+     *
+     * The registry is the package's own rather than a lock on the subject's row, because a subject
+     * need not have a row in this database at all. A deadlock is tried again, unless a transaction
+     * of the caller's surrounds this one: the database has rolled that back as a whole. Where
+     * migration 000037 has not run yet, the write gets its token as it did before, without the lock.
+     *
+     * @template TResult
+     *
+     * @param  Closure(string): TResult  $write
+     * @return TResult
+     */
+    public function whileLocked(Model $subject, Closure $write): mixed
+    {
+        $connection = LegalConsent::resolve()->getConnection();
+
+        // Settled before the transaction begins, so no read in it comes before the wait at the row.
+        $keys = $this->registryKeys($subject);
+        $registered = $keys !== null && $this->registered();
+
+        return $connection->transaction(function () use ($connection, $subject, $keys, $registered, $write): mixed {
+            if ($keys === null || ! $registered) {
+                return $write($this->forSubject($subject));
+            }
+
+            [$lockKey, $subjectHash] = $keys;
+
+            // An upsert, because it takes the row's exclusive lock at once, also where the row is
+            // already there. An insert that ignores the duplicate takes a shared lock on MySQL, and
+            // two writers upgrading theirs for the read below deadlock.
+            $connection->table(self::REGISTRY)->upsert(
+                [['lock_key' => $lockKey, 'subject_hash' => $subjectHash, 'subject_token' => null]],
+                ['lock_key'],
+                ['lock_key'],
+            );
+
+            $token = $connection->table(self::REGISTRY)->where('lock_key', $lockKey)->lockForUpdate()->value('subject_token');
+
+            if (! is_string($token)) {
+                // The subject's first write since the registry exists. The ledgers may hold a token
+                // from before it, and forSubject() finds that one before it mints.
+                $token = $this->forSubject($subject);
+
+                $connection->table(self::REGISTRY)->where('lock_key', $lockKey)->update(['subject_token' => $token]);
+            }
+
+            return $write($token);
+        }, self::ATTEMPTS);
+    }
+
+    /**
+     * Whether the registry is there, which it is once migration 000037 has run.
+     */
+    public function registered(): bool
+    {
+        return LegalConsent::resolve()->getConnection()->getSchemaBuilder()->hasTable(self::REGISTRY);
+    }
+
+    /**
+     * Takes the subject's rows in the registry for their erasure, in every tenant, so no write for
+     * them runs until the erasure has committed.
+     *
+     * A write that is under way holds its row, so this waits for it to commit. A tenant whose
+     * records predate the registry has no row yet, and a write there would not wait: it would read
+     * the token from the records the erasure is about to strip and store it next to the subject
+     * again, which ties the stripped records back to them. So a row is stored for such a tenant
+     * here, without a token, and {@see forget} deletes it with the others.
+     */
+    public function hold(string $subjectType, string $subjectKey): void
+    {
+        $connection = LegalConsent::resolve()->getConnection();
+        $subjectHash = $this->subjectHash($subjectType, $subjectKey);
+
+        $held = $connection->table(self::REGISTRY)->where('subject_hash', $subjectHash)->lockForUpdate()->pluck('lock_key')->all();
+
+        foreach (['legal_consents', 'legal_notices'] as $ledger) {
+            $tenants = $connection->table($ledger)
+                ->where('subject_type', $subjectType)
+                ->where('subject_id', $subjectKey)
+                ->distinct()
+                ->pluck(TenantContext::COLUMN);
+
+            foreach ($tenants as $tenant) {
+                $lockKey = $this->lockKey(is_scalar($tenant) ? (string) $tenant : '', $subjectType, $subjectKey);
+
+                if (! in_array($lockKey, $held, true)) {
+                    $connection->table(self::REGISTRY)->upsert(
+                        [['lock_key' => $lockKey, 'subject_hash' => $subjectHash, 'subject_token' => null]],
+                        ['lock_key'],
+                        ['lock_key'],
+                    );
+
+                    $held[] = $lockKey;
+                }
+            }
+        }
+    }
+
+    /**
+     * Deletes the subject's rows from the registry, in every tenant, as their erasure does with
+     * everything else that names them.
+     */
+    public function forget(string $subjectType, string $subjectKey): void
+    {
+        LegalConsent::resolve()->getConnection()->table(self::REGISTRY)
+            ->where('subject_hash', $this->subjectHash($subjectType, $subjectKey))
+            ->delete();
+    }
+
+    /**
+     * Deletes the rows whose token no ledger row carries any more, a page at a time, and returns how
+     * many went. A subject whose last rows the retention sweep has pruned leaves such a row behind.
+     */
+    public function forgetUnused(int $page = 500): int
+    {
+        if (! $this->registered()) {
+            return 0;
+        }
+
+        $connection = LegalConsent::resolve()->getConnection();
+
+        $unused = static function (QueryBuilder $query): QueryBuilder {
+            foreach (['legal_consents', 'legal_notices'] as $ledger) {
+                $query->whereNotExists(static function (QueryBuilder $carried) use ($ledger): void {
+                    $carried->selectRaw('1')->from($ledger)->whereColumn($ledger.'.subject_token', self::REGISTRY.'.subject_token');
+                });
+            }
+
+            return $query;
+        };
+
+        $deleted = 0;
+
+        // The page is found with a plain read and deleted by its keys, so a delete locks the rows of
+        // one page rather than every row it passes. The rows are locked before they are asked about
+        // again: a write for one of these subjects that is under way commits first, and the record
+        // it stored keeps the row.
+        $unused($connection->table(self::REGISTRY))->whereNotNull('subject_token')->select('lock_key')
+            ->chunkById($page, function (Collection $rows) use ($connection, $unused, &$deleted): void {
+                $keys = $rows->pluck('lock_key')->all();
+
+                $deleted += $connection->transaction(function () use ($connection, $unused, $keys): int {
+                    $connection->table(self::REGISTRY)->whereIn('lock_key', $keys)->lockForUpdate()->pluck('lock_key');
+
+                    return $unused($connection->table(self::REGISTRY))->whereIn('lock_key', $keys)->delete();
+                });
+            }, 'lock_key');
+
+        return $deleted;
+    }
+
+    /**
+     * The two hashes a registry row names the subject by: of the tenant, the subject type and the
+     * subject key, and of the type and key alone. Null for a subject without a key.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private function registryKeys(Model $subject): ?array
+    {
+        $id = SubjectKey::for($subject);
+
+        if ($id === null) {
+            return null;
+        }
+
+        $type = (string) $subject->getMorphClass();
+
+        return [$this->lockKey(app(TenantContext::class)->current(), $type, $id), $this->subjectHash($type, $id)];
+    }
+
+    private function lockKey(string $tenant, string $subjectType, string $subjectKey): string
+    {
+        return hash('sha256', implode("\0", [$tenant, $subjectType, $subjectKey]));
+    }
+
+    private function subjectHash(string $subjectType, string $subjectKey): string
+    {
+        return hash('sha256', $subjectType."\0".$subjectKey);
+    }
+
     public function forSubject(Model $subject): string
     {
         // Both ledgers are searched, because either can be the first to token a subject. A change
@@ -130,7 +338,7 @@ final class SubjectToken
     private function tokenIn(Builder $query, Model $subject): ?string
     {
         $token = $query
-            ->where('subject_type', $subject->getMorphClass())
+            ->where('subject_type', (string) $subject->getMorphClass())
             ->where('subject_id', SubjectKey::for($subject))
             ->whereNotNull('subject_token')
             ->value('subject_token');

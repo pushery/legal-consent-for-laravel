@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
+use Pushery\LegalConsent\Console\Concerns\RunsPerTenant;
 use Pushery\LegalConsent\Models\LegalChangeSet;
 use Pushery\LegalConsent\Support\ChangeItemsAuthor;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -21,14 +22,33 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'legal-consent:changes')]
 final class DescribeChangeCommand extends Command
 {
+    use RunsPerTenant;
+
     protected $signature = 'legal-consent:changes
         {key : The document key, e.g. terms}
         {locale : The locale to inspect}
-        {--clear : Discard the working draft for this key and locale}';
+        {--clear : Discard the working draft for this key and locale}
+        {--tenant= : With tenancy on, work in this tenant rather than the shared bucket}';
 
     protected $description = 'Show or discard the pending change description for a document and locale.';
 
     public function handle(ChangeItemsAuthor $author): int
+    {
+        $named = $this->namedTenant();
+
+        if ($named === false) {
+            return self::FAILURE;
+        }
+
+        $this->noteSharedBucket($named);
+
+        return $this->inTenant($named, fn (): int => $this->describeHere($author));
+    }
+
+    /**
+     * The description itself, in whichever tenant is current.
+     */
+    private function describeHere(ChangeItemsAuthor $author): int
     {
         /** @var string $key */
         $key = $this->argument('key');

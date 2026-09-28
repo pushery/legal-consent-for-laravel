@@ -70,6 +70,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         'notified_at', 'created_at', 'updated_at', 'notice_mode', 'change_class', 'regime',
         'notice_period_days', 'offers_termination', 'keeps_unmodified_offered',
         'objection_deadline', 'objection_closed_at', 'source_hash', 'render_fingerprint',
+        'objection_min_days',
     ];
 
     public function __construct(public readonly LegalDocument $document) {}
@@ -280,7 +281,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         // per recipient, and the ledger it reads grows for the life of the account — so the
         // unrestricted fold made a single-key yes/no cost more the longer someone had been a
         // customer, for rows it then threw away.
-        $held = new ConsentGate()->heldMajorByKey($notifiable, [$this->document->key]);
+        $held = new ConsentGate()->currentHoldings($notifiable, [$this->document->key]);
 
         return ! ConsentGate::holds($held, $this->document->key, $this->document->major_version);
     }

@@ -250,6 +250,20 @@ final class EnforceableDocumentCache
     }
 
     /**
+     * Forget the declared locales only, for when the published ones cannot be read: a database
+     * without this package's tables, before the first `migrate`, or none reachable at all, in a
+     * build step.
+     */
+    public function flushDeclared(): void
+    {
+        $this->memo = [];
+
+        foreach ($this->locales() as $locale) {
+            $this->flush($locale);
+        }
+    }
+
+    /**
      * Every locale a cached set could exist under: the declared ones, plus the ones actually
      * published.
      *

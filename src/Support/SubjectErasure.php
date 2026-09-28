@@ -15,6 +15,10 @@ namespace Pushery\LegalConsent\Support;
  * recomputed, which is what the operator correlates against the next `legal-consent:verify-ledger`.
  * It is normally the same number, and it is NOT when a subject also has rows that predate
  * tamper-evidence — those carry no link and are erased without one.
+ *
+ * `unverifiedChains` counts the subject's chains that no longer verified as the package wrote
+ * them. Their rows were erased and not re-linked, so `legal-consent:verify-ledger` goes on
+ * reporting them: a number above zero is something to look at, not something the erasure fixed.
  */
 final readonly class SubjectErasure
 {
@@ -22,6 +26,7 @@ final readonly class SubjectErasure
         public int $consents = 0,
         public int $notices = 0,
         public int $rechained = 0,
+        public int $unverifiedChains = 0,
     ) {}
 
     /** Did this erasure touch anything at all? */

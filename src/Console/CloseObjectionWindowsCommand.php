@@ -22,8 +22,8 @@ use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\ConsentContext;
-use Pushery\LegalConsent\Support\ConsentGate;
 use Pushery\LegalConsent\Support\DeemedAcceptanceDecision;
+use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\SubjectKey;
 use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -50,7 +50,9 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * SILENCE BINDS ONLY AGAINST A PROOF ROW. § 308 Nr. 5 lit. b BGB makes the special warning a
  * validity condition of the fiction, so this sweep deems nobody it cannot show a delivered notice
  * for — a `legal_notices` row for that subject and version whose mandatory content actually
- * rendered. Refusals are counted and reported: doing nothing quietly is the worst outcome here,
+ * rendered, and which was delivered by the objection deadline. The warning belongs at the start of
+ * the period to object, so a notice delivered after the deadline leaves that period empty and binds
+ * nobody. Refusals are counted and reported: doing nothing quietly is the worst outcome here,
  * because it looks exactly like success.
  *
  * That makes the durable-medium proof a PREREQUISITE of deemed consent rather than an option. With
@@ -70,7 +72,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
     protected $description = 'Deem acceptance for deemed-consent changes whose objection window has closed with no objection.';
 
-    public function handle(AffectedSubjectResolver $resolver, ConsentGate $gate, ConsentManager $consent, LegalConsentMonitor $monitor, TenantContext $tenant, DeemedAcceptanceDecision $decision): int
+    public function handle(AffectedSubjectResolver $resolver, ConsentManager $consent, LegalConsentMonitor $monitor, TenantContext $tenant, DeemedAcceptanceDecision $decision, LegalDocumentPublisher $publisher): int
     {
         DB::disableQueryLog();
 
@@ -110,18 +112,20 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
         $deemed = 0;
         $unproved = 0;
+        $late = 0;
         $closed = 0;
 
         foreach ($versions as $version) {
             $unprovedHere = 0;
+            $lateHere = 0;
 
             $resolver->forVersion($version, $maxConsentId)
                 ->chunk(self::CHUNK)
-                ->each(function (LazyCollection $chunk) use ($version, $gate, $consent, $tenant, $decision, &$deemed, &$unprovedHere): void {
+                ->each(function (LazyCollection $chunk) use ($version, $consent, $tenant, $decision, $publisher, &$deemed, &$unprovedHere, &$lateHere): void {
                     $subjects = $chunk->collect();
                     // One query per chunk, not one per subject: the answer to "was this subject
                     // sent a valid notice for this version" is the same table for all of them.
-                    $proved = $this->provenSubjects($version, $subjects);
+                    [$proved, $delivered] = $this->provenSubjects($version, $subjects, $publisher);
 
                     foreach ($subjects as $subject) {
                         // Pin the version's tenant around the WHOLE evaluation — the read as much as
@@ -130,20 +134,27 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
                         // TenantScope) and miss the subject's own Objected row — deeming someone who
                         // objected in time to have agreed by silence. An unpinned write would
                         // likewise strand the § 308 proof outside the tenant it belongs to.
-                        $tenant->forTenant($version->tenant_id, function () use ($version, $subject, $gate, $consent, $decision, $proved, &$deemed, &$unprovedHere): void {
+                        $tenant->forTenant($version->tenant_id, function () use ($version, $subject, $consent, $decision, $proved, $delivered, &$deemed, &$unprovedHere, &$lateHere): void {
                             // Read LIVE (not from the snapshot): only this can see an objection or an
-                            // express acceptance recorded since the sweep started.
-                            $latest = $gate->latestActionFor($subject, $version->key, $version->locale);
-                            $noticeProved = isset($proved[$this->subjectKey($subject)]);
+                            // express acceptance recorded since the sweep started. An objection that
+                            // answered no open change is passed over there, see latestThatCounts().
+                            $latest = $decision->latestThatCounts($subject, $version);
+                            $key = $this->subjectKey($subject);
+                            $noticeProved = isset($proved[$key]);
 
                             if (! $decision->shouldDeem($latest, $version, $noticeProved)) {
                                 // Separate the two refusals, and ask in this order. Someone who
                                 // objected, terminated, or already holds this version is the system
                                 // working — counting them as a missing notice would bury the real
                                 // deficiency in a number that is never zero. Only a subject who
-                                // WOULD have been bound, and cannot be for want of proof, counts.
+                                // WOULD have been bound, and cannot be for want of proof, counts,
+                                // and a notice that did arrive, only too late, is counted apart.
                                 if (! $noticeProved && $decision->shouldDeem($latest, $version, noticeProved: true)) {
-                                    $unprovedHere++;
+                                    if (isset($delivered[$key])) {
+                                        $lateHere++;
+                                    } else {
+                                        $unprovedHere++;
+                                    }
                                 }
 
                                 return;
@@ -173,12 +184,13 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
             // a late notice can still bind anyone — a § 308 Nr. 5 lit. b warning served after the
             // objection deadline cannot found a fiction, and re-announcing is a new version's job.
             // It promises that the scheduled task keeps saying so until somebody acts.
-            if ($unprovedHere === 0) {
+            if ($unprovedHere === 0 && $lateHere === 0) {
                 $version->forceFill(['objection_closed_at' => $now])->saveQuietly();
                 $closed++;
             }
 
             $unproved += $unprovedHere;
+            $late += $lateHere;
 
             // A memory hint, and observable after all: with the automatic collector off, a cycle left
             // before the run is freed only by this call, and an arm holds that. It stays because this
@@ -193,22 +205,28 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
         if ($unproved > 0) {
             // Loud, and non-zero. A silent skip here is indistinguishable from "nobody was owed
             // anything", and the difference is whether a population is bound or not.
-            $this->error("{$unproved} subject(s) were NOT deemed: no delivered notice carrying the § 308 Nr. 5 lit. b warning is on record for them. Silence does not bind without it. Their window stays OPEN, so this run keeps failing until it is resolved — check `legal-consent:dispatch-notices` ran for these versions, and that legal_notices.mandatory_content_ok is true.");
+            $this->error("{$unproved} subject(s) were NOT deemed: no notice carrying the § 308 Nr. 5 lit. b warning is on record as delivered to them by the objection deadline. Silence does not bind without it, and a notice sent now would arrive after the deadline it names: they need a new version with a new objection deadline. Their window stays OPEN, so this run keeps failing until the version is replaced — check that `legal-consent:dispatch-notices` runs on schedule, and that legal_notices.mandatory_content_ok is true.");
             $monitor->heartbeat('legal-consent:close-objection-windows.unproved', $unproved);
-
-            return self::FAILURE;
         }
 
-        return self::SUCCESS;
+        if ($late > 0) {
+            // Apart from the missing ones, because the repair differs: the dispatch did reach these
+            // subjects, only too late, and sending again cannot change when.
+            $this->error("{$late} subject(s) were NOT deemed: their notice carrying the § 308 Nr. 5 lit. b warning was delivered too late to leave them the objection period this version owes, after the objection deadline or too close to it, so silence cannot bind them to this version. They need a new version with a new objection deadline. Their window stays OPEN, so this run keeps failing until the version is replaced.");
+            $monitor->heartbeat('legal-consent:close-objection-windows.late', $late);
+        }
+
+        return $unproved > 0 || $late > 0 ? self::FAILURE : self::SUCCESS;
     }
 
     /**
-     * The subjects of this chunk that carry a delivered, non-deficient notice for this version.
+     * The subjects of this chunk that carry a delivered, non-deficient notice for this version, and
+     * of those the ones it reached by the objection deadline.
      *
      * @param  Collection<int, Model>  $subjects
-     * @return array<string, true>
+     * @return array{0: array<string, true>, 1: array<string, true>} delivered by the deadline, and delivered at all
      */
-    private function provenSubjects(LegalDocument $version, Collection $subjects): array
+    private function provenSubjects(LegalDocument $version, Collection $subjects, LegalDocumentPublisher $publisher): array
     {
         // No empty-collection guard: chunk() never yields an empty chunk, so this cannot be called
         // with one, and `whereIn(…, [])` is valid SQL anyway. A branch that cannot run is not
@@ -222,18 +240,26 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
             // number comes back as the int PHP made of that array key, and the closure would then
             // violate its own return type — a fatal sweep, on a configuration Laravel allows.
             ->whereIn('subject_type', $subjects->map(fn (Model $subject): string => (string) $subject->getMorphClass())->unique()->values()->all())
-            ->get(['subject_type', 'subject_id']);
+            ->get(['subject_type', 'subject_id', 'sent_at']);
 
         $proved = [];
+        $delivered = [];
 
         foreach ($rows as $row) {
-            // The value is a placeholder: the map is read with `isset()`, which is true for `false`
-            // just as it is for `true`. So `false` here would behave identically — said out loud,
-            // because a value that could be anything invites somebody to conclude it matters.
-            $proved[$row->subject_type.'#'.$row->subject_id] = true;
+            // The values are placeholders: both maps are read with `isset()`, which is true for
+            // `false` just as it is for `true` — said out loud, because a value that could be
+            // anything invites somebody to conclude it matters.
+            $key = $row->subject_type.'#'.$row->subject_id;
+            $delivered[$key] = true;
+
+            // On time means with the objection period still ahead of the recipient, measured from the
+            // day this notice was delivered, not merely before the deadline.
+            if ($publisher->leavesObjectionPeriod($version, $row->sent_at)) {
+                $proved[$key] = true;
+            }
         }
 
-        return $proved;
+        return [$proved, $delivered];
     }
 
     private function subjectKey(Model $subject): string

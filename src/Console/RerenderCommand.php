@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
+use Pushery\LegalConsent\Console\Concerns\RunsPerTenant;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\PresentationRerenderer;
+use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
 
@@ -28,12 +30,20 @@ use Throwable;
 #[AsCommand(name: 'legal-consent:rerender')]
 final class RerenderCommand extends Command
 {
-    protected $signature = 'legal-consent:rerender {key? : Only this document key} {locale? : Only this locale}';
+    use RunsPerTenant;
+
+    protected $signature = 'legal-consent:rerender {key? : Only this document key} {locale? : Only this locale} {--tenant= : With tenancy on, only this tenant rather than every one}';
 
     protected $description = 'Re-freeze published versions whose text is unchanged and whose rendering has moved.';
 
-    public function handle(PresentationRerenderer $rerenderer): int
+    public function handle(PresentationRerenderer $rerenderer, TenantContext $tenants): int
     {
+        $named = $this->namedTenant();
+
+        if ($named === false) {
+            return self::FAILURE;
+        }
+
         $key = $this->argument('key');
         $locale = $this->argument('locale');
 
@@ -43,14 +53,27 @@ final class RerenderCommand extends Command
         $published = [];
         $refusals = [];
 
-        foreach ($keys as $documentKey) {
-            foreach ($locales as $documentLocale) {
-                $document = $this->rerenderOne($rerenderer, $documentKey, $documentLocale, $refusals);
+        // Every tenant with tenancy on, as check-drift reads them, so what one reports is what the
+        // other re-freezes.
+        foreach ($this->tenantsToCheck($named) as $tenant) {
+            $tenants->forTenant($tenant, function () use ($rerenderer, $keys, $locales, $tenant, &$published, &$refusals): void {
+                $label = $this->tenantLabel($tenant);
 
-                if ($document instanceof LegalDocument) {
-                    $published[] = "'{$documentKey}' ({$documentLocale}) re-frozen as v{$document->version}";
+                foreach ($keys as $documentKey) {
+                    foreach ($locales as $documentLocale) {
+                        $refused = [];
+                        $document = $this->rerenderOne($rerenderer, $documentKey, $documentLocale, $refused);
+
+                        if ($document instanceof LegalDocument) {
+                            $published[] = "'{$documentKey}' ({$documentLocale}){$label} re-frozen as v{$document->version}";
+                        }
+
+                        foreach ($refused as $refusal) {
+                            $refusals[] = $label === '' ? $refusal : ltrim($label).': '.$refusal;
+                        }
+                    }
                 }
-            }
+            });
         }
 
         foreach ($published as $line) {

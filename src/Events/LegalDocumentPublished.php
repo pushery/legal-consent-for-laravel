@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Events;
 
+use Illuminate\Queue\SerializesModels;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
@@ -13,5 +14,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  */
 final readonly class LegalDocumentPublished
 {
+    use SerializesModels;
+
     public function __construct(public LegalDocument $document) {}
 }

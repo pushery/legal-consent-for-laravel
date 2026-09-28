@@ -12,6 +12,10 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * Make `legal_documents` identity mean the same thing on all three engines: compare `key`,
  * `locale`, `tenant_id` and `version` as BYTES on MySQL, as SQLite and PostgreSQL already do.
  *
+ * Nearly: `utf8mb4_bin` still pads trailing spaces, so `acme` and `acme ` stayed equal. Migration
+ * 000033 moves these four columns, and the tenant and subject columns of the other tables, to the
+ * no-pad `utf8mb4_0900_bin`.
+ *
  * WHAT WAS MEASURED. On SQLite, a document published under `key = 'terms'` is not found by
  * `where('key', 'TERMS')` (`exact=1 upper=0`), and publishing a second document under `'TERMS'`
  * succeeds — two rows, two identities. PostgreSQL behaves the same way under the collations its

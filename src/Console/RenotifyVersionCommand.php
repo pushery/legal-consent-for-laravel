@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
+use Pushery\LegalConsent\Support\NoticeAttempts;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
@@ -21,7 +22,9 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * `notified_at` is one of the four columns that stay writable after publish, so clearing it is a
  * legitimate operation rather than a hole in the freeze — the content, the version and the proof
  * rows are untouched. What it does NOT do is decide anything: an operator names the version, sees
- * the audience with `dispatch-notices --dry-run`, and then runs the sweep.
+ * the audience with `dispatch-notices --dry-run`, and then runs the sweep. It also forgets the
+ * notice attempts recorded for the version, so a subject the sweep had given up on, or one it
+ * still took for queued, is tried again.
  *
  * The version is an ARGUMENT rather than a `--version` option on purpose: Symfony's console
  * application owns `--version` globally, so a command declaring it never sees the value. The
@@ -47,6 +50,15 @@ final class RenotifyVersionCommand extends Command
             $this->error('No such version. Nothing was changed.');
 
             return self::FAILURE;
+        }
+
+        // The sweep stops trying a subject whose notice failed notifications.max_attempts times,
+        // and skips one whose notice is still queued. A re-notify is the repair once the cause is
+        // fixed, so every subject of the version is tried again.
+        $forgotten = NoticeAttempts::forgetVersion($version);
+
+        if ($forgotten > 0) {
+            $this->info("Forgot {$forgotten} recorded notice attempt(s) of {$version->key} {$version->version} ({$version->locale}), so every subject is tried again.");
         }
 
         if ($version->notified_at === null) {

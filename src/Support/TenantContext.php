@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Closure;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Optional multi-tenancy (config `tenancy`). When enabled, legal documents and consents
@@ -19,6 +20,14 @@ use Closure;
  * yields nothing (a system/console context) — '' is the shared-tenant bucket, so an app that
  * never enables tenancy behaves exactly as before (every row shares '').
  *
+ * A resolver that reads the signed-in user also yields nothing for a guest, and a registration is
+ * made by one: the new account is not signed in while its consents are recorded. Those rows would
+ * land in '' and the account's own tenant would never see them. Tell the package how to find a
+ * subject's tenant for that case, or resolve the tenant from the request (a domain, a route
+ * parameter) so a guest has one too:
+ *
+ *     app(TenantContext::class)->resolveSubjectUsing(fn (Model $user) => $user->tenant_id);
+ *
  * The tenant column is fixed at `tenant_id`. It was briefly configurable, which it never could
  * be: every migration declares the column literally, so pointing the option anywhere else only
  * produced a "column not found" on the first read. An advertised option that can only break is
@@ -31,6 +40,9 @@ final class TenantContext
 
     /** @var (Closure(): mixed)|null */
     private ?Closure $resolver = null;
+
+    /** @var (Closure(Model): mixed)|null */
+    private ?Closure $subjectResolver = null;
 
     public function __construct(
         private readonly bool $enabled = false,
@@ -47,6 +59,32 @@ final class TenantContext
     public function resolveUsing(Closure $resolver): void
     {
         $this->resolver = $resolver;
+    }
+
+    /**
+     * How to tell the tenant a subject belongs to, for what is written on its behalf while nobody
+     * is signed in: the registration.
+     *
+     * @param  Closure(Model): mixed  $resolver
+     */
+    public function resolveSubjectUsing(Closure $resolver): void
+    {
+        $this->subjectResolver = $resolver;
+    }
+
+    /**
+     * The tenant $subject belongs to, or '' when tenancy is off, no subject resolver is set, or it
+     * yields nothing.
+     */
+    public function tenantOf(Model $subject): string
+    {
+        if (! $this->enabled || ! $this->subjectResolver instanceof Closure) {
+            return '';
+        }
+
+        $tenant = ($this->subjectResolver)($subject);
+
+        return is_int($tenant) || is_string($tenant) ? (string) $tenant : '';
     }
 
     /**

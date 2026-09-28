@@ -92,6 +92,20 @@ final readonly class LegalDocumentPublisher
     ];
 
     /**
+     * The regimes whose statutory period the law counts in calendar months, not days.
+     *
+     * Two calendar months are 59 to 62 days and one is 28 to 31, so the day counts above fall short
+     * of the law whenever the months before the end have 31 days: a payment change announced on
+     * 2027-07-03 for 2027-09-01 has 60 days, and two months before 2027-09-01 is 2027-07-01. These
+     * regimes are therefore also checked on the calendar, and the day count stays the floor that
+     * config and an override are measured against.
+     */
+    private const array STATUTORY_MONTHS = [
+        'psd2_675g' => 2, // § 675g Abs. 1 BGB / Art. 54 PSD2
+        'eecc' => 1,      // Dir. (EU) 2018/1972 Art. 105(4)
+    ];
+
+    /**
      * @param  array<string, array<string, mixed>>  $documents
      */
     public function __construct(
@@ -261,6 +275,11 @@ final readonly class LegalDocumentPublisher
                 // MUTABLE_AFTER_PUBLISH, so whatever lands here is frozen — and it is the number a
                 // consumer's compliance report reads back as the notice period.
                 'notice_period_days' => max(0, (int) round($announce->diffInDays($enforce))),
+                // The objection period each recipient is owed, as this version is published under it.
+                // `legal-consent:close-objection-windows` measures it again from the day each notice
+                // was delivered ({@see leavesObjectionPeriod()}). Null for every other mode, since no
+                // other mode lets silence bind anybody.
+                'objection_min_days' => $mode === NoticeMode::DeemedConsent ? $this->minLeadDays($mode, $regime, $key) : null,
                 'offers_termination' => $offersTermination,
                 'keeps_unmodified_offered' => $keepsUnmodified,
                 'is_active' => false,
@@ -491,6 +510,14 @@ final readonly class LegalDocumentPublisher
             throw NoticeTimelineInvertedException::for($key, $locale, $announce, $enforce);
         }
 
+        // The periods run from the first day a notice can reach anyone. The dispatch sends
+        // nothing before the version is published, so an announcement dated on an earlier day
+        // means today and is measured from today: measured as written, a version published today
+        // with an announcement two months back passed with its objection deadline already behind
+        // it. A time earlier today stays as chosen, because the periods are counted in days.
+        $today = $now->startOfDay();
+        $earliestNotice = $announce->lessThan($today) ? $today : $announce;
+
         if ($mode === NoticeMode::DeemedConsent) {
             $deadline = $this->assertObjectionWindow($objectionDeadline, $enforce, $key);
 
@@ -502,19 +529,26 @@ final readonly class LegalDocumentPublisher
             // without a real chance to object, so there is no exemption here.
             $minDays = $this->minLeadDays($mode, $regime, $key);
 
-            if ($announce->addDays($minDays)->greaterThan($deadline)) {
+            if ($earliestNotice->addDays($minDays)->greaterThan($deadline)) {
                 // The span ENDS at the objection deadline here, and saying so is the whole of
                 // this argument: the refusal used to name this date 'enforcement', so an
                 // operator moved the enforcement date — which was never the problem — and got
                 // refused again with the same number.
-                throw LeadTimeTooShortException::for($key, $minDays, $announce, $deadline, LeadTimeSpan::ObjectionDeadline);
+                throw LeadTimeTooShortException::for($key, $minDays, $earliestNotice, $deadline, LeadTimeSpan::ObjectionDeadline);
+            }
+
+            $calendarDays = $this->calendarShortfall($regime, $earliestNotice, $deadline);
+
+            if ($calendarDays !== null) {
+                throw LeadTimeTooShortException::for($key, $calendarDays, $earliestNotice, $deadline, LeadTimeSpan::ObjectionDeadline);
             }
         } elseif ($mode->requiresNotice() && $enforce->greaterThan($now)) {
             // A change SCHEDULED for a future enforcement date must give the minimum advance
             // period for its mode and regime between its (effective) announcement and enforcement.
             // Defaulting the announce date to now before comparing closes the bypass where
-            // enforceAt is set but announceAt is omitted. An immediate publish (enforcement
-            // now-or-past — e.g. an initial version) has no grace window.
+            // enforceAt is set but announceAt is omitted, and measuring from the earliest notice
+            // closes the one where it is set to a day already past. An immediate publish
+            // (enforcement now-or-past — e.g. an initial version) has no grace window.
             //
             // The condition used to be `$mode->gates()`, which is true for ACTIVE RE-CONSENT ONLY.
             // An info-only change therefore hit neither branch and got no advance check at all —
@@ -527,19 +561,26 @@ final readonly class LegalDocumentPublisher
             $minDays = $this->minLeadDays($mode, $regime, $key);
 
             // `> 0` VS `>= 0` IS UNOBSERVABLE HERE, so no test can tell the two apart. With
-            // `$minDays === 0` the comparison reduces to `announce > enforce`, and that is false
-            // in every state this branch can be reached in:
+            // `$minDays === 0` the comparison reduces to `earliest notice > enforce`, and that is
+            // false in every state this branch can be reached in:
             //
-            //   - the branch itself requires `$enforce > $now`, and
-            //   - `$announce` is either `$now` (defaulted, therefore below `$enforce`) or a date
-            //     the operator chose, which the timeline invariant above already refused if it
+            //   - the branch itself requires `$enforce > $now`, so the start of today is below it,
+            //     and
+            //   - otherwise the earliest notice is the announcement, either `$now` (defaulted) or a
+            //     date the operator chose, which the timeline invariant above already refused if it
             //     was after `$enforce`.
             //
             // The `> 0` stays because it says what it means -- a mode and regime with no floor
             // owes no period, so no period is measured -- and reading that from the arithmetic
             // instead would make the next reader re-derive the paragraph above.
-            if ($minDays > 0 && $announce->addDays($minDays)->greaterThan($enforce)) {
-                throw LeadTimeTooShortException::for($key, $minDays, $announce, $enforce, LeadTimeSpan::Enforcement);
+            if ($minDays > 0 && $earliestNotice->addDays($minDays)->greaterThan($enforce)) {
+                throw LeadTimeTooShortException::for($key, $minDays, $earliestNotice, $enforce, LeadTimeSpan::Enforcement);
+            }
+
+            $calendarDays = $this->calendarShortfall($regime, $earliestNotice, $enforce);
+
+            if ($calendarDays !== null) {
+                throw LeadTimeTooShortException::for($key, $calendarDays, $earliestNotice, $enforce, LeadTimeSpan::Enforcement);
             }
         }
 
@@ -832,8 +873,73 @@ final readonly class LegalDocumentPublisher
         }
 
         // A statutory period may only be lengthened by an override. A regime without a legal floor
-        // — and a change with no regime at all — may be tuned down, which is the point of the knob.
-        return $floor > 0 ? max($override, $resolved) : $override;
+        // — and a change with no regime at all — may be tuned down, which is the point of the knob,
+        // down to no period at all: below zero, a deemed-consent window could close before its own
+        // announcement, and a configured period below zero already counts as zero.
+        return $floor > 0 ? max($override, $resolved) : max(0, $override);
+    }
+
+    /**
+     * Whether a notice delivered at $delivered left its recipient the objection period of a
+     * deemed-consent version.
+     *
+     * § 308 Nr. 5 BGB lets silence bind only after a reasonable period to object, with the warning
+     * given at the BEGINNING of that period. Publishing checks the period from the announcement; a
+     * recipient whose notice arrived later, behind a queue backlog or a retry, has less of it. So it
+     * is measured again here from the day their notice was delivered, the way publishing measures it:
+     * in days from the start of that day, and on the calendar as well for a regime the law counts in
+     * months. A notice delivered after the deadline leaves no period at all.
+     *
+     * The days are the ones the version was published under. A version published before they were
+     * stored is measured against the configuration, but never against more than the window it left
+     * from its announcement: it was published under the configuration of its day, which may have
+     * been shorter, and a notice delivered when it was announced was on time then.
+     */
+    public function leavesObjectionPeriod(LegalDocument $version, CarbonImmutable $delivered): bool
+    {
+        $deadline = $version->objection_deadline;
+
+        if (! $deadline instanceof CarbonImmutable || $delivered->greaterThan($deadline)) {
+            return false;
+        }
+
+        $start = $delivered->startOfDay();
+        $minDays = $version->objection_min_days ?? $this->unstoredPeriod($version, $deadline);
+
+        return ! $start->addDays($minDays)->greaterThan($deadline)
+            && $this->calendarShortfall($version->regime, $start, $deadline) === null;
+    }
+
+    /**
+     * The period to measure a version by that was published before its period was stored: the
+     * configured one, capped at the whole days from the start of its announcement day to its deadline.
+     */
+    private function unstoredPeriod(LegalDocument $version, CarbonImmutable $deadline): int
+    {
+        $configured = $this->minLeadDays(NoticeMode::DeemedConsent, $version->regime, $version->key);
+        $announced = $version->announce_from;
+        $granted = $announced instanceof CarbonImmutable ? (int) floor($announced->startOfDay()->diffInDays($deadline, false)) : $configured;
+
+        return min($configured, max(0, $granted));
+    }
+
+    /**
+     * The days the calendar months of a regime span before $end, when $start leaves less than
+     * them ({@see STATUTORY_MONTHS}), and null when it does not or the regime counts in days. The
+     * latest start the law allows is $end that many months back, without overflowing into the
+     * next month; the days are what a refusal names.
+     */
+    private function calendarShortfall(?string $regime, CarbonImmutable $start, CarbonImmutable $end): ?int
+    {
+        $months = $regime === null ? null : (self::STATUTORY_MONTHS[$regime] ?? null);
+
+        if ($months === null) {
+            return null;
+        }
+
+        $latest = $end->subMonthsNoOverflow($months);
+
+        return $start->greaterThan($latest) ? (int) round($latest->diffInDays($end)) : null;
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Testing;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use PHPUnit\Framework\Assert;
+use Pushery\LegalConsent\Content\AcceptanceWording;
 use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentAction;
@@ -38,6 +39,14 @@ use Pushery\LegalConsent\Support\SubjectErasure;
  * WRITES ARE RECORDED, NEVER PERFORMED. `record()` and friends return an UNSAVED LegalConsent
  * carrying the attributes they were called with, so calling code that reads the returned model
  * keeps working, while `$model->exists` stays false — the honest answer, since nothing was written.
+ * No event fires either, `ConsentObjected` and `ConsentTerminated` included, which the contract
+ * names for the real manager: a listener test against the fake fails rather than passing on an
+ * event that never happened.
+ *
+ * The subject is identified the way the real manager does it, by `getMorphClass()`: under an
+ * enforced morph map an unmapped subject throws here as it does in production, and a mapped one is
+ * recorded under its alias. A missing locale resolves as it does there: a read answers for the
+ * configured `default_locale`, a write takes the context's locale first.
  */
 final class ConsentFake implements ConsentManager
 {
@@ -290,7 +299,7 @@ final class ConsentFake implements ConsentManager
      */
     public function outstanding(Model $subject, ?string $locale = null): Collection
     {
-        $locale ??= 'de';
+        $locale ??= $this->defaultLocale();
         $keys = $this->owed[$this->identify($subject)] ?? [];
 
         /** @var Collection<int, LegalDocument> $documents */
@@ -351,15 +360,7 @@ final class ConsentFake implements ConsentManager
      */
     private function acceptanceWordingFor(string $key, string $locale): string
     {
-        foreach (["legal-consent::wording.{$key}", 'legal-consent::wording.default'] as $line) {
-            $translated = trans($line, [], $locale);
-
-            if (is_string($translated) && $translated !== $line && trim($translated) !== '') {
-                return $translated;
-            }
-        }
-
-        return '';
+        return AcceptanceWording::for($key, $locale) ?? '';
     }
 
     public function hasCurrent(Model $subject, string $documentKey, ?string $locale = null): bool
@@ -425,7 +426,7 @@ final class ConsentFake implements ConsentManager
         // Mirrors the real read path, which has NO locale fallback on purpose: a page shows the
         // text of the locale it claims, or nothing. A fake that fell back would let a consumer
         // build a page that works in tests and renders the wrong language in production.
-        return $this->published[$documentKey.'|'.($locale ?? 'de')] ?? null;
+        return $this->published[$documentKey.'|'.($locale ?? $this->defaultLocale())] ?? null;
     }
 
     /**
@@ -440,9 +441,13 @@ final class ConsentFake implements ConsentManager
 
     private function capture(Model $subject, string $documentKey, ConsentAction $action, ConsentContext $context, ?string $locale, ?string $expectedContentHash = null): LegalConsent
     {
+        // Resolved the way the real manager resolves a write: the argument, then the context's
+        // locale, then the configured default.
+        $locale ??= $context->locale ?? $this->defaultLocale();
+
         $this->recorded[] = new RecordedConsent(
             subject: $subject,
-            subjectType: $subject::class,
+            subjectType: (string) $subject->getMorphClass(),
             subjectKey: RecordedConsent::keyOf($subject),
             documentKey: $documentKey,
             action: $action,
@@ -458,7 +463,7 @@ final class ConsentFake implements ConsentManager
         // return value — `exists` stays false, so calling code that persists or reloads it fails
         // loudly here rather than quietly asserting against a row that was never written.
         $consent->forceFill([
-            'subject_type' => $subject::class,
+            'subject_type' => (string) $subject->getMorphClass(),
             'subject_id' => RecordedConsent::keyOf($subject),
             'document_key' => $documentKey,
             'action' => $action,
@@ -472,7 +477,15 @@ final class ConsentFake implements ConsentManager
     {
         // Reordering the parts is EQUIVALENT under mutation, since the identity is only ever used as a
         // key. Dropping the subject's key from it is not.
-        return $subject::class.'|'.(RecordedConsent::keyOf($subject) ?? 'null');
+        return $subject->getMorphClass().'|'.(RecordedConsent::keyOf($subject) ?? 'null');
+    }
+
+    /** The locale a call without one falls back to, from the same key the real manager reads. */
+    private function defaultLocale(): string
+    {
+        $locale = config('legal-consent.default_locale');
+
+        return is_string($locale) && $locale !== '' ? $locale : 'de';
     }
 
     private function describeMiss(string $lead, Model $subject, string $documentKey, ?ConsentAction $action = null): string

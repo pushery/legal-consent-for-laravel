@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Events;
 
+use Illuminate\Queue\SerializesModels;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
@@ -25,6 +26,8 @@ use Pushery\LegalConsent\Models\LegalDocument;
  */
 final readonly class NoticeDispatched
 {
+    use SerializesModels;
+
     public function __construct(
         public LegalDocument $version,
         public int $notified,

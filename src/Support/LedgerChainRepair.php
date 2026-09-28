@@ -20,10 +20,12 @@ use stdClass;
  * THE COST OF THIS IS REAL AND WAS CHOSEN, NOT OVERLOOKED. A supported re-link path exists now,
  * so "the chain verifies" no longer means "no row was ever rewritten" — it means "no row was
  * rewritten OUTSIDE these two operations", and both of them stamp `subject_erased_at` or are a
- * scheduled sweep that reports what it removed. Against an attacker it changes nothing: without a
- * key the verifier already says in its own output that anyone with table-write access can re-link,
- * and with a key this code needs the same secret they would. It is only reachable from application
- * code, never from SQL.
+ * scheduled sweep that reports what it removed. Against an attacker: without a key the verifier
+ * already says in its own output that anyone with table-write access can re-link. With a key this
+ * code holds the secret they lack, so it must never re-link what they changed, and both callers
+ * check a chain with {@see LedgerChainSoundness} first and leave one that does not verify as it is.
+ * The state that triggers a re-link can be produced through SQL; the re-link itself is only for a
+ * chain this package wrote.
  *
  * IT IS A PURE FUNCTION OVER ROWS, deliberately. It reads no table and writes none — the callers
  * differ too much for a shared write path (one rewrites every row, the other only the ones whose
@@ -176,6 +178,37 @@ final readonly class LedgerChainRepair
                 implode(', ', array_keys($tokens)),
             ));
         }
+    }
+
+    /**
+     * Whether writing these rows back gives a row a root proof it did not carry.
+     *
+     * The writer stamps the chain-root boundary before the first proof it writes, and the verifier
+     * relies on that order: proofs without a boundary read as a boundary somebody deleted. A caller
+     * that writes a proof through {@see relink()} stamps first as well, and this tells it when.
+     *
+     * @param  list<array<string, mixed>>  $before  the rows as read
+     * @param  list<array<string, mixed>>  $after  the rows about to be written back
+     */
+    public function writesARootProof(array $before, array $after): bool
+    {
+        $proofs = [];
+
+        foreach ($before as $row) {
+            if (is_int($row['id'] ?? null) || is_string($row['id'] ?? null)) {
+                $proofs[(int) $row['id']] = $row['root_proof'] ?? null;
+            }
+        }
+
+        foreach ($after as $row) {
+            $id = is_int($row['id'] ?? null) || is_string($row['id'] ?? null) ? (int) $row['id'] : 0;
+
+            if (($row['root_proof'] ?? null) !== null && ($proofs[$id] ?? null) === null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

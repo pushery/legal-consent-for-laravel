@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Console;
 
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
@@ -21,6 +22,7 @@ use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
+use Pushery\LegalConsent\Support\RetentionPeriod;
 use Pushery\LegalConsent\Support\SourceLanguageFallback;
 use Pushery\WireKit\WireKitServiceProvider;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -704,6 +706,10 @@ final class DoctorCommand extends Command
     {
         $variantFinding = $this->uiVariantFinding();
         $unknownMode = $this->unknownRegistrationMode();
+        $retentionProblem = RetentionPeriod::problem(
+            RetentionPeriod::configured(config('legal-consent.retention_after_end', '3 years')),
+            CarbonImmutable::now(),
+        );
         $editorRoute = $this->unresolvableEditorRoute();
         $uncacheable = $this->uncacheableKeys();
         $refusedFallbacks = SourceLanguageFallback::refusedKeys();
@@ -779,6 +785,15 @@ final class DoctorCommand extends Command
             $this->line('  cells are plain text — which looks exactly like an installation that never set the');
             $this->line('  key, and is the reason this line exists. The parameters are filled by position:');
             $this->line('  the document key first, the locale second.');
+            $this->newLine();
+        }
+
+        if ($retentionProblem !== null) {
+            $this->newLine();
+            $this->error('legal-consent.retention_after_end names no retention period:');
+            $this->line("  {$retentionProblem}");
+            $this->line('  `legal-consent:prune` refuses to run with it, so nothing past its retention is removed');
+            $this->line('  until the value is fixed.');
             $this->newLine();
         }
 
@@ -919,7 +934,7 @@ final class DoctorCommand extends Command
         // returns each restating the rule is how the legal contradiction fell out of the exit code
         // on the third one: the same deemed-consent-without-proof installation ended 1 or 0
         // depending on whether the published config happened to carry an unrelated stale key.
-        $failed = $incoherent || $refusedFallbacks !== [] || $unknownRightsRoutes !== [];
+        $failed = $incoherent || $refusedFallbacks !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null;
 
         // $this->laravel->configPath(), never the config_path() helper: that one lives in
         // laravel/framework's Foundation, which this package does not import a symbol from. The

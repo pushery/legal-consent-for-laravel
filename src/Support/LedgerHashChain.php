@@ -179,6 +179,12 @@ final class LedgerHashChain
      * An attacker cannot pre-stamp a high boundary to exempt a forgery: the marker carries a MAC
      * over the id, and producing one needs the secret. A marker with a wrong MAC is a break, so the
      * attempt is loud rather than useful.
+     *
+     * Nor can they have the package stamp one for them by deleting the marker: a marker that is
+     * gone while root proofs exist was removed rather than never written, since the first keyed
+     * opener stamps it before its own proof. It is left missing, and the verifier reports that
+     * ({@see rootBoundaryRemoved()}). Stamped again, it would sit above every row written since and
+     * exempt whatever was slipped in among them.
      */
     public function stampRootBoundary(): void
     {
@@ -186,11 +192,7 @@ final class LedgerHashChain
             return;
         }
 
-        $exists = DB::table('legal_ledger_markers')
-            ->where('name', self::ROOT_BOUNDARY_MARKER)
-            ->exists();
-
-        if ($exists) {
+        if (self::markerStamped(self::ROOT_BOUNDARY_MARKER) || $this->rootProofsExist()) {
             return;
         }
 
@@ -203,6 +205,41 @@ final class LedgerHashChain
             'proof' => $this->boundaryProof($boundary),
             'created_at' => now(),
         ]);
+
+        new LedgerBoundaryCensus($this)->stamp(self::ROOT_BOUNDARY_MARKER, $boundary);
+    }
+
+    /**
+     * Whether a boundary marker is stamped, asked the way a stamp has to ask it.
+     *
+     * A plain read answers from the transaction's snapshot on MySQL, and a write that waited for
+     * another one to commit can hold a snapshot from before that one stamped. So where the plain
+     * read finds no marker, a locking read asks again, which sees a committed one. Two first writes
+     * that both find none still collide at their inserts, and the one the database refuses is tried
+     * again like any other write.
+     */
+    public static function markerStamped(string $name): bool
+    {
+        $marker = DB::table('legal_ledger_markers')->where('name', $name);
+
+        return (clone $marker)->exists() || $marker->sharedLock()->value('name') !== null;
+    }
+
+    /**
+     * Whether the chain-root marker was removed: its table is there, the marker row is not, and
+     * rows carrying a root proof exist, which only a stamped boundary lets the package write.
+     */
+    public function rootBoundaryRemoved(): bool
+    {
+        return Schema::hasTable('legal_ledger_markers')
+            && ! DB::table('legal_ledger_markers')->where('name', self::ROOT_BOUNDARY_MARKER)->exists()
+            && $this->rootProofsExist();
+    }
+
+    private function rootProofsExist(): bool
+    {
+        return Schema::hasColumn('legal_consents', 'root_proof')
+            && DB::table('legal_consents')->whereNotNull('root_proof')->exists();
     }
 
     /**

@@ -6,10 +6,12 @@ namespace Pushery\LegalConsent\Listeners;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Mail\SentMessage;
 use Illuminate\Notifications\Events\NotificationSent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Notifications\ChangeNotification;
+use Pushery\LegalConsent\Support\NoticeAttempts;
 use Pushery\LegalConsent\Support\SubjectKey;
 use Pushery\LegalConsent\Support\SubjectToken;
 use Pushery\LegalConsent\Support\TenantContext;
@@ -26,9 +28,14 @@ use Pushery\LegalConsent\Support\TenantContext;
  * `legal-consent:close-objection-windows` reads exactly those rows to bind a subject to a
  * contract change by silence (§ 308 Nr. 5 lit. b BGB).
  *
- * `NotificationSent` fires after the channel returned without throwing, so the row now states
- * what its own column says: the notice went out. Three further things follow from that, all of
- * them corrections rather than side effects:
+ * `NotificationSent` fires after the channel returned without throwing, and the row is written only
+ * when the mail channel handed back the message it sent, so it states what its own column says:
+ * the notice went out. The channel returns without sending, and without an error, when the subject
+ * has no mail route (no address, or a `routeNotificationForMail()` that answers null) or a
+ * `MessageSending` listener cancels the message, and the event fires all the same. Nothing is
+ * proved then; the attempt counts as failed ({@see ReopenVersionOnNoticeFailure::record()}), so the
+ * subject is retried and, once the attempts are used up, reported as unreachable. Three further
+ * things follow from writing on delivery, all of them corrections rather than side effects:
  *
  *  - a subject the worker SKIPS gets no proof. {@see ChangeNotification::shouldSend()} runs in the
  *    worker and suppresses a re-consent notice for someone who agreed in the meantime; the sweep
@@ -53,6 +60,7 @@ final readonly class WriteNoticeDeliveryProof
     public function __construct(
         private TenantContext $tenant,
         private SubjectToken $tokens,
+        private ReopenVersionOnNoticeFailure $failures,
     ) {}
 
     public function handle(NotificationSent $event): void
@@ -78,6 +86,12 @@ final readonly class WriteNoticeDeliveryProof
             return;
         }
 
+        if (! $event->response instanceof SentMessage) {
+            $this->failures->record($notification, $subject);
+
+            return;
+        }
+
         // Read through getAttribute rather than the property: the column is NOT NULL with a default
         // of '', so a document created and notified in the same request — a publish followed by a
         // notify, with no round trip through the database — carries no value at all. The shared
@@ -94,10 +108,12 @@ final readonly class WriteNoticeDeliveryProof
         $this->tenant->forTenant($tenantId, function () use ($subject, $version, $notification, $tenantId): void {
             $proof = $this->render($notification, $version, $subject);
 
-            LegalNotice::model()::query()->forceCreate([
-                'subject_type' => $subject->getMorphClass(),
+            // The token comes from the subject's row in the token registry, held until this write
+            // commits, so a consent written for them at the same moment cannot mint a second one.
+            $this->tokens->whileLocked($subject, fn (string $token): LegalNotice => LegalNotice::model()::query()->forceCreate([
+                'subject_type' => (string) $subject->getMorphClass(),
                 'subject_id' => SubjectKey::for($subject),
-                'subject_token' => $this->tokens->forSubject($subject),
+                'subject_token' => $token,
                 // An explicitly-set value is honored (BelongsToTenant only stamps a null attribute).
                 'tenant_id' => $tenantId,
                 'document_id' => $version->getKey(),
@@ -111,8 +127,12 @@ final readonly class WriteNoticeDeliveryProof
                 'notice_content_hash' => $proof['hash'],
                 'mandatory_content_ok' => $proof['mandatory_ok'],
                 'sent_at' => CarbonImmutable::now(),
-            ]);
+            ]));
         });
+
+        // The proof row answers "was this subject served?" from here on, so the record of the
+        // notice being on its way, and of any earlier failures, is no longer needed.
+        NoticeAttempts::delivered($version, $subject);
     }
 
     /**

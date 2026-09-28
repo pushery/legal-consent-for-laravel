@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
+use Pushery\LegalConsent\Console\Concerns\RunsPerTenant;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
+use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
@@ -17,12 +19,20 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'legal-consent:check-drift')]
 final class CheckDriftCommand extends Command
 {
-    protected $signature = 'legal-consent:check-drift {key? : Only this document key} {locale? : Only this locale}';
+    use RunsPerTenant;
+
+    protected $signature = 'legal-consent:check-drift {key? : Only this document key} {locale? : Only this locale} {--tenant= : With tenancy on, only this tenant rather than every one}';
 
     protected $description = 'Report legal documents whose source text has drifted from the published version.';
 
-    public function handle(LegalDriftChecker $checker): int
+    public function handle(LegalDriftChecker $checker, TenantContext $tenants): int
     {
+        $named = $this->namedTenant();
+
+        if ($named === false) {
+            return self::FAILURE;
+        }
+
         $key = $this->argument('key');
         $locale = $this->argument('locale');
 
@@ -36,14 +46,21 @@ final class CheckDriftCommand extends Command
 
         $drifts = [];
 
-        foreach ($keys as $documentKey) {
-            foreach ($locales as $documentLocale) {
-                $reason = $checker->driftFor((string) $documentKey, $documentLocale);
+        // Every tenant with tenancy on, the way the sweeps run. The console resolves no tenant, so a
+        // check of the ambient one alone read the shared bucket and reported no drift for a tenant
+        // it never looked at.
+        foreach ($this->tenantsToCheck($named) as $tenant) {
+            $tenants->forTenant($tenant, function () use ($checker, $keys, $locales, $tenant, &$drifts): void {
+                foreach ($keys as $documentKey) {
+                    foreach ($locales as $documentLocale) {
+                        $reason = $checker->driftFor((string) $documentKey, $documentLocale);
 
-                if ($reason !== null) {
-                    $drifts[] = $reason;
+                        if ($reason !== null) {
+                            $drifts[] = 'Drift'.$this->tenantLabel($tenant).': '.$reason;
+                        }
+                    }
                 }
-            }
+            });
         }
 
         if ($drifts === []) {
@@ -52,8 +69,8 @@ final class CheckDriftCommand extends Command
             return self::SUCCESS;
         }
 
-        foreach ($drifts as $reason) {
-            $this->warn('Drift: '.$reason);
+        foreach ($drifts as $line) {
+            $this->warn($line);
         }
 
         $this->error(count($drifts).' legal document(s) have drifted from their published version.');

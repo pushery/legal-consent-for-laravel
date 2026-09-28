@@ -159,6 +159,8 @@ return [
     'dialog_loading' => 'A carregar o texto …',
     'dialog_failed' => 'Não foi possível carregar o texto.',
     'admin_status_reviewed' => 'Marcado como revisto. Este texto já pode ser publicado.',
+    'admin_status_no_draft_to_review' => 'Não existe rascunho para este idioma, por isso não há nada para marcar como revisto.',
+    'admin_status_changed_before_review' => 'O texto foi alterado depois de ser mostrado aqui, por isso não foi marcado como revisto. Volta a carregá-lo e revê a versão atual.',
     'admin_status_release_blocked' => '«:key» não foi publicado: :reasons',
     'admin_status_released' => '«:key» publicado em :count idioma(s) — afeta :affects pessoa(s).',
     'admin_deemed_heading' => 'Publicar com prazo de oposição',

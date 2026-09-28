@@ -92,7 +92,11 @@ readonly class DefaultConsentManager implements ConsentManager
 
     public function registrationChecklist(?string $locale = null): array
     {
-        $locale ??= $this->defaultLocale;
+        // The application locale, as RegistrationRules and RegistrationConsentRecorder read it. With
+        // `default_locale` here instead, an English application that keeps the shipped `de` showed
+        // the German sentence while the recorder froze the English one, or showed nothing where
+        // only an English version existed while the rules required it.
+        $locale ??= app()->getLocale();
 
         $documents = $this->checklistRows($locale);
 
@@ -421,7 +425,40 @@ readonly class DefaultConsentManager implements ConsentManager
             throw NotConfirmableException::superseded($documentKey, $pending->document_major_version, $document->major_version);
         }
 
-        return $this->append($subject, $document, ConsentAction::Confirmed, $context);
+        // The check and the write happen under one lock. Two confirmations of one request at the
+        // same moment, a double click or a mail scanner opening the link, both read the request as
+        // pending before either wrote, and both recorded a confirmation and announced it. Here the
+        // request row is locked, and the newest row is read again under that lock: the second of
+        // the two waits for the first to commit and then finds its confirmation. The read locks
+        // too, because a locking read is what sees the other's commit on MySQL, where a plain read
+        // answers from the snapshot the transaction started with. The event goes out after the
+        // commit, as it does for every other write.
+        //
+        // The subject's row in the token registry is taken before either, the order every write of
+        // theirs takes it in, so a confirmation and another write for the same subject wait for
+        // each other rather than deadlock.
+        $consent = new SubjectToken()->whileLocked($subject, fn (): LegalConsent => DB::transaction(function () use ($subject, $documentKey, $document, $context, $pending): LegalConsent {
+            LegalConsent::model()::query()->whereKey($pending->getKey())->lockForUpdate()->first();
+
+            $latest = LegalConsent::model()::query()
+                ->where('subject_type', (string) $subject->getMorphClass())
+                ->where('subject_id', SubjectKey::for($subject))
+                ->where('document_key', $documentKey)
+                ->orderByDesc('accepted_at')
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $latest instanceof LegalConsent || ! $latest->is($pending)) {
+                throw NotConfirmableException::noPendingRequest($documentKey);
+            }
+
+            return $this->write($subject, $document, ConsentAction::Confirmed, $context);
+        }, self::MAX_CHAIN_ATTEMPTS));
+
+        $this->announce($consent, ConsentAction::Confirmed);
+
+        return $consent;
     }
 
     /**
@@ -489,6 +526,10 @@ readonly class DefaultConsentManager implements ConsentManager
         $locale ??= $this->defaultLocale;
         $standing = $this->gate->standingFor($subject);
         $accepted = $standing['held'];
+        // What the subject holds now, as the gate reads it: `accepted_major` reports the fold as it
+        // is, 0 after an ending action included, while `outstanding` has to agree with the gate,
+        // and at major 0 the raw number cannot tell a holding from none.
+        $holdings = ConsentGate::holdingsOf($standing);
         $acceptedVersion = $standing['version'];
         $acceptedAt = $standing['at'];
         $pending = $standing['pending'];
@@ -572,7 +613,7 @@ readonly class DefaultConsentManager implements ConsentManager
                 'outstanding' => ! $isRetired
                     && $document->type->isConsentBearing()
                     && ! $document->requires_explicit_optin
-                    && $acceptedMajor < $document->major_version,
+                    && ! ConsentGate::holds($holdings, $document->key, $document->major_version),
                 'retired' => $isRetired,
                 // The double opt-in's middle state, and the only one `accepted_major` cannot
                 // express: entered but not yet confirmed reads as never entered, so a screen built
@@ -604,7 +645,7 @@ readonly class DefaultConsentManager implements ConsentManager
     public function history(Model $subject): array
     {
         $rows = LegalConsent::model()::query()
-            ->where('subject_type', $subject->getMorphClass())
+            ->where('subject_type', (string) $subject->getMorphClass())
             ->where('subject_id', SubjectKey::for($subject))
             ->orderBy('accepted_at')
             ->orderBy('id')
@@ -649,6 +690,19 @@ readonly class DefaultConsentManager implements ConsentManager
      */
     private function append(Model $subject, LegalDocument $document, ConsentAction $action, ConsentContext $context, ?string $shownWording = null): LegalConsent
     {
+        $consent = $this->write($subject, $document, $action, $context, $shownWording);
+
+        $this->announce($consent, $action);
+
+        return $consent;
+    }
+
+    /**
+     * The row of append(), without its event, for a caller that has to write inside a transaction
+     * of its own and announce only once that has committed.
+     */
+    private function write(Model $subject, LegalDocument $document, ConsentAction $action, ConsentContext $context, ?string $shownWording = null): LegalConsent
+    {
         // The choke point every write passes through, which is why the class check belongs here and
         // not only on the callers. `record()` takes an arbitrary action from an arbitrary caller —
         // `HasLegalConsents::recordConsent()` is public, and it lives on the consumer's own model —
@@ -674,36 +728,44 @@ readonly class DefaultConsentManager implements ConsentManager
         // only version of this a consumer can act on — and it is the door every recorded consent
         // passes through, including the registration recorder and the untyped `record()`.
         if ($subjectId !== null && mb_strlen($subjectId) > SubjectKeyTooLong::MAX_LENGTH) {
-            throw SubjectKeyTooLong::for($subject->getMorphClass(), mb_strlen($subjectId));
+            throw SubjectKeyTooLong::for((string) $subject->getMorphClass(), mb_strlen($subjectId));
         }
 
-        $token = $this->tokenFor($subject);
+        // The token comes from the subject's row in the token registry, held until this write
+        // commits, so two first writes for one subject at the same moment cannot mint one each.
+        return new SubjectToken()->whileLocked($subject, function (string $token) use ($subject, $subjectId, $document, $action, $context, $shownWording): LegalConsent {
+            $attributes = [
+                'subject_type' => (string) $subject->getMorphClass(),
+                'subject_id' => $subjectId,
+                'subject_token' => $token,
+                'document_id' => $document->getKey(),
+                'document_key' => $document->key,
+                'document_type' => $document->type,
+                'document_version' => $document->version,
+                'document_major_version' => $document->major_version,
+                'content_hash' => $document->content_hash,
+                'locale' => $document->locale,
+                'ui_wording_snapshot' => $shownWording ?? $document->ui_wording,
+                'action' => $action,
+                'method' => $context->method,
+                'source' => $context->source,
+                'ip_address' => $context->ipAddress,
+                'user_agent' => $context->userAgent,
+                'request_id' => $context->requestId,
+                'accepted_at' => CarbonImmutable::now(),
+            ];
 
-        $attributes = [
-            'subject_type' => $subject->getMorphClass(),
-            'subject_id' => $subjectId,
-            'subject_token' => $token,
-            'document_id' => $document->getKey(),
-            'document_key' => $document->key,
-            'document_type' => $document->type,
-            'document_version' => $document->version,
-            'document_major_version' => $document->major_version,
-            'content_hash' => $document->content_hash,
-            'locale' => $document->locale,
-            'ui_wording_snapshot' => $shownWording ?? $document->ui_wording,
-            'action' => $action,
-            'method' => $context->method,
-            'source' => $context->source,
-            'ip_address' => $context->ipAddress,
-            'user_agent' => $context->userAgent,
-            'request_id' => $context->requestId,
-            'accepted_at' => CarbonImmutable::now(),
-        ];
+            return $this->tamperEvidenceEnabled()
+                ? $this->appendChained($token, $attributes)
+                : DB::transaction(fn (): LegalConsent => LegalConsent::model()::query()->forceCreate($attributes));
+        });
+    }
 
-        $consent = $this->tamperEvidenceEnabled()
-            ? $this->appendChained($token, $attributes)
-            : DB::transaction(fn (): LegalConsent => LegalConsent::model()::query()->forceCreate($attributes));
-
+    /**
+     * The event a written row announces.
+     */
+    private function announce(LegalConsent $consent, ConsentAction $action): void
+    {
         event(match ($action) {
             ConsentAction::Withdrawn => new ConsentWithdrawn($consent),
             ConsentAction::Objected => new ConsentObjected($consent),
@@ -717,12 +779,10 @@ readonly class DefaultConsentManager implements ConsentManager
             ConsentAction::OptInRequested => new ConsentConfirmationRequested($consent),
             default => new ConsentRecorded($consent),
         });
-
-        return $consent;
     }
 
     /**
-     * Append a tamper-chained row, resilient to a concurrent fork.
+     * Append a tamper-chained row, resilient to a concurrent fork and to a deadlock.
      *
      * Two appends for one subject can read the same chain tail under READ COMMITTED and try to
      * chain to the same predecessor. The `(subject_token, prev_record_hash)` unique index makes the
@@ -730,6 +790,13 @@ readonly class DefaultConsentManager implements ConsentManager
      * tail so the loser chains on cleanly instead of forking. Without the retry the loser would
      * surface a violation to the caller; without the index the fork would persist and the verifier
      * would report it as tampering.
+     *
+     * A deadlock is the other way two appends meet. On MySQL the locking read of a subject with no
+     * chained row locks a gap in the index, and two first appends whose tokens fall into the same
+     * gap each wait for the other's insert, so the database rolls one of them back. The
+     * transaction's attempts repeat that one, as they repeat any concurrency error. Inside a
+     * transaction the caller opened, nothing here can: the database has rolled back the whole of
+     * it, so Laravel throws a DeadlockException out to the caller, who owns that retry.
      *
      * @param  array<string, mixed>  $attributes
      */
@@ -779,7 +846,7 @@ readonly class DefaultConsentManager implements ConsentManager
                     $macs->record([$consent->getKey()]);
 
                     return $consent;
-                });
+                }, self::MAX_CHAIN_ATTEMPTS);
             } catch (UniqueConstraintViolationException $e) {
                 if ($attempt >= self::MAX_CHAIN_ATTEMPTS) {
                     throw $e;
@@ -791,7 +858,9 @@ readonly class DefaultConsentManager implements ConsentManager
     /**
      * The subject's last already-chained row (or null when none is chained yet). `lockForUpdate`
      * serializes contending appends on Postgres/MySQL to reduce retries (it is a no-op on SQLite,
-     * which serializes writers anyway); the unique index is the actual correctness guarantee.
+     * which serializes writers anyway); the unique index is the actual correctness guarantee. On
+     * MySQL, for a subject with no chained row, it locks a gap in the index instead of a row, which
+     * is how two first appends can deadlock; appendChained() repeats the one rolled back.
      *
      * A `protected` seam: overriding it lets a test return the stale tail a concurrent writer sees
      * and drive the fork-retry deterministically, which no single-connection test could otherwise
@@ -978,12 +1047,6 @@ readonly class DefaultConsentManager implements ConsentManager
     private function resolveLocale(ConsentContext $context, ?string $locale): string
     {
         return $locale ?? $context->locale ?? $this->defaultLocale;
-    }
-
-    private function tokenFor(Model $subject): string
-    {
-        // Shared with the notice-delivery ledger so both carry the SAME pseudonym for a subject.
-        return new SubjectToken()->forSubject($subject);
     }
 
     /**

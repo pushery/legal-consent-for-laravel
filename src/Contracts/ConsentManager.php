@@ -214,6 +214,9 @@ interface ConsentManager
      * PUBLISHED rather than from a list the form hardcodes — so renaming, unpublishing, or
      * publishing a document in another language cannot leave the form silently wrong.
      *
+     * Without a locale it answers for the application locale, the one the registration rules and
+     * the recorder read, so the form, its validation and its proof resolve the same documents.
+     *
      * @return list<RegistrationChecklistItem>
      */
     public function registrationChecklist(?string $locale = null): array;

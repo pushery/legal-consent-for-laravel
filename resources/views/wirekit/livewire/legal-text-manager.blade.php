@@ -68,31 +68,33 @@
              -- a screen reader announces the sentence, a sighted reader reads the legend once. Each
              short form is drawn from its own language's long wording rather than translated from
              English, because a legend only explains a word that belongs to the same family. --}}
-        <x-wirekit::text size="sm" intent="muted" class="mb-[var(--space-wk-sm)]">
-            @foreach ([
-                'admin_not_written',
-                'review_state_draft',
-                'review_state_reviewed',
-                'admin_machine',
-                'admin_needs_update',
-                'admin_unpublished',
-            ] as $state)
-                <span class="whitespace-nowrap">{{ __('legal-consent::ui.'.$state.'_short') }} = {{ __('legal-consent::ui.'.$state) }}</span>@if (! $loop->last) · @endif
-            @endforeach
-        </x-wirekit::text>
+        <x-wirekit::stack gap="sm">
+            <x-wirekit::text size="sm" intent="muted">
+                @foreach ([
+                    'admin_not_written',
+                    'review_state_draft',
+                    'review_state_reviewed',
+                    'admin_machine',
+                    'admin_needs_update',
+                    'admin_unpublished',
+                ] as $state)
+                    <span class="whitespace-nowrap">{{ __('legal-consent::ui.'.$state.'_short') }} = {{ __('legal-consent::ui.'.$state) }}</span>@if (! $loop->last) · @endif
+                @endforeach
+            </x-wirekit::text>
 
-        {{-- The same two sentences as the plain twin, and for the same reason: the legend above
-             maps a short form onto a long one, so it explains "Draft" with "Draft". What a first
-             reader of this screen needs to hear is that REVIEWING PUBLISHES NOTHING, and then why
-             the release waits on languages other than their own. A capability in one tree and not
-             the other is exactly the drift a pair of shipped views invites. --}}
-        @foreach (['review_state_reviewed', 'review_state_draft'] as $state)
-            @if (__('legal-consent::ui.'.$state.'_description') !== '')
-                <x-wirekit::text size="sm" intent="muted" class="mb-[var(--space-wk-sm)]">
-                    {{ __('legal-consent::ui.'.$state) }}: {{ __('legal-consent::ui.'.$state.'_description') }}
-                </x-wirekit::text>
-            @endif
-        @endforeach
+            {{-- The same two sentences as the plain twin, and for the same reason: the legend above
+                 maps a short form onto a long one, so it explains "Draft" with "Draft". What a first
+                 reader of this screen needs to hear is that REVIEWING PUBLISHES NOTHING, and then why
+                 the release waits on languages other than their own. A capability in one tree and not
+                 the other is exactly the drift a pair of shipped views invites. --}}
+            @foreach (['review_state_reviewed', 'review_state_draft'] as $state)
+                @if (__('legal-consent::ui.'.$state.'_description') !== '')
+                    <x-wirekit::text size="sm" intent="muted">
+                        {{ __('legal-consent::ui.'.$state) }}: {{ __('legal-consent::ui.'.$state.'_description') }}
+                    </x-wirekit::text>
+                @endif
+            @endforeach
+        </x-wirekit::stack>
 
         <x-wirekit::table :tableLabel="__('legal-consent::ui.admin_heading')">
             <x-wirekit::table.head>
@@ -155,7 +157,7 @@
                                      .description / .actions sub-components — NOT named title/description/
                                      confirm slots, which it silently drops (leaving an empty dialog with no
                                      confirm button, so the release is unreachable through the UI). --}}
-                                <x-wirekit::alert-dialog :name="'lc-release-'.$key">
+                                <x-wirekit::alert-dialog :name="'lc-release-'.$key" close-on-confirm>
                                     <x-slot:trigger>
                                         <x-wirekit::button size="sm" :aria-label="__('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key)">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
                                     </x-slot:trigger>
@@ -173,12 +175,14 @@
                                             {{ __('legal-consent::ui.cancel') }}
                                         </x-wirekit::alert-dialog.cancel>
 
-                                        {{-- x-on:click="close()" alongside wire:click: without it the
-                                             dialog stays open behind aria-modal after confirming, so the
-                                             status live region underneath is never announced and the
-                                             backdrop keeps the page unreachable (WCAG 4.1.3). The parent
-                                             alert-dialog provides close(); alert-dialog.cancel does the
-                                             same for the cancel side. --}}
+                                        {{-- The kit's confirm, on a dialog that closes on confirm: a dialog
+                                             that stays open behind aria-modal after confirming keeps the
+                                             status live region underneath from being announced, and its
+                                             backdrop keeps the page unreachable (WCAG 4.1.3). The kit closes
+                                             it on the task after the click, once every handler of that click
+                                             has run, `wire:click` included. The caller's button goes into the
+                                             slot as it is, so the release keeps its look rather than the
+                                             confirm's destructive one. --}}
                                         {{-- `{{ Js::from() }}`, NOT `@js()`. A Blade directive inside
                                              a COMPONENT TAG attribute is never compiled: the tag
                                              compiler lifts the attribute out as a literal before the
@@ -189,15 +193,15 @@
                                              emits on a plain element. The plain stub, whose button is
                                              a real `<button>`, uses the directive. --}}
                                         {{-- No busy state here, unlike every other action in these stubs:
-                                             `x-on:click="close()"` tears the dialog down in the same click, so
-                                             this button is out of the DOM before the response arrives. An
-                                             `aria-busy` on it would flip on an element nobody can reach. The
-                                             wait is reported by the status region the close reveals, which is
-                                             what the close exists for. The plain twin's release button is not
-                                             in a dialog, stays put, and does carry the pair. --}}
-                                        <x-wirekit::button x-on:click="close()" wire:click="releaseAll({{ \Illuminate\Support\Js::from($key) }})">
-                                            {{ __('legal-consent::ui.admin_release_all') }}
-                                        </x-wirekit::button>
+                                             the dialog closes right after the click, and this button leaves
+                                             the page with it before the response arrives. An `aria-busy` on
+                                             it would flip on an element nobody can reach. The wait is
+                                             reported by the status region the close reveals. The plain
+                                             twin's release button is not in a dialog, stays put, and does
+                                             carry the pair. --}}
+                                        <x-wirekit::alert-dialog.confirm wire:click="releaseAll({{ \Illuminate\Support\Js::from($key) }})">
+                                            <x-wirekit::button>{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
+                                        </x-wirekit::alert-dialog.confirm>
                                     </x-wirekit::alert-dialog.actions>
                                 </x-wirekit::alert-dialog>
                             @else

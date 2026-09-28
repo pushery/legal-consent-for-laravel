@@ -117,7 +117,14 @@ trait HasLegalConsents
         foreach ($documentKeys as $documentKey) {
             $row = $status[$documentKey] ?? null;
 
-            $held[$documentKey] = $row !== null && $row['accepted_major'] >= $row['current_major'];
+            // The single-key method's three conditions, read off the row: an active document, a
+            // holding that exists, and at least the current major. A retired row names the held
+            // major as its current one, and an empty ledger reads as major 0, which a 0.x document
+            // matches, so the comparison alone answered true for both.
+            $held[$documentKey] = $row !== null
+                && ! $row['retired']
+                && $row['accepted_version'] !== null
+                && $row['accepted_major'] >= $row['current_major'];
         }
 
         return $held;

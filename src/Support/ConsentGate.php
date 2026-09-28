@@ -168,8 +168,18 @@ final class ConsentGate
      */
     public function currentHoldings(Model $subject, ?array $keys = null): array
     {
-        $standing = $this->standingFor($subject, $keys);
+        return self::holdingsOf($this->standingFor($subject, $keys));
+    }
 
+    /**
+     * {@see currentHoldings()} over a standing already read, for a caller that needs the other
+     * projections of the same read as well.
+     *
+     * @param  array{held: array<string, int>, version: array<string, string|null>}  $standing  from {@see standingFor()}
+     * @return array<string, int>
+     */
+    public static function holdingsOf(array $standing): array
+    {
         return array_intersect_key(
             $standing['held'],
             array_filter($standing['version'], static fn (?string $version): bool => $version !== null),
@@ -432,7 +442,7 @@ final class ConsentGate
     public function latestActionFor(Model $subject, string $documentKey, ?string $locale = null): ?LegalConsent
     {
         return LegalConsent::model()::query()
-            ->where('subject_type', $subject->getMorphClass())
+            ->where('subject_type', (string) $subject->getMorphClass())
             ->where('subject_id', SubjectKey::for($subject))
             ->where('document_key', $documentKey)
             ->when($locale !== null, fn (Builder $query): Builder => $query->where('locale', $locale))

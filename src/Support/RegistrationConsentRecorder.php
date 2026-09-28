@@ -63,6 +63,30 @@ final readonly class RegistrationConsentRecorder
      */
     public function record(Model $subject, array $input, ConsentContext $context, ?string $locale = null, array $shownWordings = []): void
     {
+        // Nobody is signed in while an account registers, so a resolver that reads the signed-in
+        // user places the documents and the rows in the shared '' bucket, where the account's own
+        // tenant never looks. When the request names no tenant, the subject's own one is pinned
+        // around the read and the writes, as the notice sweeps pin the version's.
+        $tenants = app(TenantContext::class);
+        $own = $tenants->current() === '' ? $tenants->tenantOf($subject) : '';
+
+        if ($own !== '') {
+            $tenants->forTenant($own, function () use ($subject, $input, $context, $locale, $shownWordings): void {
+                $this->write($subject, $input, $context, $locale, $shownWordings);
+            });
+
+            return;
+        }
+
+        $this->write($subject, $input, $context, $locale, $shownWordings);
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     * @param  array<array-key, mixed>  $shownWordings
+     */
+    private function write(Model $subject, array $input, ConsentContext $context, ?string $locale, array $shownWordings): void
+    {
         // The locale the subject actually SAW, when a caller passes it (Way A's argument, or the
         // context). Falling straight to default_locale — as this did — is how a validated checkbox
         // could record nothing at all: an English app that keeps the shipped `default_locale => 'de'`
@@ -118,7 +142,7 @@ final readonly class RegistrationConsentRecorder
                             'document_key' => $key,
                             'seen_locale' => $locale,
                             'recorded_locale' => $row->locale,
-                            'subject_type' => $subject->getMorphClass(),
+                            'subject_type' => (string) $subject->getMorphClass(),
                         ]);
 
                         break;
@@ -247,7 +271,7 @@ final readonly class RegistrationConsentRecorder
         if ($unevidenced !== []) {
             Log::warning('legal-consent: recorded a mandatory consent with no registration-form field present', [
                 'document_keys' => $unevidenced,
-                'subject_type' => $subject->getMorphClass(),
+                'subject_type' => (string) $subject->getMorphClass(),
                 'method' => $context->method->value,
                 'hint' => 'If your form shows ONE control for several documents, declare '
                     .'registration_field per document in the registry and this check looks for the '

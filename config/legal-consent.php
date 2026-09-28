@@ -254,6 +254,26 @@ return [
         | merely expensive. Set it while you find your footing, then decide.
         */
         'max_recipients_per_run' => filter_var(env('LEGAL_CONSENT_MAX_RECIPIENTS_PER_RUN'), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE),
+
+        /*
+        | How often one subject's change notice is attempted. A notice the mail transport refuses is
+        | counted against that subject and version, and the next dispatch sweep tries it again,
+        | serving only the subjects it failed for. After this many attempts the sweep stops trying
+        | and names the subject's version on every run, with a non-zero exit, because the notice is
+        | still owed: an address refused every time would otherwise get a fresh in-app notice on
+        | every run. Correct the address and run `legal-consent:renotify`, which tries every subject
+        | of the version again.
+        */
+        'max_attempts' => filter_var(env('LEGAL_CONSENT_NOTICE_MAX_ATTEMPTS', 3), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 3,
+
+        /*
+        | How long a queued change notice counts as on its way, in minutes. Within this window the
+        | sweep does not queue the same subject for the same version again, so a run that starts
+        | over a queue that has not been worked off does not double it. A notice queued longer ago
+        | that was neither delivered nor failed is taken as lost, queued again, and counted as an
+        | attempt.
+        */
+        'requeue_after_minutes' => filter_var(env('LEGAL_CONSENT_NOTICE_REQUEUE_AFTER_MINUTES', 1440), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 1440,
     ],
 
     /*
@@ -563,8 +583,9 @@ return [
     |--------------------------------------------------------------------------
     |
     | While a subject owes a document, the gate stops every route it guards except its
-    | own ways out: `logout`, the consent screen, the withdrawal route and Livewire's
-    | endpoints. `allowlist_routes` and `allowlist_paths` add your own.
+    | own ways out: `logout`, the consent screen, the withdrawal route, the document
+    | fragment the wording dialog reads and Livewire's endpoints. `allowlist_routes`
+    | and `allowlist_paths` add your own.
     |
     | `rights_routes` is the one list this package asks you to fill. Name the routes
     | where a subject exports or deletes their data — the page that holds the button
@@ -734,7 +755,9 @@ return [
     |--------------------------------------------------------------------------
     |
     | How long to keep proof after a consent's relevance ends. Default 3 years
-    | (§ 31 Abs. 2 OWiG / § 195 BGB). A relative-time string parsed by Carbon.
+    | (§ 31 Abs. 2 OWiG / § 195 BGB). An English relative time such as '3 years',
+    | or an ISO 8601 duration such as 'P3Y'. A value that does not put the cutoff
+    | at least a day in the past is refused, and the sweep deletes nothing.
     |
     */
     'retention_after_end' => '3 years',
@@ -762,6 +785,10 @@ return [
     |   regime psd2_675g -> psd2_min_days      (FLOOR 60 — § 675g Abs. 1 / Art. 54 PSD2)
     |          p2b       -> p2b_standstill_days (FLOOR 15 — Reg. 2019/1150 Art. 3(2))
     |          eecc      -> eecc_min_days       (FLOOR 30 — Dir. 2018/1972 Art. 105(4))
+    |
+    |          psd2_675g and eecc are also checked on the calendar: the law fixes two months and
+    |          one month, which are longer than 60 and 30 days whenever the months before the end
+    |          have 31 days.
     |          gdpr      -> privacy_advance_days (no floor: WP260 says "well in advance",
     |                                             which is guidance, not a number)
     |          bgb_agb   -> nothing; § 308 Nr. 5's "angemessene Frist" IS the mode benchmark
@@ -854,6 +881,13 @@ return [
     |
     |     app(\Pushery\LegalConsent\Support\TenantContext::class)
     |         ->resolveUsing(fn () => auth()->user()?->tenant_id);
+    |
+    | A resolver that reads the signed-in user yields nothing for a guest, and a new account is a
+    | guest while its registration consents are recorded. Name the subject's tenant for that case,
+    | or resolve the tenant from the request (a domain, a route parameter) instead:
+    |
+    |     app(\Pushery\LegalConsent\Support\TenantContext::class)
+    |         ->resolveSubjectUsing(fn ($user) => $user->tenant_id);
     |
     | Documents are published, gated, and recorded per tenant; each tenant gets its own
     | active version of a (key, locale). Admin sweeps (prune, dispatch-notices) run across

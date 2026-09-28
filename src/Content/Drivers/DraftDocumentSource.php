@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Content\Drivers;
 
+use Pushery\LegalConsent\Content\AcceptanceWording;
 use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Content\ContentFormat;
 use Pushery\LegalConsent\Content\LegalDocumentSource;
@@ -120,15 +121,7 @@ final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocume
             return null;
         }
 
-        foreach (["legal-consent::wording.{$type}", 'legal-consent::wording.default'] as $key) {
-            $translated = trans($key, [], $locale);
-
-            if (is_string($translated) && $translated !== $key) {
-                return $translated;
-            }
-        }
-
-        throw MissingAcceptanceWording::for($type, $locale);
+        return AcceptanceWording::for($type, $locale) ?? throw MissingAcceptanceWording::for($type, $locale);
     }
 
     /**

@@ -150,7 +150,7 @@ return [
     'admin_status_translation_running' => 'Une traduction de ce brouillon est déjà en cours. Le résultat apparaîtra ici une fois qu\'elle sera terminée.',
 
     'admin_status_machine_translated' => 'Traduit automatiquement. Une personne doit le relire avant toute publication.',
-    'admin_status_translation_failed' => 'La traduction n\'est pas allée à son terme. Le brouillon est inchangé, vous pouvez réessayer.',
+    'admin_status_translation_failed' => 'La traduction n\'est pas allée à son terme. Le brouillon est inchangé, tu peux réessayer.',
 
     /** The button that closes the document dialog on a consent form. */
     'dialog_close' => 'Fermer',
@@ -159,6 +159,8 @@ return [
     'dialog_loading' => 'Chargement du texte …',
     'dialog_failed' => 'Le texte n\'a pas pu être chargé.',
     'admin_status_reviewed' => 'Marqué comme relu. Ce texte est désormais publiable.',
+    'admin_status_no_draft_to_review' => 'Il n\'existe aucun brouillon pour cette langue, il n\'y a donc rien à marquer comme relu.',
+    'admin_status_changed_before_review' => 'Le texte a été modifié après son affichage ici, il n\'a donc pas été marqué comme relu. Recharge-le et relis la version actuelle.',
     'admin_status_release_blocked' => '« :key » n\'a pas été publié : :reasons',
     'admin_status_released' => '« :key » publié dans :count langue(s) — concerne :affects personne(s).',
     'admin_deemed_heading' => 'Publier avec un délai d’opposition',
@@ -169,7 +171,7 @@ return [
     'admin_deemed_regime' => 'Régime juridique',
     'admin_deemed_regime_none' => 'Non classé',
     'admin_deemed_change_class' => 'Classe de modification',
-    'admin_deemed_change_class_hint' => 'Votre propre étiquette de classification, celle que la ligne de commande accepte — par exemple agb_minor_peripheral ou privacy_material.',
+    'admin_deemed_change_class_hint' => 'Ta propre étiquette de classification, celle que la ligne de commande accepte — par exemple agb_minor_peripheral ou privacy_material.',
     'admin_deemed_offers_termination' => 'Accorde un droit de résiliation gratuit',
     'admin_deemed_keeps_unmodified' => 'Garde la version inchangée disponible',
     'admin_deemed_submit' => 'Publier avec un délai d’opposition',
@@ -180,10 +182,10 @@ return [
     'lead_time_too_short_objection' => 'une modification substantielle de « :document » exige au moins :days jours entre l’annonce (:announce) et le délai d’opposition (:deadline)',
     'notice_timeline_inverted' => 'l’annonce de « :document » (:announce) tombe après son entrée en vigueur (:enforce) ; une modification doit être annoncée avant d’entrer en vigueur',
     'publish_refused_version_taken_in_another_mode' => 'la version :version est déjà publiée en :language avec ce texte sous un autre mode d’information ; un autre mode exige une nouvelle version',
-    'publish_refused_binding_document_became_informational' => 'elle est désormais enregistrée comme page d’information, alors que sa version active :active_version en :language demande l’acceptation des personnes ; conservez sa base juridique ou enregistrez la page sous une nouvelle clé',
-    'publish_refused_version_lower_than_active' => 'la version :version est inférieure à la version active :active_version en :language ; publiez plutôt une version supérieure avec l’ancien texte',
+    'publish_refused_binding_document_became_informational' => 'elle est désormais enregistrée comme page d’information, alors que sa version active :active_version en :language demande l’acceptation des personnes ; conserve sa base juridique ou enregistre la page sous une nouvelle clé',
+    'publish_refused_version_lower_than_active' => 'la version :version est inférieure à la version active :active_version en :language ; publie plutôt une version supérieure avec l’ancien texte',
     'publish_refused_mode_differs_across_languages' => 'la version majeure :major est déjà active en :other_language sous un autre mode d’information, et :language partirait sous celui-ci ; toutes les langues d’une même modification exigent le même mode',
-    'publish_refused_major_needs_reconsent' => 'la version :version relève la version majeure en :language, ce qui demande à chacun d’accepter à nouveau la modification ; publiez-la comme nouveau consentement actif',
-    'publish_refused_gating_mode_keeps_the_major' => 'la version :version garde la version majeure :major en :language, un nouveau consentement n’atteindrait donc personne qui a déjà accepté ; publiez-la comme :next',
+    'publish_refused_major_needs_reconsent' => 'la version :version relève la version majeure en :language, ce qui demande à chacun d’accepter à nouveau la modification ; publie-la comme nouveau consentement actif',
+    'publish_refused_gating_mode_keeps_the_major' => 'la version :version garde la version majeure :major en :language, un nouveau consentement n’atteindrait donc personne qui a déjà accepté ; publie-la comme :next',
     'publish_refused_objection_deadline_not_before_effective_date' => 'la date limite d’opposition (:deadline) doit tomber avant le jour d’entrée en vigueur de la modification (:enforce)',
 ];

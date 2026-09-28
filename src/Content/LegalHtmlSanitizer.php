@@ -241,6 +241,18 @@ final class LegalHtmlSanitizer
      */
     private function isSafeUrl(string $url): bool
     {
+        // Character references are decoded first, and the decoded value has to pass as well, so
+        // the answer does not depend on which libxml parsed the text. Up to 2.13 its parser leaves
+        // an HTML5 name such as `&colon;` or `&Tab;` in the value as text, and in
+        // `javascript&colon;alert(1)` the check below finds no scheme. What kept such a link
+        // harmless was only the serializer writing that `&` as `&amp;`. Decoding repeats until
+        // nothing changes, so a value encoded twice is read the same way.
+        $decoded = html_entity_decode($url, ENT_QUOTES | ENT_HTML5 | ENT_SUBSTITUTE, 'UTF-8');
+
+        if ($decoded !== $url && ! $this->isSafeUrl($decoded)) {
+            return false;
+        }
+
         // Strip control chars (incl. tabs/newlines used to smuggle a scheme).
         $probe = (string) preg_replace('/[\x00-\x20]+/', '', $url);
 

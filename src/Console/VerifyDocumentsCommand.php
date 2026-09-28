@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Console;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Pushery\LegalConsent\Content\AcceptanceWording;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
@@ -113,15 +114,10 @@ final class VerifyDocumentsCommand extends Command
 
     private function cannedWording(string $key, string $locale): ?string
     {
-        foreach (["legal-consent::wording.{$key}", 'legal-consent::wording.default'] as $translationKey) {
-            $translated = trans($translationKey, [], $locale);
-
-            if (is_string($translated) && $translated !== $translationKey) {
-                return $translated;
-            }
-        }
-
-        return null;
+        // In the locale's own language only. With the application's fallback locale in the
+        // lookup, every locale without lines of its own answered with the fallback's sentence,
+        // and this check could not tell a wording in the wrong language from the right one.
+        return AcceptanceWording::for($key, $locale);
     }
 
     /**
