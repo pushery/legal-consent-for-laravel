@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.43.0 → 0.43.1
+
+**Nothing is required of you**, unless you published the French translations.
+
+**The French confirmation before a consent is withdrawn reads differently.** Its second sentence now reads « Cela prend effet immédiatement … », as the English one reads "It takes effect immediately …". A copy published with `--tag=legal-consent-lang` keeps the old sentence. Change it in `lang/vendor/legal-consent/fr/ui.php`, or publish again with `php artisan vendor:publish --tag=legal-consent-lang --force` if your copy holds no changes of your own.
+
 ## 0.42.4 → 0.43.0
 
 **Run `php artisan migrate` before anything else of the release runs.** It brings migrations 000032 to 000038, and publishing and the queued change notices already read and write `legal_documents.objection_min_days`, the column 000038 adds.

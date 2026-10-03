@@ -4,6 +4,17 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.43.1] - 2026-10-03
+
+### Changed
+
+- **The French confirmation before a consent is withdrawn follows the English text.** Its second sentence now reads « Cela prend effet immédiatement … », as the English one reads "It takes effect immediately …", instead of naming the withdrawal a second time.
+
+### Fixed
+
+- **A `0` or a negative number in `LEGAL_CONSENT_MAX_NESTING_LEVEL` keeps the shipped nesting level of 20.** At `0` CommonMark started no block at all, so every heading and list of a document rendered as plain text. `LEGAL_CONSENT_NOTICE_MAX_ATTEMPTS` and `LEGAL_CONSENT_NOTICE_REQUEUE_AFTER_MINUTES` hold to the same floor of 1 in the configuration, where the notice sweep already read anything lower as the shipped 3 and 1440; only code that reads these keys directly sees the change. A negative `LEGAL_CONSENT_CACHE_TTL` or `LEGAL_CONSENT_ENFORCEABLE_TTL` keeps the shipped lifetime, and `0` still caches nothing.
+- **The configuration reference lists `LEGAL_CONSENT_NOTICE_MAX_ATTEMPTS` and `LEGAL_CONSENT_NOTICE_REQUEUE_AFTER_MINUTES`** among the keys a host can set from the environment, and says what a `0` does for each numeric key.
+
 ## [0.43.0] - 2026-09-28
 
 ### Changed
@@ -2970,7 +2981,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.43.1...HEAD
+[0.43.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.43.0...v0.43.1
 [0.43.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.4...v0.43.0
 [0.42.4]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.3...v0.42.4
 [0.42.3]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.2...v0.42.3

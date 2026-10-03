@@ -207,7 +207,13 @@ return [
     'markdown' => [
         'html_input' => 'strip',
         'allow_unsafe_links' => filter_var(env('LEGAL_CONSENT_ALLOW_UNSAFE_LINKS', false), FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
-        'max_nesting_level' => filter_var(env('LEGAL_CONSENT_MAX_NESTING_LEVEL', 20), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 20,
+        // How deep CommonMark nests blocks. Anything below 1 keeps the shipped 20: at 0 no block
+        // starts at all, and every heading and list of a document renders as plain text.
+        'max_nesting_level' => filter_var(
+            env('LEGAL_CONSENT_MAX_NESTING_LEVEL', 20),
+            FILTER_VALIDATE_INT,
+            ['flags' => FILTER_NULL_ON_FAILURE, 'options' => ['min_range' => 1]],
+        ) ?? 20,
     ],
 
     /*
@@ -221,14 +227,26 @@ return [
     */
     'cache' => [
         'store' => env('LEGAL_CONSENT_CACHE_STORE'),
-        'ttl' => filter_var(env('LEGAL_CONSENT_CACHE_TTL', 86400), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 86400,
+        // In seconds. `0` caches nothing, so every read renders the source again; a negative
+        // number keeps the shipped value.
+        'ttl' => filter_var(
+            env('LEGAL_CONSENT_CACHE_TTL', 86400),
+            FILTER_VALIDATE_INT,
+            ['flags' => FILTER_NULL_ON_FAILURE, 'options' => ['min_range' => 0]],
+        ) ?? 86400,
         'prefix' => 'legal:doc',
 
         // How long the gate may keep its cached "which versions are enforceable" set. Only the
         // SET is cached, never a subject's satisfaction — so this bounds how late a scheduled
         // enforce_from boundary starts gating, nothing about what gets recorded. A publish
         // flushes it immediately; an out-of-band is_active write needs legal-consent:cache-flush.
-        'enforceable_ttl' => filter_var(env('LEGAL_CONSENT_ENFORCEABLE_TTL', 60), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 60,
+        // In seconds. `0` caches nothing, so a boundary gates on the next read at the cost of a
+        // query per read; a negative number keeps the shipped value.
+        'enforceable_ttl' => filter_var(
+            env('LEGAL_CONSENT_ENFORCEABLE_TTL', 60),
+            FILTER_VALIDATE_INT,
+            ['flags' => FILTER_NULL_ON_FAILURE, 'options' => ['min_range' => 0]],
+        ) ?? 60,
     ],
 
     /*
@@ -262,18 +280,26 @@ return [
         | and names the subject's version on every run, with a non-zero exit, because the notice is
         | still owed: an address refused every time would otherwise get a fresh in-app notice on
         | every run. Correct the address and run `legal-consent:renotify`, which tries every subject
-        | of the version again.
+        | of the version again. Anything below 1 keeps the shipped 3, as the sweep reads it.
         */
-        'max_attempts' => filter_var(env('LEGAL_CONSENT_NOTICE_MAX_ATTEMPTS', 3), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 3,
+        'max_attempts' => filter_var(
+            env('LEGAL_CONSENT_NOTICE_MAX_ATTEMPTS', 3),
+            FILTER_VALIDATE_INT,
+            ['flags' => FILTER_NULL_ON_FAILURE, 'options' => ['min_range' => 1]],
+        ) ?? 3,
 
         /*
         | How long a queued change notice counts as on its way, in minutes. Within this window the
         | sweep does not queue the same subject for the same version again, so a run that starts
         | over a queue that has not been worked off does not double it. A notice queued longer ago
         | that was neither delivered nor failed is taken as lost, queued again, and counted as an
-        | attempt.
+        | attempt. Anything below 1 keeps the shipped 1440, as the sweep reads it.
         */
-        'requeue_after_minutes' => filter_var(env('LEGAL_CONSENT_NOTICE_REQUEUE_AFTER_MINUTES', 1440), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE) ?? 1440,
+        'requeue_after_minutes' => filter_var(
+            env('LEGAL_CONSENT_NOTICE_REQUEUE_AFTER_MINUTES', 1440),
+            FILTER_VALIDATE_INT,
+            ['flags' => FILTER_NULL_ON_FAILURE, 'options' => ['min_range' => 1]],
+        ) ?? 1440,
     ],
 
     /*
