@@ -4,6 +4,36 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.43.1 → 0.44.0
+
+**A later version of a major now keeps what the major asked for, and the first sweep after the upgrade may send notices.** The gate, the banner, the notice sweep and `legal-consent:close-objection-windows` used to read the mode of the active version alone. If you published an editorial fix or an info-only change inside a major that went out as an active re-consent, everyone who has not accepted that major is asked again after the upgrade. If you published a correction while a change's notices were still going out, the notices that change still owes go out with the next sweep, and an objection window left open by a correction closes with the next run of `close-objection-windows`. Run `php artisan legal-consent:dispatch-notices --dry-run` before the first sweep to see who will be written to.
+
+**`legal-consent:rerender` refuses in two more cases, and exits 1 when it does.** It refuses a document whose title or acceptance sentence differs from the published version, because the sentence is copied into every consent given under it: publish a new version instead. It also waits for a version that has not taken effect yet: run it again after the version's date. A deploy script that runs it after every package update reads the refusal from the exit code and the warning lines.
+
+**Raise `pushery/wirekit` to `^2.56.0` if you use the WireKit views.** From that release the kit's editor no longer reports its own version of a text as input when it loads, which the editor view relies on. With 2.49.x to 2.55.x installed, the default `auto` variant serves the plain views. A copy of the editor view published from an earlier release still works on 2.56.0; the element around the editor that held the input back is no longer needed there.
+
+**If you lint the migrations with sqlens and published them, publish them again.** Five migrations changed so that `sqlens:lint` reads them all: `php artisan vendor:publish --tag=legal-consent-migrations --force`. A database that ran them needs nothing, because the SQL they apply is unchanged.
+
+**Publish the WireKit views again if you published them.** The consent checkboxes and their document link changed, so a link that opens the wording dialog stops announcing a new tab, and the name of the dialog reaches its click handler as a JavaScript string: `php artisan vendor:publish --tag=legal-consent-wirekit --force`.
+
+**Publish the plain views again if you published them.** A link inside the consent sentence now carries `rel="noopener noreferrer"`: `php artisan vendor:publish --tag=legal-consent-views --force`. A copy you changed keeps your changes only if you carry them over.
+
+**A release from the admin screens no longer waits for every language of a contract or a consent.** It covers the languages whose draft is reviewed and matches its source, and a language left out keeps the version it has live until its own translation is released. If your process relied on a missing translation stopping a release, review the languages the manager names beside the release button before you confirm. Nothing changes for a release from `legal-consent:publish`, which publishes the languages you name.
+
+**A model of your own mapped in `legal-consent.models` now keeps the package's write guards.** If its `booted()` did not call `parent::booted()`, it had lost them: it could rewrite a ledger row or a published version. Such a write now throws `LedgerImmutableException` or `LegalDocumentFrozenException`, as it does for the package's own models.
+
+**A whole-number setting your published config reads straight from `env()` now applies.** With `'threshold' => env('AGE_GATE_THRESHOLD', 16)`, the environment's value arrived as a string and the package default applied instead. Check the values you set this way before you upgrade: the age threshold, a notice period, a document's `min_lead_days` or a notification limit becomes the one you configured. `php artisan legal-consent:doctor` names a whole-number setting that holds anything else.
+
+**A tenant resolver has to answer with a tenant id.** If you enable `tenancy`, `resolveUsing()` and `resolveSubjectUsing()` return the tenant's key as an int or a string, or `null` where there is no tenant; a backed enum and a `Stringable` count as well. Any other answer, a model among them, now throws `Pushery\LegalConsent\Exceptions\UnresolvableTenant`. It used to count as no tenant, which put every tenant into one shared bucket. A resolver that returns `tenant()` returns `tenant()?->getKey()` instead.
+
+**Name the shared checkbox of an informational page you flag for registration.** A page with `acknowledge_at_registration` is now acknowledged only when the request carries its control, ticked. If the page sits in a line under another document's checkbox, set `registration_field` on it to that checkbox's field, `legal_terms` for example; otherwise its rows stop being written, and the log says which field it looked for.
+
+**Save a model before recording its consent.** A consent recorded for a subject without a key, a model that is not saved yet, now throws `Pushery\LegalConsent\Exceptions\SubjectWithoutKey`. Before, it wrote a row with no `subject_id`, which nothing could find and the retention sweep later removed. If you record consent while a model is being created, do it after `save()` or in a `created` listener.
+
+**An `X-Request-Id` set in front of your application reaches a consent record only through a trusted proxy.** The request id is recorded where the server side vouches for it: set by your application after the request arrived, in a middleware for example, or carried in through one of your trusted proxies. A header straight from a client is no longer recorded, because it could name any request. If your records should carry the id your load balancer assigns, list the load balancer in your trusted-proxy configuration.
+
+**A class of your own that implements `Pushery\LegalConsent\Contracts\ConsentManager` gains one method,** `publishedVersion(string $documentKey, ?string $locale = null): ?PublishedVersion`. The package's own manager and `Consent::fake()` have it. A class that decorates the package's manager can pass the call through.
+
 ## 0.43.0 → 0.43.1
 
 **Nothing is required of you**, unless you published the French translations.
@@ -671,18 +701,13 @@ The registration now asks whether the tables are **there**, which is the fact th
 
 ## 0.22.0 → 0.23.0
 
-**Nothing to do**, and the changelog says so in its own words: *"nothing in `UPGRADE.md` applies,
-because no public contract changed shape."* Measured rather than taken on trust — `git diff v0.22.0
-v0.23.0` touches neither `database/migrations/` nor `config/`, and the one new file under `src/` is
-an internal helper.
+**Nothing to do.** No migration and no configuration key changed in this step, and no public
+contract changed shape.
 
 Two of that release's fixes are behavior a consuming application can observe — a deleted document
 stayed enforceable until its cache entry expired, and a retention sweep could hit a driver error
 while repairing the tamper chain on a large ledger — but both are repairs, so there is nothing to
 change on your side.
-
-This section exists because the step had no entry at all for a while, and an omission reads exactly
-like an oversight. The reader should not have to work out which one it was.
 
 ## 0.21.0 → 0.22.0
 
@@ -1286,17 +1311,15 @@ in this release removes them. Your options:
 
 - **move `legal_documents` and the ledger to PostgreSQL, MySQL 8.4 or SQLite** — the engines whose
   trigger this package writes and tests against real servers. This is the supported path;
-- **stay on 0.13.0**, and understand that the engine has no proving lane behind it: nothing
-  re-measures those triggers on MariaDB, so a future defect there would not be caught;
+- **stay on 0.13.0**, and understand that MariaDB is no longer tested: a future defect in those
+  triggers there would not be caught;
 - do **not** expect a rollback to work cleanly. `ProofColumnGuard::drop()` and the migrations'
   drop paths still name `mariadb` on purpose, so the triggers 0.13.0 installed can be taken off —
   but the install paths are gone, and re-running the migrations forward will refuse.
 
-**What stays, and is the half worth keeping.** MariaDB is still recognized explicitly — as an
-*impostor* on the MySQL lane. It reports e.g. `11.4.4-MariaDB`, which clears an 8.4 version floor
-numerically, so both the test harness and the CI-lane pin assert engine identity from the server's
-own banner rather than trusting the number. Pointing this package's MySQL suite at a MariaDB
-server is a hard failure, not a silent pass.
+**Pointing the `mysql` driver at MariaDB is no way around this.** MariaDB reports a version such
+as `11.4.4-MariaDB`, which clears the MySQL 8.4 floor by its number alone, but it is not MySQL, and
+the package is no more tested against it under that driver than under `mariadb`.
 
 ## 0.12.0 → 0.13.0
 
@@ -1849,19 +1872,12 @@ php artisan legal-consent:doctor
 ## 0.6.0 → 0.7.0
 
 **Nothing to do.** This release adds `legal-consent:doctor` and changes nothing you have to act on:
-no migrations, no configuration keys, no signature that moved. Measured rather than assumed —
-`git diff v0.6.0 v0.7.0` touches neither `database/migrations/` nor `config/`, and the only new file
-under `src/` is the command itself.
-
-It is written down because an omission and an oversight look identical from the outside. Every other
-step from 0.3.x onward has a section; this one had a hole, and a reader hitting it could not tell
-whether the upgrade was free or whether somebody forgot to describe it.
+no migrations, no configuration keys, no signature that moved.
 
 ## 0.5.0 → 0.6.0
 
-`0.6.0` is deep-audit hardening. It is a **minor** bump but carries one breaking change to the
-tamper-evidence chain format, plus additive, opt-in features. **No new migrations ship** — nothing in
-your schema changes.
+`0.6.0` is a **minor** bump that carries one breaking change to the tamper-evidence chain format,
+plus additive, opt-in features. **No new migrations ship** — nothing in your schema changes.
 
 ### 1. Tamper-evidence chains reset (only if you enabled `tamper_evidence`)
 
@@ -2083,14 +2099,12 @@ It re-derives every published row's hash and flags any row whose stored hash,
 notice mode, or wording locale disagrees with its content — so tampering or a
 pre-`0.4.0` mislabeled `ui_wording` snapshot is visible rather than silent.
 
-### 8. Extending the `legal_documents` table (maintainers)
+### 8. Adding a column to `legal_documents`
 
-The immutability trigger from `000011` fails **closed** on PostgreSQL — a proof
-column added by a future migration is protected automatically. On MySQL and
-SQLite the trigger enumerates the columns present when it was created, so a proof
-column added later would slip past it. If you add a migration that backfills or
-rewrites a `legal_documents` column, it must **drop the trigger, apply the data
-change, and re-create the trigger** — the guard aborts a migration-time `UPDATE`
-exactly as it aborts runtime tampering. The package's own suite iterates
-the live column list against the allowlist and fails if a new column is left
-unprotected.
+The immutability trigger from `000011` fails **closed** on PostgreSQL — a column
+added by a later migration is protected automatically. On MySQL and SQLite the
+trigger enumerates the columns present when it was created, so a column added
+later is not covered by it. A migration of yours that backfills or rewrites a
+`legal_documents` column must **drop the trigger, apply the data change, and
+re-create the trigger** — the guard aborts a migration-time `UPDATE` exactly as
+it aborts runtime tampering.

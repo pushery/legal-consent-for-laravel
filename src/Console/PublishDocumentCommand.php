@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Console;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Console\Concerns\RunsPerTenant;
 use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Content\Document;
@@ -13,6 +14,7 @@ use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Models\LegalDocument;
+use Pushery\LegalConsent\Support\ActivationLock;
 use Pushery\LegalConsent\Support\CalendarDate;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
@@ -46,6 +48,12 @@ use ValueError;
  * position: it fills gaps and touches nothing that already exists, so it cannot classify a change
  * at all. Use it wherever the caller is a script; keep the bare `--all` for a human who has looked
  * at the diff.
+ *
+ * `--locales=de,en` publishes those languages of ONE key together: one transaction, one notice
+ * mode, all or none. Every language of a version carries the same mode, so a change of mode
+ * between two versions, `--editorial` to `--info` for example, is refused one language at a time
+ * and is lawful only as a whole. The admin screens release a text on the drafts store this way;
+ * this is the same release for every other source, Markdown included.
  */
 #[AsCommand(name: 'legal-consent:publish')]
 final class PublishDocumentCommand extends Command
@@ -55,6 +63,7 @@ final class PublishDocumentCommand extends Command
     protected $signature = 'legal-consent:publish
         {key? : The document key (e.g. terms) — omit it and pass --all for the whole registry}
         {locale? : The locale (defaults to the configured default_locale)}
+        {--locales= : Publish these locales of the key together, comma-separated (e.g. de,en): one transaction, one notice mode, all or none}
         {--all : Publish every configured document in every configured locale, idempotently}
         {--only-missing : With --all: publish ONLY combinations that have no active version, and leave every existing one untouched — a drifted source is named, never re-frozen}
         {--dry-run : Resolve every source and report what a run would do. Writes nothing}
@@ -131,7 +140,33 @@ final class PublishDocumentCommand extends Command
         }
 
         if ($all) {
+            if ($this->option('locales') !== null) {
+                $this->error('--locales names the languages of one key; --all already publishes every language of every key. Drop one of the two.');
+
+                return self::FAILURE;
+            }
+
             return $this->publishAll($publisher, $mode);
+        }
+
+        $together = $this->localesOption();
+
+        if ($together !== null) {
+            if ($this->argument('locale') !== null) {
+                $this->error('Name the languages either as the locale argument or in --locales, not both.');
+
+                return self::FAILURE;
+            }
+
+            if ($together === []) {
+                $this->error('--locales needs at least one language, comma-separated: --locales=de,en.');
+
+                return self::FAILURE;
+            }
+
+            return $this->option('dry-run')
+                ? $this->previewTogether($publisher, $mode, $key, $together)
+                : $this->publishTogether($publisher, $mode, $key, $together);
         }
 
         $locale = $this->resolveLocale();
@@ -143,6 +178,8 @@ final class PublishDocumentCommand extends Command
 
     private function publishOne(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale): int
     {
+        $before = $this->activeVersion($key, $locale);
+
         try {
             $document = $this->publish($publisher, $mode, $key, $locale);
         } catch (Throwable $e) {
@@ -157,6 +194,10 @@ final class PublishDocumentCommand extends Command
         // differ (an unchanged re-publish returns the existing version), and a success line naming
         // a notice mode the row does not carry is how a missing legal notice goes unnoticed.
         $this->info("Published {$key} ({$locale}) v{$document->version} — major {$document->major_version}, {$document->noticeMode()->value}, enforced from {$enforceFrom}.");
+
+        if ($document->wasRecentlyCreated) {
+            $this->reportWordingChange($key, $locale, $before, $document->ui_wording);
+        }
 
         return self::SUCCESS;
     }
@@ -188,8 +229,8 @@ final class PublishDocumentCommand extends Command
      */
     private function publishAll(LegalDocumentPublisher $publisher, NoticeMode $mode): int
     {
-        // A VALUE_NONE flag is already a bool, so this cast is EQUIVALENT under mutation. It is there
-        // for previewAll()'s bool parameter, which static analysis rejects `mixed` for.
+        // A VALUE_NONE flag is already a bool, so this cast changes nothing. It is there for
+        // previewAll()'s bool parameter, which takes no `mixed`.
         $onlyMissing = (bool) $this->option('only-missing');
 
         if ($this->option('dry-run')) {
@@ -214,6 +255,8 @@ final class PublishDocumentCommand extends Command
                     continue;
                 }
 
+                $before = $this->activeVersion($key, $locale);
+
                 try {
                     $document = $this->publish($publisher, $mode, $key, $locale);
                 } catch (LegalDocumentNotFound $e) {
@@ -237,6 +280,7 @@ final class PublishDocumentCommand extends Command
                 if ($document->wasRecentlyCreated) {
                     $published++;
                     $this->info("Published {$key} ({$locale}) v{$document->version} — {$document->noticeMode()->value}.");
+                    $this->reportWordingChange($key, $locale, $before, $document->ui_wording);
                 } else {
                     $unchanged++;
                 }
@@ -367,6 +411,7 @@ final class PublishDocumentCommand extends Command
                 $this->info($active instanceof LegalDocument
                     ? "  + {$key} ({$locale}) — would publish v{$rendered->version}, replacing active v{$active->version} (source has drifted)."
                     : "  + {$key} ({$locale}) — would publish v{$rendered->version} (first version).");
+                $this->reportWordingChange($key, $locale, $active, $rendered->uiWording, preview: true);
             }
         }
 
@@ -444,6 +489,110 @@ final class PublishDocumentCommand extends Command
     }
 
     /**
+     * The given languages of one key as one release: every publish inside one transaction, under
+     * the lock every writer of the key's active version takes, so a refusal in one language leaves
+     * none of them published.
+     *
+     * @param  non-empty-list<string>  $locales
+     */
+    private function publishTogether(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, array $locales): int
+    {
+        $before = [];
+
+        foreach ($locales as $locale) {
+            $before[$locale] = $this->activeVersion($key, $locale);
+        }
+
+        try {
+            /** @var list<LegalDocument> $documents */
+            $documents = ActivationLock::serialize(
+                $key,
+                'a publish of several languages',
+                fn (): array => DB::transaction(fn (): array => array_map(
+                    fn (string $locale): LegalDocument => $this->publish($publisher, $mode, $key, $locale, $locales),
+                    $locales,
+                )),
+            );
+        } catch (Throwable $e) {
+            $this->error($e->getMessage().' Nothing was published in '.implode(', ', $locales).'.');
+
+            return self::FAILURE;
+        }
+
+        foreach ($documents as $document) {
+            $enforceFrom = $document->enforce_from?->toDateTimeString() ?? 'immediately';
+
+            $this->info($document->wasRecentlyCreated
+                ? "Published {$key} ({$document->locale}) v{$document->version} — major {$document->major_version}, {$document->noticeMode()->value}, enforced from {$enforceFrom}."
+                : "Unchanged {$key} ({$document->locale}) v{$document->version} — already the active version, {$document->noticeMode()->value}.");
+
+            if ($document->wasRecentlyCreated) {
+                $this->reportWordingChange($key, $document->locale, $before[$document->locale] ?? null, $document->ui_wording);
+            }
+        }
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * What {@see publishTogether()} would do, with the same guards and nothing written.
+     *
+     * @param  non-empty-list<string>  $locales
+     */
+    private function previewTogether(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, array $locales): int
+    {
+        $lines = [];
+
+        foreach ($locales as $locale) {
+            try {
+                $rendered = $this->preview($publisher, $mode, $key, $locale, $locales);
+            } catch (Throwable $e) {
+                $this->error($e->getMessage().' The release of '.implode(', ', $locales).' would publish nothing.');
+
+                return self::FAILURE;
+            }
+
+            $active = $this->activeVersion($key, $locale);
+
+            $unchanged = $active instanceof LegalDocument && $active->content_hash === $rendered->contentHash;
+
+            $lines[] = [$locale, $rendered->uiWording, $active, $unchanged, match (true) {
+                $unchanged => "Dry run: {$key} ({$locale}) v{$rendered->version} is already the active version, unchanged.",
+                $active instanceof LegalDocument => "Dry run: {$key} ({$locale}) would publish v{$rendered->version} as {$mode->value}, replacing active v{$active->version}.",
+                default => "Dry run: {$key} ({$locale}) would publish v{$rendered->version} as {$mode->value}, the first version.",
+            }];
+        }
+
+        foreach ($lines as [$locale, $wording, $active, $unchanged, $line]) {
+            $this->info($line);
+
+            if (! $unchanged) {
+                $this->reportWordingChange($key, $locale, $active, $wording, preview: true);
+            }
+        }
+
+        $this->line('Nothing was written.');
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * The languages `--locales` names, in order and without repeats; null when the option is absent.
+     *
+     * @return list<string>|null
+     */
+    private function localesOption(): ?array
+    {
+        $raw = $this->option('locales');
+
+        if (! is_string($raw)) {
+            return null;
+        }
+
+        return array_values(array_unique(array_filter(array_map(trim(...), explode(',', $raw)), static fn (string $locale): bool => $locale !== '')));
+    }
+
+    /**
      * One combination, resolved and reported. Writes nothing.
      *
      * Through the same guarded path as {@see previewAll}, and for the same reason: the exit code
@@ -472,6 +621,8 @@ final class PublishDocumentCommand extends Command
             ? "Dry run: {$key} ({$locale}) would publish v{$rendered->version}, replacing active v{$active->version}. Nothing was written."
             : "Dry run: {$key} ({$locale}) would publish v{$rendered->version} as the first version. Nothing was written.");
 
+        $this->reportWordingChange($key, $locale, $active, $rendered->uiWording, preview: true);
+
         return self::SUCCESS;
     }
 
@@ -495,13 +646,38 @@ final class PublishDocumentCommand extends Command
     private function activeVersion(string $key, string $locale): ?LegalDocument
     {
         return LegalDocument::model()::query()
-            // `id` is EQUIVALENT under mutation: every caller reads the version and the hash. Measured
-            // 2026-09-14, the publish suites stay green without it and turn red without either of those.
-            ->select(['id', 'version', 'content_hash'])
+            // The version, the hash and the acceptance sentence are what the callers read; `id` keeps
+            // the row a row rather than a bag of columns.
+            ->select(['id', 'version', 'content_hash', 'ui_wording'])
             ->where('key', $key)
             ->where('locale', $locale)
             ->where('is_active', true)
             ->first();
+    }
+
+    /**
+     * Say so when a version carries a different acceptance sentence than the one it replaces.
+     *
+     * The sentence is frozen into the version and copied into every consent given under it, so a
+     * changed one is a change of what subjects agree to, whatever the notice mode says about the
+     * text. It is a warning rather than a refusal: changing the sentence on purpose is legitimate.
+     * What is not is changing it without noticing, which moving a document from Markdown to the
+     * drafts store does, because the drafts store takes its sentence from the translation files
+     * rather than from the front matter.
+     */
+    private function reportWordingChange(string $key, string $locale, ?LegalDocument $before, ?string $after, bool $preview = false): void
+    {
+        if (! $before instanceof LegalDocument || $before->ui_wording === $after) {
+            return;
+        }
+
+        $was = $before->ui_wording ?? '(none)';
+        $now = $after ?? '(none)';
+
+        $this->warn($preview
+            ? "Dry run: the acceptance sentence of {$key} ({$locale}) would change from \"{$was}\" to \"{$now}\", and every consent given under the new version would record it."
+            : "The acceptance sentence of {$key} ({$locale}) changed from \"{$was}\" to \"{$now}\". Every consent given under this version records the new one.");
+        $this->line("  If that is not meant, set the sentence the version should carry: `ui_wording` in a Markdown source, or lang/vendor/legal-consent/{$locale}/wording.php for the drafts store.");
     }
 
     /**
@@ -513,8 +689,10 @@ final class PublishDocumentCommand extends Command
      * different command than the one the operator is about to type. The guards themselves stay in
      * the publisher, because each is a legal rule and a second copy of a legal rule is a second
      * answer that drifts from the first the moment one is amended.
+     *
+     * @param  list<string>  $releasedTogether  the locales the previewed publish releases in one transaction
      */
-    private function preview(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale): Document
+    private function preview(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale, array $releasedTogether = []): Document
     {
         return $publisher->previewWithMode(
             $key,
@@ -525,14 +703,18 @@ final class PublishDocumentCommand extends Command
             announceAt: $this->dateOption('announce-at'),
             enforceAt: $this->dateOption('enforce-at'),
             objectionDeadline: $this->dateOption('objection-at'),
-            // Both flags are VALUE_NONE, so these casts are EQUIVALENT under mutation. They satisfy the bool
-            // parameters, which static analysis rejects `mixed` for.
+            // Both flags are VALUE_NONE, so these casts change nothing. They satisfy the bool
+            // parameters, which take no `mixed`.
             offersTermination: (bool) $this->option('offers-termination'),
             keepsUnmodified: (bool) $this->option('keeps-unmodified'),
+            releasedTogether: $releasedTogether,
         );
     }
 
-    private function publish(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale): LegalDocument
+    /**
+     * @param  list<string>  $releasedTogether  the locales published in the same transaction
+     */
+    private function publish(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale, array $releasedTogether = []): LegalDocument
     {
         return $publisher->publishWithMode(
             $key,
@@ -543,10 +725,11 @@ final class PublishDocumentCommand extends Command
             announceAt: $this->dateOption('announce-at'),
             enforceAt: $this->dateOption('enforce-at'),
             objectionDeadline: $this->dateOption('objection-at'),
-            // Both flags are VALUE_NONE, so these casts are EQUIVALENT under mutation. They satisfy the bool
-            // parameters, which static analysis rejects `mixed` for.
+            // Both flags are VALUE_NONE, so these casts change nothing. They satisfy the bool
+            // parameters, which take no `mixed`.
             offersTermination: (bool) $this->option('offers-termination'),
             keepsUnmodified: (bool) $this->option('keeps-unmodified'),
+            releasedTogether: $releasedTogether,
         );
     }
 

@@ -73,11 +73,8 @@ final class ActivationLock
      * publish. Taking the lock there is not merely redundant, it is fatal: see
      * {@see ownedByCaller()} for why a second instance of a non-reentrant lock can only time out.
      *
-     * The branch lives HERE rather than at each call site on purpose. A transactional test suite
-     * has a transaction open for every test that has touched the database, so a caller-side
-     * `ownedByCaller() ? … : …` would have one arm no test in this suite can enter — and an
-     * unreachable arm is where a serialization quietly stops happening. In here both arms are
-     * reachable, because a closure that touches nothing leaves the suite at transaction level 0.
+     * The branch lives here rather than at each call site, so every nested writer makes the same
+     * decision in the same place.
      *
      * @template TReturn
      *

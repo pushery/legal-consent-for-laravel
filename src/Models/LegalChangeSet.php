@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Override;
 use Pushery\LegalConsent\Enums\ChangeSetState;
-use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Models\Concerns\FreezesPublishedChangeSet;
 use Pushery\LegalConsent\Models\Concerns\Replaceable;
 
 /**
@@ -40,6 +40,7 @@ use Pushery\LegalConsent\Models\Concerns\Replaceable;
 class LegalChangeSet extends Model
 {
     use BelongsToTenant;
+    use FreezesPublishedChangeSet;
     use Replaceable;
 
     protected $table = 'legal_change_sets';
@@ -114,42 +115,6 @@ class LegalChangeSet extends Model
         }
 
         return self::query()->whereKey($set->getKey())->first(['state', 'key', 'locale', 'version']);
-    }
-
-    #[Override]
-    protected static function booted(): void
-    {
-        // The app-layer half of the freeze. The database triggers cover PostgreSQL and MySQL; this
-        // covers SQLite and every path that goes through a model, and it produces a typed failure
-        // instead of a raw SQLSTATE.
-        self::updating(function (self $set): void {
-            // getOriginal(), not the current attribute: the question is whether the row WAS frozen,
-            // and reading the incoming value would let an update that also rewrites `state` walk
-            // straight past the guard. The database triggers ask OLD.state for the same reason.
-            $stored = self::storedRow($set);
-
-            // A row that cannot be found is REFUSED, not waved through: a guard that cannot decide
-            // must not decide in favor of the write.
-            if ($stored instanceof LegalChangeSet && $stored->getOriginal('state') !== ChangeSetState::Published) {
-                return;
-            }
-
-            $key = $stored?->getOriginal('key');
-            $locale = $stored?->getOriginal('locale');
-            $version = $stored?->getOriginal('version');
-
-            throw LegalDocumentFrozenException::forChangeSet(
-                is_string($key) ? $key : '?',
-                is_string($locale) ? $locale : '?',
-                is_string($version) ? $version : '',
-            );
-        });
-
-        self::deleting(function (self $set): void {
-            if ($set->state->isFrozen()) {
-                throw LegalDocumentFrozenException::forChangeSet($set->key, $set->locale, $set->version);
-            }
-        });
     }
 
     /**

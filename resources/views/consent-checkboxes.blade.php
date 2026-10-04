@@ -115,7 +115,7 @@
         //
         // One echo has no adjacency to get wrong. Every dynamic part goes through `e()`, which is
         // what `{{ }}` does; the wording itself is escaped exactly once, as before.
-        $anchorFor = static function (array $target, string $text, string $id = '', string $rel = 'noopener'): string {
+        $anchorFor = static function (array $target, string $text, string $id = ''): string {
             $locale = (string) ($target['locale'] ?? '');
 
             return '<a'
@@ -126,7 +126,9 @@
                 // appears in its own language. Omitted rather than emptied — `hreflang=""` is
                 // itself a claim.
                 .($locale === '' ? '' : ' hreflang="'.e($locale).'"')
-                .' target="_blank" rel="'.$rel.'">'.e($text).'</a>';
+                // `noreferrer` as on every other link of this package: a document hosted elsewhere
+                // is not told the address of the registration page it was opened from.
+                .' target="_blank" rel="noopener noreferrer">'.e($text).'</a>';
         };
 
         if ($cut !== null) {

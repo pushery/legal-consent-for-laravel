@@ -152,6 +152,12 @@ return [
             // nothing, which you find, rather than a registration that fails, which they do. The
             // exception is a form that builds its sentence per request and hands it to
             // recordRegistrationConsent() as `shownWordings`: then the flag is enough.
+            //
+            // It is written only where the form's control for the page was rendered and ticked:
+            // `legal_imprint`, or the shared checkbox named in `registration_field` above. A page
+            // that binds nobody gets no validation rule, so an empty box is a "no" the person may
+            // give, and a registration without the control acknowledges nothing and logs which
+            // field it missed.
             // 'acknowledge_at_registration' => true,
             // 'registration_wording' => 'I have read the imprint.',
             //
@@ -404,9 +410,9 @@ return [
     | without a queue worker keeps working exactly as before.
     |
     | Turn it on if your translator is a language model. A privacy notice is ~15 kB of text, which is
-    | an ordinary length for one and a long time for a model: a consumer measured the inline call
-    | ending in a 500 twice in one day. The duration is not this package's to know — the translator is
-    | YOUR binding, and might answer in microseconds or in minutes — which is why the answer is not a
+    | an ordinary length for one and a long time for a model, and an inline call that outlasts the
+    | request ends it in a 500. The duration is not this package's to know — the translator is your
+    | binding, and might answer in microseconds or in minutes — which is why the answer is not a
     | longer timeout but a request that does not wait.
     |
     */
@@ -890,6 +896,15 @@ return [
     'tamper_evidence_key' => env('LEGAL_CONSENT_TAMPER_KEY'),
 
     /*
+    | Text that marks a legal text as a placeholder, written before the real one. An active version
+    | whose content, title or acceptance sentence carries one of these markers, or that stands on
+    | version 0.0.0, is reported by `php artisan legal-consent:verify-documents`: as a warning, or
+    | as a failure with `--placeholders-fail`, the form a release check runs before a launch. The
+    | match is case-sensitive. An empty list leaves only the 0.0.0 check.
+    */
+    'placeholder_markers' => ['LEGAL-PLACEHOLDER'],
+
+    /*
     | Age gate (Art. 8 DSGVO). When enabled, the registration ruleset additionally
     | requires an `age_confirmed` checkbox to be accepted — the minimum-age attestation.
     | `threshold` only shapes the message (the German floor is 16; some member states set
@@ -964,6 +979,11 @@ return [
     | The subclass inherits the package's table, its tenant scope and its mass-assignment guard.
     | Keep all three: these rows are the proof of what a subject was told and agreed to, and the
     | package writes them only through its own curated paths.
+    |
+    | It inherits the write guards as well, whatever it declares itself: a ledger row refuses to
+    | change, and a published version refuses to be rewritten, or deleted while consents rest on
+    | it. They are registered by traits, so a booted() of your own does not have to call its
+    | parent for them to hold.
     |
     | A class that does not exist, or does not extend the package class, is ignored and the
     | package class is used instead. Obeying it would fail in the middle of a request, a queued

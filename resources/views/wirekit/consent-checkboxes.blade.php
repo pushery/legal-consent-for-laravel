@@ -118,10 +118,15 @@
              is running, which is exactly when it is true.
 
              A WINDOW EVENT rather than the modal's own trigger slot: that slot renders a div, and
-             flow content inside a label is invalid markup. --}}
+             flow content inside a label is invalid markup.
+
+             The name goes into the expression as a JavaScript string, encoded the way `@js()`
+             encodes it where the dialog reads it. A bag handed over as `:attributes` is printed
+             without HTML escaping, so a quote in a field or a key would end the string or the
+             attribute, and `.prevent` would already have stopped the link. --}}
         @php($dialogTrigger = new \Illuminate\View\ComponentAttributeBag($dialog !== null ? [
             'x-bind:aria-haspopup' => "'dialog'",
-            'x-on:click.prevent' => '$dispatch(\'wirekit-modal-show\', { name: \''.$dialogName.'\' })',
+            'x-on:click.prevent' => '$dispatch(\'wirekit-modal-show\', { name: '.\Illuminate\Support\Js::from($dialogName).' })',
         ] : []))
         {{-- The label is assembled and echoed ONCE, rather than written as a chain of
              directives. Blade leaves a closing directive that sits flush against the token before
@@ -145,7 +150,7 @@
              MEMBER: the control's own name would have given every text in the sentence one dialog. --}}
         @php($memberDialog = static fn (array $member): ?string => config('legal-consent.ui.wording_dialog', false) && \Illuminate\Support\Facades\Route::has('legal-consent.document.fragment') && ($member['url'] ?? null) !== null && ($member['locale'] ?? '') !== '' && ($member['key'] ?? '') !== '' ? route('legal-consent.document.fragment', ['key' => $member['key'], 'locale' => $member['locale'], 'heading' => 0]) : null)
         @php($memberDialogName = static fn (array $member): string => $dialogName.'-'.(string) ($member['key'] ?? ''))
-        @php($memberTrigger = static fn (array $member): \Illuminate\View\ComponentAttributeBag => new \Illuminate\View\ComponentAttributeBag($memberDialog($member) !== null ? ['x-bind:aria-haspopup' => "'dialog'", 'x-on:click.prevent' => '$dispatch(\'wirekit-modal-show\', { name: \''.$memberDialogName($member).'\' })'] : []))
+        @php($memberTrigger = static fn (array $member): \Illuminate\View\ComponentAttributeBag => new \Illuminate\View\ComponentAttributeBag($memberDialog($member) !== null ? ['x-bind:aria-haspopup' => "'dialog'", 'x-on:click.prevent' => '$dispatch(\'wirekit-modal-show\', { name: '.\Illuminate\Support\Js::from($memberDialogName($member)).' })'] : []))
         @php($renderLink = static fn (array $target, string $text, ?string $id, \Illuminate\View\ComponentAttributeBag $extra): string => trim(view('legal-consent::wirekit.consent-link', ['id' => $id, 'href' => (string) ($target['url'] ?? ''), 'hreflang' => ($target['locale'] ?? '') !== '' ? $target['locale'] : null, 'extra' => $extra, 'text' => $text])->render()))
         @php($singleLabel = $wordingLink !== null ? e($wordingLink->before).$renderLink($document, $wordingLink->match, $field.'_link', $dialogTrigger).e($wordingLink->after) : e($document['wording']))
         @php($label = $cut === null ? $singleLabel : implode('', array_map(static fn (array $segment): string => $segment['document'] !== null && ($segment['document']['url'] ?? null) !== null ? $renderLink($segment['document'], $segment['text'], null, $memberTrigger($segment['document'])) : e($segment['text']), $cut->segments)))
@@ -191,27 +196,17 @@
                      separate link the single-document path has always fallen back to. One per
                      member, each with its own id, because the description above names them all. --}}
                 @if (($member['url'] ?? null) !== null)
-                    <x-wirekit::link
-                        :id="$memberLinkId($member)"
-                        :href="$member['url']"
-                        :hreflang="($member['locale'] ?? '') !== '' ? $member['locale'] : null"
-                        external
-                        :attributes="$memberTrigger($member)"
-                    >{{ $member['title'] ?? '' }}</x-wirekit::link>
+                    {!! $renderLink($member, (string) ($member['title'] ?? ''), $memberLinkId($member), $memberTrigger($member)) !!}
                 @endif
             @endforeach
 
             @if ($cut === null && ($document['url'] ?? null) !== null && $wordingLink === null)
                 {{-- `hreflang` names the language of the linked text, which is not always this
                      page's — a mandatory document published only in the default locale still
-                     binds and appears in its own language. See the plain stub. --}}
-                <x-wirekit::link
-                    :id="$field.'_link'"
-                    :href="$document['url']"
-                    :hreflang="($document['locale'] ?? '') !== '' ? $document['locale'] : null"
-                    external
-                    :attributes="$dialogTrigger"
-                >{{ $document['title'] }}</x-wirekit::link>
+                     binds and appears in its own language. See the plain stub. Rendered through
+                     the same link view as the one in the sentence, which decides what the anchor
+                     announces. --}}
+                {!! $renderLink($document, (string) $document['title'], $field.'_link', $dialogTrigger) !!}
             @endif
 
             @if (($document['hashField'] ?? '') !== '' && ($document['contentHash'] ?? '') !== '')
@@ -224,29 +219,23 @@
             @endif
         </x-wirekit::stack>
 
-        {{-- COLLECTED HERE, RENDERED AFTER THE STACK. The dialog markup used to sit right
-             here, which made every dialog a FLEX CHILD of the `gap="md"` stack above — a
-             sibling of every field.
+        {{-- Collected here, rendered after the stack. Placed here, every dialog would be a flex
+             child of the `gap="md"` stack above, a sibling of every field.
 
              That costs a full gap each, and it is not visible in the markup. WireKit's outer
-             modal node is a `<div>` carrying the Alpine state and NO `x-show`; what hides is the
-             box inside it. So the wrapper is a VISIBLE flex child of height zero, and a flex
-             container gives a zero-height child its whole gap anyway. Measured in a consumer that
-             had built the same construction itself, on a form with six published documents:
+             modal node is a `<div>` carrying the Alpine state and no `x-show`; what hides is the
+             box inside it. So the wrapper is a visible flex child of height zero, and a flex
+             container gives a zero-height child its whole gap anyway.
 
-               before:  pw→cb1 16   cb1→cb2 20   cb2→cb3 9   cb3→btn 17
-               after:   pw→cb1 16   cb1→cb2  4   cb2→cb3 5   cb3→btn 17
+             The spacing turns uneven rather than merely wide, because only a document with a
+             page gets a dialog: four of them between the first checkbox and the second are four
+             zero-height children and five gaps where the other fields have one.
 
-             Uneven rather than merely wide, because only a document WITH a page gets a dialog:
-             four of them between the first checkbox and the second is four zero-height children
-             and five 4px gaps — the 20. It was reported from the screen twice.
+             Moving them one level out is not enough while that level has a gap of its own: the
+             extra gaps then sit between the last field and the button instead. The only thing
+             that fixes it is a container with no gap, which is what the root element below is.
 
-             And moving them one level out is not enough, which the same consumer measured:
-             after the group but still inside a container that has a gap, `cb3→btn` went from 17
-             to 33. One uneven pair traded for a coarser one. The only thing that fixes it is a
-             container with NO gap, which is what the root element below is.
-
-             A modal is addressed by NAME, so where it sits in the document changes nothing about
+             A modal is addressed by name, so where it sits in the document changes nothing about
              opening one. --}}
         @if ($dialog !== null)
             @php($deferredDialogs[] = [
@@ -281,9 +270,9 @@
 
                 {{-- `max-h-[70vh]` because WireKit's own views use it. A host's Tailwind build scans
                      WireKit's views and not this package's, so it only generates a utility the kit
-                     carries too. From WireKit 2.50.0 the modal panel also caps itself; before that
-                     this cap is what keeps the header and the footer of a long text on a phone's
-                     screen. --}}
+                     carries too. The modal panel's own cap landed in 2.50.0; on a view pinned to an
+                     older kit, this cap is what keeps the header and the footer of a long text on a
+                     phone's screen. --}}
                 <x-wirekit::modal.body class="max-h-[70vh] overflow-y-auto" tabindex="0" role="region" :aria-label="$deferred['title']">
                     {{-- FETCHED ON FIRST OPEN, and kept afterwards. The text is the published,
                          already-sanitized HTML the legal page itself renders — one allowlist, applied

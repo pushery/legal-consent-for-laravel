@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Contracts;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Pushery\LegalConsent\Content\PublishedDocument;
+use Pushery\LegalConsent\Content\PublishedVersion;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Models\LegalConsent;
@@ -187,7 +188,12 @@ interface ConsentManager
      *
      * The document, its version, the frozen wording, the action and the instant all survive —
      * Art. 17(3)(b)/(e) — as does `subject_token`, the pseudonym that still ties the two ledgers
-     * together. What goes is everything naming the person.
+     * together. What goes is every column naming the person.
+     *
+     * A notice row keeps its body, the text that was sent: it is the durable-medium proof, and its
+     * hash cannot be rewritten. The shipped notices build it from the document alone, so it names
+     * nobody. A notification class of the application's own that writes the recipient into a line
+     * leaves them in the body, and the delivery proof logs a warning the first time it sees one.
      *
      * It is NOT an update. Both ledgers refuse every UPDATE, so each row is deleted and written
      * again without those columns, at its original id and inside one transaction. Where tamper
@@ -208,6 +214,17 @@ interface ConsentManager
      * promise the ledger makes.
      */
     public function published(string $documentKey, ?string $locale = null): ?PublishedDocument;
+
+    /**
+     * The version {@see published()} finds, without its text: the acceptance sentence, the content
+     * hash, the version, the type and the notice mode. Null when nothing is published for that
+     * (key, locale), with the same fallback as the text; it never throws.
+     *
+     * For a form that shows the sentence on every render and the document behind a link. It is read
+     * from the cached set of active documents the consent gate reads, so it costs no query after
+     * the first, and a publish refreshes it.
+     */
+    public function publishedVersion(string $documentKey, ?string $locale = null): ?PublishedVersion;
 
     /**
      * The consent controls a registration form must render, derived from what is actually

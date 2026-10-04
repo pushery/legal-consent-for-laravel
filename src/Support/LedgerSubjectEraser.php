@@ -70,8 +70,9 @@ final readonly class LedgerSubjectEraser
      * notifications build it from the DOCUMENT alone — title, dates, change items, the § 308 Nr. 5
      * lit. b warning — and never read the notifiable. So the guarantee lives in those classes, not
      * in a signature, and a consumer who subclasses `ChangeNotification` and renders per subject
-     * breaks it. That is the case this list has to change for, and it is a seam a consumer is
-     * invited to use.
+     * breaks it. That seam is one a consumer is invited to use, so the case is reported where it
+     * arises: `WriteNoticeDeliveryProof` warns the first time a body depends on its recipient, and
+     * the erasure contract on `ConsentManager::forget()` says the body stays.
      *
      * Clearing it would destroy the durable-medium proof of what was communicated — the thing that
      * makes a deemed acceptance binding at all (§ 308 Nr. 5 lit. b) — and, as the code stands,

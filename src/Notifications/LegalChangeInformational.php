@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Notifications;
 
-use Carbon\CarbonImmutable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Pushery\LegalConsent\Enums\DocumentType;
 
@@ -26,7 +25,7 @@ class LegalChangeInformational extends ChangeNotification
     public function toMail(object $notifiable): MailMessage
     {
         $enforceAt = $this->document->enforce_from;
-        $deadline = $enforceAt instanceof CarbonImmutable ? $enforceAt->toDateString() : '';
+        $deadline = $this->readableDate($enforceAt);
 
         $mail = (new MailMessage)
             ->subject($this->line('subject', ['title' => $this->document->title]))
@@ -108,7 +107,7 @@ class LegalChangeInformational extends ChangeNotification
             return false;
         }
 
-        // The replacements handed in here are EQUIVALENT under mutation: a placeholder left unfilled
+        // The replacements handed in here change nothing observable: a placeholder left unfilled
         // still leaves a non-empty line, and the check only asks whether each line is there.
         return $this->line('intro', ['title' => '']) !== ''
             && $this->line('effective', ['deadline' => '']) !== ''

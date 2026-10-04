@@ -20,6 +20,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
 use Pushery\LegalConsent\Support\ConsentGate;
 use Pushery\LegalConsent\Support\NoticeMailConfig;
+use Pushery\LegalConsent\Support\TenantContext;
 
 /**
  * What the three notice-mode notifications share, and the seams a consuming developer activates.
@@ -37,11 +38,11 @@ use Pushery\LegalConsent\Support\NoticeMailConfig;
  *    consequence after it. A base class that assembled the mail would be deciding that.
  *  - `mandatoryContentPresent()` — what this mode's regime actually demands.
  *
- * EVERY SEAM IS INERT BY DEFAULT, with one exception the owner decided: the package's own Markdown
- * shell. Until 0.13 a German § 126b declaration went out inside Laravel's global template, with
- * "Hello!", "Regards," and "If you're having trouble clicking" resolved from the CONSUMING
- * application's translations — while the documentation promised the opposite. `notice_mail.view`
- * set to null opts back out.
+ * Every seam is inert by default, with one exception: the package's own Markdown shell. Laravel's
+ * global template greets with "Hello!", closes with "Regards," and explains "If you're having
+ * trouble clicking", all resolved from the application's translations, so a German § 126b
+ * declaration would arrive wrapped in another language. `notice_mail.view` set to null opts back
+ * out.
  *
  * Inert matters more here than elsewhere: the notice body is hashed into an append-only proof row,
  * so a seam that changed the mail without being asked for would move the bytes of a document
@@ -210,8 +211,8 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
      */
     private function decoratedSubject(?string $subject): string
     {
-        // Every shipped notice sets a subject before this runs, so the cast is EQUIVALENT under
-        // mutation here. It stays for a subclass that sets none: the subject is then null, and this
+        // Every shipped notice sets a subject before this runs, so the cast changes nothing for
+        // them. It stays for a subclass that sets none: the subject is then null, and this
         // has to return a string.
         $subject = (string) $subject;
         $prefix = NoticeMailConfig::subjectPrefix();
@@ -225,7 +226,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         if (NoticeMailConfig::showsEffectiveDateInSubject() && $enforceFrom instanceof CarbonImmutable) {
             return trans('legal-consent::notifications.common.subject_effective', [
                 'subject' => $subject,
-                'date' => $enforceFrom->toDateString(),
+                'date' => $this->readableDate($enforceFrom),
             ]);
         }
 
@@ -263,7 +264,13 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
      *
      * Only the gating mode is skipped, and only on a document that no longer gates them. An
      * info-only or deemed-consent notice is owed regardless of what the subject does, so
-     * suppressing one would drop a legally required communication.
+     * suppressing one would drop a legally required communication. The one exception is a
+     * deemed-consent notice whose objection deadline has passed, and its own class says why
+     * ({@see DeemedConsentNotice::shouldSend()}).
+     *
+     * The question is asked in the tenant of the version, the way its delivery proof is written.
+     * A worker has nobody signed in, so the ambient tenant is the shared bucket, where a subject of
+     * any other tenant holds nothing and would be asked again for what they already agreed to.
      */
     public function shouldSend(object $notifiable, string $channel): bool
     {
@@ -281,9 +288,34 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         // per recipient, and the ledger it reads grows for the life of the account — so the
         // unrestricted fold made a single-key yes/no cost more the longer someone had been a
         // customer, for rows it then threw away.
-        $held = new ConsentGate()->currentHoldings($notifiable, [$this->document->key]);
+        $tenantId = $this->document->getAttribute(TenantContext::COLUMN);
+
+        $held = app(TenantContext::class)->forTenant(
+            is_string($tenantId) ? $tenantId : '',
+            fn (): array => new ConsentGate()->currentHoldings($notifiable, [$this->document->key]),
+        );
 
         return ! ConsentGate::holds($held, $this->document->key, $this->document->major_version);
+    }
+
+    /**
+     * A date the way the reader of this notice writes one: in the language the mail is rendered in,
+     * never in the ISO form a machine reads. The deadline of a deemed consent is the core of its
+     * notice (§ 308 Nr. 5 lit. b BGB), and it has to read as a date in the sentence around it. The
+     * `toArray()` payloads keep the ISO form, because a program reads those.
+     *
+     * A language the date library has no data for formats to an empty string, which would leave a
+     * gap where the deadline belongs. The ISO date stands in there: it reads the same everywhere.
+     */
+    protected function readableDate(?CarbonImmutable $date): string
+    {
+        if (! $date instanceof CarbonImmutable) {
+            return '';
+        }
+
+        $readable = $date->settings(['locale' => app()->getLocale()])->isoFormat('LL');
+
+        return $readable !== '' ? $readable : $date->toDateString();
     }
 
     /**

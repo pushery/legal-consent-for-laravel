@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Override;
 use Pushery\LegalConsent\Enums\ChangeItemType;
 use Pushery\LegalConsent\Enums\ChangeSetState;
-use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
+use Pushery\LegalConsent\Models\Concerns\FreezesPublishedChangeItem;
 use Pushery\LegalConsent\Models\Concerns\Replaceable;
 
 /**
@@ -36,6 +36,7 @@ use Pushery\LegalConsent\Models\Concerns\Replaceable;
  */
 class LegalChangeItem extends Model
 {
+    use FreezesPublishedChangeItem;
     use Replaceable;
 
     protected $table = 'legal_change_items';
@@ -89,7 +90,7 @@ class LegalChangeItem extends Model
     private static function storedRow(self $item): ?self
     {
         if (array_key_exists('state', $item->getRawOriginal())) {
-            // Trusting the loaded row is EQUIVALENT under mutation for an item whose state has not moved
+            // Trusting the loaded row changes nothing observable for an item whose state has not moved
             // since it was loaded, which is every item the package writes: reading it again finds the
             // same three values. One whose state did move is refused either way, by the database trigger
             // instead of by this hook.
@@ -97,33 +98,6 @@ class LegalChangeItem extends Model
         }
 
         return self::query()->whereKey($item->getKey())->first(['state', 'change_set_id', 'position']);
-    }
-
-    #[Override]
-    protected static function booted(): void
-    {
-        self::updating(function (self $item): void {
-            $stored = self::storedRow($item);
-
-            // A row that cannot be found is REFUSED, not waved through.
-            if ($stored instanceof LegalChangeItem && $stored->getOriginal('state') !== ChangeSetState::Published) {
-                return;
-            }
-
-            $changeSetId = $stored?->getOriginal('change_set_id');
-            $position = $stored?->getOriginal('position');
-
-            throw LegalDocumentFrozenException::forChangeItem(
-                is_int($changeSetId) ? $changeSetId : 0,
-                is_int($position) ? $position : 0,
-            );
-        });
-
-        self::deleting(function (self $item): void {
-            if ($item->state->isFrozen()) {
-                throw LegalDocumentFrozenException::forChangeItem($item->change_set_id, $item->position);
-            }
-        });
     }
 
     /**

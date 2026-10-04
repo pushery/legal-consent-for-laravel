@@ -68,9 +68,8 @@ enum ConsentAction: string
      * consent that was there.
      *
      * The value is `optin_requested` and not the case name spelled out, because `action` is a
-     * 20-character column. SQLite does not enforce that and Postgres and MySQL do, so a longer
-     * value would pass the fast suite and fail on the engines a consumer actually runs.
-     * The suite holds the whole set against the schema.
+     * 20-character column. SQLite does not enforce that length and Postgres and MySQL do, so a
+     * longer value would be accepted on one engine and refused on the others.
      */
     case OptInRequested = 'optin_requested';
 
@@ -110,13 +109,10 @@ enum ConsentAction: string
         return [self::Objected, self::OptInRequested];
     }
 
-    /**
-     * THE `true` IN THE TWO `in_array()` CALLS BELOW IS UNOBSERVABLE, AND THAT IS NOT A REASON
-     * TO DROP IT. Enum cases are singletons, so a loose comparison between two of them already
-     * decides on identity -- measured: dropping the strict flag from either call leaves the whole
-     * tree green. It earns its place the moment either side stops being pure enum cases, which is
-     * a one-line edit away, and it costs nothing until then.
-     */
+    // The strict flag in the two `in_array()` calls below changes nothing while both sides are enum
+    // cases, which are singletons and already compare by identity. It stays so that each comparison
+    // remains an identity check if either side ever stops being one.
+
     /** Whether this action leaves the prior standing untouched. See {@see neutral()}. */
     public function isNeutral(): bool
     {

@@ -152,6 +152,12 @@
                                      button list (WCAG 2.4.6) — the same rule this package already
                                      enforces for the withdraw control. --}}
                                 <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key) }}" wire:click="releaseAll(@js($key))" wire:loading.attr="aria-busy" wire:target="releaseAll">{{ __('legal-consent::ui.admin_release_all') }}</button>
+                                {{-- Visible before the click: the languages this release leaves out keep the
+                                     version they already have live, so leaving them out is a decision
+                                     somebody saw. --}}
+                                @if ($rows[$key]['_release']['left_out'] !== [])
+                                    <p id="left-out-{{ $key }}">{{ __('legal-consent::ui.admin_release_leaves_out', ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}</p>
+                                @endif
                             @else
                                 {{-- The blocking reasons stay OUTSIDE aria-describedby on a disabled
                                      button (a disabled control is skipped, so its description is never

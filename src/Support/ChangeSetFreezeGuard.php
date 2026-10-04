@@ -177,7 +177,7 @@ final class ChangeSetFreezeGuard
     {
         $prefix = DB::connection()->getTablePrefix();
 
-        if (preg_match('/^\w*$/', $prefix) !== 1) {
+        if (preg_match('/^\w*\z/', $prefix) !== 1) {
             throw new RuntimeException(
                 "refusing to build the change-set freeze guard for an unexpected table prefix: {$prefix}"
             );

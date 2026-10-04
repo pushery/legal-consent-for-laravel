@@ -83,7 +83,8 @@ trait RendersChangeItems
      * One line per entry: a translated label for what happened, the subject, then the detail.
      *
      * A third party gets its EDPB Opinion 22/2024 Rz. 22 facets appended in parentheses, because a
-     * name on its own does not tell a reader whether their data left the country.
+     * name on its own does not tell a reader whether their data left the country. Its name leads
+     * them when the subject says something else, such as the role the party takes.
      */
     private function renderItem(LegalChangeItem $item): string
     {
@@ -96,9 +97,10 @@ trait RendersChangeItems
             $line .= ' — '.$item->detail;
         }
 
-        // array_values() is EQUIVALENT under mutation: implode() and the emptiness check below read
+        // array_values() changes nothing observable: implode() and the emptiness check below read
         // no keys.
         $facets = array_values(array_filter([
+            $item->party_name !== $item->subject ? $item->party_name : null,
             $item->party_location,
             $item->purpose,
             $item->party_contact,

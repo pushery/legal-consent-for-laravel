@@ -240,7 +240,7 @@ final class ProofColumnGuard
     {
         $prefix = DB::connection()->getTablePrefix();
 
-        if (preg_match('/^\w*$/', $prefix) !== 1) {
+        if (preg_match('/^\w*\z/', $prefix) !== 1) {
             throw new RuntimeException(
                 "refusing to build the legal_documents guards for an unexpected table prefix: {$prefix}"
             );
@@ -289,7 +289,7 @@ final class ProofColumnGuard
         ));
 
         foreach ($columns as $column) {
-            if (preg_match('/^[A-Za-z_]\w*$/', $column) !== 1) {
+            if (preg_match('/^[A-Za-z_]\w*\z/', $column) !== 1) {
                 throw new RuntimeException(
                     "refusing to build the legal_documents proof trigger from an unexpected column name: {$column}"
                 );

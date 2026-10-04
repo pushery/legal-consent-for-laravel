@@ -32,7 +32,7 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * triggers (see 000011). Neither `legal_consents` nor `legal_notices` carries a trigger of its own
  * on that engine — their append-only guards have a pgsql arm and a mysql arm and nothing else,
  * because SQLite gets the same guarantee from the model layer. The unique chain-link index from
- * 000012 survives the rebuild, and the suite asserts it still bites afterwards.
+ * 000012 survives the rebuild and still refuses a duplicate link afterwards.
  *
  * What is NOT safe, and is why the rebuild runs inside `ProofColumnGuard::whileDisarmed()`: the
  * guard on `legal_documents` names `legal_consents` in its DELETE arm, and the rebuild's last step
@@ -51,7 +51,7 @@ return new class extends Migration
     {
         ProofColumnGuard::whileDisarmed(function (): void {
             foreach (self::TABLES as $table) {
-                if ($this->holdsStringKeys($table)) {
+                if (! $this->pretending() && $this->holdsStringKeys($table)) {
                     continue;
                 }
 
@@ -72,7 +72,7 @@ return new class extends Migration
     {
         ProofColumnGuard::whileDisarmed(function (): void {
             foreach (self::TABLES as $table) {
-                if (! $this->holdsStringKeys($table)) {
+                if (! $this->pretending() && ! $this->holdsStringKeys($table)) {
                     continue;
                 }
 
@@ -91,6 +91,18 @@ return new class extends Migration
         $type = strtolower(Schema::getColumnType($table, 'subject_id'));
 
         return str_contains($type, 'char') || str_contains($type, 'text') || $type === 'string';
+    }
+
+    /**
+     * Is this run collecting SQL rather than executing it?
+     *
+     * Under `pretend()` every read returns nothing, so `Schema::getColumnType()` cannot find the
+     * column and throws. A pretended run therefore asks no question and shows the change for
+     * every table, which is what the migration does wherever it has work to do.
+     */
+    private function pretending(): bool
+    {
+        return DB::connection()->pretending();
     }
 
     private function widen(string $table): void
@@ -131,20 +143,16 @@ return new class extends Migration
      * the portable path stays green while the engine-specific one names a table the schema does
      * not have.
      *
-     * THE PREFIX IS VALIDATED BEFORE THIS METHOD CAN RUN, AND NOT HERE. Sister migrations refuse a
+     * The prefix is validated before this method can run, and not here. Sister migrations refuse a
      * prefix that is not a bare identifier fragment on the spot, because they build their DDL as
      * the first thing they do. This one cannot be reached that way: every caller sits inside
      * `ProofColumnGuard::whileDisarmed()`, whose first act is `drop()` -> `qualify()`, which
-     * applies the identical `/^\w*$/` rule and throws. This method used to repeat that check, and
-     * the copy could not fire — measured 2026-08-27, `up()` on a prefix of `legal-` raises
-     * "refusing to build the legal_documents guards for an unexpected table prefix", never this
-     * file's own sentence. A branch no run can enter is not a defense; it only reads like one.
+     * applies the identical `/^\w*\z/` rule and throws. `up()` on a prefix of `legal-` therefore
+     * refuses with "refusing to build the legal_documents guards for an unexpected table prefix"
+     * before any statement is issued, and a second check here could never fire.
      *
-     * So the guarantee lives one level up, and the suite pins it there rather than here: both
-     * halves are run on a hostile prefix and the refusal is required to arrive BEFORE any statement
-     * is issued. Take `whileDisarmed()` off this migration and that goes red, which is the point —
-     * the wrapper is what makes the interpolation below safe, on top of the rebuild hazard it was
-     * added for.
+     * That refusal is what makes the interpolation below safe, on top of the rebuild hazard the
+     * wrapper was added for.
      */
     private function prefixed(string $name): string
     {

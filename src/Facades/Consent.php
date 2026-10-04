@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Facade;
 use Pushery\LegalConsent\Content\PublishedDocument;
+use Pushery\LegalConsent\Content\PublishedVersion;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Models\LegalConsent;
@@ -33,6 +34,7 @@ use Pushery\LegalConsent\Testing\ConsentFake;
  * @method static list<array<string, mixed>> history(Model $subject)
  * @method static SubjectErasure forget(Model $subject)
  * @method static ?PublishedDocument published(string $documentKey, ?string $locale = null)
+ * @method static ?PublishedVersion publishedVersion(string $documentKey, ?string $locale = null)
  * @method static list<RegistrationChecklistItem> registrationChecklist(?string $locale = null)
  *
  * @see ConsentManager

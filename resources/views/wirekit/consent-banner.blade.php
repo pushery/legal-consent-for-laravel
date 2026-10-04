@@ -1,14 +1,15 @@
 {{--
     WireKit-native variant of the change banners. Publish with `--tag=legal-consent-wirekit`.
 
-    Built from real `x-wirekit::*` components — needs `pushery/wirekit` >= 2.49.0, the floor the
+    Built from real `x-wirekit::*` components — needs `pushery/wirekit` >= 2.56.0, the floor the
     provider itself applies (`LegalConsentServiceProvider::WIREKIT_MINIMUM`), and `@wirekitScripts`
     in the layout for the live countdown. The `countdown` component itself landed in 2.13.0, and
     that is the number this comment used to name. WireKit's own localized screen-reader strings
     landed in 2.26.0, and below that it announces them in English whatever locale the page is in,
     which on a legal deadline is not a cosmetic difference — that was the floor until the busy-state
-    props landed in 2.47.0 and the stubs stopped hand-rolling their own, and the release dialog's
-    close on confirm landed in 2.49.0. The
+    props landed in 2.47.0 and the stubs stopped hand-rolling their own, the release dialog's
+    close on confirm landed in 2.49.0, and the quiet new-tab link and the editor that reports only
+    a person's edit landed in 2.56.0. The
     package's own test suite renders these views against the installed WireKit and fails on any
     component the release lacks, so this never reaches for one the app cannot resolve.
 

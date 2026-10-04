@@ -39,9 +39,9 @@ final class NoticeAttempts
      */
     public static function maxAttempts(): int
     {
-        $configured = config('legal-consent.notifications.max_attempts');
+        $configured = IntegerSetting::from(config('legal-consent.notifications.max_attempts'));
 
-        return is_int($configured) && $configured >= 1 ? $configured : 3;
+        return $configured !== null && $configured >= 1 ? $configured : 3;
     }
 
     /**
@@ -49,9 +49,9 @@ final class NoticeAttempts
      */
     public static function staleBefore(): CarbonImmutable
     {
-        $configured = config('legal-consent.notifications.requeue_after_minutes');
+        $configured = IntegerSetting::from(config('legal-consent.notifications.requeue_after_minutes'));
 
-        return CarbonImmutable::now()->subMinutes(is_int($configured) && $configured >= 1 ? $configured : 1440);
+        return CarbonImmutable::now()->subMinutes($configured !== null && $configured >= 1 ? $configured : 1440);
     }
 
     /**
@@ -136,10 +136,17 @@ final class NoticeAttempts
             return;
         }
 
+        $subjectId = SubjectKey::for($subject);
+
+        // A subject without a key has no attempts to forget, and `subject_id = null` names nobody.
+        if ($subjectId === null) {
+            return;
+        }
+
         DB::table(self::TABLE)
             ->where('document_id', $version->getKey())
             ->where('subject_type', (string) $subject->getMorphClass())
-            ->where('subject_id', SubjectKey::for($subject))
+            ->where('subject_id', $subjectId)
             ->delete();
     }
 

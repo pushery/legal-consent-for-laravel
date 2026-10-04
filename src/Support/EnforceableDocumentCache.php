@@ -6,7 +6,9 @@ namespace Pushery\LegalConsent\Support;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
@@ -46,6 +48,28 @@ final class EnforceableDocumentCache
     public const string PREFIX = 'legal:enforceable:v2';
 
     /**
+     * The suffix of the second entry per (tenant, locale): the announced versions an active one has
+     * replaced inside its own major. A key of its own rather than a new payload shape, so code that
+     * predates the set never reads it and the active set keeps the payload it has.
+     */
+    private const string BEHIND = 'behind';
+
+    /**
+     * The columns both cached sets carry: what the gate and the banner read.
+     *
+     * `is_active` is among them although every active row has it set: a consumer calling
+     * isEnforceable() on a document handed out by the gate would otherwise read an unset is_active
+     * as false, or, under Model::shouldBeStrict(), hit a MissingAttributeException.
+     *
+     * @var list<string>
+     */
+    private const array COLUMNS = [
+        'id', 'key', 'locale', 'type', 'major_version', 'version', 'title', 'ui_wording',
+        'content_hash', 'requires_explicit_optin', 'requires_reconsent', 'notice_mode',
+        'announce_from', 'enforce_from', 'objection_deadline', 'offers_termination', 'is_active',
+    ];
+
+    /**
      * The already-hydrated set per cache key, with the wall-clock second it stops being usable.
      *
      * The documented layout asks for this set FOUR times in one request — once from the gate's
@@ -82,11 +106,11 @@ final class EnforceableDocumentCache
      * not published in it resolves through the same chain registration walks, fallback_locale and then
      * default_locale ({@see RegistrationLocaleChain}), and the first version found stands in.
      *
-     * {@see activeFor()} ALONE FAILED OPEN FOR EVERY UNTRANSLATED LOCALE. The gate read the strict
-     * per-locale set, so a subject browsing in a language the terms were never translated into owed
-     * nothing: measured in a consumer with terms in `de` and `en`, `outstanding()` answered empty for
-     * `fr`, `es`, `it`, `nl` and `pt`, and a subject in `it` who had accepted nothing reached the
-     * dashboard. Holdings were already cross-locale; only the enforceable set was not.
+     * {@see activeFor()} alone fails open for every untranslated locale. Read as the gate's set, the
+     * strict per-locale answer leaves a subject browsing in a language the terms were never
+     * translated into owing nothing: with terms in `de` and `en`, `outstanding()` would answer empty
+     * for `fr`, `es`, `it`, `nl` and `pt`, and a subject in `it` who had accepted nothing would reach
+     * the dashboard. Holdings are cross-locale, so the enforceable set is as well.
      *
      * Mandatory only, as registration does. A voluntary consent in another language is not one to ask
      * for, and an informational page binds nobody; both stay strictly per locale.
@@ -198,16 +222,7 @@ final class EnforceableDocumentCache
     private function freshRows(string $locale): array
     {
         return LegalDocument::model()::query()
-            ->select([
-                'id', 'key', 'locale', 'type', 'major_version', 'version', 'title', 'ui_wording',
-                'content_hash', 'requires_explicit_optin', 'requires_reconsent', 'notice_mode',
-                'announce_from', 'enforce_from', 'objection_deadline', 'offers_termination',
-                // Every row here is active by definition, but the column must be SELECTED: a
-                // consumer calling isEnforceable() on a document handed out by the gate would
-                // otherwise read an unset is_active as false — or, under Model::shouldBeStrict(),
-                // hit a MissingAttributeException.
-                'is_active',
-            ])
+            ->select(self::COLUMNS)
             ->where('locale', $locale)
             ->where('is_active', true)
             // ORDERED, BECAUSE EVERYTHING DOWNSTREAM RENDERS THIS SET IN THIS ORDER. Without it
@@ -226,15 +241,56 @@ final class EnforceableDocumentCache
             ->all();
     }
 
+    /**
+     * The version that gates this document's major in its language: the document itself when it
+     * was published as an active re-consent, otherwise the active re-consent that opened its major,
+     * or null when the major never asked for one.
+     *
+     * A later version of a major replaces the active row, not what the major asked of its readers.
+     * An active re-consent has to raise the major, so a major holds at most one, and an editorial
+     * fix or an info-only change published inside it keeps that gate, from the effective date of
+     * the version that opened it. Read from the active row alone, the gate ended with the first
+     * such version for everyone who had not agreed yet.
+     */
+    public function gatingVersionOf(LegalDocument $document): ?LegalDocument
+    {
+        if ($document->noticeMode() === NoticeMode::ActiveReconsent) {
+            return $document;
+        }
+
+        return $this->announcedVersionsOfTheMajor($document)
+            ->first(static fn (LegalDocument $announced): bool => $announced->noticeMode() === NoticeMode::ActiveReconsent);
+    }
+
+    /**
+     * The change this document's text belongs to: the document itself unless it was published
+     * silently, otherwise the latest announced version of its major, or the document itself when
+     * its major announced nothing.
+     *
+     * A silent version corrects the text of a change without being one, so what the change still
+     * owes its readers, an info-only notice ahead of its date or an objection window still open,
+     * is the announced version's.
+     */
+    public function governingVersionOf(LegalDocument $document): LegalDocument
+    {
+        if ($document->noticeMode() !== NoticeMode::SilentEditorial) {
+            return $document;
+        }
+
+        return $this->announcedVersionsOfTheMajor($document)->last() ?? $document;
+    }
+
     public function flush(string $locale): void
     {
         $key = $this->keyFor($locale);
+        $behind = $key.':'.self::BEHIND;
 
         // The in-process copy goes with it. A publish that dropped only the shared entry would be
         // invisible to the very process that performed it for the rest of the request.
-        unset($this->memo[$key]);
+        unset($this->memo[$key], $this->memo[$behind]);
 
         $this->cache->forget($key);
+        $this->cache->forget($behind);
     }
 
     /** Forget every locale that could be cached — what a publish or an explicit flush needs. */
@@ -291,6 +347,94 @@ final class EnforceableDocumentCache
         $locales = array_merge($this->locales(), array_filter($published, is_string(...)));
 
         return array_values(array_unique($locales));
+    }
+
+    /**
+     * The announced versions of this document's major that an active version has replaced, oldest
+     * first.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    private function announcedVersionsOfTheMajor(LegalDocument $document): Collection
+    {
+        return $this->behind($document->locale)
+            ->filter(static fn (LegalDocument $announced): bool => $announced->key === $document->key
+                && $announced->major_version === $document->major_version)
+            ->values();
+    }
+
+    /**
+     * The announced versions each active one has replaced inside its own major, for one locale:
+     * the second half of what the gate reads, memoized and cached exactly like the active set and
+     * flushed with it.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    private function behind(string $locale): Collection
+    {
+        $key = $this->keyFor($locale).':'.self::BEHIND;
+        $now = CarbonImmutable::now()->getTimestamp();
+
+        [$memoized, $expiresAt] = $this->memo[$key] ?? [null, 0];
+
+        if ($memoized instanceof Collection && $expiresAt > $now) {
+            return $memoized;
+        }
+
+        $cached = $this->cache->get($key);
+
+        if (is_array($cached)) {
+            $rows = $cached;
+        } else {
+            $rows = $this->freshRowsBehind($locale);
+            $this->cache->put($key, $rows, $this->ttl);
+        }
+
+        $documents = LegalDocument::model()::hydrate($rows);
+
+        $this->memo[$key] = [$documents, $now + $this->ttl];
+
+        return $documents;
+    }
+
+    /**
+     * Only the majors of active versions that are not an active re-consent themselves are read:
+     * those are the ones whose obligations can sit on an earlier row. An installation whose active
+     * versions all gate, or that has published nothing, pays no query here.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function freshRowsBehind(string $locale): array
+    {
+        $majors = [];
+
+        foreach ($this->activeFor($locale) as $document) {
+            if ($document->noticeMode() !== NoticeMode::ActiveReconsent) {
+                $majors[$document->key] = $document->major_version;
+            }
+        }
+
+        if ($majors === []) {
+            return [];
+        }
+
+        return LegalDocument::model()::query()
+            ->select(self::COLUMNS)
+            ->where('locale', $locale)
+            ->where('is_active', false)
+            ->whereIn('key', array_keys($majors))
+            ->where(static fn (Builder $announced): Builder => $announced
+                ->where('notice_mode', '!=', NoticeMode::SilentEditorial->value)
+                // A row from before the column states its mode through requires_reconsent alone,
+                // which is how noticeMode() reads it.
+                ->orWhere(static fn (Builder $legacy): Builder => $legacy->whereNull('notice_mode')->where('requires_reconsent', true)))
+            ->orderBy('key')
+            ->orderBy('id')
+            ->get()
+            ->filter(static fn (LegalDocument $document): bool => ($majors[$document->key] ?? null) === $document->major_version)
+            ->map(static fn (LegalDocument $document): array => $document->getAttributes())
+            ->values()
+            ->all();
     }
 
     private function keyFor(string $locale): string

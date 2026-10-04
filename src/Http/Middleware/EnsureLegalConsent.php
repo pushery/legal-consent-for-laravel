@@ -107,22 +107,17 @@ final readonly class EnsureLegalConsent
 
         $extraRoutes = config('legal-consent.middleware.allowlist_routes');
 
-        // THE NARROWING BELOW CANNOT BE KILLED BY A TEST, AND THAT IS A STATEMENT ABOUT
-        // `routeIs()`, NOT ABOUT THE NARROWING. Measured: `Request::routeIs()` is an untyped
-        // variadic (`routeIs(...$patterns)`) that hands each pattern to `Route::named()`, and a
-        // non-string there simply matches nothing. So dropping the `is_string` filter -- or the
-        // `!== ''` guard on the name above -- changes no observable behavior today, which is
-        // exactly why no test can hold them.
+        // The `is_string` filter below is what keeps a nested list from opening the gate.
+        // `Request::routeIs()` hands each pattern to `Route::named()` and on to `Str::is()`, which
+        // walks an iterable pattern element by element. An array entry therefore matches like the
+        // names inside it: `'allowlist_routes' => [['admin.*']]`, a list nested by mistake, would
+        // exempt every admin route from the gate. A non-string scalar matches nothing, which is
+        // why a stray integer in the list never showed it. The same holds for `rights_routes`.
         //
-        // They stay for the reason they were written: the accessors feeding this are `mixed`, the
-        // filter is what a static analyzer reads as the narrowing, and the day `routeIs()` is
-        // typed `string ...$patterns` the unfiltered form becomes a TypeError on a legal gate.
-        // A guard that is redundant against today's framework contract is not a guard that is
-        // wrong -- but it must be labeled, or the next reader deletes it as dead weight.
-        //
-        // `array_values` is redundant for a second, independent reason: `array_merge` renumbers
-        // integer keys itself. It is kept because the intent (a positional list) is the thing
-        // being expressed, not the renumbering.
+        // The `!== ''` guard on the name above changes nothing observable, because an empty
+        // pattern matches no route name; it stays as the narrowing a static analyzer reads.
+        // `array_values` changes nothing either, since `array_merge` renumbers integer keys
+        // itself. It is kept because the intent, a positional list, is the thing expressed.
         if (is_array($extraRoutes)) {
             $names = array_merge($names, array_values(array_filter($extraRoutes, is_string(...))));
         }
@@ -187,7 +182,7 @@ final readonly class EnsureLegalConsent
         foreach ($this->livewireEndpoints(app(LivewireManager::class)) as $endpoint) {
             $path = mb_trim($endpoint, '/');
 
-            // The `!== ''` is EQUIVALENT under mutation: no reachable Livewire endpoint trims to an
+            // The `!== ''` changes nothing observable: no reachable Livewire endpoint trims to an
             // empty path, and an empty pattern matches no request path anyway.
             if ($path !== '' && ($request->is($path) || $request->is($path.'/*'))) {
                 return true;
@@ -237,7 +232,7 @@ final readonly class EnsureLegalConsent
 
         $consentPath = config('legal-consent.routes.consent_path');
 
-        // Widening the first `&&`, or dropping the `!== ''`, is EQUIVALENT under mutation: a string
+        // Widening the first `&&`, or dropping the `!== ''`, would change nothing observable: a string
         // path passes either way, and an empty or missing one reaches `is('')`, which matches no
         // request path.
         return is_string($consentPath) && $consentPath !== '' && $request->is(ltrim($consentPath, '/'));
@@ -247,7 +242,7 @@ final readonly class EnsureLegalConsent
     {
         $name = config('legal-consent.routes.consent_name');
 
-        // The `!== ''` is EQUIVALENT under mutation, because `Route::has('')` is false, and so is
+        // The `!== ''` changes nothing observable, because `Route::has('')` is false, and neither does
         // widening the first `&&`. It stays as the cheaper half of the pair, as in
         // ChangeNotification::ctaUrl().
         if (is_string($name) && $name !== '' && Route::has($name)) {

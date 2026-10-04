@@ -232,8 +232,8 @@ final readonly class LedgerRecordMacs
             // "the last one wins" without a second pass or a window function no engine here shares.
             // Keyed by the id as an INT, because the caller's key is one too — a bigint arrives as
             // a numeric string through some connections, and two spellings of one id would mean a
-            // recorded mac that no lookup ever finds. Both fallbacks are EQUIVALENT under
-            // mutation: `consent_id` and `mac` are NOT NULL columns of this table.
+            // recorded mac that no lookup ever finds. Neither fallback is ever taken: `consent_id`
+            // and `mac` are NOT NULL columns of this table.
             foreach ($rows as $row) {
                 if (is_string($row->mac) && (is_int($row->consent_id) || is_string($row->consent_id))) {
                     $macs[(int) $row->consent_id] = $row->mac;

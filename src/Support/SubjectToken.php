@@ -337,9 +337,17 @@ final class SubjectToken
      */
     private function tokenIn(Builder $query, Model $subject): ?string
     {
+        $subjectId = SubjectKey::for($subject);
+
+        // A subject without a key names nobody, and `subject_id = null` would hand it the token of a
+        // row of its type that was written without a key.
+        if ($subjectId === null) {
+            return null;
+        }
+
         $token = $query
             ->where('subject_type', (string) $subject->getMorphClass())
-            ->where('subject_id', SubjectKey::for($subject))
+            ->where('subject_id', $subjectId)
             ->whereNotNull('subject_token')
             ->value('subject_token');
 

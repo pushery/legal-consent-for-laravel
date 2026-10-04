@@ -18,6 +18,7 @@ use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
+use Pushery\LegalConsent\Livewire\Concerns\NamesChangedSentences;
 use Pushery\LegalConsent\Livewire\Concerns\WordsPublishRefusals;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\DocumentMatrix;
@@ -38,6 +39,7 @@ final class LegalTextManager extends Component
 {
     use AnnouncesStatus;
     use AuthorizesLegalAdmin;
+    use NamesChangedSentences;
     use WordsPublishRefusals;
 
     /**
@@ -88,6 +90,8 @@ final class LegalTextManager extends Component
 
         // No version is set here. The release derives it inside its own transaction, for this
         // screen and the editor alike ({@see LegalDocumentReleaser::nextVersionFor()}).
+        $sentencesBefore = app(LegalDocumentReleaser::class)->sentencesBefore($key);
+
         try {
             $released = app(LegalDocumentReleaser::class)->release($key, $this->modeFor($key), $this->releaseLocalesFor($key));
         } catch (LegalReleaseNotReady $e) {
@@ -136,7 +140,7 @@ final class LegalTextManager extends Component
             'key' => app(NamesLegalTexts::class)->document($key),
             'count' => count($released),
             'affects' => $affects,
-        ]));
+        ]).$this->sentenceChangeNotice(app(LegalDocumentReleaser::class)->sentenceChangedIn($sentencesBefore, $released)));
     }
 
     public function render(): View
@@ -174,10 +178,11 @@ final class LegalTextManager extends Component
             $set = LegalDraftSet::for($key);
 
             // Over the locales a release of THIS document would cover, not over every configured
-            // one. Asked the wide way, an informational page with an untranslated locale showed a
-            // blocked row beside a button that would have released it — the screen argued with
-            // itself, and an operator had no way to tell which half was right.
-            $blocking = $set->blockingLocales($set->releaseLocales($this->locales()));
+            // one. Asked the wide way, a document with an untranslated locale showed a blocked row
+            // beside a button that would have released it — the screen argued with itself, and an
+            // operator had no way to tell which half was right.
+            $covered = $set->releaseLocales($this->locales());
+            $blocking = $set->blockingLocales($covered);
 
             // One statement per key for the whole row, rather than one per cell. Asked per cell,
             // six documents in seven languages cost 42 of them on a component that re-renders on
@@ -209,6 +214,9 @@ final class LegalTextManager extends Component
             $grid[$key]['_release'] = [
                 'ready' => $blocking === [],
                 'blocking' => $blocking,
+                // The languages a release leaves out keep the version they already have live. The
+                // screen names them beside the button, so the release is a decision somebody saw.
+                'left_out' => array_values(array_diff($this->locales(), $covered)),
             ];
         }
 
@@ -336,9 +344,8 @@ final class LegalTextManager extends Component
     {
         $locales = config('legal-consent.locales');
 
-        // array_values() is EQUIVALENT under mutation: its readers, in_array() and a foreach in the
-        // releaser, never read a key. It stays for the list<string> this returns; static analysis
-        // rejects the removal (measured 2026-09-14).
+        // array_values() changes nothing observable: its readers, in_array() and a foreach in the
+        // releaser, never read a key. It stays for the list<string> this returns.
         return is_array($locales) ? array_values(array_filter($locales, is_string(...))) : [];
     }
 }

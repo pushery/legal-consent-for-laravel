@@ -17,10 +17,10 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * traffic rather than exotica: `zh-Hant-TW`, `zh-Hans-CN` and `sr-Latn-RS` are each exactly 10, so
  * a consumer serving Traditional Chinese sits ON the limit and any variant subtag goes over it.
  *
- * AND THE FAILURE IS INVISIBLE WHERE PEOPLE DEVELOP. SQLite ignores a `varchar` length
- * completely — measured: `ca-ES-valencia` goes into a `VARCHAR(10)` column and comes back at 14
- * characters. MySQL 8.4 in strict mode refuses the same row outright with `1406 Data too long`.
- * So the suite is green, the developer's machine is green, and the deployment is where it breaks.
+ * And the failure is invisible where people develop. SQLite ignores a `varchar` length
+ * completely: `ca-ES-valencia` goes into a `VARCHAR(10)` column and comes back at 14 characters.
+ * MySQL 8.4 in strict mode refuses the same row outright with `1406 Data too long`. So a
+ * development database accepts the value, and the deployment is where it breaks.
  * That is the same divergence class migration 000022 closed for collation.
  *
  * The new widths are 35 and 64. RFC 5646 sets no hard limit, but 35 covers every tag the IANA

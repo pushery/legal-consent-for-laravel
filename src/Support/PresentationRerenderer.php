@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Carbon\CarbonImmutable;
 use Pushery\LegalConsent\Content\Document;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -70,11 +71,33 @@ final readonly class PresentationRerenderer
             return null;
         }
 
+        // The source hash covers the body alone, and two fields beside it are evidence as well: the
+        // title, and the acceptance sentence, which is copied into every consent given under the
+        // version and folded into the hash chain. Taken from the live source, either could change
+        // under "no materiality decision is owed".
+        if ($active->title !== $rendered->title || $active->ui_wording !== $rendered->uiWording) {
+            throw new RuntimeException(
+                "Cannot re-render '{$key}' ({$locale}): its title or acceptance sentence differs from the one published as {$active->version}. A re-render freezes the same text again, and these are part of what a reader agreed to — publish a new version instead."
+            );
+        }
+
+        // The effective date is the version's, never the source's: taken from the live source, it
+        // fell back to now, and a scheduled major would have gated its readers at once. Before
+        // that date the publisher would also measure the announcement from today and record a
+        // shorter notice period than the version gave, so such a version is not re-frozen yet.
+        // After it, the date is carried; the announcement of a silent re-freeze is its own.
+        if ($active->enforce_from instanceof CarbonImmutable && $active->enforce_from->greaterThan(CarbonImmutable::now())) {
+            throw new RuntimeException(
+                "Cannot re-render '{$key}' ({$locale}) yet: its version {$active->version} takes effect on {$active->enforce_from->toDateString()}, and a re-render before then would record another notice period. Re-render once it has taken effect."
+            );
+        }
+
         return $this->publisher->publishWithMode(
             $key,
             $locale,
             NoticeMode::SilentEditorial,
             changeClass: 'presentation',
+            enforceAt: $active->enforce_from,
             prerendered: $rendered->withVersion(
                 $active->major_version,
                 $active->minor_version,

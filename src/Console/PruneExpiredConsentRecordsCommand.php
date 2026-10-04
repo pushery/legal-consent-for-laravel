@@ -429,16 +429,12 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      */
     private function chainsNotStartingAtGenesis(mixed $after): array
     {
-        // `min`, and `max` would pass every test in the suite — measured, not assumed. It is not
-        // a hole: a broken chain is flagged either way, because whichever chained row is picked,
-        // its link points at a hash rather than at genesis. `max` is worse for a reason no arm can
-        // assert, which is why this note exists instead of a test. It flags every INTACT chain of
-        // two or more rows as well (the last row's link is a hash by definition), so every
-        // multi-row chain in the table enters `relinkBrokenChains()` on every nightly run, loading
-        // and re-walking a subject's whole ledger to write nothing — the `$moved` filter below
-        // catches it, so the outcome stays correct and only the work is wasted. A test for that
-        // would have to assert a query count, which pins the implementation rather than the
-        // promise.
+        // `min`, not `max`. Either flags a broken chain, because whichever chained row is picked,
+        // its link points at a hash rather than at genesis. `max` would flag every intact chain
+        // of two or more rows as well (the last row's link is a hash by definition), so every
+        // multi-row chain in the table would enter `relinkBrokenChains()` on every run, loading
+        // and re-walking a subject's whole ledger to write nothing. The `$moved` filter below
+        // would keep the outcome correct; only the work would be wasted.
         $firstPerToken = DB::table('legal_consents')
             ->selectRaw('subject_token, min(id) as first_id')
             ->whereNotNull('prev_record_hash')
@@ -487,9 +483,9 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         $corrected = $repair->relink($rows);
 
         // Only the rows whose link actually MOVED, so the repair is never churn on an append-only
-        // table. The filter and array_values() are EQUIVALENT under mutation in the ledger they
-        // leave: an unmoved row deleted and inserted again comes back identical, id included. What
-        // the filter saves is the work, and a test of that would pin the implementation.
+        // table. The filter and array_values() change nothing in the ledger they leave: an unmoved
+        // row deleted and inserted again comes back identical, id included. What the filter saves
+        // is the work.
         $moved = array_values(array_filter(
             $corrected,
             static fn (array $row, int $index): bool => $row['prev_record_hash'] !== $rows[$index]['prev_record_hash'],

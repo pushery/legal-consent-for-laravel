@@ -7,6 +7,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\ProofColumnGuard;
+use Pushery\SQLens\Attributes\NoSqlOnDriver;
 
 /**
  * Make `legal_documents` identity mean the same thing on all three engines: compare `key`,
@@ -48,7 +49,9 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * At 64, 10, 64 and 20 characters the index key stays far below InnoDB's 3072-byte limit either
  * way.
  */
-return new class extends Migration
+return new
+#[NoSqlOnDriver('pgsql', reason: 'PostgreSQL already compares these columns as bytes; only MySQL needs the binary collation')]
+class extends Migration
 {
     public function up(): void
     {

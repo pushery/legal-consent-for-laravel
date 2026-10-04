@@ -116,59 +116,45 @@ final readonly class LegalDraftSet
     /**
      * The locales a release of THIS document covers, out of the ones an application configured.
      *
-     * A release is atomic across locales because a subject must never be bound in a language they
-     * did not read: German gated while Italian lags would leave two populations under two majors of
-     * the same contract. That reasoning covers a contract and a real opt-in, and it covers nothing
-     * at all for an INFORMATIONAL page — an imprint, a cookie notice, an accessibility statement.
-     * Those bind nobody and gate nobody, so there is no half-released state for the atomicity to
-     * prevent, and the read path serves another locale's version for exactly these rows.
+     * A language comes along when its draft could go out, for every type of document. A language
+     * whose draft is missing, unreviewed or stale keeps the version it already has live, or has
+     * none, as before. The release screens name every language left out, so a release that does not
+     * reach a language is a decision somebody saw rather than an omission.
      *
-     * Nor for an ACKNOWLEDGMENT whose entry sets `locale_fallback`. The gate holds a reader of an
-     * untranslated locale to the version the chain finds, so there is one population under one
-     * major, and the read path shows that reader the same version. The rule for which document may
-     * fall back lives in {@see SourceLanguageFallback}, and this reads it rather than restating it.
+     * This holds for a document that binds somebody, and the reason is the rule the release exists
+     * to keep: nobody is bound in a language they did not read. Each language keeps its own active
+     * version, the gate reads the version of the reader's language, and a change notice goes to the
+     * subjects who agreed in the language that changed. A reader of a language left out stays bound
+     * to the text they read in it until its own translation is released. Releasing a contract in
+     * German and leaving Italian on the earlier version therefore leaves two versions in force, one
+     * per language, which every ledger row tells apart by version and locale. Holding the release
+     * until every language is ready, the alternative, left an operator unable to release anything
+     * after discarding one translation, and binding a reader to another language's version would
+     * break the rule above.
      *
-     * Without this, one missing translation kept such a page off the site entirely: the capability
-     * was there and the route to it was closed. Measured in a consumer with three informational
-     * documents out of six, which narrowed the list itself rather than go without an imprint.
-     *
-     * A LANGUAGE COMES ALONG ONLY WHEN ITS DRAFT COULD GO OUT, and the source always comes along.
-     * This used to drop only a language with no draft at all and keep one whose draft was written
-     * but not reviewed, on the argument that an unreviewed translation is work an operator can act
-     * on. It is, and it was also the only way forward: an unreviewed English draft held back the
-     * corrected German imprint, and nothing released it except reviewing a translation nobody was
-     * waiting for. The same state was reported from the screen and measured in a consumer, which
-     * narrowed the list itself. A language whose draft is not ready keeps the version it already
-     * has live, or serves the default locale where it has none — what a language without any draft
-     * has always done.
+     * Whether a reader of a language without any version is SHOWN another language's version is a
+     * different question, answered by the type ({@see SourceLanguageFallback}): an informational
+     * page and an acknowledgment that asks for it fall back, a contract and a consent never do.
      *
      * The source is the exception in the other direction. Every other language falls back to it,
      * so a release without it has nothing to fall back to. When the source is not ready the release
      * is the source alone, and the refusal names the source and its reason rather than publishing
-     * the translations around it. The same holds when nothing is written at all: the page blocks on
-     * its source, the one language that can hold it back, rather than on every configured one.
+     * the translations around it. The same holds when nothing is written at all: the document blocks
+     * on its source, the one language that can hold it back, rather than on every configured one.
      *
      * An application whose default locale is not among its configured ones has no source in this
      * list to anchor on, and keeps the narrowing without it: whatever is ready, or every configured
      * language when nothing is, so the refusal still names them.
      *
-     * IT LIVES HERE BECAUSE THREE PLACES ASK IT AND THEY DISAGREED. Until it moved here, the answer
-     * sat in a PRIVATE method of the admin grid's component, so it reached the release button and
-     * nothing else: the grid computed its blocking flags over every configured locale, and the
-     * editor's own release narrowed nothing at all. An informational page could therefore read as
-     * blocked on a screen whose button would have released it. The document's type is resolved from
-     * this set's own key rather than passed in, so a caller cannot answer the question differently
-     * by handing over a different type.
+     * It lives here because three places ask it and they must agree: the grid's blocking flags, the
+     * manager's release button and the editor's release. The document's type is not an input, so a
+     * caller cannot answer the question differently by handing over a different type.
      *
      * @param  list<string>  $configured
      * @return list<string>
      */
     public function releaseLocales(array $configured): array
     {
-        if (! SourceLanguageFallback::allowedFor($this->key, $this->type())) {
-            return $configured;
-        }
-
         $ready = array_values(array_filter(
             $configured,
             fn (string $locale): bool => ($draft = $this->draft($locale)) instanceof LegalDraft && $this->isPublishable($draft),
@@ -246,7 +232,7 @@ final readonly class LegalDraftSet
      *
      * The admin matrix is documents × locales and asked per cell: six documents in seven languages
      * cost 42 statements for something one statement answers, on a Livewire component that
-     * re-renders on every filter click. A consumer measured it and folded the matrix itself.
+     * re-renders on every filter click.
      *
      * A locale with no draft answers false: there is no approved text waiting to go live. That is
      * the same answer the matrix composed by hand around the single-draft call, kept here so the two

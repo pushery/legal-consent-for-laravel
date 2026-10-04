@@ -22,11 +22,11 @@
  *
  * ## The text goes in through a ref, never through `x-html`
  *
- * The CSP build refuses the `x-html` DIRECTIVE outright, before it reads any expression: "Using the
- * x-html directive is prohibited in the CSP build". 0.38.0 shipped `x-html="body"` in this dialog, and
- * a consumer found the body empty in both engines while the trigger had already swallowed the click.
- * The component sets the markup itself. The trust is unchanged: it is the published, already
- * sanitized HTML the legal page renders, and `x-html` did nothing but assign `innerHTML` either.
+ * The CSP build refuses the `x-html` directive outright, before it reads any expression: "Using the
+ * x-html directive is prohibited in the CSP build". A dialog body filled that way stays empty in both
+ * engines, after the trigger has already swallowed the click. The component sets the markup itself.
+ * The trust is unchanged: it is the published, already sanitized HTML the legal page renders, and
+ * `x-html` does nothing but assign `innerHTML` either.
  *
  * ## It registers itself, so no build step is needed
  *
