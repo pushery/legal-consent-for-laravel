@@ -12,8 +12,8 @@ use Override;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Enums\DocumentType;
-use Pushery\LegalConsent\Exceptions\LedgerImmutableException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Models\Concerns\RecordIsAppendOnly;
 use Pushery\LegalConsent\Models\Concerns\Replaceable;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
 
@@ -53,6 +53,7 @@ use Pushery\LegalConsent\Support\DefaultConsentManager;
 class LegalConsent extends Model
 {
     use BelongsToTenant;
+    use RecordIsAppendOnly;
     use Replaceable;
 
     protected $table = 'legal_consents';
@@ -85,18 +86,6 @@ class LegalConsent extends Model
     public function document(): BelongsTo
     {
         return $this->belongsTo(LegalDocument::model(), 'document_id');
-    }
-
-    #[Override]
-    protected static function booted(): void
-    {
-        self::creating(function (LegalConsent $consent): void {
-            $consent->created_at ??= CarbonImmutable::now();
-        });
-
-        self::updating(function (): never {
-            throw LedgerImmutableException::onUpdate();
-        });
     }
 
     /**

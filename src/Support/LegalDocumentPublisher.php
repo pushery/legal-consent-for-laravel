@@ -343,6 +343,11 @@ final readonly class LegalDocumentPublisher
      * The identical-content case returns rather than throws, because the real run does not refuse
      * it either: it returns the existing row untouched. A dry run that invented a refusal there
      * would be as misleading as one that promised a publish the real run refuses.
+     *
+     * `$releasedTogether` is the publish's own, for the same reason: a preview of one locale of a
+     * joint release would otherwise report the refusal the joint release does not have.
+     *
+     * @param  list<string>  $releasedTogether  the locales the previewed publish releases in one transaction
      */
     public function previewWithMode(
         string $key,
@@ -355,13 +360,14 @@ final readonly class LegalDocumentPublisher
         ?CarbonImmutable $objectionDeadline = null,
         bool $offersTermination = false,
         bool $keepsUnmodified = false,
+        array $releasedTogether = [],
     ): Document {
         $this->assertRequestCoherent($key, $locale, $mode, $regime);
 
         $rendered = $this->preview($key, $locale);
         $type = $this->typeFor($key);
 
-        $this->assertVersionPublishable($key, $locale, $mode, $type, $rendered);
+        $this->assertVersionPublishable($key, $locale, $mode, $type, $rendered, $releasedTogether);
 
         $existing = $this->existingVersion($key, $locale, $rendered->version);
 
@@ -584,7 +590,12 @@ final readonly class LegalDocumentPublisher
             }
         }
 
-        return [$announce, $enforce];
+        // What is frozen is the announcement the periods were measured from. For a change that
+        // takes effect later, a day already past means the first day a notice can reach anyone,
+        // and storing it as written would freeze a period nobody was given: `notice_period_days`
+        // is derived from these two dates, and a compliance report reads it as the period granted.
+        // A version whose effective date has passed as well records the past, and keeps its dates.
+        return [$enforce->greaterThan($now) ? $earliestNotice : $announce, $enforce];
     }
 
     /**
@@ -689,15 +700,34 @@ final readonly class LegalDocumentPublisher
             ->where('is_active', true)
             ->get();
 
+        $siblingLocales = [];
+
+        foreach ($siblings as $sibling) {
+            $siblingLocales[] = $sibling->locale;
+        }
+
         foreach ($siblings as $sibling) {
             if ($sibling->noticeMode() !== $mode) {
+                $together = implode(',', array_unique([$locale, ...$releasedTogether, ...$siblingLocales]));
+
                 throw LegalPublishRefused::because(
                     PublishRefusal::ModeDiffersAcrossLanguages,
-                    "'{$key}' major {$rendered->majorVersion} is already active in '{$sibling->locale}' as {$sibling->noticeMode()->value}; publishing '{$locale}' as {$mode->value} would make one change bind by two different standards. Acceptance is identity-keyed, so the weaker one would satisfy the stronger one's gate — release every locale of a version with the same notice mode.",
+                    "'{$key}' major {$rendered->majorVersion} is already active in '{$sibling->locale}' as {$sibling->noticeMode()->value}; publishing '{$locale}' as {$mode->value} would make one change bind by two different standards. Acceptance is identity-keyed, so the weaker one would satisfy the stronger one's gate — release every locale of a version with the same notice mode, together: `php artisan legal-consent:publish {$key} --locales={$together} {$this->consoleFlagFor($mode)}`, or Release in the admin screen for a text on the drafts store.",
                     ['major' => $rendered->majorVersion, 'other_language' => $sibling->locale, 'language' => $locale],
                 );
             }
         }
+    }
+
+    /** The `legal-consent:publish` flag that classifies a change as this mode. */
+    private function consoleFlagFor(NoticeMode $mode): string
+    {
+        return match ($mode) {
+            NoticeMode::SilentEditorial => '--editorial',
+            NoticeMode::InfoPush => '--info',
+            NoticeMode::DeemedConsent => '--deemed',
+            NoticeMode::ActiveReconsent => '--active',
+        };
     }
 
     /**
@@ -866,9 +896,9 @@ final readonly class LegalDocumentPublisher
         $floor = $regime === null ? 0 : (self::STATUTORY_FLOORS[$regime] ?? 0);
         $resolved = max($modeMinimum, $regimeMinimum, $floor);
 
-        $override = $this->documents[$key]['min_lead_days'] ?? null;
+        $override = IntegerSetting::from($this->documents[$key]['min_lead_days'] ?? null);
 
-        if (! is_int($override)) {
+        if ($override === null) {
             return $resolved;
         }
 
@@ -924,10 +954,16 @@ final readonly class LegalDocumentPublisher
     }
 
     /**
-     * The days the calendar months of a regime span before $end, when $start leaves less than
-     * them ({@see STATUTORY_MONTHS}), and null when it does not or the regime counts in days. The
-     * latest start the law allows is $end that many months back, without overflowing into the
-     * next month; the days are what a refusal names.
+     * The days the calendar months of a regime ask for before $end, when $start leaves less than
+     * them ({@see STATUTORY_MONTHS}), and null when it does not or the regime counts in days.
+     *
+     * The months run backward from the day of $end, and §§ 187, 188 BGB apply to such a period by
+     * analogy: that day is not counted, and the period ends at the start of the day the same number
+     * of months earlier. The latest day a notice may arrive is the day before, so for a change in
+     * force on 1 September under § 675g Abs. 1 BGB it is 30 June, not 1 July. A month too short for
+     * the day (31 August, two months back) ends the period at the start of that month's last day,
+     * which leaves the reader the longer period. The days are what a refusal names: from the latest
+     * day a notice may arrive to the day of $end.
      */
     private function calendarShortfall(?string $regime, CarbonImmutable $start, CarbonImmutable $end): ?int
     {
@@ -937,22 +973,22 @@ final readonly class LegalDocumentPublisher
             return null;
         }
 
-        $latest = $end->subMonthsNoOverflow($months);
+        $periodStart = $end->startOfDay()->subMonthsNoOverflow($months);
 
-        return $start->greaterThan($latest) ? (int) round($latest->diffInDays($end)) : null;
+        return $start->startOfDay()->greaterThanOrEqualTo($periodStart)
+            ? (int) round($periodStart->subDay()->diffInDays($end->startOfDay()))
+            : null;
     }
 
     /**
      * One `notice_periods` value, falling back to the material default when the published config
-     * dropped or corrupted the key.
+     * dropped or corrupted the key. A number from `env()` counts ({@see IntegerSetting}).
      *
      * @param  array<array-key, mixed>  $periods
      */
     private function period(array $periods, string $key): int
     {
-        $value = $periods[$key] ?? self::MATERIAL_MIN_LEAD_DAYS;
-
-        return is_int($value) ? $value : self::MATERIAL_MIN_LEAD_DAYS;
+        return IntegerSetting::from($periods[$key] ?? null) ?? self::MATERIAL_MIN_LEAD_DAYS;
     }
 
     /**

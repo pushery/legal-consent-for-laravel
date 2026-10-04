@@ -27,6 +27,7 @@ use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
 use Pushery\LegalConsent\Jobs\TranslateLegalDraft;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
+use Pushery\LegalConsent\Livewire\Concerns\NamesChangedSentences;
 use Pushery\LegalConsent\Livewire\Concerns\WordsPublishRefusals;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\CalendarDate;
@@ -51,6 +52,7 @@ final class LegalTextEditor extends Component
 {
     use AnnouncesStatus;
     use AuthorizesLegalAdmin;
+    use NamesChangedSentences;
     use WordsPublishRefusals;
 
     /**
@@ -142,7 +144,7 @@ final class LegalTextEditor extends Component
      * hidden field already carried the new one, so the reader edited what they saw, the engine
      * wrote its own document back on the next keystroke, and a save stored the old text over the
      * translation. Nothing failed anywhere, which is why this is data loss rather than a display
-     * fault. Measured by a consumer against v0.34.0 in Chromium.
+     * fault.
      *
      * NOT `md5($body)`, which is the obvious derivation and fires too often. The client's own
      * typing reaches the server with the next action, so a plain save would change that key too and
@@ -187,19 +189,19 @@ final class LegalTextEditor extends Component
     public string $heldRevision = '';
 
     /**
-     * The document key arrives as `documentKey`, never `key`: Livewire reserves `key` for its own
-     * DOM-diffing identity and strips it before mount(), so `<livewire:… :key="'terms'" />` — the
-     * form the docs used to show — could never reach this method. Mount it as
-     * `<livewire:legal-consent.legal-text-editor :document-key="'terms'" :locale="'de'" />`.
-     * The internal property stays `$key`; only the mount parameter had to move.
-     */
-    /**
      * Whether the screen opens with its own page title. Same switch, same reason, as the overview
      * beside it: an admin frame that titles itself would otherwise show two.
      */
     #[Locked]
     public bool $heading = true;
 
+    /**
+     * The document key arrives as `documentKey`, never `key`: Livewire reserves `key` for its own
+     * DOM-diffing identity and strips it before mount(), so `<livewire:… :key="'terms'" />` — the
+     * form the docs used to show — could never reach this method. Mount it as
+     * `<livewire:legal-consent.legal-text-editor :document-key="'terms'" :locale="'de'" />`.
+     * The internal property stays `$key`; only the mount parameter had to move.
+     */
     public function mount(string $documentKey, string $locale, bool $heading = true): void
     {
         // The same refusal the manager makes at the top of releaseAll(), and for the same reason.
@@ -278,10 +280,10 @@ final class LegalTextEditor extends Component
             return;
         }
 
-        // OFF THE REQUEST, where an application asked for that. The translator is the application's
-        // own binding and might answer in microseconds or in minutes; a consumer measured the inline
-        // call ending in a 500 twice in one day on a privacy notice. Dispatching answers that without
-        // this package guessing a timeout on somebody else's service.
+        // Off the request, where an application asked for that. The translator is the application's
+        // own binding and might answer in microseconds or in minutes, and an inline call that
+        // outlasts the request ends it in a 500. Dispatching answers that without this package
+        // guessing a timeout on somebody else's service.
         //
         // The marker is written HERE rather than in the job, and that ordering is the point: between
         // dispatch and the worker picking the job up there is a window, and a screen that polled
@@ -558,6 +560,8 @@ final class LegalTextEditor extends Component
             return;
         }
 
+        $sentencesBefore = app(LegalDocumentReleaser::class)->sentencesBefore($this->key);
+
         try {
             $released = app(LegalDocumentReleaser::class)->release(
                 $this->key,
@@ -632,7 +636,7 @@ final class LegalTextEditor extends Component
             'key' => app(NamesLegalTexts::class)->document($this->key),
             'count' => count($released),
             'affects' => $affects,
-        ]));
+        ]).$this->sentenceChangeNotice(app(LegalDocumentReleaser::class)->sentenceChangedIn($sentencesBefore, $released)));
     }
 
     public function render(): View
@@ -806,9 +810,8 @@ final class LegalTextEditor extends Component
     {
         $locales = config('legal-consent.locales');
 
-        // array_values() is EQUIVALENT under mutation: its readers, in_array() and a foreach in the
-        // releaser, never read a key. It stays for the list<string> this returns; static analysis
-        // rejects the removal (measured 2026-09-14).
+        // array_values() changes nothing observable: its readers, in_array() and a foreach in the
+        // releaser, never read a key. It stays for the list<string> this returns.
         return is_array($locales) ? array_values(array_filter($locales, is_string(...))) : [];
     }
 

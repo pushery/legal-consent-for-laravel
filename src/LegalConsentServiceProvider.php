@@ -60,6 +60,7 @@ use Pushery\LegalConsent\Support\ConsentGate;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
 use Pushery\LegalConsent\Support\DocumentUrlResolver;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
+use Pushery\LegalConsent\Support\IntegerSetting;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
@@ -117,27 +118,26 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * only on WireKit's develop branch), which is why presence alone is not the test.
      *
      * Raised 2.26.0 -> 2.47.0 when the busy controls began to pass `:disable-on-loading="false"`
-     * (first shipped in 2.47.0), and 2.47.0 -> 2.49.0 when the release dialog began to close through
-     * `close-on-confirm` (first shipped in 2.49.0) around `<x-wirekit::alert-dialog.confirm>` (2.41.0).
+     * (first shipped in 2.47.0), 2.47.0 -> 2.49.0 when the release dialog began to close through
+     * `close-on-confirm` (first shipped in 2.49.0) around `<x-wirekit::alert-dialog.confirm>` (2.41.0),
+     * and 2.49.0 -> 2.56.0 when the document link of the consent sentence began to keep its new tab
+     * quiet through `:announce-new-tab="false"` and the editor view stopped filtering the kit's own
+     * write-out on load, which the kit no longer reports as input (both first shipped in 2.56.0).
      * The first-shipped versions were read off the tags themselves rather than from a changelog.
      *
      * A consumer below the floor therefore receives the plain views instead of the WireKit variant,
      * which is this constant working rather than failing: the alternative is a Blade tag compiling
      * against a component that is not there, or a dialog that does not close after its action.
      */
-    public const string WIREKIT_MINIMUM = '2.49.0';
+    public const string WIREKIT_MINIMUM = '2.56.0';
 
     /**
      * Whether the bundled migrations are registered automatically. Disable with
      * self::ignoreMigrations() to publish and manage them in the host app instead.
      *
-     * IT SAYS NOTHING ABOUT WHETHER THE TABLES EXIST, and reading it as if it did cost three
-     * scheduled sweeps. The documented use is to publish the migrations and run them yourself —
-     * the tables are then present — while `UPGRADE.md` for 0.16.1 read the same flag as declining
-     * them. The schedule believed the second reading and gated on this flag, so a consumer taking
-     * the documented path silently lost `dispatch-notices`, `close-objection-windows` and `prune`.
-     * Anything that needs to know whether the tables are there asks
-     * {@see self::ledgerTablesExist()} instead.
+     * It says nothing about whether the tables exist: with the migrations published and run by
+     * the host app, they are present while this flag is false. Anything that needs to know
+     * whether the tables are there asks {@see self::ledgerTablesExist()} instead.
      */
     public static bool $runsMigrations = true;
 
@@ -314,28 +314,18 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         // A scheduled command that touches this package's tables cannot run where those tables do
         // not exist. The config flag beside each registration below answers whether the consumer
-        // WANTS that sweep; this asks whether it CAN run here at all, and nothing connected the two
-        // — so a consumer without the tables got three commands a night against missing relations.
+        // wants that sweep; this asks whether it can run here at all.
         //
-        // IT USED TO ASK `self::$runsMigrations`, AND THAT FLAG DOES NOT MEAN WHAT THE GATE
-        // NEEDED. Its own docblock offers it for publishing the migrations and running them from
-        // the host app instead — the tables then EXIST — while `UPGRADE.md` reads it as declining
-        // the tables altogether. The schedule believed the second reading and the documentation
-        // advertised the first, so a consumer following the documented publish path silently lost
-        // `dispatch-notices` (the change notices owed under § 308 Nr. 5 lit. b never go out),
-        // `close-objection-windows` (no objection window ever closes, so silence never binds) and
-        // `prune` (retention under Art. 5(1)(e) never runs). No error, no warning, tables present.
+        // It asks whether the tables are present, not whether the migrations are registered: with
+        // the migrations published and run by the host app, `ignoreMigrations()` has switched
+        // registration off while the tables exist, and the three sweeps have to run there. They carry the change notices owed under § 308 Nr. 5
+        // lit. b BGB, the closing of every objection window, and retention under Art. 5(1)(e)
+        // GDPR.
         //
-        // So the gate asks the question it actually has: are the tables here? A flag is a statement
-        // of intent about migrations; presence is the fact the commands depend on. That is
-        // deliberately the repair that changes no public contract — splitting the flag in two would
-        // add a public surface, and narrowing its documented meaning would make the published
-        // publish path unusable. Both of those are the owner's call; this one is not.
-        //
-        // Moved INSIDE the closure, which is where it costs nothing: `callAfterResolving` fires
-        // only when something resolves a Schedule, so a web request never reaches this. And a fresh
-        // install that has not migrated yet self-heals — `schedule:run` boots the application anew
-        // every minute, so the first boot after `migrate` registers.
+        // Inside the closure it costs nothing: `callAfterResolving` fires only when something
+        // resolves a Schedule, so a web request never reaches this. A fresh install that has not
+        // migrated yet registers on the first boot after `migrate`, because `schedule:run` boots
+        // the application anew every minute.
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
             if (! $this->ledgerTablesExist()) {
                 return;
@@ -344,18 +334,24 @@ final class LegalConsentServiceProvider extends ServiceProvider
             if ((bool) config('legal-consent.schedule.dispatch_notices', true)) {
                 $schedule->command('legal-consent:dispatch-notices')
                     ->hourly()
-                    // Cap the overlap lock at 2h, not the 24h default: a hung hourly run should
-                    // self-clear well before the next legally time-boxed sweep, so a stuck lock
-                    // cannot silence the sweep — and its heartbeat — for a whole day.
-                    ->withoutOverlapping(120)
+                    // The overlap lock expires after 55 minutes, inside the hour, rather than after
+                    // the 24h default. The expiry only matters when a run dies holding the lock (a
+                    // SIGKILL, an OOM or a lost host, none of which `releaseOnTerminationSignals`
+                    // catches) or outlives it. A dead run must not cost the next hourly sweep as
+                    // well, so the lock is gone before that sweep is due. A run longer than 55
+                    // minutes is overtaken by one that resumes: it skips subjects that carry a
+                    // proof row for the version or whose notice is still on its way.
+                    ->withoutOverlapping(55)
                     ->onOneServer();
             }
 
             if ((bool) config('legal-consent.schedule.close_objection_windows', true)) {
                 $schedule->command('legal-consent:close-objection-windows')
                     ->hourly()
-                    // See dispatch-notices above: a 2h overlap cap, not the 24h default.
-                    ->withoutOverlapping(120)
+                    // 55 minutes, for the reason given at dispatch-notices above. A run that
+                    // overtakes a long one deems nobody twice: a subject who already holds the
+                    // version is refused.
+                    ->withoutOverlapping(55)
                     ->onOneServer();
             }
 
@@ -500,17 +496,6 @@ final class LegalConsentServiceProvider extends ServiceProvider
     }
 
     /**
-     * Every host path below is resolved through `$this->app`, never through the global
-     * `config_path()` / `database_path()` / `resource_path()` / `lang_path()` helpers.
-     *
-     * Not a dependency argument — the manifest requires `laravel/framework`, so those helpers are
-     * present. It is that a path a provider publishes to is the APPLICATION's, and asking the
-     * application instance for it is the honest way to say so: the methods live on
-     * Illuminate\Contracts\Foundation\Application, the type `$this->app` already has, and the
-     * value follows an application that has moved its config or lang directory. The global helpers
-     * read the same container and add a layer that hides where the answer came from.
-     */
-    /**
      * Are the tables the scheduled sweeps read actually here?
      *
      * The three commands touch `legal_documents`, `legal_consents` and `legal_notices`, and all
@@ -540,6 +525,17 @@ final class LegalConsentServiceProvider extends ServiceProvider
         return true;
     }
 
+    /**
+     * Every host path below is resolved through `$this->app`, never through the global
+     * `config_path()` / `database_path()` / `resource_path()` / `lang_path()` helpers.
+     *
+     * Not a dependency argument — the manifest requires `laravel/framework`, so those helpers are
+     * present. It is that a path a provider publishes to is the APPLICATION's, and asking the
+     * application instance for it is the honest way to say so: the methods live on
+     * Illuminate\Contracts\Foundation\Application, the type `$this->app` already has, and the
+     * value follows an application that has moved its config or lang directory. The global helpers
+     * read the same container and add a layer that hides where the answer came from.
+     */
     private function registerPublishing(): void
     {
         // Each standard group carries the umbrella tag `legal-consent` as well, so
@@ -754,9 +750,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
     private function intConfig(string $key, int $default): int
     {
-        $value = config($key, $default);
-
-        return is_int($value) ? $value : $default;
+        return IntegerSetting::from(config($key, $default)) ?? $default;
     }
 
     /**
@@ -819,9 +813,6 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * never merged at all -- the framework's design, not this method's limit. For those installs
      * the published file is the whole truth, which is why a read site for a nested key needs a
      * fallback that agrees with the shipped default. The two are halves of one guarantee.
-     *
-     * Adopted from the package skeleton rather than invented here, so the nine packages that had
-     * solved this apiece stop each carrying their own answer.
      */
     private function mergeConfigRecursivelyFrom(string $path, string $key): void
     {

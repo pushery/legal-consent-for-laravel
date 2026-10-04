@@ -139,7 +139,7 @@ final readonly class RenderPipeline
         // malformed one is refused, never normalized: `(int) 'v2'` is 0, so a 'v'-prefixed
         // version would parse to major 0 and every gate comparison `0 < 0` would be false —
         // a material change taking effect with no re-consent while the row looks compliant.
-        if ($raw->version !== null && preg_match('/^\d+\.\d+\.\d+$/', $version) !== 1) {
+        if ($raw->version !== null && preg_match('/^\d+\.\d+\.\d+\z/', $version) !== 1) {
             throw InvalidDocumentVersion::for($raw->type, $raw->locale, $version);
         }
 
@@ -154,7 +154,7 @@ final readonly class RenderPipeline
             version: $version,
             majorVersion: (int) $parts[0],
             // The two `?? 0` cannot fire: a version is either the '0.0.0' default or has passed
-            // /^\d+\.\d+\.\d+$/ above, so all three parts exist. They stay for the type checker,
+            // /^\d+\.\d+\.\d+\z/ above, so all three parts exist. They stay for the type checker,
             // which cannot see the pattern.
             minorVersion: (int) ($parts[1] ?? 0),
             patchVersion: (int) ($parts[2] ?? 0),

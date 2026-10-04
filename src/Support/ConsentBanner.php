@@ -40,13 +40,18 @@ final readonly class ConsentBanner
         $now ??= CarbonImmutable::now();
         $locale ??= $this->defaultLocale;
 
-        $upcoming = $this->resolvedFor($locale)->filter(
-            fn (LegalDocument $document): bool => ! $document->requires_explicit_optin
-                && $document->requires_reconsent
-                && $this->announced($document, $now)
-                && $document->enforce_from instanceof CarbonImmutable
-                && $document->enforce_from->greaterThan($now)
-        );
+        $upcoming = $this->resolvedFor($locale)
+            // The re-consent a document asks for is its major's: an editorial fix or an info-only
+            // change published inside the major keeps the countdown of the version that opened it.
+            // A document whose major asks for none stays itself, and the filter drops it.
+            ->map(fn (LegalDocument $document): LegalDocument => $this->cache()->gatingVersionOf($document) ?? $document)
+            ->filter(
+                fn (LegalDocument $document): bool => ! $document->requires_explicit_optin
+                    && $document->requires_reconsent
+                    && $this->announced($document, $now)
+                    && $document->enforce_from instanceof CarbonImmutable
+                    && $document->enforce_from->greaterThan($now)
+            );
 
         if ($upcoming->isEmpty()) {
             return [];
@@ -103,21 +108,25 @@ final readonly class ConsentBanner
         $now ??= CarbonImmutable::now();
         $locale ??= $this->defaultLocale;
 
-        $active = $this->resolvedFor($locale)->filter(
-            // The stored column, not noticeMode(): a null notice_mode is NOT an info push (the
-            // accessor would derive one from requires_reconsent), matching the previous SQL filter.
-            //
-            // The type is checked too, for the same reason the gate checks it: an informational
-            // page can only be published silently, but this must not DEPEND on the publisher
-            // having been the only way into the row. A hand-edited or restored row marked
-            // info_push would otherwise put "please take notice" on the banner for an Impressum,
-            // which asks the reader for nothing.
-            fn (LegalDocument $document): bool => $document->type->isConsentBearing()
-                && $document->notice_mode === NoticeMode::InfoPush
-                && $this->announced($document, $now)
-                && $document->enforce_from instanceof CarbonImmutable
-                && $document->enforce_from->greaterThan($now)
-        );
+        $active = $this->resolvedFor($locale)
+            // A silent correction published after an info-only change keeps that change's notice up
+            // until its date: the banner reads the announced version the text belongs to.
+            ->map(fn (LegalDocument $document): LegalDocument => $this->cache()->governingVersionOf($document))
+            ->filter(
+                // The stored column, not noticeMode(): a null notice_mode is NOT an info push (the
+                // accessor would derive one from requires_reconsent), matching the previous SQL filter.
+                //
+                // The type is checked too, for the same reason the gate checks it: an informational
+                // page can only be published silently, but this must not DEPEND on the publisher
+                // having been the only way into the row. A hand-edited or restored row marked
+                // info_push would otherwise put "please take notice" on the banner for an Impressum,
+                // which asks the reader for nothing.
+                fn (LegalDocument $document): bool => $document->type->isConsentBearing()
+                    && $document->notice_mode === NoticeMode::InfoPush
+                    && $this->announced($document, $now)
+                    && $document->enforce_from instanceof CarbonImmutable
+                    && $document->enforce_from->greaterThan($now)
+            );
 
         $informational = [];
 
@@ -153,12 +162,15 @@ final readonly class ConsentBanner
         $now ??= CarbonImmutable::now();
         $locale ??= $this->defaultLocale;
 
-        $upcoming = $this->resolvedFor($locale)->filter(
-            fn (LegalDocument $document): bool => $document->notice_mode === NoticeMode::DeemedConsent
-                && $this->announced($document, $now)
-                && $document->objection_deadline instanceof CarbonImmutable
-                && $document->objection_deadline->greaterThan($now)
-        );
+        $upcoming = $this->resolvedFor($locale)
+            // An objection window stays open across a silent correction of the text it concerns.
+            ->map(fn (LegalDocument $document): LegalDocument => $this->cache()->governingVersionOf($document))
+            ->filter(
+                fn (LegalDocument $document): bool => $document->notice_mode === NoticeMode::DeemedConsent
+                    && $this->announced($document, $now)
+                    && $document->objection_deadline instanceof CarbonImmutable
+                    && $document->objection_deadline->greaterThan($now)
+            );
 
         if ($upcoming->isEmpty()) {
             return [];
@@ -258,7 +270,12 @@ final readonly class ConsentBanner
      */
     private function resolvedFor(string $locale): Collection
     {
-        return app(EnforceableDocumentCache::class)->resolvedFor($locale);
+        return $this->cache()->resolvedFor($locale);
+    }
+
+    private function cache(): EnforceableDocumentCache
+    {
+        return app(EnforceableDocumentCache::class);
     }
 
     /** Whether the document's announce window has opened. */

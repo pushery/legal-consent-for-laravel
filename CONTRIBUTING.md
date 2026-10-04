@@ -11,7 +11,9 @@ version and a minimal reproduction, and never paste secrets or credentials.
 
 - Keep the public API stable, or call out the break explicitly.
 - Add tests for any behavior change.
-- Add a `CHANGELOG.md` `## [Unreleased]` entry for anything a consumer can see.
+- Add a `CHANGELOG.md` `## [Unreleased]` entry for anything a consumer can see. A change that
+  touches only the tests, the CI or the tooling gets none: a release note says what changed for the
+  people using the version.
 - Update the bundled Boost skill (`resources/boost/skills/legal-consent-for-laravel/SKILL.md`) in
   the same change whenever the public API, the config surface, a command or a publish tag moves —
   it is adoption guidance that ships and is read from `vendor/`.

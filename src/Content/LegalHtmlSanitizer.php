@@ -67,6 +67,32 @@ final class LegalHtmlSanitizer
         ));
     }
 
+    /**
+     * Every element a sanitized text keeps. Any other element is unwrapped, or removed with its
+     * content when it is active content.
+     *
+     * For an application that tests its own surface against the package's list rather than a copy
+     * of it: a rich-text editor drops an element it does not know while parsing a draft, and the
+     * next save stores that loss. The list is part of {@see fingerprint()}.
+     *
+     * @return list<string>
+     */
+    public static function allowedElements(): array
+    {
+        return self::ALLOWED;
+    }
+
+    /**
+     * The attributes a kept element may carry, by element. An element missing here keeps none, and
+     * an `href` is kept only when its scheme is safe (relative, `http`, `https` or `mailto`).
+     *
+     * @return array<string, list<string>>
+     */
+    public static function allowedAttributes(): array
+    {
+        return self::ALLOWED_ATTRIBUTES;
+    }
+
     public function sanitize(string $html): string
     {
         // A short-circuit, not a correctness guard, and worth the distinction: measured, the parse
@@ -80,9 +106,8 @@ final class LegalHtmlSanitizer
 
         $dom = new DOMDocument;
 
-        // The closing `</body>` and the two flags are EQUIVALENT under mutation, measured rather
-        // than assumed (2026-09-11, 30 inputs including stray and nested body tags, a head, CDATA, a
-        // processing instruction and 30 levels of nesting; no output differed). libxml closes the
+        // The closing `</body>` and the two flags change no output, for stray and nested body tags,
+        // a head, CDATA, a processing instruction and deep nesting alike. libxml closes the
         // body at the end of the input by itself, and without the flags it adds the doctype and
         // html wrapper it otherwise omits, while the body lookup below still finds the same body.
         // Both stay because they say what is being parsed.

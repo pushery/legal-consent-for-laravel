@@ -13,6 +13,8 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Http\Middleware\EnsureLegalConsent;
@@ -20,7 +22,9 @@ use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\DocumentMatrix;
+use Pushery\LegalConsent\Support\IntegerSetting;
 use Pushery\LegalConsent\Support\LedgerHashChain;
+use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
 use Pushery\LegalConsent\Support\RetentionPeriod;
 use Pushery\LegalConsent\Support\SourceLanguageFallback;
@@ -150,7 +154,7 @@ final class DoctorCommand extends Command
      * the legal pages are shells. Nothing in the package said so until this arm existed, and the
      * install instructions never named a publish step.
      *
-     * @return list<string>
+     * @return list<array{0: string, 1: string}> (document key, locale) of every combination without a version
      */
     private function unpublishedCombinations(): array
     {
@@ -173,12 +177,87 @@ final class DoctorCommand extends Command
         foreach (DocumentMatrix::keys() as $key) {
             foreach (DocumentMatrix::locales() as $locale) {
                 if (! in_array("{$key}|{$locale}", $active, true) && ! $this->servedByStandIn($key, $locale, $active)) {
-                    $missing[] = "{$key} ({$locale})";
+                    $missing[] = [$key, $locale];
                 }
             }
         }
 
         return $missing;
+    }
+
+    /**
+     * Does this document's source publish only what somebody wrote and released?
+     *
+     * Such a source ({@see AwaitsAuthoring}) has nothing to publish before its text exists, so
+     * `legal-consent:publish` is the wrong advice for it. A source that cannot be resolved is not
+     * one: its own finding is reported elsewhere, and the publish command names the error.
+     */
+    private function awaitsAuthoring(string $key): bool
+    {
+        try {
+            return app(LegalDocumentPublisher::class)->sourceFor($key) instanceof AwaitsAuthoring;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * The section on registered documents without a published version.
+     *
+     * When nothing in the matrix is published, which is the state of every freshly migrated
+     * database, one line says so with the size of the matrix. The list is for the case in which
+     * part of it is published, because a missing language is what nobody notices otherwise. The
+     * advice follows the source: what a source holds is published by the console command, and a
+     * source authored by people is written and released first.
+     *
+     * @param  non-empty-list<array{0: string, 1: string}>  $unpublished  (document key, locale) without a version
+     */
+    private function reportUnpublished(array $unpublished): void
+    {
+        $combinations = count($unpublished);
+        $documents = count(DocumentMatrix::keys());
+        $locales = count(DocumentMatrix::locales());
+
+        $this->newLine();
+
+        if ($combinations === $documents * $locales) {
+            $this->warn(sprintf(
+                'Nothing is published yet: %s × %s, %s without a version.',
+                Str::plural('document', $documents, prependCount: true),
+                Str::plural('locale', $locales, prependCount: true),
+                Str::plural('combination', $combinations, prependCount: true),
+            ));
+            $this->line('  A page reading `Consent::published()` renders EMPTY until a version is published,');
+            $this->line('  with no error and no log. Every freshly migrated database starts here, CI included.');
+        } else {
+            $this->warn('These documents are registered but have no published version:');
+            $this->line('  A page reading `Consent::published()` renders EMPTY for them — no error, no log.');
+            $this->line('  Nothing is published in that language, and the document may not fall back to');
+            $this->line('  another, so nothing else says it.');
+            $this->newLine();
+
+            foreach ($unpublished as [$key, $locale]) {
+                $this->line("  <fg=yellow>?</> {$key} ({$locale})");
+            }
+        }
+
+        $keys = array_values(array_unique(array_column($unpublished, 0)));
+        $authored = array_values(array_filter($keys, $this->awaitsAuthoring(...)));
+
+        $this->newLine();
+
+        if (count($authored) < count($keys)) {
+            $this->line('  Publish what the sources hold, and leave every existing version as it is:');
+            $this->line('  legal-consent:publish --all --only-missing --editorial');
+        }
+
+        if ($authored !== []) {
+            $this->line('  These take their text from a source written by people, and nothing can be published');
+            $this->line('  before the text is written and released there: '.implode(', ', $authored));
+            $this->line('  On the drafts store, that happens on the legal-consent.legal-text-manager screen.');
+        }
+
+        $this->newLine();
     }
 
     /**
@@ -298,9 +377,9 @@ final class DoctorCommand extends Command
         // One key per document identity: the same contract published in seven locales is one
         // thing a subject accepts, and naming it seven times would read as seven problems.
         //
-        // The filter and array_values() are EQUIVALENT under mutation: `key` is a non-null string
+        // The filter and array_values() change nothing observable: `key` is a non-null string
         // column, and the only readers, count() and implode(), ignore array keys. Both stay for the
-        // list<string> this returns; measured 2026-09-14, static analysis rejects either removal.
+        // list<string> this returns.
         return array_values(array_unique(array_filter($keys, is_string(...))));
     }
 
@@ -416,14 +495,6 @@ final class DoctorCommand extends Command
     }
 
     /**
-     * A `registration.without_form_fields` value the recorder does not recognize.
-     *
-     * It falls back to `warn`, which is the safe direction — a typo must never be the thing that
-     * starts failing registrations — and that is exactly why it has to be said out loud. An
-     * operator who wrote `refuse` with a typo believes they are refusing, and the one state they
-     * were guarding against goes on being recorded, in an append-only table.
-     */
-    /**
      * The tamper-evidence posture, when it is weaker than the operator is likely to believe.
      *
      * Two states, and the second is the one nothing else reports. `verify-ledger` says on every
@@ -457,6 +528,22 @@ final class DoctorCommand extends Command
                     '  into a chain that verifies. Keying the hash closes that path; it does not close',
                     '  a tail truncation, which needs the head notarized somewhere else.',
                     '  This is a posture, not a defect — say so deliberately rather than by omission.',
+                ],
+            ];
+        }
+
+        // A key that cannot hold the 256 bits the config asks for. The length is the one thing
+        // measurable here: it bounds the key's entropy from above, and a passphrase of any length
+        // passes it. Measured as the bytes a `base64:` key decodes to, the way APP_KEY is written.
+        if (is_string($key) && $key !== '' && $this->keyMaterialBytes($key) < 32) {
+            $findings[] = [
+                'legal-consent.tamper_evidence_key holds fewer than 32 bytes, too few for the 256 bits it needs.',
+                [
+                    '  Every chained row stores its content beside a MAC over it, so a copy of the table',
+                    '  lets anybody guess the key offline, at their own pace, and then re-chain history.',
+                    '  Generate a key with `openssl rand -base64 32`. Rows already chained keep the key',
+                    '  they were written under: the ledger cannot be re-keyed, and `verify-ledger` reports',
+                    '  them as broken once the key changes, so decide about that chain before replacing it.',
                 ],
             ];
         }
@@ -496,6 +583,14 @@ final class DoctorCommand extends Command
             ->exists();
     }
 
+    /**
+     * A `registration.without_form_fields` value the recorder does not recognize.
+     *
+     * It falls back to `warn`, which is the safe direction — a typo must never be the thing that
+     * starts failing registrations — and that is exactly why it has to be said out loud. An
+     * operator who wrote `refuse` with a typo believes they are refusing, and the one state they
+     * were guarding against goes on being recorded, in an append-only table.
+     */
     private function unknownRegistrationMode(): ?string
     {
         // The literal, for the same reason the provider uses one: the config-drift test reads
@@ -514,6 +609,61 @@ final class DoctorCommand extends Command
         }
 
         return is_scalar($value) ? (string) $value : get_debug_type($value);
+    }
+
+    /**
+     * The settings read as a whole number that hold something else, each with the type it holds.
+     *
+     * Each is read through {@see IntegerSetting}: a string that spells a whole number counts as
+     * that number, and any other value counts as unset, so the package's own value applies. That is
+     * the right fallback and the wrong silence, because the value in effect reads exactly like one
+     * the operator chose. An empty value is how an unset environment variable arrives, so it is
+     * not reported.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private function unreadableWholeNumbers(): array
+    {
+        $keys = [
+            'age_gate.threshold',
+            'cache.ttl',
+            'cache.enforceable_ttl',
+            'notifications.max_attempts',
+            'notifications.requeue_after_minutes',
+            'notifications.max_recipients_per_run',
+        ];
+
+        $settings = [];
+
+        foreach ($keys as $key) {
+            $settings[$key] = config("legal-consent.{$key}");
+        }
+
+        $periods = config('legal-consent.notice_periods');
+        $periods = is_array($periods) ? $periods : [];
+
+        foreach ($periods as $key => $value) {
+            $settings["notice_periods.{$key}"] = $value;
+        }
+
+        $documents = config('legal-consent.documents');
+        $documents = is_array($documents) ? $documents : [];
+
+        foreach ($documents as $key => $definition) {
+            if (is_array($definition) && array_key_exists('min_lead_days', $definition)) {
+                $settings["documents.{$key}.min_lead_days"] = $definition['min_lead_days'];
+            }
+        }
+
+        $unreadable = [];
+
+        foreach ($settings as $key => $value) {
+            if ($value !== null && $value !== '' && IntegerSetting::from($value) === null) {
+                $unreadable[] = [$key, get_debug_type($value)];
+            }
+        }
+
+        return $unreadable;
     }
 
     /**
@@ -585,7 +735,7 @@ final class DoctorCommand extends Command
             $store = is_string($default) ? $default : null;
         }
 
-        // EQUIVALENT under mutation without this return: the lookup below would read
+        // The same answer would come without this return: the lookup below would read
         // `cache.stores..driver`, which is null, and return null all the same. It stays because it
         // says the case out loud.
         if ($store === null) {
@@ -613,9 +763,8 @@ final class DoctorCommand extends Command
      * notification job fails.
      *
      * The mail is not lost with it, and that changes how loud this is. Laravel dispatches one
-     * queued job PER CHANNEL, so a missing table fails the database job alone; a consumer reported
-     * this as "the retry re-sends the mail" and it does not. What is lost is the in-app record, on
-     * an install that asked for one.
+     * queued job per channel, so a missing table fails the database job alone, and a retry does
+     * not send the mail again. What is lost is the in-app record, on an install that asked for one.
      *
      * Reported, never enforced, like the cache finding above: the exit code of this command is for
      * a configuration that contradicts itself, and this one is merely broken in a way an operator
@@ -659,11 +808,10 @@ final class DoctorCommand extends Command
      *
      * ## AND IT IS A REPORT, NOT A FAILURE
      *
-     * This command used to end on the exception. A consumer had it in the statics stage of their
-     * gate — which boots the application and deliberately reaches no external service, because
-     * nothing in that chain had ever needed one — and the upgrade turned a config check into a
-     * red lane with a `Connection refused` in it. In the next repository to adopt that arm the
-     * same failure would read as a package defect.
+     * A deploy pipeline often runs this report in a stage that boots the application and
+     * deliberately reaches no external service. Ending on the exception there would turn a
+     * configuration check into a failed step with a `Connection refused` in it, which reads as a
+     * defect of the package rather than as the state of that stage.
      *
      * So an unreachable database makes these sections say they could not be checked, which is the
      * pattern this report already uses for the mailer: *whether a mailer reaches its host cannot be
@@ -676,7 +824,7 @@ final class DoctorCommand extends Command
      * @return array{
      *     firstUse: array{0: string, 1: list<string>}|null,
      *     incoherent: bool,
-     *     unpublished: list<string>,
+     *     unpublished: list<array{0: string, 1: string}>,
      *     tamper: list<array{0: string, 1: list<string>}>,
      *     databaseCache: array{0: string, 1: string}|null,
      *     undeliverable: list<string>,
@@ -706,6 +854,7 @@ final class DoctorCommand extends Command
     {
         $variantFinding = $this->uiVariantFinding();
         $unknownMode = $this->unknownRegistrationMode();
+        $unreadableNumbers = $this->unreadableWholeNumbers();
         $retentionProblem = RetentionPeriod::problem(
             RetentionPeriod::configured(config('legal-consent.retention_after_end', '3 years')),
             CarbonImmutable::now(),
@@ -806,6 +955,20 @@ final class DoctorCommand extends Command
             $this->newLine();
         }
 
+        if ($unreadableNumbers !== []) {
+            $this->newLine();
+            $this->warn('These settings take a whole number and hold something else, so each one counts as unset:');
+
+            foreach ($unreadableNumbers as [$key, $type]) {
+                $this->line("  <fg=yellow>?</> legal-consent.{$key}  <fg=gray>({$type})</>");
+            }
+
+            $this->line('  The package value applies in their place, and nothing else says so: an age threshold or');
+            $this->line('  a notice period then differs from the one you configured. A number from `env()` arrives');
+            $this->line("  as a string and counts when it spells a whole number, as in `env('AGE_GATE_THRESHOLD', 16)`.");
+            $this->newLine();
+        }
+
         if ($databaseCache !== null) {
             [$store, $origin] = $databaseCache;
 
@@ -840,20 +1003,7 @@ final class DoctorCommand extends Command
         }
 
         if ($unpublished !== []) {
-            $this->newLine();
-            $this->warn('These documents are registered but have no published version:');
-            $this->line('  A page reading `Consent::published()` renders EMPTY for them — no error, no log.');
-            $this->line('  Nothing is published in that language, and the document may not fall back to');
-            $this->line('  another, so nothing else says it.');
-            $this->newLine();
-
-            foreach ($unpublished as $combination) {
-                $this->line("  <fg=yellow>?</> {$combination}");
-            }
-
-            $this->newLine();
-            $this->line('  Publish the whole matrix idempotently: legal-consent:publish --all --editorial');
-            $this->newLine();
+            $this->reportUnpublished($unpublished);
         }
 
         if ($undeliverable !== []) {
@@ -981,10 +1131,12 @@ final class DoctorCommand extends Command
             $this->warn('These keys exist only in your published file — the package no longer defines them:');
             $this->line('  They still read like valid configuration. An entry naming a class that has since');
             $this->line('  been removed fails at resolve time, pointing at your config rather than the upgrade.');
+            $this->line('  Named without their values: your file is read with `env()` evaluated, so a value');
+            $this->line('  printed here would be the real one from your environment, a secret included.');
             $this->newLine();
 
-            foreach ($stale as $key => $value) {
-                $this->line("  <fg=yellow>?</> {$key}  <fg=gray>(your value: {$value})</>");
+            foreach ($stale as $key) {
+                $this->line("  <fg=yellow>?</> {$key}");
             }
         }
 
@@ -1030,9 +1182,7 @@ final class DoctorCommand extends Command
      * every map, precisely so a key added inside an already-published block still arrives.
      *
      * So the report named keys that were reaching the runtime perfectly well — and `$lost` drives
-     * the exit code, which made it a red step over a configuration with nothing wrong in it. It was
-     * measured by a consumer whose integration branch had gone red over exactly that, on a published
-     * file missing keys the recursive merge was delivering the whole time.
+     * the exit code, which made it a red step over a configuration with nothing wrong in it.
      *
      * AND THE ADVICE WAS WORSE THAN THE RED RUN. "Copy the missing keys into the matching block"
      * writes package defaults into a published file and freezes them on the day the package
@@ -1106,7 +1256,7 @@ final class DoctorCommand extends Command
         $narrowed = [];
 
         foreach ($this->comparableBlocks($package, $published) as $block => [$value, $current]) {
-            // A `break` here is EQUIVALENT under mutation only by accident of the package config:
+            // A `break` here would behave the same only by accident of the package config:
             // `locales` is its one list and comes before every block, so nothing is left to skip. A
             // list added further down would be skipped silently, which is why this is `continue`.
             if (! array_is_list($value) || ! array_is_list($current)) {
@@ -1117,10 +1267,10 @@ final class DoctorCommand extends Command
             // not a set of choices an operator made — it is a shape this report has nothing to say
             // about.
             //
-            // On the package side the filter, the describe() map and array_values() are EQUIVALENT
-            // under mutation: its one list holds strings, describe() hands a string back unchanged,
-            // and implode() ignores keys. They stay for the list<string> this returns (measured
-            // 2026-09-14: static analysis rejects each removal), and on the published side the
+            // On the package side the filter, the describe() map and array_values() change nothing
+            // observable: its one list holds strings, describe() hands a string back unchanged,
+            // and implode() ignores keys. They stay for the list<string> this returns, and on the
+            // published side the
             // filter carries real weight, because a hand-edited list can hold an array.
             $missing = array_values(array_map($this->describe(...), array_diff(
                 array_filter($value, is_scalar(...)),
@@ -1167,7 +1317,7 @@ final class DoctorCommand extends Command
                 continue;
             }
 
-            // The cast is EQUIVALENT under mutation, because PHP stores a numeric string key as an
+            // The cast changes nothing observable, because PHP stores a numeric string key as an
             // int either way. It is there for the string keys the return type promises.
             $blocks[(string) $block] = [$value, $published[$block]];
         }
@@ -1178,9 +1328,14 @@ final class DoctorCommand extends Command
     /**
      * Keys the published file carries that the package no longer defines.
      *
+     * Keys only, never their values. The published file is read with `env()` evaluated, and this
+     * command is built to run in a CI step, whose log is read more widely than the environment. A
+     * key the package has renamed keeps its old name in the file, so a secret kept under it would
+     * be printed in the clear.
+     *
      * @param  array<array-key, mixed>  $package
      * @param  array<array-key, mixed>  $published
-     * @return array<string, string>
+     * @return list<string>
      */
     private function staleKeys(array $package, array $published): array
     {
@@ -1196,16 +1351,16 @@ final class DoctorCommand extends Command
             // reported as stale on a perfectly synchronized file.
             if (! is_array($value) || array_is_list($value)) {
                 if (! array_key_exists($block, $package)) {
-                    // EQUIVALENT under mutation for the reason given in comparableBlocks().
-                    $stale[(string) $block] = $this->describe($value);
+                    // The cast changes nothing observable, for the reason given in comparableBlocks().
+                    $stale[] = (string) $block;
                 }
 
                 continue;
             }
 
-            foreach ($this->flatten($value, (string) $block) as $key => $current) {
+            foreach (array_keys($this->flatten($value, (string) $block)) as $key) {
                 if (! $this->has($package, $key)) {
-                    $stale[$key] = $current;
+                    $stale[] = $key;
                 }
             }
         }
@@ -1259,6 +1414,18 @@ final class DoctorCommand extends Command
         }
 
         return true;
+    }
+
+    /** The bytes of key material a tamper key holds at most: decoded for `base64:`, else its length. */
+    private function keyMaterialBytes(string $key): int
+    {
+        if (str_starts_with($key, 'base64:')) {
+            $decoded = base64_decode(substr($key, 7), true);
+
+            return $decoded === false ? 0 : strlen($decoded);
+        }
+
+        return strlen($key);
     }
 
     private function describe(mixed $value): string

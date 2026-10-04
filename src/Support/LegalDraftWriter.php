@@ -42,8 +42,7 @@ use Pushery\LegalConsent\Models\LegalDraft;
  *
  * There is NO path from applyTranslation() to Reviewed. That is what makes "a machine draft can
  * never be published" structural rather than a matter of discipline.
- */
-/**
+ *
  * Not `final`: `find()` is a `protected` seam so a test can force the stale read a concurrent writer
  * sees (find returns null while the row exists) and exercise the insert→unique-violation→converge
  * path deterministically, which no single-connection test could otherwise provoke.

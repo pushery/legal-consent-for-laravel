@@ -30,7 +30,7 @@ class ReconsentRequired extends ChangeNotification
     public function toMail(object $notifiable): MailMessage
     {
         $enforceAt = $this->document->enforce_from;
-        $deadline = $enforceAt instanceof CarbonImmutable ? $enforceAt->toDateString() : '';
+        $deadline = $this->readableDate($enforceAt);
 
         $mail = (new MailMessage)
             ->subject($this->line('subject', ['title' => $this->document->title]))
@@ -120,7 +120,7 @@ class ReconsentRequired extends ChangeNotification
      */
     private function fallback(string $key, array $replace = []): string
     {
-        // The `?? ''` below is EQUIVALENT under mutation: toMail() asks only for keys this map
+        // The `?? ''` below is never taken: toMail() asks only for keys this map
         // carries, so the empty fallback for an unknown key is never taken.
         $line = [
             'subject' => 'Wichtig: aktualisierte Nutzungsbedingungen',

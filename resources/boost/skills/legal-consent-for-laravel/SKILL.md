@@ -11,9 +11,8 @@ metadata:
 
 # Legal Consent for Laravel
 
-Use this skill when a Laravel application installs or integrates the
-`pushery/legal-consent-for-laravel` package. Laravel Boost surfaces it inside consuming
-applications, so keep it focused on adoption — never on package internals.
+Use this skill when a Laravel application installs, configures or integrates the
+`pushery/legal-consent-for-laravel` package.
 
 ## Primary Goal
 
@@ -98,7 +97,7 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   every session-backed ledger write — that route and the Livewire components' grant, withdraw,
   object and terminate actions. Same shape as `routes.api_throttle`; `null` switches it off.
 - `ui.variant` — `auto` by default: the WireKit-native views are served when `pushery/wirekit`
-  ≥ 2.49.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
+  ≥ 2.56.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
 - `notice_mail` — the change-notice mail. `identity.declarant` names the declaring legal person
   (§ 126b BGB) and is appended to the notice AND to its append-only proof row; leave it null and
   the notice is byte-for-byte what it was. Multi-tenant apps bind `ResolvesNoticeIdentity` instead
@@ -121,7 +120,9 @@ php artisan legal-consent:publish terms de --editorial   # silent, no notice
 php artisan legal-consent:publish --all --editorial      # the whole matrix, idempotent
 php artisan legal-consent:publish --all --only-missing --editorial   # gap-fill only — use THIS in a deploy script
 php artisan legal-consent:publish --all --dry-run --editorial        # what would a run do? writes nothing
+php artisan legal-consent:publish privacy --locales=de,en --info     # every language together: how a version changes its mode
 php artisan legal-consent:check-drift                    # source changed since it was published?
+php artisan legal-consent:verify-documents --placeholders-fail   # before a launch: fails on a placeholder text or a 0.0.0 version
 php artisan legal-consent:publish terms de --active --tenant=acme   # tenancy on: the console resolves no tenant, so name it
 ```
 
@@ -129,13 +130,25 @@ The mode is the legal classification of the change, so it is never guessed: `--a
 must accept again), `--deemed` (silence counts, contract terms only), `--info` (announced, takes
 effect regardless), `--editorial` (no material change). `--active` needs a new major version: the
 gate compares major versions, so the publisher refuses it on a minor or patch bump of a contract or
-a consent. A document's first publication is not a bump and is unaffected.
+a consent. A document's first publication is not a bump and is unaffected. A later version inside a
+major keeps what the major asked for: an `--editorial` fix after an `--active` major still gates
+everyone who has not accepted it, and a correction of an `--info` or `--deemed` change keeps its
+notices and its objection window running.
+
+**Tenancy is opt-in** (`tenancy.enabled`). The resolver returns the tenant's key as an int or a
+string, or `null` outside a tenant, and any other answer throws `UnresolvableTenant`, so return
+`tenant()?->getKey()`, never the model:
+
+```php
+app(\Pushery\LegalConsent\Support\TenantContext::class)->resolveUsing(fn () => auth()->user()?->tenant_id);
+```
 
 **A fresh install has published nothing, and nothing says so.** `legal_documents` is empty after
 `migrate`, `Consent::published()` returns `null` for every document, and the read path does not
 fall back to the source — so every legal page renders empty with no error and no log. Run
-`legal-consent:publish --all --editorial` once, or ask `legal-consent:doctor`, which names every
-registered document with no published version.
+`legal-consent:publish --all --editorial` once, or ask `legal-consent:doctor`, which says so when
+nothing is published and names every missing language once something is. A document on the drafts
+store publishes nothing before its text is written and released on the admin screen.
 
 **When the application deletes an account, call `Consent::forget($user)`.** It strips
 `subject_type`, `subject_id`, `ip_address`, `user_agent` and `request_id` from the consent ledger,
@@ -184,6 +197,10 @@ so `hash(page) === ledger.content_hash` is a tautology rather than a chore:
 $document = Consent::published('terms', app()->getLocale()); // null when unpublished, never throws
 ```
 
+A form that only shows the acceptance sentence beside a link, on every page, reads
+`Consent::publishedVersion($key, $locale)` instead: the same version without its text, from the
+cache the consent gate reads, with `uiWording` and `acceptanceFingerprint()`.
+
 **Collect acceptance at registration** from what is actually published, instead of a hardcoded list:
 
 ```php
@@ -229,11 +246,12 @@ acceptance in an interstitial shown after authentication and before first use, a
 ```
 
 **Drop in the optional UI** (needs `livewire/livewire`. The WireKit-native views are served
-automatically when `pushery/wirekit` ≥ 2.49.0 is installed — `legal-consent.ui.variant` defaults to
+automatically when `pushery/wirekit` ≥ 2.56.0 is installed — `legal-consent.ui.variant` defaults to
 `auto`; publish `legal-consent-wirekit` only to customize them. The floor is part of the automatic
 choice rather than advice because the views name components that must exist: WireKit's own localized
 screen-reader strings landed in 2.26.0, the busy-state props these stubs use landed in 2.47.0, and
-the release dialog's close on confirm landed in 2.49.0):
+the release dialog's close on confirm landed in 2.49.0, and the quiet new-tab link and the editor
+that reports only a person's edit landed in 2.56.0):
 
 ```blade
 <livewire:legal-consent.reconsent-form />
@@ -266,6 +284,10 @@ yourself — all in `Pushery\LegalConsent\Exceptions`: `LegalDocumentNotFound`,
 `NotWithdrawableException`, `NotObjectableException`, `NotTerminableException`,
 `NotConsentBearingException`. They are refusals to record a row the ledger cannot take back, not
 failures to work around.
+
+Save a model before you record a consent for it. A subject without a key throws
+`SubjectWithoutKey`, because a row that names nobody is found by no read and reached by no erasure.
+Record after `save()` or in a `created` listener.
 
 The last one catches the case that is easiest to reach by accident: an `informational` document —
 an Impressum, a cookie policy — is published so it can be read and asks the reader for nothing, so
@@ -396,6 +418,9 @@ separates the page from the proof. Everything else on a consent screen is escape
   source lets the page and the ledger drift with no test turning red — the proof breaks silently.
 - **Do not add a second sanitizer or hasher.** The package sanitizes and hashes in one place; a
   second one means the ledger hashes one form while the page renders another.
+- **Do not copy the sanitizer's allowlist into a test.** A rich editor drops a tag it does not know
+  while parsing, and the next save stores the loss. Test the editor against
+  `LegalHtmlSanitizer::allowedElements()` and `allowedAttributes()`, which grow with the package.
 - **Do not hardcode registration checkboxes.** Derive them from `registrationChecklist()`, or the
   form will block on a document that does not exist, or quietly omit one that does.
 - **Do not edit `legal_documents` rows.** They are append-only and the database refuses it; publish a
@@ -411,4 +436,3 @@ separates the page from the proof. Everything else on a consent screen is escape
 - **Do not ship a closure in `document_url` or `gate.subject_filter`.** Both accept one, and both
   break `php artisan config:cache` — a failure that first appears in the deploy, because nothing
   local caches. Use an invokable class-string; `legal-consent:doctor` names the offenders.
-- Do not document package internals here; keep integration guidance in the application.

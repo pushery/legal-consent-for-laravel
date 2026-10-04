@@ -116,15 +116,13 @@ readonly class AffectedSubjectResolver
             // matches no row of a NOT NULL column — the sweep resolves ZERO subjects and notifies
             // nobody, silently. With tenancy ON that was one un-refreshed model away.
             //
-            // AND THE GUARD STAYS. Making this filter unconditional so `tenant_id` could LEAD
-            // the affected-subject index looks correct — a NOT NULL DEFAULT '' column makes the
-            // predicate hold in both modes — and it was built that way once. The suite refuted it:
-            // with tenancy OFF, a version that belongs to a tenant must still
-            // reach subjects whose consents sit in the shared bucket, because the stamping hook is
-            // inert while tenancy is off and the proof row would otherwise be invisible to the very
-            // tenant it belongs to. The dispatch suite defends exactly that. So the filter is
-            // conditional by necessity, and 000013's reason for leaving tenant_id out of the index
-            // stands — a leading column that is sometimes absent from the predicate cannot be one.
+            // The filter stays conditional. Unconditional, it would let `tenant_id` lead the
+            // affected-subject index, since a NOT NULL DEFAULT '' column makes the predicate hold
+            // in both modes, but with tenancy off a version that belongs to a tenant must still
+            // reach subjects whose consents sit in the shared bucket: the stamping hook is inert
+            // while tenancy is off, and the proof row would otherwise be invisible to the tenant
+            // it belongs to. That is also why 000013 leaves tenant_id out of the index: a leading
+            // column that is sometimes absent from the predicate cannot be one.
             ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id ?? ''))
             ->when($maxConsentId !== null, fn (QueryBuilder $query): QueryBuilder => $query->where('id', '<=', $maxConsentId))
             ->when($skipNotified, fn (QueryBuilder $query): QueryBuilder => $this->withoutAlreadyNotified($query, $version))
@@ -302,7 +300,7 @@ readonly class AffectedSubjectResolver
      * RESUMABILITY (notice sweep): skip subjects who already have a durable-medium proof row for
      * THIS version, and those whose notice is still on its way or has failed
      * `notifications.max_attempts` times ({@see NoticeAttempts}). A run killed or overtaken
-     * mid-sweep (the 120-min lock can expire on a large population) resumes on the subjects still
+     * mid-sweep (the 55-minute lock can expire on a large population) resumes on the subjects still
      * owed a notice instead of re-sending from the top — and, crucially, it stops the
      * concurrent/re-run case from writing a SECOND proof row for a subject already notified.
      * Delivery stays at-least-once (a proof written by a genuinely simultaneous sweep in the same

@@ -12,7 +12,6 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Enums\ConsentAction;
-use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use stdClass;
@@ -46,7 +45,9 @@ final class ConsentGate
         // The active set is cached (a global, publish-driven fact); the time/mode filter runs here
         // because those windows move on a clock. A dormant install now pays no query at all — it
         // used to run this on every authenticated request just to be told nothing is published.
-        $enforceable = app(EnforceableDocumentCache::class)
+        $cache = app(EnforceableDocumentCache::class);
+
+        $enforceable = $cache
             ->resolvedFor($locale)
             ->filter(fn (LegalDocument $document): bool => $document->type->isConsentBearing()
                 // Informational is checked FIRST and separately, because the opt-in flag cannot
@@ -55,9 +56,10 @@ final class ConsentGate
                 // Impressum block every authenticated request the moment it were published as an
                 // active re-consent. Nothing a subject never accepts may gate access.
                 && ! $document->requires_explicit_optin
-                && $document->noticeMode() === NoticeMode::ActiveReconsent // only an active re-consent gates
-                && $document->enforce_from instanceof CarbonImmutable
-                && $document->enforce_from->lessThanOrEqualTo($now))
+                // Only an active re-consent gates, and it gates its whole major: an editorial fix or
+                // an info-only change published inside the major keeps the gate of the version that
+                // opened it, from that version's effective date.
+                && $this->gateIsOpen($cache->gatingVersionOf($document), $now))
             ->values();
 
         if ($enforceable->isEmpty()) {
@@ -73,6 +75,14 @@ final class ConsentGate
         return $enforceable
             ->filter(fn (LegalDocument $document): bool => ! self::holds($held, $document->key, $document->major_version))
             ->values();
+    }
+
+    /** Whether a major's active re-consent has reached its effective date. */
+    private function gateIsOpen(?LegalDocument $gating, CarbonImmutable $now): bool
+    {
+        return $gating instanceof LegalDocument
+            && $gating->enforce_from instanceof CarbonImmutable
+            && $gating->enforce_from->lessThanOrEqualTo($now);
     }
 
     /**
@@ -441,9 +451,17 @@ final class ConsentGate
      */
     public function latestActionFor(Model $subject, string $documentKey, ?string $locale = null): ?LegalConsent
     {
+        $subjectId = SubjectKey::for($subject);
+
+        // A subject without a key names nobody. Matched against `subject_id = null`, it would find
+        // the latest row of its type that was written without a key, which is nobody's.
+        if ($subjectId === null) {
+            return null;
+        }
+
         return LegalConsent::model()::query()
             ->where('subject_type', (string) $subject->getMorphClass())
-            ->where('subject_id', SubjectKey::for($subject))
+            ->where('subject_id', $subjectId)
             ->where('document_key', $documentKey)
             ->when($locale !== null, fn (Builder $query): Builder => $query->where('locale', $locale))
             ->orderByDesc('accepted_at')

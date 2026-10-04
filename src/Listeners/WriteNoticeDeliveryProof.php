@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Listeners;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Mail\SentMessage;
 use Illuminate\Notifications\Events\NotificationSent;
+use Illuminate\Support\Facades\Log;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Notifications\ChangeNotification;
@@ -15,6 +17,7 @@ use Pushery\LegalConsent\Support\NoticeAttempts;
 use Pushery\LegalConsent\Support\SubjectKey;
 use Pushery\LegalConsent\Support\SubjectToken;
 use Pushery\LegalConsent\Support\TenantContext;
+use Throwable;
 
 /**
  * Writes the append-only durable-medium proof row — and does it from the DELIVERY side.
@@ -150,32 +153,92 @@ final readonly class WriteNoticeDeliveryProof
         app()->setLocale($version->locale);
 
         try {
-            $mail = $notification->toMail($subject);
-
-            /** @var array<int, string> $lines */
-            $lines = array_filter([
-                $mail->subject,
-                ...$mail->introLines,
-                $mail->actionText,
-                ...$mail->outroLines,
-            ], is_string(...));
+            $body = implode("\n", $this->lines($notification, $subject));
 
             // Must be evaluated INSIDE the version's locale — the same locale the notice was
             // rendered in — or it would certify a translation the subject never received. Ask the
             // notice itself: a non-empty body proves nothing (subject + intro alone keep it
             // non-empty while the § 308 Nr. 5 lit. b warning silently drops out).
             $mandatoryOk = $notification->mandatoryContentPresent();
+
+            $this->warnWhenTheBodyDependsOnItsRecipient($notification, $subject, $body);
         } finally {
             app()->setLocale($original);
         }
-
-        $body = implode("\n", $lines);
 
         return [
             'body' => $body,
             'hash' => hash('sha256', $body),
             'mandatory_ok' => $mandatoryOk,
         ];
+    }
+
+    /**
+     * The lines of the notice as the mail channel sends them: the subject, the intro, the action
+     * and the outro.
+     *
+     * @return list<string>
+     */
+    private function lines(ChangeNotification $notification, Model $notifiable): array
+    {
+        $mail = $notification->toMail($notifiable);
+
+        $lines = [];
+
+        foreach ([$mail->subject, ...$mail->introLines, $mail->actionText, ...$mail->outroLines] as $line) {
+            // A line a notice formats as HTML is sent as that HTML, so it is recorded as such.
+            // Dropped, the hash would certify a text that differs from the mail.
+            if ($line instanceof Htmlable) {
+                $line = $line->toHtml();
+            }
+
+            if (is_string($line)) {
+                $lines[] = $line;
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Warn, once per notice class and process, when the body depends on its recipient.
+     *
+     * The shipped notices build their text from the document alone, so the body is the same for
+     * every recipient and names nobody. A notification class of the application's own may write
+     * the recipient into its lines, and the proof keeps the body as it was sent: it is the
+     * durable-medium proof, and its hash cannot be rewritten. Such a body therefore outlives
+     * `forget()`, which is said here rather than found after an erasure request. Rendered once more
+     * for a blank instance of the recipient's class, a body built from the document comes out the
+     * same; a notice that cannot be rendered without its recipient depends on it as well. The check
+     * never stands between a delivery and its proof.
+     */
+    private function warnWhenTheBodyDependsOnItsRecipient(ChangeNotification $notification, Model $subject, string $body): void
+    {
+        // The classes already reported in this process: a sweep over thousands of recipients logs
+        // the finding once rather than once per row.
+        /** @var array<class-string, true> $reported */
+        static $reported = [];
+
+        if (isset($reported[$notification::class])) {
+            return;
+        }
+
+        try {
+            $blank = implode("\n", $this->lines($notification, $subject->newInstance()));
+        } catch (Throwable) {
+            $blank = null;
+        }
+
+        if ($blank === $body) {
+            return;
+        }
+
+        $reported[$notification::class] = true;
+
+        Log::warning('legal-consent: a notice body depends on its recipient, so forget() leaves it in the delivery proof', [
+            'notification' => $notification::class,
+            'document_key' => $notification->document->key,
+        ]);
     }
 
     /**

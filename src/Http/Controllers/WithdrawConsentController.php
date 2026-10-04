@@ -138,7 +138,7 @@ final readonly class WithdrawConsentController
         // foreign authority afterwards. No legitimate Referer carries a raw control or space;
         // browsers percent-encode them.
         //
-        // The `=== ''` is EQUIVALENT under mutation: url()->previous() is handed a non-empty fallback
+        // The `=== ''` changes nothing observable: url()->previous() is handed a non-empty fallback
         // and never answers with an empty string, so the pattern test below would refuse one anyway.
         if ($target === '' || preg_match('/[\x00-\x20\x7F]/', $target) === 1) {
             return false;

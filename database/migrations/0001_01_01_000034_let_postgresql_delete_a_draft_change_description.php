@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Pushery\LegalConsent\Support\ChangeSetFreezeGuard;
+use Pushery\SQLens\Attributes\NoSqlOnDriver;
 
 /**
  * Let PostgreSQL delete a draft change description.
@@ -18,7 +19,9 @@ use Pushery\LegalConsent\Support\ChangeSetFreezeGuard;
  * Both functions are replaced in place where they exist, and the triggers stay bound to them. A
  * fresh installation already gets the corrected body from 000016 and 000017.
  */
-return new class extends Migration
+return new
+#[NoSqlOnDriver('mysql', reason: 'the trigger functions it replaces exist on PostgreSQL only; MySQL was not affected')]
+class extends Migration
 {
     public function up(): void
     {
@@ -29,6 +32,7 @@ return new class extends Migration
      * Nothing to put back: the body this replaced let no draft be deleted on PostgreSQL, and a
      * rollback that restored it would restore that, not a state anything relied on.
      */
+    #[NoSqlOnDriver('pgsql', reason: 'the replaced body let no draft be deleted, and nothing relied on that')]
     public function down(): void
     {
         // The functions stay as up() left them.

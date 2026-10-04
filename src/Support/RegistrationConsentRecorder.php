@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\DocumentType;
+use Pushery\LegalConsent\Exceptions\DocumentChangedException;
 use Pushery\LegalConsent\Exceptions\UnevidencedConsentException;
 use Pushery\LegalConsent\Exceptions\UnrecordableConsentException;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -113,10 +114,16 @@ final readonly class RegistrationConsentRecorder
         // known rather than aborting on whichever key happened to come first.
         $unevidenced = [];
 
+        // Pages flagged for registration whose control this request does not carry, so nothing was
+        // shown to acknowledge. Collected for one warning, for the reason given above.
+        $unshown = [];
+
         // Resolution is separated from writing, and the separation is the whole reason `refuse`
         // can be honest: it decides before the first accept(), so a registration records all of
         // its consents or none. Refusing mid-loop would leave a partial ledger in the one table
-        // that cannot be corrected afterwards.
+        // that cannot be corrected afterwards. The same holds for a form that showed a version
+        // which is no longer the one to record: that refusal is decided here too, before anything
+        // is written, rather than by the manager in the middle of the writes.
         $pending = [];
 
         foreach (array_keys($this->documents) as $key) {
@@ -168,8 +175,9 @@ final readonly class RegistrationConsentRecorder
             //
             // UNLESS the operator says their form DOES show it. Then the opposite is true: the box
             // was ticked over four pages and a ledger naming one of them is the misleading record.
-            // The predicate is asked rather than the type, so this site and RegistrationRules
-            // cannot drift into disagreeing about which pages the form covers.
+            // The flag says which pages the form CAN show; whether this request showed one, and
+            // whether the box next to it was ticked, is asked below, because no validation rule
+            // asks it: RegistrationRules gives a page that binds nobody no rule at all.
             //
             // A page flagged for registration with no configured sentence is recorded too when the
             // form handed over the one it showed: then the request carries the only sentence that
@@ -179,6 +187,24 @@ final readonly class RegistrationConsentRecorder
             if (! RegistrationAcknowledgment::isRecordedAtRegistration($document)
                 && ($shown === null || ! RegistrationAcknowledgment::isFlaggedForRegistration((string) $key))) {
                 continue;
+            }
+
+            // A page that binds nobody is written only where its control was rendered and ticked:
+            // its own field, or the one the registry names for the box it shares with other pages.
+            // Without the control this request showed nothing to acknowledge, and an empty box is
+            // the person saying no. Either way the ledger would hold an acknowledgment nobody gave.
+            if (! $document->type->isConsentBearing()) {
+                $field = RegistrationField::forDocument((string) $key);
+
+                if (! array_key_exists($field, $input)) {
+                    $unshown[] = (string) $key;
+
+                    continue;
+                }
+
+                if (! $this->wasGiven($input[$field])) {
+                    continue;
+                }
             }
 
             if ($document->type->requiresExplicitOptin() && ! $this->wasGiven($input[RegistrationField::forDocument((string) $key)] ?? null)) {
@@ -192,6 +218,7 @@ final readonly class RegistrationConsentRecorder
             // which `accept()` treats as "no check requested", so a form that does not render it keeps
             // the prior behavior exactly.
             $expectedHash = $input[RegistrationField::hashForDocument((string) $key)] ?? null;
+            $this->assertShownVersionIsCurrent((string) $key, $document, is_string($expectedHash) ? $expectedHash : null);
 
             // A mandatory document is accepted unconditionally, because RegistrationRules made its
             // box `required` and validation already ran. That reasoning holds only while a FORM ran
@@ -203,11 +230,9 @@ final readonly class RegistrationConsentRecorder
             // it is this request, observed. (Asking the ROUTE table whether a registration form
             // exists cannot be made reliable: an application may name that route anything.)
             //
-            // WHICH field is asked for is now the registry's answer rather than a convention this
-            // site derives: a form with one control for four pages declares `registration_field`
-            // once per document, and this check looks for the control that was actually rendered.
-            // Before that existed, such a consumer had to accept a warning on every registration
-            // whose own hint named a different cause entirely.
+            // Which field is asked for is the registry's answer rather than a convention this site
+            // derives: a form with one control for four pages declares `registration_field` once
+            // per document, and this check looks for the control that was actually rendered.
             //
             // Whether that is reported or REFUSED is the operator's call, and the default is to
             // report: the check can only look for the field name RegistrationRules generates, so an
@@ -268,6 +293,14 @@ final readonly class RegistrationConsentRecorder
             $this->consent->accept($subject, $key, $context, $documentLocale, $expectedHash, $registrationWording);
         }
 
+        if ($unshown !== []) {
+            Log::warning('legal-consent: acknowledged no page flagged for registration whose field the request does not carry', [
+                'document_keys' => $unshown,
+                'fields' => array_map(RegistrationField::forDocument(...), $unshown),
+                'subject_type' => (string) $subject->getMorphClass(),
+            ]);
+        }
+
         if ($unevidenced !== []) {
             Log::warning('legal-consent: recorded a mandatory consent with no registration-form field present', [
                 'document_keys' => $unevidenced,
@@ -303,12 +336,16 @@ final readonly class RegistrationConsentRecorder
     }
 
     /**
+     * The active documents of one locale, by key, with what the loop reads: the type, and the two
+     * values the shown version is compared with before the first write. Without `content_hash` and
+     * `ui_wording` that comparison read nulls and could not build the acceptance fingerprint.
+     *
      * @return Collection<string, LegalDocument>
      */
     private function activeByKey(string $locale): Collection
     {
         return LegalDocument::model()::query()
-            ->select(['key', 'type', 'locale'])
+            ->select(['key', 'type', 'locale', 'content_hash', 'ui_wording'])
             ->where('locale', $locale)
             ->where('is_active', true)
             ->get()
@@ -317,6 +354,31 @@ final readonly class RegistrationConsentRecorder
 
     // `mixed`: this is raw registration-form input ("1"/"true"/"on"/bool/null) taken before any
     // coercion, so the boolean interpretation is deferred to filter_var here rather than assumed.
+    /**
+     * Refuses, before the first row is written, a document whose form showed a version that is no
+     * longer the one this registration would record.
+     *
+     * The manager asks the same question for each document as it writes it, and asked there alone
+     * it refuses after the documents before it are already in the ledger: a registration that
+     * throws and still holds part of its consents. The answer is the manager's own, the acceptance
+     * fingerprint or the bare content hash for a binding text and the content hash for a page that
+     * binds nobody, so the two places cannot disagree about what counts as changed.
+     */
+    private function assertShownVersionIsCurrent(string $key, LegalDocument $document, ?string $expectedHash): void
+    {
+        if ($expectedHash === null) {
+            return;
+        }
+
+        $current = $document->type->isConsentBearing()
+            ? [DefaultConsentManager::acceptanceFingerprint($document), $document->content_hash]
+            : [$document->content_hash];
+
+        if (! in_array($expectedHash, $current, true)) {
+            throw DocumentChangedException::for($key, $expectedHash, $current[0]);
+        }
+    }
+
     private function wasGiven(mixed $value): bool
     {
         return filter_var($value, FILTER_VALIDATE_BOOLEAN);

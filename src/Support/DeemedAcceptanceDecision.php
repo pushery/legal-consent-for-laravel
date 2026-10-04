@@ -94,9 +94,17 @@ final class DeemedAcceptanceDecision
      */
     public function latestThatCounts(Model $subject, LegalDocument $version): ?LegalConsent
     {
+        $subjectId = SubjectKey::for($subject);
+
+        // A subject without a key names nobody, and `subject_id = null` would read rows of its type
+        // written without a key as this one's.
+        if ($subjectId === null) {
+            return null;
+        }
+
         $rows = LegalConsent::model()::query()
             ->where('subject_type', (string) $subject->getMorphClass())
-            ->where('subject_id', SubjectKey::for($subject))
+            ->where('subject_id', $subjectId)
             ->where('document_key', $version->key)
             ->where('locale', $version->locale)
             ->orderByDesc('accepted_at')

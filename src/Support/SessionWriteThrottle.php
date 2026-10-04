@@ -47,10 +47,8 @@ final class SessionWriteThrottle
         // the `routes` block already, and `mergeConfigFrom()` is flat — its block wins whole, and
         // the key never arrives. The inline default is then the only value that runs.
         //
-        // A LITERAL, not a constant: the suite's config-drift guard reads every inline default in
-        // the shipped code and holds it against config/legal-consent.php, and it can only read what
-        // is written out. A constant here would leave this pair unchecked while the suite stayed
-        // green.
+        // Written out, and equal to the shipped default in config/legal-consent.php, so the value
+        // that runs without the key is the one the published file documents.
         $value = config('legal-consent.routes.web_throttle', '60,1');
 
         if (! is_string($value) || trim($value) === '') {

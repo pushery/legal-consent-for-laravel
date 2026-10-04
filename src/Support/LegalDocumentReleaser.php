@@ -49,12 +49,11 @@ final readonly class LegalDocumentReleaser
         // interleave with a release — this lock is the one that spans the outer transaction, and an
         // inner writer skips its own rather than re-taking this name.
         //
-        // THIS PARAGRAPH USED TO CALL THE INNER LOCK "A SAVEPOINT INSIDE IT", AND THAT SENTENCE
-        // IS HOW THE DEADLOCK GOT WRITTEN. A savepoint is a database construct that nests; this
-        // lock lives in the cache store and knows nothing about the transaction it is taken in. It
-        // does not nest, it CONTENDS — the inner instance is a different owner, so it waits out its
-        // timeout and throws. Reported by a consumer who read this sentence, disbelieved it, and
-        // was right. Whoever opens the transaction owns the lock, and nobody below re-takes it.
+        // An inner lock is not a savepoint inside the outer one. A savepoint is a database construct
+        // that nests; this lock lives in the cache store and knows nothing about the transaction it
+        // is taken in. It does not nest, it contends: an inner instance is a different owner, so it
+        // would wait out its timeout and throw. Whoever opens the transaction owns the lock, and
+        // nobody below re-takes it.
         //
         // The same name on a DIFFERENT store is no lock at all, and that is what this line used to
         // be: `Cache::lock(...)` resolves the app default, while the model resolves the package's
@@ -97,7 +96,7 @@ final readonly class LegalDocumentReleaser
         // Count the grouped set directly — never hydrate the whole affected population just to
         // size it (this runs in the release Livewire request).
         //
-        // The 0 is EQUIVALENT under mutation: the watermark only bounds `id <=` in SQL, and an empty
+        // Any number in place of the 0 counts the same: the watermark only bounds `id <=` in SQL, and an empty
         // ledger counts nobody below any number.
         return $this->resolver->countForVersion($version, is_numeric($maxConsentId) ? (int) $maxConsentId : 0);
     }
@@ -179,6 +178,49 @@ final readonly class LegalDocumentReleaser
     }
 
     /**
+     * The acceptance sentence of each language's active version of $key, read before a release
+     * replaces it, so {@see sentenceChangedIn()} has something to compare with.
+     *
+     * @return array<string, string|null> locale => the sentence
+     */
+    public function sentencesBefore(string $key): array
+    {
+        $sentences = [];
+
+        foreach (LegalDocument::model()::query()->select(['locale', 'ui_wording'])->where('key', $key)->where('is_active', true)->get() as $row) {
+            $sentences[$row->locale] = $row->ui_wording;
+        }
+
+        return $sentences;
+    }
+
+    /**
+     * The languages of a release whose acceptance sentence differs from the version it replaced.
+     *
+     * The sentence is frozen into a version and copied into every consent given under it, so a
+     * release that changes it changes what subjects agree to, whatever its notice mode says about
+     * the text. It is reported, not refused: a deliberate change is legitimate. A language that
+     * had no version before has nothing to differ from, and one the release left unchanged was not
+     * released.
+     *
+     * @param  array<string, string|null>  $before  from {@see sentencesBefore()}, read before the release
+     * @param  Collection<int, LegalDocument>  $released
+     * @return list<string>
+     */
+    public function sentenceChangedIn(array $before, Collection $released): array
+    {
+        $changed = [];
+
+        foreach ($released as $row) {
+            if ($row->wasRecentlyCreated && array_key_exists($row->locale, $before) && $before[$row->locale] !== $row->ui_wording) {
+                $changed[] = $row->locale;
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
      * @param  list<string>  $locales
      * @return Collection<int, LegalDocument>
      */
@@ -229,8 +271,8 @@ final readonly class LegalDocumentReleaser
         // existing release the day it shipped a new field would be forcing a feature, not offering
         // one. Off by default; the notice simply carries no delta until someone turns it on.
         if ($mode->requiresNotice() && config('legal-consent.change_items.required', false)) {
-            // array_values() is EQUIVALENT under mutation, since blockingLocales() only iterates the locales.
-            // Static analysis needs the list its signature declares (measured 2026-09-14).
+            // array_values() changes nothing observable, since blockingLocales() only iterates the locales.
+            // It is there for the list its signature declares.
             $blocking = [...$blocking, ...$this->changeItems->blockingLocales($key, array_values(array_diff($locales, array_keys($blocking))))];
         }
 
@@ -272,13 +314,13 @@ final readonly class LegalDocumentReleaser
      * release stamps the derived answer onto that row whenever nobody gave one, and that is what
      * lets the screens release a text more than once.
      *
-     * A VERSION ON THE ROW IS AN ANSWER UNTIL IT HAS BEEN RELEASED WITH OTHER BYTES. A release
-     * leaves its own number on the row, and the next release used to read it as a deliberate
-     * answer: the text changed, the row still said 1.0.0, and the publisher refused "already exists
-     * with different content" with no field on either screen to type another number into. A
-     * consumer measured it: through the package's screens, every text could be released once. So a
-     * number that one of the released languages already carries with other bytes belongs to the
-     * previous release and is replaced. The same number over the same bytes stays. Pressing release
+     * A version on the row is an answer until it has been released with other bytes. A release
+     * leaves its own number on the row, and read as a deliberate answer that number would stop the
+     * next release of a changed text: the row still says 1.0.0, the publisher refuses "already
+     * exists with different content", and neither screen has a field to type another number into,
+     * which would leave every text releasable once. A number that one of the released languages
+     * already carries with other bytes therefore belongs to the previous release and is replaced.
+     * The same number over the same bytes stays. Pressing release
      * twice then publishes what is live again instead of minting a new version of an unchanged
      * text, which under a mode that gates would ask everybody to accept it once more.
      *

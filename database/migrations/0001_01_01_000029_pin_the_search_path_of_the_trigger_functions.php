@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Pushery\SQLens\Attributes\NoSqlOnDriver;
 
 /**
  * Pin the search_path of the six trigger functions this package installs on PostgreSQL.
@@ -22,7 +23,9 @@ use Illuminate\Support\Facades\DB;
  * create the functions. The two guards that can create their functions again carry the same
  * clause, so a re-install does not lose it.
  */
-return new class extends Migration
+return new
+#[NoSqlOnDriver('mysql', reason: 'the six trigger functions and their search_path exist on PostgreSQL only')]
+class extends Migration
 {
     /** @var list<string> */
     private const array FUNCTIONS = [
@@ -76,7 +79,7 @@ return new class extends Migration
     {
         $prefix = DB::connection()->getTablePrefix();
 
-        if (preg_match('/^\w*$/', $prefix) !== 1) {
+        if (preg_match('/^\w*\z/', $prefix) !== 1) {
             throw new RuntimeException("refusing to pin trigger function search paths for an unexpected table prefix: {$prefix}");
         }
 

@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Content\PublishedDocument;
+use Pushery\LegalConsent\Content\PublishedVersion;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Enums\DocumentType;
@@ -29,6 +30,7 @@ use Pushery\LegalConsent\Exceptions\NotObjectableException;
 use Pushery\LegalConsent\Exceptions\NotTerminableException;
 use Pushery\LegalConsent\Exceptions\NotWithdrawableException;
 use Pushery\LegalConsent\Exceptions\SubjectKeyTooLong;
+use Pushery\LegalConsent\Exceptions\SubjectWithoutKey;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use RuntimeException;
@@ -37,8 +39,7 @@ use RuntimeException;
  * The default headless consent core. Every record/withdraw appends exactly one
  * immutable ledger entry, snapshotting the active version's proof fields plus the
  * server-side context, then fires the matching event.
- */
-/**
+ *
  * Not `final`: the tamper-chain tail read is a `protected` seam ({@see latestChainedRow}) so a test
  * can force the stale read a concurrent writer sees and exercise the fork-retry deterministically.
  */
@@ -88,6 +89,11 @@ readonly class DefaultConsentManager implements ConsentManager
     public function published(string $documentKey, ?string $locale = null): ?PublishedDocument
     {
         return $this->reader->read($documentKey, $locale ?? $this->defaultLocale);
+    }
+
+    public function publishedVersion(string $documentKey, ?string $locale = null): ?PublishedVersion
+    {
+        return $this->reader->readVersion($documentKey, $locale ?? $this->defaultLocale);
     }
 
     public function registrationChecklist(?string $locale = null): array
@@ -562,7 +568,7 @@ readonly class DefaultConsentManager implements ConsentManager
             // standing to report, which is the whole reason it is here: a row was written, so
             // `accepted_major` is a real number rather than a permanent 0, and the difference
             // between it and `current_major` is exactly the "which version did they see" question
-            // a consumer asked for. `outstanding` stays false for it below — the state is reported,
+            // an application asks. `outstanding` stays false for it below — the state is reported,
             // nothing is enforced.
             ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing()
                 || RegistrationAcknowledgment::covers($document->key));
@@ -644,9 +650,17 @@ readonly class DefaultConsentManager implements ConsentManager
 
     public function history(Model $subject): array
     {
+        $subjectId = SubjectKey::for($subject);
+
+        // A subject without a key names nobody. Matched against `subject_id = null`, it would answer
+        // with every row of its type that was written without a key, none of which is its own.
+        if ($subjectId === null) {
+            return [];
+        }
+
         $rows = LegalConsent::model()::query()
             ->where('subject_type', (string) $subject->getMorphClass())
-            ->where('subject_id', SubjectKey::for($subject))
+            ->where('subject_id', $subjectId)
             ->orderBy('accepted_at')
             ->orderBy('id')
             ->get();
@@ -722,12 +736,20 @@ readonly class DefaultConsentManager implements ConsentManager
 
         $subjectId = SubjectKey::for($subject);
 
+        // A subject without a key, usually a model not saved yet, would get a row with no
+        // `subject_id`: one that names nobody, that no read for the subject finds, and that the
+        // retention sweep removes like the row of an erased subject. Erasure refuses such a subject,
+        // and so does the write.
+        if ($subjectId === null) {
+            throw SubjectWithoutKey::for((string) $subject->getMorphClass());
+        }
+
         // Checked HERE rather than left to the column, because the column answers differently on
         // every engine: SQLite keeps an over-long key, PostgreSQL and MySQL refuse it with a raw
         // SQLSTATE at the first write of the subject's life. One named refusal at the door is the
         // only version of this a consumer can act on — and it is the door every recorded consent
         // passes through, including the registration recorder and the untyped `record()`.
-        if ($subjectId !== null && mb_strlen($subjectId) > SubjectKeyTooLong::MAX_LENGTH) {
+        if (mb_strlen($subjectId) > SubjectKeyTooLong::MAX_LENGTH) {
             throw SubjectKeyTooLong::for((string) $subject->getMorphClass(), mb_strlen($subjectId));
         }
 
@@ -894,8 +916,7 @@ readonly class DefaultConsentManager implements ConsentManager
      * after a material change is meaningful for all three, and a guardian acts for a minor both
      * where a consent is asked for (Art. 8) and where a contract is (§ 107 BGB) — refusing either
      * would refuse a lawful row, which is the more expensive mistake in an append-only ledger.
-     */
-    /**
+     *
      * @param  bool  $acknowledgedByForm  the caller supplied the sentence the subject read, which is
      *                                    the only way an informational page reaches the ledger
      */
@@ -1066,7 +1087,7 @@ readonly class DefaultConsentManager implements ConsentManager
      * Eloquent model and leave the read path the reader calls the only one to use. One function,
      * both types, so the two sides cannot drift.
      */
-    public static function acceptanceFingerprint(LegalDocument|PublishedDocument $document): string
+    public static function acceptanceFingerprint(LegalDocument|PublishedDocument|PublishedVersion $document): string
     {
         [$contentHash, $uiWording] = $document instanceof LegalDocument
             ? [$document->content_hash, $document->ui_wording]

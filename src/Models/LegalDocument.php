@@ -15,12 +15,10 @@ use Illuminate\Support\Facades\DB;
 use Override;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
-use Pushery\LegalConsent\Exceptions\LegalDocumentFrozenException;
-use Pushery\LegalConsent\Exceptions\LegalDocumentInEvidenceException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Models\Concerns\GuardsPublishedDocument;
 use Pushery\LegalConsent\Models\Concerns\Replaceable;
 use Pushery\LegalConsent\Support\ActivationLock;
-use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\TenantContext;
 
@@ -76,6 +74,7 @@ use Pushery\LegalConsent\Support\TenantContext;
 class LegalDocument extends Model
 {
     use BelongsToTenant;
+    use GuardsPublishedDocument;
     use Replaceable;
 
     protected $table = 'legal_documents';
@@ -102,108 +101,6 @@ class LegalDocument extends Model
      * @var list<string>
      */
     public const array MUTABLE_AFTER_PUBLISH = ['is_active', 'updated_at', 'notified_at', 'objection_closed_at'];
-
-    #[Override]
-    protected static function booted(): void
-    {
-        // Keep the legacy boolean `requires_reconsent` and the first-class `notice_mode`
-        // consistent on every insert, whichever the caller sets. `notice_mode` is the source of
-        // truth; a caller that still sets only the boolean (pre-v0.3.0 code) gets the mapped mode,
-        // and a caller that sets only the mode gets the derived boolean — so a notice-mode query
-        // and a legacy `requires_reconsent` query can never disagree.
-        //
-        // This paragraph used to sit ABOVE `MUTABLE_AFTER_PUBLISH`, stacked on a second
-        // docblock. PHP attaches only the LAST one to a declaration, so it was invisible to
-        // reflection and to every editor — describing this hook from a place nothing connects to
-        // it, while the constant it appeared to document said something else entirely.
-        self::creating(function (self $document): void {
-            $mode = $document->notice_mode;
-
-            if ($mode instanceof NoticeMode) {
-                $document->requires_reconsent = $mode->gates();
-
-                return;
-            }
-
-            $mode = NoticeMode::fromLegacyReconsent((bool) $document->requires_reconsent);
-            $document->notice_mode = $mode;
-            $document->requires_reconsent = $mode->gates();
-        });
-
-        // A published version is frozen proof (EDPB 05/2020 Rz. 108): refuse any update that
-        // touches a column outside MUTABLE_AFTER_PUBLISH, in PHP, before any SQL is issued — a
-        // clean typed failure on an accidental `$doc->content = …; $doc->save()`. The database
-        // trigger (migration 000011) is the defense-in-depth layer that also catches the paths
-        // this hook cannot see: the two sweeps write via saveQuietly() (which bypasses events),
-        // and raw DB::table()/psql updates never reach a model at all.
-        self::updating(function (self $document): void {
-            // array_values changes nothing observable: LegalDocumentFrozenException::for() sorts
-            // the list, which re-indexes it, and only ever implodes it into its message.
-            $forbidden = array_values(array_diff(array_keys($document->getDirty()), self::MUTABLE_AFTER_PUBLISH));
-
-            if ($forbidden !== []) {
-                throw LegalDocumentFrozenException::for($forbidden);
-            }
-        });
-
-        // Any write to this table can change WHICH versions are enforceable, so it drops the gate's
-        // cached set. Tying invalidation to the publish event alone would leave every other path
-        // stale — an activate(), a seeder, a consumer inserting a row by hand — and a stale
-        // enforceable set is a gate that fires late or not at all. The after-commit listener still
-        // exists for the release transaction's ordering; this is the net underneath it.
-        $flush = static function (self $document): void {
-            $cache = app(EnforceableDocumentCache::class);
-
-            // The row's OWN locale first, and only a delete needs it: `flushAll()` discovers
-            // locales from the declared list plus the ones currently published, and a deleted row
-            // is in neither by the time the listener runs. With `legal-consent.locales` undeclared
-            // — the one configuration that lets a document be published in ANY language, which is
-            // why this file's sibling guard exists — deleting the last document of a locale left
-            // its set cached for the full TTL, so the gate kept enforcing a version that no longer
-            // existed. The model still carries the attribute here; the table no longer does.
-            // The `!== ''` is EQUIVALENT under mutation: `locale` is a NOT NULL column no write path leaves
-            // empty, and flushing '' would drop nothing. It keeps an empty value from reading as a locale.
-            if ($document->locale !== '') {
-                $cache->flush($document->locale);
-            }
-
-            // EQUIVALENT under mutation for the row this listener was called with: every set is keyed
-            // per locale, and resolvedFor() walks a chain by reading each locale's own set, so the
-            // flush above already reaches every reader this write can change. Measured 2026-09-14
-            // through a locale chain. It stays as the wider net the comment above `$flush` describes.
-            $cache->flushAll();
-        };
-
-        self::saved($flush);
-        self::deleted($flush);
-
-        // The text a subject was shown exists exactly ONCE, here, in `content`. The ledger row
-        // beside it holds `content_hash` and the acceptance sentence — a fingerprint verifies a
-        // text somebody produces, it cannot produce one. So deleting a version that consents point
-        // at destroys the Art. 7(1) evidence for every one of them, silently: the rows survive,
-        // history() still answers, and only a supervisory authority asking "what exactly did they
-        // agree to?" finds that nothing can answer it any more.
-        //
-        // Refused, rather than warned about, because it cannot be undone and because the ledger's
-        // subordinate tables (legal_change_sets / legal_change_items) have carried BEFORE DELETE
-        // triggers since they existed — the load-bearing table was the unprotected one. Retirement
-        // is `is_active = false`, which is what the column is for and what every retirement path in
-        // the package already uses.
-        self::deleting(function (self $document): void {
-            $consents = $document->consentsInEvidence();
-
-            if ($consents > 0) {
-                // The three casts are for the declared string parameters and change no value: key,
-                // version and locale are NOT NULL string columns, and this model casts none of them.
-                throw LegalDocumentInEvidenceException::for(
-                    (string) $document->key,
-                    (string) $document->version,
-                    (string) $document->locale,
-                    $consents,
-                );
-            }
-        });
-    }
 
     /**
      * How many ledger rows prove themselves against THIS version.
@@ -253,6 +150,30 @@ class LegalDocument extends Model
     public function scopeActive(Builder $query): void
     {
         $query->where('is_active', true);
+    }
+
+    /**
+     * The active version of a (key, locale), and every earlier version of the same major.
+     *
+     * A later version of a major replaces the active row without ending what an earlier version of
+     * that major set in motion: the notices it still owes and the objection window it opened. A new
+     * major is what ends them, which is why the match is on the major and not on the key.
+     *
+     * @param  Builder<LegalDocument>  $query
+     */
+    public function scopeOfTheActiveMajor(Builder $query): void
+    {
+        $table = $this->getTable();
+
+        $query->where(static fn (Builder $versions): Builder => $versions
+            ->where('is_active', true)
+            ->orWhereExists(static fn (QueryBuilder $active): QueryBuilder => $active
+                ->from($table.' as active_version')
+                ->whereColumn('active_version.key', $table.'.key')
+                ->whereColumn('active_version.locale', $table.'.locale')
+                ->whereColumn('active_version.tenant_id', $table.'.tenant_id')
+                ->whereColumn('active_version.major_version', $table.'.major_version')
+                ->where('active_version.is_active', true)));
     }
 
     /**

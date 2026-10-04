@@ -79,26 +79,10 @@
              where no component supplies it. A constant is the honest answer there — a render with
              no component behind it has no replacement to report.
 
-             ONLY A PERSON'S EDIT REACHES `body`. The editor writes its own serialization into the
-             field once it has loaded and reports that as an `input` event, before anybody has done
-             anything. Bound directly, that became a pending change to `body`, and the next save
-             stored the engine's version of the text over the stored bytes: wherever the two
-             differed, the draft fell back to unreviewed and to authored, over an edit nobody made.
-             A consumer lost a table that way, by opening a document and saving it.
-
-             So the wrapper holds back an `input` event that nothing a person did preceded: no key,
-             no pointer, no paste, no drop, no `beforeinput`. It stops the event on its way down,
-             before the binding on the field sees it. A trusted `input` passes on its own, which is
-             what a browser that types into the plain field without the engine produces. Every
-             expression here is one the CSP build parses; the audit in the suite holds that. --}}
-        <div wire:ignore wire:key="lc-editor-body-{{ $bodyNonce ?? 0 }}"
-            x-data="{ edited: false }"
-            x-on:keydown.capture="edited = true"
-            x-on:pointerdown.capture="edited = true"
-            x-on:paste.capture="edited = true"
-            x-on:drop.capture="edited = true"
-            x-on:beforeinput.capture="edited = true"
-            x-on:input.capture="edited || $event.isTrusted || $event.stopPropagation()">
+             ONLY A PERSON'S EDIT REACHES `body`. From 2.56.0, the floor of these views, the editor
+             no longer reports its own serialization of the text as input when it loads, so a save
+             without an edit stores the bytes the draft was opened with. --}}
+        <div wire:ignore wire:key="lc-editor-body-{{ $bodyNonce ?? 0 }}">
             {{-- The current draft body seeds the editor via :value (the component reads the `value`
                  prop, never a slot — a slot here would silently render nothing on edit). Content
                  flows back through a plain wire:model: WireKit routes it to the inner

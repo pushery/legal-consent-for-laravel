@@ -19,14 +19,14 @@ use Pushery\LegalConsent\Content\LegalDocumentSource;
  *
  * ## Why it is three states collapsed into a predicate, and which two
  *
- * The question is "is the source something OTHER than the draft store", never "is there one". A
- * document with no resolvable source is a misconfiguration that already has owners — the draft
- * pre-flight reports it as a missing draft, the publisher as a missing source — and turning that
- * unknown into this refusal would rename an error a caller is already catching. Measured once
- * before: a suite configuring no registry at all had a release start answering
- * `InvalidArgumentException` where it used to answer `LegalReleaseNotReady`.
+ * The question is "is the source something other than the draft store", never "is there one". A
+ * document with no resolvable source is a misconfiguration that is already reported elsewhere —
+ * the draft pre-flight reports it as a missing draft, the publisher as a missing source — and
+ * turning that unknown into this refusal would rename an error a caller is already catching: a
+ * release start would answer `InvalidArgumentException` where it answers `LegalReleaseNotReady`.
  *
- * So an unresolvable source answers FALSE here, deliberately, and stays with the owner it has.
+ * So an unresolvable source answers false here, deliberately, and stays with the two places that
+ * already report it.
  */
 final readonly class DocumentSourceKind
 {

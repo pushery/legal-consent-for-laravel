@@ -36,13 +36,10 @@ enum ChangeItemType: string
     /** Narrower position: a right limited, a liability excluded, an entitlement reduced. */
     case Restricted = 'restricted';
 
-    /**
-     * THE `true` IN THE TWO `in_array()` CALLS BELOW IS UNOBSERVABLE, AND THAT IS NOT A REASON
-     * TO DROP IT. Enum cases are singletons, so a loose comparison between two of them already
-     * decides on identity -- measured: dropping the strict flag from either call leaves the whole
-     * tree green. It earns its place the moment either side stops being pure enum cases, which is
-     * a one-line edit away, and it costs nothing until then.
-     */
+    // The strict flag in the two `in_array()` calls below changes nothing while both sides are enum
+    // cases, which are singletons and already compare by identity. It stays so that each comparison
+    // remains an identity check if either side ever stops being one.
+
     /**
      * Does this entry, on its own, make the change disadvantageous to the subject?
      *

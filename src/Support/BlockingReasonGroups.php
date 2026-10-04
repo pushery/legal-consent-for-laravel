@@ -9,23 +9,21 @@ use Pushery\LegalConsent\Enums\BlockingReason;
 /**
  * The locales blocking a release, collected under the reason they share.
  *
- * ## Why it groups at all, and the answer is HEIGHT rather than width
+ * ## Why it groups at all, and the answer is height rather than width
  *
- * A consumer reported the admin grid's release column as sitting outside the frame on the right, and
- * proposed moving it to a full row under the document. Measured in a browser at 1728 px with seven
- * locales all blocked: the cell was 486 px wide, nothing in it overflowed, and the table's
- * `scrollWidth` equalled its width — there was no frame to sit outside of.
+ * The release column fits its cell: at 1728 px with seven locales all blocked, the cell is 486 px
+ * wide, nothing in it overflows, and the table's `scrollWidth` equals its width. A full row under
+ * the document would not help.
  *
- * What there WAS, was 210 px of height per blocked row, because the refusal listed one full sentence
- * per language. Six documents then make a grid showing two rows per screen, and the proposed fix
- * would have made that worse. Grouped, the same row is 69-92 px.
+ * Its height is what grows. Listed one full sentence per language, a blocked row is 210 px tall, so
+ * six documents make a grid that shows two rows per screen. Grouped by reason, the same row is
+ * 69-92 px.
  *
  * ## Why here and not in the component
  *
- * It is a pure function of the blocking map, and BOTH shipped manager stubs render it. Held in the
- * grid's row data instead, it would have become a seventh key that six hand-built test fixtures
- * state and a seventh forgets; held in each view, it would be two copies of one rule, which is how
- * the two stubs have drifted before.
+ * It is a pure function of the blocking map, and both shipped manager stubs render it. Held in the
+ * grid's row data instead, it would be one more key every row has to carry; held in each view, it
+ * would be two copies of one rule, and two copies drift.
  *
  * ## Keyed by the LABEL, and the locales keep their order
  *

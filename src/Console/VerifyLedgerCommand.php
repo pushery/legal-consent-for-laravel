@@ -161,7 +161,7 @@ final class VerifyLedgerCommand extends Command
                 }
             }
 
-            // The '' fallback is EQUIVALENT under mutation: chainedRows() reads only rows whose
+            // The '' fallback is never taken: chainedRows() reads only rows whose
             // prev_record_hash is not null, and the column is a string, so it is never taken.
             $stored = is_string($row->prev_record_hash ?? null) ? $row->prev_record_hash : '';
 
@@ -176,7 +176,7 @@ final class VerifyLedgerCommand extends Command
 
             $expectedPrev = $chain->hashRow($row);
 
-            // The cast and the 0 fallback are EQUIVALENT under mutation, for the same reason the
+            // The cast and the 0 fallback change nothing observable, for the same reason the
             // three other id reads in this file say so: `legal_consents.id` is a NOT NULL bigint,
             // so a driver hands back an int or a numeric string and never anything else. The cast
             // is what makes this key and {@see LedgerRecordMacs::newestFor()}'s key the same
@@ -202,8 +202,8 @@ final class VerifyLedgerCommand extends Command
         // written through the manager: it is a direct insert. Pre-feature rows have lower ids and
         // are legitimately unchained, so they are not flagged.
         $firstChainedId = DB::table('legal_consents')->whereNotNull('prev_record_hash')->min('id');
-        // Seeded at 0 and only ever read as `> 0`, so a seed of -1 is EQUIVALENT under mutation. A
-        // seed of 1 is not, and the report arm for an empty ledger holds that.
+        // Seeded at 0 and only ever read as `> 0`, so a seed of -1 would read the same. A seed of 1
+        // would not.
         $unprotected = 0;
 
         if ($firstChainedId !== null) {
@@ -434,9 +434,8 @@ final class VerifyLedgerCommand extends Command
         $id = $marker->boundary_id ?? null;
         $proof = $marker->proof ?? null;
 
-        // Both fallbacks are EQUIVALENT under mutation: boundary_id and proof are NOT NULL columns,
-        // so neither is ever taken. The cast is not: through a connection that stringifies fetched
-        // values the id arrives as a string, and a test holds that.
+        // Neither fallback is ever taken: boundary_id and proof are NOT NULL columns. The cast is
+        // needed: through a connection that stringifies fetched values the id arrives as a string.
         return new LedgerRootBoundary(
             is_int($id) || is_string($id) ? (int) $id : 0,
             is_string($proof) ? $proof : '',
@@ -454,7 +453,7 @@ final class VerifyLedgerCommand extends Command
      */
     private function rootProofBreak(LedgerHashChain $chain, stdClass $row, ?LedgerRootBoundary $boundary): array
     {
-        // The '' fallback is EQUIVALENT under mutation: the walk reads only rows whose
+        // The '' fallback is never taken: the walk reads only rows whose
         // subject_token is not null, so it is never taken.
         $token = is_string($row->subject_token ?? null) ? $row->subject_token : '';
         $expected = $chain->rootProof($token);
@@ -471,7 +470,7 @@ final class VerifyLedgerCommand extends Command
             return [];
         }
 
-        // The cast and the 0 fallback are EQUIVALENT under mutation: an id always arrives as an int
+        // The cast and the 0 fallback change nothing observable: an id always arrives as an int
         // or a string, so the fallback is never taken, and a numeric string compares with the
         // boundary and prints exactly as its int does.
         $rowId = is_int($row->id) || is_string($row->id) ? (int) $row->id : 0;
@@ -582,8 +581,7 @@ final class VerifyLedgerCommand extends Command
         // different values as one.
         //
         // Only MySQL needs it. PostgreSQL's default collation is deterministic, so equality there
-        // is byte-wise already, and SQLite compares BINARY unless a column declares otherwise —
-        // which is why the defect was invisible in a suite that runs on SQLite.
+        // is byte-wise already, and SQLite compares BINARY unless a column declares otherwise.
         $binaryGrouping = DB::connection()->getDriverName() === 'mysql';
         $columns = ['subject_type', 'subject_id', 'tenant_id', 'subject_token'];
 
@@ -612,7 +610,7 @@ final class VerifyLedgerCommand extends Command
         $subjectsPerToken = [];
 
         foreach ($pairs as $pair) {
-            // The two casts and the tenant's '' fallback are EQUIVALENT under mutation: tenant_id is a
+            // The two casts and the tenant's '' fallback change nothing observable: tenant_id is a
             // NOT NULL string column, and both values only ever reach a concatenation or `%s`, which
             // print an int the same way. The casts stay so `id` is the string its shape declares.
             $type = is_string($pair->subject_type) ? $pair->subject_type : '?';

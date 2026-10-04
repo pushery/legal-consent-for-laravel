@@ -94,7 +94,8 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
         $versions = LegalDocument::model()::query()
             ->withoutGlobalScope(TenantScope::class) // close every tenant's due windows
-            ->where('is_active', true)
+            // A window stays open across a later version of the same major, so it is closed there.
+            ->ofTheActiveMajor()
             ->where('notice_mode', NoticeMode::DeemedConsent->value)
             ->whereNotNull('objection_deadline')
             ->where('objection_deadline', '<=', $now)
@@ -268,7 +269,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
         // A subject with no key cannot own a proof row, so it can never be proven — the resolver
         // only ever hydrates persisted models, but stringifying `mixed` is not something to assume.
-        // The '' is EQUIVALENT under mutation for the same reason: no keyless subject reaches this.
+        // The '' is never taken for the same reason: no keyless subject reaches this.
         return $subject->getMorphClass().'#'.(is_scalar($key) ? $key : '');
     }
 }

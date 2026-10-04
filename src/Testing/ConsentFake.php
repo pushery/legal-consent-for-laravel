@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use PHPUnit\Framework\Assert;
 use Pushery\LegalConsent\Content\AcceptanceWording;
 use Pushery\LegalConsent\Content\PublishedDocument;
+use Pushery\LegalConsent\Content\PublishedVersion;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Enums\DocumentType;
@@ -317,7 +318,7 @@ final class ConsentFake implements ConsentManager
                 'version' => '1.0.0',
                 'title' => $key,
                 'ui_wording' => $this->acceptanceWordingFor($key, $locale),
-                // Swapping the halves is EQUIVALENT under mutation: the fingerprint is only ever compared
+                // Swapping the halves changes nothing observable: the fingerprint is only ever compared
                 // with itself, and either order is stable and distinct per key and locale.
                 'content_hash' => hash('sha256', $key.'|'.$locale),
                 // An arranged document is mandatory and still owed — the two reads a gate makes,
@@ -429,6 +430,15 @@ final class ConsentFake implements ConsentManager
         return $this->published[$documentKey.'|'.($locale ?? $this->defaultLocale())] ?? null;
     }
 
+    public function publishedVersion(string $documentKey, ?string $locale = null): ?PublishedVersion
+    {
+        // Answers from what `publishes()` declared, so one arrangement serves both reads and the two
+        // cannot disagree about which version a page is showing.
+        $document = $this->published($documentKey, $locale);
+
+        return $document instanceof PublishedDocument ? PublishedVersion::fromDocument($document) : null;
+    }
+
     /**
      * @return list<RegistrationChecklistItem>
      */
@@ -475,7 +485,7 @@ final class ConsentFake implements ConsentManager
 
     private function identify(Model $subject): string
     {
-        // Reordering the parts is EQUIVALENT under mutation, since the identity is only ever used as a
+        // Reordering the parts changes nothing observable, since the identity is only ever used as a
         // key. Dropping the subject's key from it is not.
         return $subject->getMorphClass().'|'.(RecordedConsent::keyOf($subject) ?? 'null');
     }

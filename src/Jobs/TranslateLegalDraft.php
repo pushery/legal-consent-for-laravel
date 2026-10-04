@@ -29,10 +29,9 @@ use Throwable;
  *
  * ## Why this exists
  *
- * The editor called the translator inline. A consumer measured that ending in a 500 twice in one day
- * on a privacy notice — a document this package renders to about 15 kB, which is an ordinary length
- * for one and a long time for a language model. The request has a timeout; a translation does not
- * care about it.
+ * Called inline, the translator runs inside the request. A privacy notice renders to about 15 kB,
+ * an ordinary length for one and a long time for a language model, and a translation that outlasts
+ * the request's timeout ends it in a 500.
  *
  * ## The translator is a SEAM, so its duration is not this package's to know
  *

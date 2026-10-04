@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use BackedEnum;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
+use Pushery\LegalConsent\Exceptions\UnresolvableTenant;
+use Stringable;
 
 /**
  * Optional multi-tenancy (config `tenancy`). When enabled, legal documents and consents
@@ -19,6 +22,10 @@ use Illuminate\Database\Eloquent\Model;
  * `current()` returns '' when tenancy is off, when no resolver is set, or when the resolver
  * yields nothing (a system/console context) — '' is the shared-tenant bucket, so an app that
  * never enables tenancy behaves exactly as before (every row shares '').
+ *
+ * A resolver answers with an int or a string. A backed enum counts as its value and a Stringable,
+ * such as a UUID object, as its string. Any other answer, a model among them, is refused with
+ * {@see UnresolvableTenant}: read as no tenant, it would put every tenant into the shared bucket.
  *
  * A resolver that reads the signed-in user also yields nothing for a guest, and a registration is
  * made by one: the new account is not signed in while its consents are recorded. Those rows would
@@ -82,9 +89,7 @@ final class TenantContext
             return '';
         }
 
-        $tenant = ($this->subjectResolver)($subject);
-
-        return is_int($tenant) || is_string($tenant) ? (string) $tenant : '';
+        return $this->idFrom(($this->subjectResolver)($subject), 'resolveSubjectUsing');
     }
 
     /**
@@ -96,9 +101,30 @@ final class TenantContext
             return '';
         }
 
-        $tenant = ($this->resolver)();
+        return $this->idFrom(($this->resolver)(), 'resolveUsing');
+    }
 
-        return is_int($tenant) || is_string($tenant) ? (string) $tenant : '';
+    /**
+     * A resolver's answer as a tenant id, with null as the shared bucket.
+     *
+     * A model is refused although PHP counts it as Stringable: its string form is its JSON, which
+     * changes whenever one of its attributes does, so it would move the tenant's rows each time.
+     */
+    private function idFrom(mixed $tenant, string $resolver): string
+    {
+        if ($tenant === null || is_int($tenant) || is_string($tenant)) {
+            return (string) $tenant;
+        }
+
+        if ($tenant instanceof BackedEnum) {
+            return (string) $tenant->value;
+        }
+
+        if ($tenant instanceof Stringable && ! $tenant instanceof Model) {
+            return (string) $tenant;
+        }
+
+        throw UnresolvableTenant::from($tenant, $resolver);
     }
 
     /**

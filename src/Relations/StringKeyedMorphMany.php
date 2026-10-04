@@ -16,10 +16,10 @@ use Pushery\LegalConsent\Support\SubjectKey;
  * native `uuid` on PostgreSQL.
  *
  * `subject_id` is a varchar since the column was widened for UUID and ULID subjects. That is right
- * for the ledger, and it left the two relation forms that compare the column inside the SQL text
+ * for the ledger, and it leaves the two relation forms that compare the column inside the SQL text
  * broken on PostgreSQL, which has no `varchar = integer`, `bigint = varchar` or `uuid = varchar`
- * operator. Measured in a consumer on 0.26.1 with a `bigint` user key: the lazy
- * `$user->legalConsents()` worked, `User::with('legalConsents')` failed with
+ * operator. With a `bigint` user key and a plain `morphMany`, the lazy `$user->legalConsents()`
+ * works, `User::with('legalConsents')` fails with
  * `operator does not exist: character varying = integer`, and `User::whereHas('legalConsents')`
  * with `operator does not exist: bigint = character varying`.
  *

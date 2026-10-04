@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Override;
 use Pushery\LegalConsent\Enums\NoticeMode;
-use Pushery\LegalConsent\Exceptions\LedgerImmutableException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
+use Pushery\LegalConsent\Models\Concerns\RecordIsAppendOnly;
 use Pushery\LegalConsent\Models\Concerns\Replaceable;
 
 /**
@@ -45,6 +45,7 @@ use Pushery\LegalConsent\Models\Concerns\Replaceable;
 class LegalNotice extends Model
 {
     use BelongsToTenant;
+    use RecordIsAppendOnly;
     use Replaceable;
 
     protected $table = 'legal_notices';
@@ -75,18 +76,6 @@ class LegalNotice extends Model
     public function document(): BelongsTo
     {
         return $this->belongsTo(LegalDocument::model(), 'document_id');
-    }
-
-    #[Override]
-    protected static function booted(): void
-    {
-        self::creating(function (LegalNotice $notice): void {
-            $notice->created_at ??= CarbonImmutable::now();
-        });
-
-        self::updating(function (): never {
-            throw LedgerImmutableException::onUpdate();
-        });
     }
 
     /**

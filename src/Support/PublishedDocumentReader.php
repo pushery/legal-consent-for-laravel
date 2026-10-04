@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Closure;
 use Pushery\LegalConsent\Content\PublishedDocument;
+use Pushery\LegalConsent\Content\PublishedVersion;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
@@ -33,9 +35,29 @@ final readonly class PublishedDocumentReader
 
     public function read(string $key, string $locale): ?PublishedDocument
     {
-        $row = $this->activeRow($key, $locale) ?? $this->fallbackFor($key, $locale);
+        $row = $this->activeRow($key, $locale)
+            ?? $this->fallbackFor($key, $locale, fn (string $candidate): ?LegalDocument => $this->activeRow($key, $candidate));
 
         return $row instanceof LegalDocument ? PublishedDocument::fromRow($row) : null;
+    }
+
+    /**
+     * The version {@see read()} finds, without its text.
+     *
+     * Read from the set of active documents the consent gate reads ({@see EnforceableDocumentCache}),
+     * so it shares that set's invalidation: a publish flushes it, a short TTL covers a scheduled
+     * boundary passing, and `legal-consent:cache-flush` covers a write made outside the package. A
+     * form that shows an acceptance sentence on every render pays no query for it after the first,
+     * and the fallback is the one the text follows.
+     */
+    public function readVersion(string $key, string $locale): ?PublishedVersion
+    {
+        $cache = app(EnforceableDocumentCache::class);
+        $cached = static fn (string $candidate): ?LegalDocument => $cache->activeFor($candidate)->firstWhere('key', $key);
+
+        $row = $cached($locale) ?? $this->fallbackFor($key, $locale, $cached);
+
+        return $row instanceof LegalDocument ? PublishedVersion::fromRow($row) : null;
     }
 
     /**
@@ -54,15 +76,17 @@ final readonly class PublishedDocumentReader
      *
      * The type is read from the ROW, not from the config registry: a contract published only in
      * `de` stays invisible under an `en` URL, exactly as before.
+     *
+     * @param  Closure(string): ?LegalDocument  $rowIn  the active row of this key in a locale
      */
-    private function fallbackFor(string $key, string $locale): ?LegalDocument
+    private function fallbackFor(string $key, string $locale, Closure $rowIn): ?LegalDocument
     {
         foreach (RegistrationLocaleChain::resolve($locale, $this->defaultLocale) as $candidate) {
             if ($candidate === $locale) {
                 continue;
             }
 
-            $row = $this->activeRow($key, $candidate);
+            $row = $rowIn($candidate);
 
             if ($row instanceof LegalDocument && in_array($candidate, SourceLanguageFallback::standInLocales($key, $row->type, $locale, $this->defaultLocale), true)) {
                 return $row;

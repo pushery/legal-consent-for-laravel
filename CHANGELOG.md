@@ -4,6 +4,94 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.44.0] - 2026-10-04
+
+### Added
+
+- **`legal-consent:publish --locales=de,en` publishes the languages of a document together.** One transaction, one notice mode, all or none. A change of mode between two versions, `--editorial` to `--info` for example, is refused one language at a time, because every language of a version carries the same mode; for a Markdown source there was no command that could make it. The refusal now names this command, and `--dry-run` previews the joint publish with the same guards.
+
+- **Publishing names a changed acceptance sentence.** The sentence is frozen into a version and copied into every consent given under it, and moving a document from Markdown to the drafts store changed it without a word, because the drafts store takes it from the translation files rather than from the front matter. `legal-consent:publish`, its `--all` and `--locales` forms and every `--dry-run` now print the old and the new sentence whenever a version changes it, and a release from the admin screens names the languages whose sentence changed in its status line. The guide to managing legal texts says how to keep your own sentence when you move a document.
+
+- **`legal-consent:verify-documents` reports a legal text that went live as a placeholder.** An active version on `0.0.0`, or one whose text, title or acceptance sentence carries a placeholder marker, is named with its key, locale and version. The markers come from the new `placeholder_markers` key, `['LEGAL-PLACEHOLDER']` by default. A placeholder is a warning; with `--placeholders-fail` it fails the run, so a release check can keep a placeholder from reaching a launch even when the text was written in the editor and never existed as a file.
+
+- **`LegalHtmlSanitizer::allowedElements()` and `LegalHtmlSanitizer::allowedAttributes()` return what a sanitized text keeps.** An application that tests its rich-text editor against the sanitizer can read the list from the package instead of copying it, and the test follows the package when the list grows. The two readers return the lists the sanitizer enforces; its behavior does not change.
+
+- **`Consent::publishedVersion($key, $locale)` reads a published version without its text.** A form that shows the acceptance sentence on every page needs the sentence, the hash, the version and the type, and `published()` read the whole row, text included, from the database on every call. The new read answers from the cached set of active documents the consent gate already reads, so it costs no query after the first, follows the same language fallback as the text, and is refreshed by every write to the documents table through the package. It returns a `PublishedVersion` with `uiWording` and `acceptanceFingerprint()`. `Consent::fake()` answers it from what the fake publishes.
+
+### Changed
+
+- **Comments in the shipped source give the reason in terms of the code.** Comments that described how a line was tested, who reported a problem or which package a solution came from now say why the line is written that way, for example a column that is never null or a caller that never reads a key.
+
+- **A contract or a consent is released in the languages that are ready, and a language left out keeps the version its readers accepted.** A release from the admin screens covered every configured language of a document that binds somebody, so one discarded or unreviewed translation held the release back until it was written again. It now covers every language whose draft is reviewed and matches its source, and always the source language, as it already did for an informational page. A language left out stays on the version it has live, so nobody is bound in a language they did not read: the gate reads the version of the reader's language, and a change notice goes to the people who agreed in a language that changed. The manager names the languages a release leaves out beside the button and in the confirmation dialog. When the source language is not ready, nothing is released.
+
+- **A change notice writes its deadline and its effective date the way its reader writes a date.** "bis zum 30. September 2026" in German, "by September 30, 2026" in English, and so on in each of the seven languages, where every notice wrote the ISO form before. In a notice of a deemed consent the deadline is the core of the mail. The `toArray()` payloads of the notifications keep the ISO form, because a program reads those. A notice subject that carries the effective date (`notice_mail.subject_effective_date`) writes it the same way. In a language the date library has no data for, the ISO date stands in, so a deadline never goes out blank.
+
+- **The WireKit views are served from `pushery/wirekit` 2.56.0.** From that release the kit's editor no longer reports its own version of a text as input when it loads, so opening a draft and saving it stores the text it was opened with, and the view no longer wraps the editor in an element that held that input back. With 2.49.x to 2.55.x installed, the default `auto` variant now serves the plain views; raise your constraint to `^2.56.0` to keep the WireKit ones.
+
+- **The two hourly sweeps hold their overlap lock for 55 minutes instead of 120.** `legal-consent:dispatch-notices` and `legal-consent:close-objection-windows` run every hour, and a run that died holding its lock (a SIGKILL, an OOM, a lost host) kept the next hourly sweep from running as well. The lock now expires inside the hour. A run that takes longer than 55 minutes is overtaken by one that resumes: the notice sweep skips subjects that carry a proof row or whose notice is on its way, and the objection sweep deems nobody twice. The opt-in daily `legal-consent:prune` keeps its 120 minutes.
+
+- **`legal-consent:doctor` says in one line that nothing is published yet.** A freshly migrated database, a CI database among them, used to get one line for every combination of document and locale, which read like a finding about the content: "Nothing is published yet: 5 documents × 7 locales, 35 combinations without a version." The combinations are still listed one by one once part of the matrix is published. The advice now follows the source: `legal-consent:publish --all --only-missing --editorial` for a source that holds its text, and writing and releasing the text for a source written by people, such as the drafts store. The exit code is unchanged.
+
+### Documentation
+
+- **The bundled Boost skill speaks only to the application it is loaded into.** Its introduction and the last item of its list of mistakes to avoid each carried a sentence meant for whoever writes the skill, and both are gone.
+
+- **The retention page says that a failed ledger write puts the person into your log.** Laravel reports the failed statement with every bound value filled in, the IP address, the user agent, the subject's key and its `subject_token` among them, and `Consent::forget()` cannot reach a log. From `laravel/framework` 13.27.0 on, `mask_bindings_in_exception_messages` on the connection keeps the placeholders instead; the page shows where to set it.
+
+- **`SECURITY.md` says how to keep this package's dependencies safe in your application.** It described the update automation of the development repository, which never reaches an application: the versions there come from its own `composer.lock`, kept current with `composer update` and checked with `composer audit`.
+
+### Fixed
+
+- **`Consent::forget()` says what stays in a notice body, and the delivery proof warns when a body names its recipient.** The contract promised that everything naming the person goes, while a notice row keeps its body: the text that was sent, hashed into a row nobody can rewrite. The shipped notices build it from the document alone, so it names nobody, but a notification class of your own may write the recipient into a line, and nothing said that the line survives an erasure. The contract and the retention guide now say so, and the proof logs a warning, once per notification class and process, when a body depends on its recipient.
+
+- **A later version of a major keeps what the major asked for.** The gate, the banner, the notice sweep and `legal-consent:close-objection-windows` read the notice mode of the active version alone. An editorial fix or an info-only change published inside a major that went out as an active re-consent therefore ended its gate for everyone who had not accepted it yet, and a correction published while a change's notices were still going out, or while its objection window was open, ended those as well. The re-consent of a major now gates the whole major from the effective date of the version that opened it, the banner keeps an announced change until its date, and the sweep and the window close read every version of the active major.
+
+- **A model mapped in `legal-consent.models` keeps the package's write guards even when its `booted()` does not call its parent.** The guards that keep a ledger row from changing, set its `created_at`, keep a version's notice mode in step with its legacy boolean, refuse a rewrite of a published version or the deletion of one that consents rest on, and freeze a published change description were registered in `booted()`. Laravel calls only the concrete class's `booted()`, so a subclass that declared its own, the way Laravel's documentation registers a global scope, lost all of them without a sign. They are registered by trait boot methods now, which run for every class in the hierarchy.
+
+- **A registration retried after its transaction rolled back records its consent.** In a queue worker or a console command, where one request object serves many jobs, the mark that keeps the two registration paths from recording one account twice was kept by the account's key and outlived the rollback. A retry with the same key then created the account and wrote no consent record. The mark now belongs to the model instance both paths are handed, so a retry, which builds a new instance, records, and a long-lived process no longer collects marks.
+
+- **The calendar months of § 675g BGB and the EECC are counted backward from the day the change takes effect, which itself is not counted.** A notice reaching the reader on 1 July counted as two months before a change in force on 1 September. Counted the way §§ 187 and 188 BGB count a period that runs backward, the two months end at the start of 1 July, so the last day in time is 30 June. Publishing and closing an objection window apply the same rule, so a deemed-consent notice delivered on that one day too late no longer binds by silence.
+
+- **A version announced on a day already past freezes the period its readers actually got.** The lead-time check has measured such an announcement from the day of publishing since 0.43.0, but the version stored the date as written, and `notice_period_days` was derived from it: announced "on 1 February" and published on 1 March, a change in force on 10 May froze 98 days where its readers got 70. For a change that takes effect later, `announce_from` is now the day the periods were measured from. A version whose effective date has passed as well keeps both dates as given.
+
+- **A deemed-consent notice that waited in the queue past its objection deadline is no longer sent.** Behind a backlog or a stopped worker, a notice queued before the deadline went out after it and told the reader they could object until a day that had passed, while closing the window counted it as late and bound nobody with it. The notice now checks the deadline when the worker picks it up, the same moment the notice sweep uses, and the subject is reported as one without a notice when the window closes.
+
+- **Recording a consent for a subject without a key throws `SubjectWithoutKey` instead of writing a row that names nobody.** A model that is not saved yet got a row with no `subject_id`. No read for the subject found it, and it looked exactly like the row of an erased subject, so the retention sweep removed it as an orphan. Erasing such a subject was already refused. Reading for such a subject answers with nothing: `history()`, the latest action the gate reads, the subject token and the deemed-acceptance decision used to match `subject_id = null`, which found the rows of its type that an earlier release had written without a key. The guide to recording consent and the bundled Boost skill say to save the model first.
+
+- **A whole-number setting given as a string now counts as its number.** `env()` returns every value as a string, and the age threshold, the notice periods, a document's `min_lead_days`, the two cache lifetimes and the three notification limits were read as integers only. With `'threshold' => env('AGE_GATE_THRESHOLD', 16)` and 18 in the environment, the age gate asked for 16; a notice period of 90 set the same way checked 60. A string that spells a whole number now counts as that number. Any other value still counts as unset, and `legal-consent:doctor` names the setting, because the package value then applies without a word.
+
+- **A tenant resolver that answers with something other than a tenant id is refused instead of switching the separation off.** An answer that was neither an int nor a string counted as no tenant, so every tenant read and wrote the shared bucket and saw the documents and consents of the others. A backed enum now counts as its value and a `Stringable` as its string. Any other answer, a model among them, throws `UnresolvableTenant`, which names the resolver and the type it returned.
+
+- **Under tenancy, a re-consent notice is no longer sent to a subject who agreed after the sweep.** The worker asked whether the subject had agreed in the shared bucket, because nobody is signed in there, and a subject of a tenant holds nothing in it. It now asks in the tenant of the version, the way the delivery proof is written.
+
+- **A link inside the consent sentence of the plain checkboxes carries `rel="noopener noreferrer"`.** It carried `noopener` alone, so opening a document hosted elsewhere sent that host the address of the registration page. Every other link of the package carries both.
+
+- **The WireKit checkboxes write the name of the wording dialog into the click handler as a JavaScript string.** It stood between two quotes in an attribute that is printed without escaping, so a field or a key with an apostrophe broke the handler, and the link opened neither the dialog nor the document.
+
+- **The checks in front of the hand-written DDL and the version check anchor at the very end of the value.** A table prefix, a column name and a document version were matched with `$`, which also matches before one final line break, so a prefix ending in a line break passed the check and failed in the database driver with a syntax error instead of the package's own refusal.
+
+- **`legal-consent:doctor` names a stale key without its value.** The published file is read with `env()` evaluated, so the value was the real one from the environment, printed into the log of the CI step the command is built for. A secret kept under an old key name, while rotating a key or after the package renamed one, was printed in the clear.
+
+- **`legal-consent:doctor` names a `tamper_evidence_key` that holds fewer than 32 bytes.** It named a missing key and nothing about a key of a few bytes, which anybody holding a copy of the table can guess offline. A key written `base64:…` is measured by the bytes it decodes to.
+
+- **The `X-Request-Id` of a consent record is taken only where the server side vouches for it.** A header that arrived straight from a client could name any request, and `ConsentContext` documented every field as a server-side signal. It now records the id when the application assigned it after the request arrived, or when it came through a trusted proxy, and its docblock says which fields the client supplies.
+
+- **The notice sweep sends nothing for an informational page.** A row of that type claiming info push, from a restored dump or a hand edit, was mailed a change notice with a proof row for it, while the gate and the banner already refuse that row. The publisher never allowed the mode for the type.
+
+- **A change entry whose subject names a party's role prints the party's name.** The facets carried the location, the purpose and the contact, never `partyName`, so the name was missing from the notice and from its hashed proof. It now leads the facets when it differs from the subject.
+
+- **A line a notice formats as HTML is kept in the hashed proof.** The proof kept only string lines, so an `HtmlString` line that the mail rendered was missing from `notice_body` and its hash. It is recorded as the HTML it rendered.
+
+- **An informational page flagged for registration is acknowledged only when its box was ticked.** The flag says the form can show the page, and nothing asked whether this request showed it or whether its box was ticked: no validation rule asks, because the page binds nobody. So the acknowledgment was written for an empty box and for a registration without a form. It now needs the page's own field, or the shared checkbox named in `registration_field`, present and ticked; a request without the field acknowledges nothing and logs a warning naming it.
+
+- **A registration whose form showed an outdated version records none of its consents.** The check of the shown version ran per document while the documents were written, so a version released between page load and submit was refused after the documents before it were already in the ledger. It now runs before the first write, with the rule the manager applies.
+
+- **`legal-consent:rerender` keeps what a reader agreed to.** The re-freeze compared the body alone and took the title, the acceptance sentence and the dates from the live source, so a sentence that had changed in the source went into a silent patch, and the patch was published as in force from the day of the re-render, whatever date the version it replaced carried. It now refuses a changed title or sentence, waits for a version that has not taken effect, and keeps the effective date of the version it re-freezes.
+
+- **sqlens can lint every migration of the package.** Migration 000018 asked the database for a column type while sqlens captured it under `pretend()`, which answers no read, and the lint stopped there with an error. It now shows its change without asking. The four migrations that do nothing on a driver by design, 000014, 000022, 000029 and 000034, carry sqlens's `#[NoSqlOnDriver]` attribute with the reason, so `sqlens:lint` no longer reports them as migrations that produce no SQL. The package does not depend on sqlens: the attribute is read from the source, and without sqlens it costs nothing. If you lint copies you published, publish them again: `php artisan vendor:publish --tag=legal-consent-migrations --force`.
+
+- **A document link that opens the wording dialog no longer announces a new tab.** With the dialog switched on, a screen reader heard "has popup: dialog" and "(opens in new tab)" together, and the link carried the new-tab arrow, although it opened a dialog. The new-tab hint is now heard only where script does not run, which is where the link really opens a tab, and the arrow is gone from these links. The page link in the dialog's footer still announces its tab. Publish the WireKit views again if you published them: `php artisan vendor:publish --tag=legal-consent-wirekit --force`.
+
 ## [0.43.1] - 2026-10-03
 
 ### Changed
@@ -2981,7 +3069,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.43.1...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.43.1...v0.44.0
 [0.43.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.43.0...v0.43.1
 [0.43.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.4...v0.43.0
 [0.42.4]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.42.3...v0.42.4

@@ -17,6 +17,7 @@ use Illuminate\Support\LazyCollection;
 use Pushery\LegalConsent\Console\Concerns\SkipsWhenTablesAreMissing;
 use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
 use Pushery\LegalConsent\Contracts\SendsNoticeMail;
+use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Events\NoticeDispatched;
 use Pushery\LegalConsent\Events\NoticeDispatching;
@@ -26,6 +27,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
+use Pushery\LegalConsent\Support\IntegerSetting;
 use Pushery\LegalConsent\Support\NoticeAttempts;
 use Pushery\LegalConsent\Support\NoticeMailConfig;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -57,7 +59,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
  *
  * Delivery is deliberately AT-LEAST-ONCE: the `notified_at` watermark is stamped only after a
  * version's full subject sweep completes, so a clean re-run never re-queues, and a missed § 308 /
- * § 675g notice is never risked. A process killed mid-sweep — or a run overtaken when the 120-min
+ * § 675g notice is never risked. A process killed mid-sweep — or a run overtaken when its 55-minute
  * `withoutOverlapping` lock expires on a large population — RESUMES: with durable-medium proof on,
  * {@see AffectedSubjectResolver::forVersion()} skips subjects that already carry a proof row for the
  * version, and those whose notice is still on its way ({@see NoticeAttempts}), so the retry serves
@@ -347,9 +349,9 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             return false;
         }
 
-        $limit = config('legal-consent.notifications.max_recipients_per_run');
+        $limit = IntegerSetting::from(config('legal-consent.notifications.max_recipients_per_run'));
 
-        return is_int($limit) && $limit >= 0 && $audience > $limit;
+        return $limit !== null && $limit >= 0 && $audience > $limit;
     }
 
     /**
@@ -361,13 +363,19 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
     {
         return LegalDocument::model()::query()
             ->withoutGlobalScope(TenantScope::class) // sweep every tenant's due versions
-            ->where('is_active', true)
+            // The active version and the earlier ones of its major: a correction published after a
+            // change does not cancel the notices that change still owes.
+            ->ofTheActiveMajor()
             ->whereIn('notice_mode', [
                 NoticeMode::ActiveReconsent->value,
                 NoticeMode::InfoPush->value,
                 NoticeMode::DeemedConsent->value,
             ])
             ->where('requires_explicit_optin', false) // mandatory docs only — never nag a voluntary consent (Art. 7(4))
+            // An informational page binds nobody, so no change to it is owed a notice. The publisher
+            // refuses every mode but the silent one for it, and this is the check that holds for a
+            // row that came another way, a restored dump or a hand edit, as the gate and the banner do.
+            ->where('type', '!=', DocumentType::Informational->value)
             ->whereNotNull('announce_from')
             ->where('announce_from', '<=', CarbonImmutable::now())
             // Not yet swept, or swept and owing a notice to try again: one that failed while the
@@ -420,7 +428,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // audience size, not a delivery forecast — it errs toward more notice rather than less,
             // which is the safe direction here, but it is not the same number.
             $remaining = $resolver->countForVersion($version, skipNotified: $proofEnabled);
-            // The floor is EQUIVALENT under mutation: the resume count reads the same audience with one
+            // The floor changes nothing observable: the resume count reads the same audience with one
             // more condition, so it never exceeds the total. It stays to say the difference cannot go
             // negative.
             $proofed = max(0, $total - $remaining);

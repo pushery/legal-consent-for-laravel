@@ -127,19 +127,15 @@ final class ReConsentForm extends Component
      */
     private array $questionByKey = [];
 
-    /**
-     * THE INITIALIZERS BELOW ARE NOT THE POLICY, AND EDITING ONE CHANGES NOTHING.
-     *
-     * The value in effect always comes from somewhere else: on the first request from `mount()`'s
-     * parameter default, and on every request after that from the checksummed snapshot, because
-     * `#[Locked]` properties are restored rather than re-mounted. So the assignment here is only
-     * what PHP requires of a typed property before anything may read it -- leave it off and an
-     * access before `mount()` is a fatal, not a false.
-     *
-     * Measured: flipping every one of these leaves the whole suite green, while flipping the
-     * matching `mount()` default reddens it immediately. That asymmetry is the point of this note.
-     * A capability switched off here would look switched off in review and stay on in production.
-     */
+    // The initializers below are not the policy, and editing one changes nothing.
+    //
+    // The value in effect always comes from somewhere else: on the first request from `mount()`'s
+    // parameter default, and on every request after that from the checksummed snapshot, because
+    // `#[Locked]` properties are restored rather than re-mounted. So the assignment here is only
+    // what PHP requires of a typed property before anything may read it -- leave it off and an
+    // access before `mount()` is a fatal, not a false. The policy lives in `mount()`'s defaults: a
+    // capability switched off here would look switched off in review and stay on in production.
+
     /**
      * Whether the objection endpoint exists on this instance. Locked, because a value the client
      * can send back is not a permission — Livewire hydrates public properties from the payload
@@ -313,7 +309,7 @@ final class ReConsentForm extends Component
         // `//evil`) and the protocol-relative `//host`. Do not trust the caller to have
         // pre-sanitized the value — honor the contract here.
 
-        // The `=== ''` is EQUIVALENT under mutation: an empty target also fails the rooted-path test
+        // The `=== ''` changes nothing observable: an empty target also fails the rooted-path test
         // below, so it is refused either way. It stays because it says the case out loud.
         if ($target === '' || str_contains($target, '\\') || str_starts_with($target, '//')) {
             return false;
@@ -406,7 +402,7 @@ final class ReConsentForm extends Component
                 : $manager->outstanding($subject, $this->locale);
 
             // Recorded for questionFor(), which reads it only for a gate-question mount. On this path
-            // it is never read, so emptying the map is EQUIVALENT under mutation here.
+            // it is never read, so emptying the map would change nothing here.
             $this->questionByKey = $pending
                 ->mapWithKeys(fn (LegalDocument $document): array => [$document->key => $this->method])
                 ->all();
@@ -421,7 +417,7 @@ final class ReConsentForm extends Component
             ->reject(fn (LegalDocument $document): bool => in_array($document->key, $changedKeys, true))
             ->values();
 
-        // A changed document's entry is EQUIVALENT under mutation: questionFor() answers
+        // A changed document's entry changes nothing observable: questionFor() answers
         // ReConsentGate for a key it does not find, which is what this entry says.
         $this->questionByKey = array_merge(
             $changed->mapWithKeys(fn (LegalDocument $d): array => [$d->key => ConsentMethod::ReConsentGate])->all(),

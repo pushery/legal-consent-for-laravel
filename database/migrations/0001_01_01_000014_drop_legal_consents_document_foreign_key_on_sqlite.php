@@ -7,6 +7,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\ProofColumnGuard;
+use Pushery\SQLens\Attributes\NoSqlOnDriver;
 
 /**
  * Drop the `legal_consents.document_id` foreign key on SQLite too.
@@ -47,7 +48,10 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * back. Take a file copy before migrating a SQLite database you care about, and re-create your own
  * triggers afterwards.
  */
-return new class extends Migration
+return new
+#[NoSqlOnDriver('pgsql', reason: 'only SQLite still carried this foreign key; 000008 dropped it on PostgreSQL')]
+#[NoSqlOnDriver('mysql', reason: 'only SQLite still carried this foreign key; 000008 dropped it on MySQL')]
+class extends Migration
 {
     public function up(): void
     {

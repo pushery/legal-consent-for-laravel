@@ -168,6 +168,9 @@
 
                                     <x-wirekit::alert-dialog.description>
                                         {{ __('legal-consent::ui.admin_release_confirm_body') }}
+                                        @if ($rows[$key]['_release']['left_out'] !== [])
+                                            {{ __('legal-consent::ui.admin_release_leaves_out', ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}
+                                        @endif
                                     </x-wirekit::alert-dialog.description>
 
                                     <x-wirekit::alert-dialog.actions>
@@ -204,6 +207,11 @@
                                         </x-wirekit::alert-dialog.confirm>
                                     </x-wirekit::alert-dialog.actions>
                                 </x-wirekit::alert-dialog>
+                                {{-- Visible on the row as well as in the dialog: the languages this release
+                                     leaves out keep the version they already have live. --}}
+                                @if ($rows[$key]['_release']['left_out'] !== [])
+                                    <x-wirekit::text size="sm">{{ __('legal-consent::ui.admin_release_leaves_out', ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}</x-wirekit::text>
+                                @endif
                             @else
                                 {{-- The blocking reasons stay OUTSIDE aria-describedby, the same call
                                      the plain stub writes out: the button renders a native `disabled`

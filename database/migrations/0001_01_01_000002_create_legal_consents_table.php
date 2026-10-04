@@ -156,7 +156,7 @@ return new class extends Migration
     {
         $prefix = DB::connection()->getTablePrefix();
 
-        if (preg_match('/^\w*$/', $prefix) !== 1) {
+        if (preg_match('/^\w*\z/', $prefix) !== 1) {
             throw new RuntimeException("refusing to build legal_consents DDL for an unexpected table prefix: {$prefix}");
         }
 

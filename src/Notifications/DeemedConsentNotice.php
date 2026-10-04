@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Notifications;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Notifications\Messages\MailMessage;
+use Override;
 
 /**
  * The deemed-consent (Zustimmungsfiktion) notice: a minor/peripheral CONTRACT change where
@@ -23,6 +24,28 @@ class DeemedConsentNotice extends ChangeNotification
         return 'deemed';
     }
 
+    /**
+     * Not once the objection deadline has passed, which a notice queued before it can reach behind a
+     * backlog or a stopped worker.
+     *
+     * It would tell the reader they may object until a day that is gone, and it can bind nobody:
+     * `legal-consent:close-objection-windows` counts a notice delivered after the deadline as late.
+     * Not sending it leaves the subject without a proof row, so closing the window reports them and
+     * points at a new version with a new deadline. The deadline counts as passed from its own
+     * moment on, as it does when the notice sweep decides whether to send at all.
+     */
+    #[Override]
+    public function shouldSend(object $notifiable, string $channel): bool
+    {
+        $deadline = $this->document->objection_deadline;
+
+        if ($deadline instanceof CarbonImmutable && $deadline->lessThanOrEqualTo(CarbonImmutable::now())) {
+            return false;
+        }
+
+        return parent::shouldSend($notifiable, $channel);
+    }
+
     public function toMail(object $notifiable): MailMessage
     {
         $objectBy = $this->document->objection_deadline;
@@ -30,8 +53,8 @@ class DeemedConsentNotice extends ChangeNotification
 
         $replace = [
             'title' => $this->document->title,
-            'deadline' => $objectBy instanceof CarbonImmutable ? $objectBy->toDateString() : '',
-            'effective' => $effective instanceof CarbonImmutable ? $effective->toDateString() : '',
+            'deadline' => $this->readableDate($objectBy),
+            'effective' => $this->readableDate($effective),
         ];
 
         $mail = (new MailMessage)
@@ -82,7 +105,7 @@ class DeemedConsentNotice extends ChangeNotification
      */
     public function mandatoryContentPresent(): bool
     {
-        // The blanks are EQUIVALENT under mutation, as in LegalChangeInformational: a placeholder left
+        // The blanks change nothing observable, as in LegalChangeInformational: a placeholder left
         // unfilled still leaves a non-empty line, and only presence is asked.
         $blank = ['deadline' => '', 'effective' => '', 'title' => ''];
 
