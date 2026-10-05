@@ -38,8 +38,8 @@ final class DeemedAcceptanceDecision
             return false;
         }
 
-        // No recorded action at all: the affected-subject set already established that they hold an
-        // older major, so silence binds.
+        // No recorded action at all: nothing answered the notice, and its proof is in place, so
+        // silence binds.
         if (! $latest instanceof LegalConsent) {
             return true;
         }
@@ -74,7 +74,7 @@ final class DeemedAcceptanceDecision
         // Compare the VERSION, not the major. A deemed-consent change is lawful only for a minor,
         // peripheral change (BGH XI ZR 26/20), and the publisher enforces that by refusing the mode
         // on a major bump of a contract — so under a major comparison the subject's major always
-        // equalled the version's and silence bound nobody, which is the same assumption that made
+        // equaled the version's and silence bound nobody, which is the same assumption that made
         // the notice sweep select nobody. Only the ACTIVE version is ever swept and the publisher
         // refuses a downgrade, so a subject cannot hold anything newer: "not this version" is
         // exactly "older than this version" here.

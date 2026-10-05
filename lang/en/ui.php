@@ -69,7 +69,7 @@ return [
     'consent_given' => 'Given',
     'consent_not_given' => 'Not given',
 
-    // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
+    // Grace-period remaining time (trans_choice): pluralization + effective-today case.
     'days_left' => '{0}Effective today|{1}:count day left|[2,*]:count days left',
     'updated_note' => 'Updated — no action required.',
     'object_review' => 'Review or object',
@@ -84,7 +84,6 @@ return [
     'admin_heading' => 'Legal texts',
     'admin_policy' => 'Texts are edited per locale, reviewed by a human, then released across every locale at once. A machine translation can never be published until someone reviews it, and the acceptance sentence is fixed copy — it is never machine-translated.',
     'admin_document' => 'Document',
-    'admin_release' => 'Release',
     'admin_not_written' => 'Not written',
     'admin_not_written_short' => 'None',
     'review_state_draft' => 'Draft',
@@ -142,8 +141,6 @@ return [
     'reconsent_none_selected' => 'Please tick the box for each item you agree to before continuing.',
     'admin_body_label' => 'Text (sanitized HTML)',
     'admin_preview_label' => 'Preview of the published text',
-    'admin_edit' => 'edit',
-    'admin_edit_for' => 'Edit :key (:locale)',
     'admin_edit_for_state' => 'Edit :key (:locale) — :state',
     'admin_status_saved' => 'Saved. Review is required before this text can be published.',
     'admin_status_not_saved' => 'Not saved — :reason',
@@ -195,4 +192,8 @@ return [
     'publish_refused_major_needs_reconsent' => 'version :version raises the major version in :language, which asks everybody to accept the change again; release it as an active re-consent',
     'publish_refused_gating_mode_keeps_the_major' => 'version :version keeps major version :major in :language, so a re-consent would reach nobody who accepted it; release it as :next',
     'publish_refused_objection_deadline_not_before_effective_date' => 'the objection deadline (:deadline) has to fall before the day the change takes effect (:enforce)',
+    'publish_refused_change_class_too_long' => 'the change class has :length characters and can have at most :max',
+    'draft_refused_no_translator' => 'no machine translation is set up for this application; translate the text by hand, or ask a developer to connect a translator',
+    'draft_refused_too_large' => 'the text has :size KB, and a legal text can have at most :limit KB',
+    'draft_refused_unparsable' => 'the text could not be read to its end and would have been cut short; markup nested very deeply is the usual cause',
 ];

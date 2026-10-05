@@ -54,7 +54,9 @@ class extends Migration
         }
 
         foreach (self::FUNCTIONS as $function) {
-            $name = $this->prefixed($function);
+            // Quoted as the migrations that create the functions quote them: PostgreSQL folds an
+            // unquoted name to lower case, in a lookup as in a statement.
+            $name = DB::connection()->getQueryGrammar()->wrap($this->prefixed($function));
 
             // Only what exists. A consumer may have dropped a guard on purpose, and an ALTER on a
             // missing function would stop the whole migration chain over it.

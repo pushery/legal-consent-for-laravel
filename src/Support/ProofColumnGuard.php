@@ -14,6 +14,13 @@ use RuntimeException;
  * un-editable: a BEFORE UPDATE guard over its proof columns, and a BEFORE DELETE guard over any
  * row a ledger entry still points at.
  *
+ * PostgreSQL gets a third, because a `TRUNCATE` removes every row without firing a row trigger: a
+ * BEFORE TRUNCATE trigger asks the delete guard's question of the whole table and refuses while any
+ * consent points at a row in it. Laravel's `truncate()` issues exactly that statement there, with
+ * `CASCADE`. On SQLite the same call is a `DELETE`, which the row trigger answers. MySQL runs no
+ * trigger on `TRUNCATE TABLE` at all, so there only the database user's privileges hold it back:
+ * the statement needs `DROP`.
+ *
  * The DELETE half exists because the UPDATE half alone protects the wrong thing. `legal_consents`
  * carries a `content_hash` and the one acceptance sentence, never the text itself — the full text
  * exists exactly once, in `legal_documents.content`. A hash can verify a text somebody produces;
@@ -61,12 +68,17 @@ final class ProofColumnGuard
 
     public const string DELETE_FUNCTION = 'legal_documents_guard_delete';
 
+    /** PostgreSQL only; it runs {@see self::DELETE_FUNCTION}, which answers a TRUNCATE for the whole table. */
+    public const string TRUNCATE_TRIGGER = 'legal_documents_no_referenced_truncate';
+
     /**
      * Kept under MySQL's 128-character limit for `SIGNAL … SET MESSAGE_TEXT`, which truncates
      * silently rather than erroring — a guard whose sentence is cut in half still refuses, but
      * stops telling the operator what to do instead.
      */
     private const string DELETE_MESSAGE = 'a legal_documents row a consent points at IS the proof text: retire it with is_active = false, never DELETE (Art. 7(1))';
+
+    private const string TRUNCATE_MESSAGE = 'legal_documents holds versions consents point at, and each is the proof text: retire a version with is_active = false, never TRUNCATE (Art. 7(1))';
 
     /**
      * (Re-)install the triggers for the connection's engine.
@@ -169,16 +181,19 @@ final class ProofColumnGuard
     public static function drop(): void
     {
         $driver = DB::connection()->getDriverName();
-        $documents = self::qualify('legal_documents');
-        $update = self::qualify(self::TRIGGER);
-        $delete = self::qualify(self::DELETE_TRIGGER);
 
         if ($driver === 'pgsql') {
-            self::execute("DROP TRIGGER IF EXISTS {$update} ON {$documents};");
-            self::execute("DROP TRIGGER IF EXISTS {$delete} ON {$documents};");
+            $documents = self::quoted('legal_documents');
+
+            foreach ([self::TRIGGER, self::DELETE_TRIGGER, self::TRUNCATE_TRIGGER] as $trigger) {
+                self::execute('DROP TRIGGER IF EXISTS '.self::quoted($trigger)." ON {$documents};");
+            }
 
             return;
         }
+
+        $update = self::qualify(self::TRIGGER);
+        $delete = self::qualify(self::DELETE_TRIGGER);
 
         // `mariadb` is named on the DROP side only, and deliberately. The engine is not supported
         // -- assertSupportedEngine() refuses it -- but 0.13.0 briefly did install these triggers on
@@ -215,8 +230,8 @@ final class ProofColumnGuard
         // and nothing written against SQLite can close it; the question to ask is whether the
         // engine suites cover the behavior.
         if (DB::connection()->getDriverName() === 'pgsql') {
-            self::execute('DROP FUNCTION IF EXISTS '.self::qualify(self::FUNCTION).'();');
-            self::execute('DROP FUNCTION IF EXISTS '.self::qualify(self::DELETE_FUNCTION).'();');
+            self::execute('DROP FUNCTION IF EXISTS '.self::quoted(self::FUNCTION).'();');
+            self::execute('DROP FUNCTION IF EXISTS '.self::quoted(self::DELETE_FUNCTION).'();');
         }
     }
 
@@ -250,18 +265,29 @@ final class ProofColumnGuard
     }
 
     /**
+     * A name for PostgreSQL DDL: prefixed by {@see self::qualify()} and quoted as the schema
+     * builder quotes the names it creates. PostgreSQL folds an unquoted name to lower case, so
+     * under a prefix with a capital letter the unquoted name would point at a table or function
+     * that does not exist.
+     */
+    private static function quoted(string $name): string
+    {
+        return DB::connection()->getQueryGrammar()->wrap(self::qualify($name));
+    }
+
+    /**
      * The ONE place hand-built DDL from this class reaches the connection.
      *
      * Nothing here can be a literal string: the MySQL and SQLite arms enumerate the live column
      * list because neither engine can diff a row minus a set of keys inside a trigger, and every
-     * arm carries a table prefix that is only known at runtime. Funnelling them through a single
+     * arm carries a table prefix that is only known at runtime. Funneling them through a single
      * method keeps the static exemption for `unprepared()`'s literal-string requirement to one
      * line, pointing at the place the validation lives, instead of a file-wide waiver that would
      * also cover a statement assembled from something less careful.
      *
-     * What may reach this method: names from {@see self::qualify()} and columns from
-     * {@see self::protectedColumns()}, both of which refuse anything that is not a bare SQL
-     * identifier, plus the class's own constants.
+     * What may reach this method: names from {@see self::qualify()}, quoted by
+     * {@see self::quoted()} for PostgreSQL, and columns from {@see self::protectedColumns()}, both
+     * of which refuse anything that is not a bare SQL identifier, plus the class's own constants.
      */
     private static function execute(string $sql): void
     {
@@ -345,13 +371,15 @@ final class ProofColumnGuard
             LegalDocument::MUTABLE_AFTER_PUBLISH,
         ));
 
-        $documents = self::qualify('legal_documents');
-        $consents = self::qualify('legal_consents');
-        $updateTrigger = self::qualify(self::TRIGGER);
-        $updateFunction = self::qualify(self::FUNCTION);
-        $deleteTrigger = self::qualify(self::DELETE_TRIGGER);
-        $deleteFunction = self::qualify(self::DELETE_FUNCTION);
+        $documents = self::quoted('legal_documents');
+        $consents = self::quoted('legal_consents');
+        $updateTrigger = self::quoted(self::TRIGGER);
+        $updateFunction = self::quoted(self::FUNCTION);
+        $deleteTrigger = self::quoted(self::DELETE_TRIGGER);
+        $deleteFunction = self::quoted(self::DELETE_FUNCTION);
         $deleteMessage = self::DELETE_MESSAGE;
+        $truncateTrigger = self::quoted(self::TRUNCATE_TRIGGER);
+        $truncateMessage = self::TRUNCATE_MESSAGE;
 
         self::execute(<<<SQL
             CREATE OR REPLACE FUNCTION {$updateFunction}() RETURNS trigger SET search_path FROM CURRENT AS \$\$
@@ -369,6 +397,12 @@ final class ProofColumnGuard
 
             CREATE OR REPLACE FUNCTION {$deleteFunction}() RETURNS trigger SET search_path FROM CURRENT AS \$\$
             BEGIN
+                IF TG_OP = 'TRUNCATE' THEN
+                    IF EXISTS (SELECT 1 FROM {$consents} WHERE document_id IN (SELECT id FROM {$documents})) THEN
+                        RAISE EXCEPTION '{$truncateMessage}';
+                    END IF;
+                    RETURN NULL;
+                END IF;
                 IF EXISTS (SELECT 1 FROM {$consents} WHERE document_id = OLD.id) THEN
                     RAISE EXCEPTION '{$deleteMessage}';
                 END IF;
@@ -379,6 +413,10 @@ final class ProofColumnGuard
             CREATE TRIGGER {$deleteTrigger}
                 BEFORE DELETE ON {$documents}
                 FOR EACH ROW EXECUTE FUNCTION {$deleteFunction}();
+
+            CREATE TRIGGER {$truncateTrigger}
+                BEFORE TRUNCATE ON {$documents}
+                FOR EACH STATEMENT EXECUTE FUNCTION {$deleteFunction}();
             SQL);
     }
 
@@ -387,9 +425,10 @@ final class ProofColumnGuard
         // Enumerated distinctness over every protected column, compared as BYTES.
         //
         // `<=>` alone was the defect: it is null-safe EQUALITY, and equality on a string column
-        // follows that column's collation. Every collation Laravel configures by default
-        // (utf8mb4_unicode_ci, utf8mb4_0900_ai_ci) is case- AND accent-insensitive and PAD SPACE,
-        // so a raw `UPDATE … SET ui_wording = UPPER(ui_wording)` read as "unchanged" and walked
+        // follows that column's collation. Laravel's default, utf8mb4_unicode_ci, is case- AND
+        // accent-insensitive and PAD SPACE; MySQL's own server default, utf8mb4_0900_ai_ci, is NO
+        // PAD but just as case- and accent-insensitive. So under either a raw
+        // `UPDATE … SET ui_wording = UPPER(ui_wording)` read as "unchanged" and walked
         // through a trigger whose whole claim is that the row is frozen. PostgreSQL compares
         // `to_jsonb` images and SQLite compares BINARY, so MySQL was the one engine of the three
         // where a case, accent or trailing-space edit of `title`, `ui_wording` or `version`

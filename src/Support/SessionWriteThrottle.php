@@ -42,10 +42,10 @@ final class SessionWriteThrottle
      */
     public static function parameters(): ?array
     {
-        // Read with a default rather than from the config file alone, for the consumer this
-        // hardening has to reach: an application whose published config predates the key declares
-        // the `routes` block already, and `mergeConfigFrom()` is flat — its block wins whole, and
-        // the key never arrives. The inline default is then the only value that runs.
+        // Read with a default rather than from the config file alone. The provider merges the
+        // shipped file under a published one key by key, so a published `routes` block without
+        // this key receives it; but a configuration cached before the update is not merged at all,
+        // and there the inline default is the only value that runs.
         //
         // Written out, and equal to the shipped default in config/legal-consent.php, so the value
         // that runs without the key is the one the published file documents.
@@ -62,8 +62,8 @@ final class SessionWriteThrottle
         }
 
         // The decay is pinned before the prefix: with `'60'` alone, `throttle:60,<prefix>` would
-        // read the prefix as the minutes — a string that casts to zero, and a window that never
-        // closes.
+        // read the prefix as the minutes, and the middleware multiplies the minutes by 60, which
+        // throws a TypeError for that string on every request.
         return [$parts[0], $parts[1] ?? '1', self::PREFIX];
     }
 

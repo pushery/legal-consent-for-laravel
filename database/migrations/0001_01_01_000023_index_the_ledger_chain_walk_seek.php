@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\IndexName;
 
 /**
  * Index `legal_consents (subject_token, id)` for the ledger walk's keyset seek, and drop the
@@ -53,16 +54,17 @@ use Illuminate\Support\Facades\Schema;
  * like PostgreSQL, ignored the pair until the single-column index was gone. So this migration is
  * a real change on PostgreSQL, the engine the package is primary on, and a rename everywhere else.
  *
- * No column is altered, so no table is rebuilt and the triggers installed by 000011 and 000012
- * survive — `ProofColumnGuard::whileDisarmed()` is for a migration that changes a COLUMN, and an
- * index is not one.
+ * No column is altered, so no table is rebuilt and every trigger survives: the append-only trigger
+ * 000002 puts on this table on PostgreSQL and MySQL, and the guard of 000011 and 000021 on
+ * `legal_documents`, whose delete arm reads this table. `ProofColumnGuard::whileDisarmed()` is for
+ * a migration that changes a COLUMN, and an index is not one.
  */
 return new class extends Migration
 {
     public function up(): void
     {
         Schema::table('legal_consents', function (Blueprint $table): void {
-            $table->index(['subject_token', 'id'], 'legal_consents_token_id_idx');
+            $table->index(['subject_token', 'id'], IndexName::of('legal_consents_token_id_idx'));
 
             // The column list rather than the literal name, so the name is derived exactly the way
             // 000002 derived it when `$table->index('subject_token')` created it. Should the
@@ -76,7 +78,7 @@ return new class extends Migration
     {
         Schema::table('legal_consents', function (Blueprint $table): void {
             $table->index('subject_token');
-            $table->dropIndex('legal_consents_token_id_idx');
+            $table->dropIndex(IndexName::existing('legal_consents', 'legal_consents_token_id_idx'));
         });
     }
 };

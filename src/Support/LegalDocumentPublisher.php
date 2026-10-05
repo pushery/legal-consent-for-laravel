@@ -47,6 +47,9 @@ final readonly class LegalDocumentPublisher
     /** Suggested minimum for a scheduled minor change (not enforced — minors never gate). */
     public const int MINOR_MIN_LEAD_DAYS = 14;
 
+    /** The width of `legal_documents.change_class`, the column a change class is frozen into. */
+    public const int CHANGE_CLASS_MAX_LENGTH = 48;
+
     /** The regimes a change may declare; an unknown one would fail OPEN onto a tunable default. */
     public const array REGIMES = ['bgb_agb', 'psd2_675g', 'dcd_327r', 'gdpr', 'p2b', 'eecc'];
 
@@ -186,7 +189,7 @@ final readonly class LegalDocumentPublisher
         ?Document $prerendered = null,
         array $releasedTogether = [],
     ): LegalDocument {
-        $this->assertRequestCoherent($key, $locale, $mode, $regime);
+        $this->assertRequestCoherent($key, $locale, $mode, $regime, $changeClass);
 
         // The presentation re-render is the one caller that hands a document in, and it has to:
         // it publishes the ACTIVE version's text under the next PATCH, so the version it freezes is
@@ -196,6 +199,61 @@ final readonly class LegalDocumentPublisher
         $rendered = $prerendered ?? $this->preview($key, $locale);
         $type = $this->typeFor($key);
 
+        // The guards read the versions this publish is about to change, so they run under the lock
+        // the write takes, inside the same transaction. Read before the lock, two writers of one key
+        // could both pass them against the same active version, and the later one would deactivate a
+        // higher version the earlier had just activated. The source is rendered above, outside the
+        // lock: it reads no version and can be slow.
+        //
+        // The lock is taken outside the transaction and the transaction is opened inside it, as
+        // LegalDocumentReleaser does. `LegalDocument::activate()` skips its own lock while a
+        // transaction is open, because whoever opened it holds the lock; a transaction opened before
+        // the lock would leave the activation unserialized.
+        //
+        // serializeUnlessOwned() rather than serialize(): a multi-locale release calls this method
+        // while it holds the lock under the same name, and a Laravel lock is not reentrant, so a
+        // second instance could only wait out its timeout and throw. The annotation carries what the
+        // signature cannot, the shape the callback returns.
+        /** @var array{0: LegalDocument, 1: bool} $outcome */
+        $outcome = ActivationLock::serializeUnlessOwned($key, 'a publish', fn (): array => DB::transaction(
+            fn (): array => $this->publishUnderLock(
+                $key, $locale, $mode, $type, $rendered, $releasedTogether, $changeClass, $regime,
+                $announceAt, $enforceAt, $objectionDeadline, $offersTermination, $keepsUnmodified,
+            ),
+        ));
+
+        [$document, $created] = $outcome;
+
+        // A version that already existed was published before, and announces nothing new.
+        if ($created) {
+            event(new LegalDocumentPublished($document));
+        }
+
+        return $document;
+    }
+
+    /**
+     * The guards and the write of {@see publishWithMode()}, under the activation lock and inside one
+     * transaction.
+     *
+     * @param  list<string>  $releasedTogether
+     * @return array{0: LegalDocument, 1: bool} the version, and whether this call created it
+     */
+    private function publishUnderLock(
+        string $key,
+        string $locale,
+        NoticeMode $mode,
+        DocumentType $type,
+        Document $rendered,
+        array $releasedTogether,
+        ?string $changeClass,
+        ?string $regime,
+        ?CarbonImmutable $announceAt,
+        ?CarbonImmutable $enforceAt,
+        ?CarbonImmutable $objectionDeadline,
+        bool $offersTermination,
+        bool $keepsUnmodified,
+    ): array {
         $this->assertVersionPublishable($key, $locale, $mode, $type, $rendered, $releasedTogether);
 
         $existing = $this->existingVersion($key, $locale, $rendered->version);
@@ -207,7 +265,7 @@ final readonly class LegalDocumentPublisher
                 $existing->activate();
             }
 
-            return $existing;
+            return [$existing, false];
         }
 
         if ($this->isMajorBump($key, $locale, $rendered)) {
@@ -218,109 +276,74 @@ final readonly class LegalDocumentPublisher
 
         $now = CarbonImmutable::now();
 
-        // A RE-FREEZE MUST NOT CONSUME THE DRAFT THAT DESCRIBES THE NEXT CHANGE. The freezer
-        // TRANSITIONS the working row onto the version it publishes — it does not copy it — so a
-        // presentation re-render would carry away the description an operator wrote for the text
-        // change they have not published yet, and that publish would then go out with none.
+        // A re-freeze must not consume the draft that describes the next change. The freezer moves
+        // the working row onto the version it publishes rather than copying it, so a presentation
+        // re-render would carry away a description written for a text change not yet published,
+        // and that publish would then go out without one.
         $describesNoChange = $this->describesNoChange($mode, $key, $locale, $rendered);
 
         [$announce, $enforce] = $this->assertedSchedule($key, $locale, $mode, $regime, $rendered, $announceAt, $enforceAt, $objectionDeadline, $now);
 
-        // THE ROW AND ITS ACTIVATION ARE ONE ACT, AND THEY USED NOT TO BE.
-        // `forceCreate()` persisted the version and `activate()` ran after it, unwrapped. When
-        // `activate()` lost the lock race it threw LockTimeoutException — and left the row behind,
-        // persisted and inactive. That version is then unrepublishable: the next attempt meets
-        // "Version … already exists with different content — bump the version before publishing",
-        // for a version the operator never successfully published. A phantom that can only be
-        // cleared by hand, in an append-only table.
-        //
-        // The lock is taken OUTSIDE the transaction, exactly as LegalDocumentReleaser does, and the
-        // ordering is the whole point: `LegalDocument::activate()` skips its own lock when a
-        // transaction is already open (it delegates to the orchestrating caller by design), so
-        // wrapping without lifting the lock out would have removed the serialization while looking
-        // like it added safety.
-        $write = (fn (): LegalDocument => DB::transaction(function () use (
-            $key, $locale, $type, $mode, $regime, $rendered, $changeClass, $offersTermination,
-            $keepsUnmodified, $now, $announce, $enforce, $objectionDeadline, $describesNoChange
-        ): LegalDocument {
-            $document = LegalDocument::model()::query()->forceCreate([
-                'key' => $key,
-                'type' => $type,
-                'requires_explicit_optin' => $type->requiresExplicitOptin(),
-                'locale' => $locale,
-                'version' => $rendered->version,
-                'major_version' => $rendered->majorVersion,
-                'minor_version' => $rendered->minorVersion,
-                'patch_version' => $rendered->patchVersion,
-                'title' => $rendered->title,
-                'content_format' => 'html',
-                'content' => $rendered->html,
-                'content_hash' => $rendered->contentHash,
-                // What this HTML was made FROM, and what made it. A later run compares both
-                // against the live source to say whether the TEXT moved or only its rendering;
-                // see LegalDriftChecker. Both are proof columns and frozen from here on.
-                'source_hash' => $rendered->sourceHash,
-                'render_fingerprint' => $rendered->renderFingerprint,
-                'ui_wording' => $rendered->uiWording,
-                'source_driver' => $this->sourceNameFor($key),
-                'source_reference' => $rendered->sourceRef,
-                'notice_mode' => $mode,
-                'requires_reconsent' => $mode->gates(),
-                'change_class' => $changeClass,
-                'regime' => $regime,
-                // Floored at zero, because this is the period that was GRANTED and a granted period is
-                // never negative. The guard above rules out an inverted timeline; what remains is the
-                // immediate publish whose effective date is already past, where the honest answer is
-                // "no grace at all" rather than a negative count of days. The column sits outside
-                // MUTABLE_AFTER_PUBLISH, so whatever lands here is frozen — and it is the number a
-                // consumer's compliance report reads back as the notice period.
-                'notice_period_days' => max(0, (int) round($announce->diffInDays($enforce))),
-                // The objection period each recipient is owed, as this version is published under it.
-                // `legal-consent:close-objection-windows` measures it again from the day each notice
-                // was delivered ({@see leavesObjectionPeriod()}). Null for every other mode, since no
-                // other mode lets silence bind anybody.
-                'objection_min_days' => $mode === NoticeMode::DeemedConsent ? $this->minLeadDays($mode, $regime, $key) : null,
-                'offers_termination' => $offersTermination,
-                'keeps_unmodified_offered' => $keepsUnmodified,
-                'is_active' => false,
-                'published_at' => $now,
-                'announce_from' => $announce,
-                'enforce_from' => $enforce,
-                'objection_deadline' => $objectionDeadline,
-            ]);
+        // The row and its activation are one act: persisted and activated in the transaction above, a
+        // version whose activation fails leaves no inactive row behind, which no later publish of the
+        // same number could replace.
+        $document = LegalDocument::model()::query()->forceCreate([
+            'key' => $key,
+            'type' => $type,
+            'requires_explicit_optin' => $type->requiresExplicitOptin(),
+            'locale' => $locale,
+            'version' => $rendered->version,
+            'major_version' => $rendered->majorVersion,
+            'minor_version' => $rendered->minorVersion,
+            'patch_version' => $rendered->patchVersion,
+            'title' => $rendered->title,
+            'content_format' => 'html',
+            'content' => $rendered->html,
+            'content_hash' => $rendered->contentHash,
+            // What this HTML was made FROM, and what made it. A later run compares both
+            // against the live source to say whether the TEXT moved or only its rendering;
+            // see LegalDriftChecker. Both are proof columns and frozen from here on.
+            'source_hash' => $rendered->sourceHash,
+            'render_fingerprint' => $rendered->renderFingerprint,
+            'ui_wording' => $rendered->uiWording,
+            'source_driver' => $this->sourceNameFor($key),
+            'source_reference' => $rendered->sourceRef,
+            'notice_mode' => $mode,
+            'requires_reconsent' => $mode->gates(),
+            'change_class' => $changeClass,
+            'regime' => $regime,
+            // Floored at zero, because this is the period that was GRANTED and a granted period is
+            // never negative. The guard above rules out an inverted timeline; what remains is the
+            // immediate publish whose effective date is already past, where the honest answer is
+            // "no grace at all" rather than a negative count of days. The column sits outside
+            // MUTABLE_AFTER_PUBLISH, so whatever lands here is frozen — and it is the number a
+            // consumer's compliance report reads back as the notice period.
+            'notice_period_days' => max(0, (int) round($announce->diffInDays($enforce))),
+            // The objection period each recipient is owed, as this version is published under it.
+            // `legal-consent:close-objection-windows` measures it again from the day each notice
+            // was delivered ({@see leavesObjectionPeriod()}). Null for every other mode, since no
+            // other mode lets silence bind anybody.
+            'objection_min_days' => $mode === NoticeMode::DeemedConsent ? $this->minLeadDays($mode, $regime, $key) : null,
+            'offers_termination' => $offersTermination,
+            'keeps_unmodified_offered' => $keepsUnmodified,
+            'is_active' => false,
+            'published_at' => $now,
+            'announce_from' => $announce,
+            'enforce_from' => $enforce,
+            'objection_deadline' => $objectionDeadline,
+        ]);
 
-            // Freeze the operator's description of THIS change onto THIS version, before the row
-            // goes active. No new parameter: the freezer finds the draft by (key, locale,
-            // tenant), so the ten-argument signature stays as it is and no caller has to learn
-            // about the feature to keep working. Absence is not an error — see ChangeItemsFreezer.
-            if (! $describesNoChange) {
-                $this->changeItems->freeze($document, $this->sources->for($key)->fingerprint($key, $locale));
-            }
+        // Freeze the operator's description of THIS change onto THIS version, before the row
+        // goes active. No new parameter: the freezer finds the draft by (key, locale,
+        // tenant), so the signature stays as it is and no caller has to learn
+        // about the feature to keep working. Absence is not an error — see ChangeItemsFreezer.
+        if (! $describesNoChange) {
+            $this->changeItems->freeze($document, $this->sources->for($key)->fingerprint($key, $locale));
+        }
 
-            $document->activate();
+        $document->activate();
 
-            return $document;
-        }));
-
-        // ASK WHETHER THE LOCK IS ALREADY HELD BEFORE TAKING IT. REPORTED FROM PRODUCTION.
-        // This line used to take the activation lock unconditionally, and a multi-locale release
-        // reaches it while holding that very name: LegalDocumentReleaser takes it, opens its
-        // transaction, and calls this method once per locale. A Laravel lock is not reentrant, so
-        // the second instance — a different owner token — could only wait out its five seconds and
-        // throw, and every release on a store that really locks failed on its own serialization.
-        //
-        // It survived to a consumer's production because both sites guard the take with the same
-        // predicate: on `array` and `null` NEITHER locks, and that is what a test suite runs on.
-        //
-        // Degrading on a store that cannot serialize, the shared name and the two timeouts all live
-        // in ActivationLock now. The annotation carries what its signature cannot: `block()` returns
-        // whatever its callback returns and is typed `mixed`, while `$write` is `: LegalDocument`.
-        /** @var LegalDocument $document */
-        $document = ActivationLock::serializeUnlessOwned($key, 'a publish', $write);
-
-        event(new LegalDocumentPublished($document));
-
-        return $document;
+        return [$document, true];
     }
 
     /**
@@ -362,7 +385,7 @@ final readonly class LegalDocumentPublisher
         bool $keepsUnmodified = false,
         array $releasedTogether = [],
     ): Document {
-        $this->assertRequestCoherent($key, $locale, $mode, $regime);
+        $this->assertRequestCoherent($key, $locale, $mode, $regime, $changeClass);
 
         $rendered = $this->preview($key, $locale);
         $type = $this->typeFor($key);
@@ -392,11 +415,32 @@ final readonly class LegalDocumentPublisher
      * The guards that need no rendered text — so a typo in a locale or a regime is refused before
      * a source is read.
      */
-    private function assertRequestCoherent(string $key, string $locale, NoticeMode $mode, ?string $regime): void
+    private function assertRequestCoherent(string $key, string $locale, NoticeMode $mode, ?string $regime, ?string $changeClass): void
     {
         $this->assertLocaleSupported($locale);
         $this->assertRegimeKnown($regime, $key);
         $this->assertRegimeCoherentWithMode($regime, $mode, $key);
+        $this->assertChangeClassFits($changeClass, $key);
+    }
+
+    /**
+     * The change class is frozen onto the row as given. Longer than its column, it would be kept by
+     * SQLite and refused by PostgreSQL and MySQL as a database error, so it is refused here, with a
+     * reason a screen can word, on every engine.
+     */
+    private function assertChangeClassFits(?string $changeClass, string $key): void
+    {
+        if ($changeClass === null || mb_strlen($changeClass) <= self::CHANGE_CLASS_MAX_LENGTH) {
+            return;
+        }
+
+        $length = mb_strlen($changeClass);
+
+        throw LegalPublishRefused::because(
+            PublishRefusal::ChangeClassTooLong,
+            "The change class for '{$key}' is {$length} characters long; the column it is frozen into holds ".self::CHANGE_CLASS_MAX_LENGTH.'. Use a shorter class.',
+            ['length' => $length, 'max' => self::CHANGE_CLASS_MAX_LENGTH],
+        );
     }
 
     /**
@@ -1056,20 +1100,15 @@ final readonly class LegalDocumentPublisher
     /**
      * Refuse to publish a version in a locale the app does not declare in
      * `legal-consent.locales` — an unlisted locale is almost always a typo, and shipping a
-     * document nobody's gate/banner ever looks for is a silent proof gap. When the list is
-     * empty/unset, any locale is allowed (no opinion).
+     * document nobody's gate/banner ever looks for is a silent proof gap. The list is read
+     * through {@see DocumentMatrix}, so an empty or missing one means the default locale alone,
+     * as it does for the admin screens, the document route and every command.
      */
     private function assertLocaleSupported(string $locale): void
     {
-        $locales = config('legal-consent.locales');
+        $supported = DocumentMatrix::locales();
 
-        if (! is_array($locales)) {
-            return;
-        }
-
-        $supported = array_values(array_filter($locales, is_string(...)));
-
-        if ($supported !== [] && ! in_array($locale, $supported, true)) {
+        if (! in_array($locale, $supported, true)) {
             throw new LegalPublishRefused(
                 "Locale '{$locale}' is not in the configured legal-consent.locales (".implode(', ', $supported).'). Add it there, or publish a supported locale.'
             );

@@ -9,6 +9,7 @@ use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
+use Pushery\LegalConsent\Support\TenantContext;
 
 /**
  * A published version without its text: what a form needs to show the acceptance sentence beside a
@@ -36,10 +37,22 @@ final readonly class PublishedVersion
         public ?string $uiWording,
         public NoticeMode $noticeMode,
         public ?CarbonImmutable $enforceFrom = null,
+        /**
+         * The tenant this version belongs to, or '' for the shared bucket (and for every
+         * single-tenant app, where tenancy is off).
+         *
+         * Reads are confined to the current tenant already; this is what lets a caller confirm
+         * which tenant's sentence it holds, as {@see PublishedDocument::$tenantId} does for the text.
+         */
+        public string $tenantId = '',
     ) {}
 
     public static function fromRow(LegalDocument $row): self
     {
+        // Narrowed as PublishedDocument::fromRow() narrows it: anything that is not a scalar id
+        // belongs in the shared '' bucket rather than in a plausible-looking string.
+        $tenant = $row->getAttribute(TenantContext::COLUMN);
+
         return new self(
             id: $row->id,
             key: $row->key,
@@ -52,6 +65,7 @@ final readonly class PublishedVersion
             uiWording: $row->ui_wording,
             noticeMode: $row->noticeMode(),
             enforceFrom: $row->enforce_from,
+            tenantId: is_string($tenant) || is_int($tenant) ? (string) $tenant : '',
         );
     }
 
@@ -70,6 +84,7 @@ final readonly class PublishedVersion
             uiWording: $document->uiWording,
             noticeMode: $document->noticeMode,
             enforceFrom: $document->enforceFrom,
+            tenantId: $document->tenantId,
         );
     }
 

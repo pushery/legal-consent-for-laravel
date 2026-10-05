@@ -66,7 +66,7 @@ return [
     'consent_given' => 'Gegeven',
     'consent_not_given' => 'Niet gegeven',
 
-    // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
+    // Grace-period remaining time (trans_choice): pluralization + effective-today case.
     'days_left' => '{0}Vandaag van kracht|{1}Nog :count dag|[2,*]Nog :count dagen',
     'updated_note' => 'Bijgewerkt — geen actie nodig.',
     'object_review' => 'Bekijken of bezwaar maken',
@@ -81,7 +81,6 @@ return [
     'admin_heading' => 'Juridische teksten',
     'admin_policy' => 'Teksten worden per taal bewerkt, door een mens gecontroleerd en dan in alle talen tegelijk vrijgegeven. Een machinevertaling kan nooit worden gepubliceerd voordat iemand haar heeft gecontroleerd, en de acceptatiezin is vaste tekst — die wordt nooit machinaal vertaald.',
     'admin_document' => 'Document',
-    'admin_release' => 'Vrijgeven',
     'admin_not_written' => 'Niet geschreven',
     'admin_not_written_short' => 'Ontbreekt',
     'review_state_draft' => 'Concept',
@@ -137,8 +136,6 @@ return [
     'reconsent_none_selected' => 'Vink elk item aan waarmee je akkoord gaat voordat je verdergaat.',
     'admin_body_label' => 'Tekst (opgeschoonde HTML)',
     'admin_preview_label' => 'Voorbeeld van de gepubliceerde tekst',
-    'admin_edit' => 'bewerken',
-    'admin_edit_for' => ':key bewerken (:locale)',
     'admin_edit_for_state' => ':key bewerken (:locale) — :state',
     'admin_status_saved' => 'Opgeslagen. Voor publicatie is een controle vereist.',
     'admin_status_not_saved' => 'Niet opgeslagen — :reason',
@@ -190,4 +187,8 @@ return [
     'publish_refused_major_needs_reconsent' => 'versie :version verhoogt voor :language de hoofdversie en vraagt daarmee iedereen opnieuw in te stemmen; publiceer haar als actieve nieuwe instemming',
     'publish_refused_gating_mode_keeps_the_major' => 'versie :version houdt voor :language hoofdversie :major, dus een nieuwe instemming bereikt niemand die al heeft ingestemd; publiceer haar als :next',
     'publish_refused_objection_deadline_not_before_effective_date' => 'de uiterste bezwaardatum (:deadline) moet vóór de dag van inwerkingtreding (:enforce) liggen',
+    'publish_refused_change_class_too_long' => 'de wijzigingsklasse heeft :length tekens en mag er hoogstens :max hebben',
+    'draft_refused_no_translator' => 'voor deze applicatie is geen machinevertaling ingesteld; vertaal de tekst met de hand of vraag een ontwikkelaar om een vertaler aan te sluiten',
+    'draft_refused_too_large' => 'de tekst is :size KB, en een juridische tekst mag hoogstens :limit KB zijn',
+    'draft_refused_unparsable' => 'de tekst kon niet tot het einde worden gelezen en zou zijn afgekapt; meestal is zeer diep geneste opmaak de oorzaak',
 ];

@@ -16,8 +16,11 @@
      `?? false` because this view is ALSO rendered standalone, by the tests that check its markup
      against real components. There is no Livewire component behind those, so the flag is absent —
      and absent means "do not poll", which is the only thing a render without a component could
-     honestly mean. Calling `$this->translating()` here instead threw on every one of them. --}}
-<div @if ($translating ?? false) wire:poll.3s @endif>
+     honestly mean. Calling `$this->translating()` here instead threw on every one of them.
+
+     Each tick calls `pollTranslation`, which answers without a render while the run is still going.
+     The tick after it ends renders, takes the result, and stops the poll. --}}
+<div @if ($translating ?? false) wire:poll.3s="pollTranslation" @endif>
     {{-- The label is assembled into an attribute bag, because a Blade `@if` INSIDE a component
          tag does not compile — it is emitted as literal text into the rendered attribute list.
          The landmark takes its name directly when the heading is gone: `aria-labelledby` pointing
@@ -230,7 +233,7 @@
                 @endforeach
             </x-wirekit::select>
 
-            <x-wirekit::input wire:model="changeClass" name="changeClass" :label="__('legal-consent::ui.admin_deemed_change_class')" :hint="__('legal-consent::ui.admin_deemed_change_class_hint')" />
+            <x-wirekit::input wire:model="changeClass" name="changeClass" :maxlength="\Pushery\LegalConsent\Support\LegalDocumentPublisher::CHANGE_CLASS_MAX_LENGTH" :label="__('legal-consent::ui.admin_deemed_change_class')" :hint="__('legal-consent::ui.admin_deemed_change_class_hint')" />
 
             <x-wirekit::toggle wire:model="offersTermination" :label="__('legal-consent::ui.admin_deemed_offers_termination')" />
             <x-wirekit::toggle wire:model="keepsUnmodified" :label="__('legal-consent::ui.admin_deemed_keeps_unmodified')" />

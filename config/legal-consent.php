@@ -33,6 +33,11 @@ return [
     |--------------------------------------------------------------------------
     | Locales
     |--------------------------------------------------------------------------
+    |
+    | `locales` is the set legal documents are published in: the admin screens show one column
+    | per entry, the document route serves them, and a publish to any other locale is refused.
+    | An empty list means `default_locale` alone.
+    |
     */
     'default_locale' => 'de',
     'locales' => ['de', 'en'],
@@ -242,12 +247,13 @@ return [
         ) ?? 86400,
         'prefix' => 'legal:doc',
 
-        // How long the gate may keep its cached "which versions are enforceable" set. Only the
-        // SET is cached, never a subject's satisfaction — so this bounds how late a scheduled
-        // enforce_from boundary starts gating, nothing about what gets recorded. A publish
-        // flushes it immediately; an out-of-band is_active write needs legal-consent:cache-flush.
-        // In seconds. `0` caches nothing, so a boundary gates on the next read at the cost of a
-        // query per read; a negative number keeps the shipped value.
+        // How long the gate may keep its cached set of active versions. Only the SET is cached,
+        // never a subject's satisfaction and never the clock: announce_from and enforce_from are
+        // compared with the time on every read, so a scheduled boundary takes effect on time. What
+        // this bounds is how long an is_active change made outside a publish (a manual UPDATE, a
+        // restored dump) stays unseen. A publish flushes the set at once, and
+        // legal-consent:cache-flush does the same for a change of your own. In seconds. `0` caches
+        // nothing, at the cost of a query per read; a negative number keeps the shipped value.
         'enforceable_ttl' => filter_var(
             env('LEGAL_CONSENT_ENFORCEABLE_TTL', 60),
             FILTER_VALIDATE_INT,
@@ -531,8 +537,9 @@ return [
     | Before it, a German § 126b declaration went out inside Laravel's global template with
     | "Hello!", "Regards," and "If you're having trouble clicking", resolved from YOUR
     | application's translations. Set it to null to go back to that template. It must stay a
-    | MARKDOWN view: `->view()` empties the mail's lines, and the proof body would collapse
-    | to the subject while still reporting its mandatory content as present.
+    | MARKDOWN view: a plain `->view()` renders only its own template, which need not print the
+    | notice's lines, while the proof row is still built from them and would certify lines the
+    | subject may never have seen.
     |
     | `identity` — § 126b BGB wants "eine lesbare Erklärung, in der die Person des
     | Erklärenden genannt ist". Name yours and it is appended to the notice AND therefore to
@@ -697,9 +704,12 @@ return [
     | it names, which for advertising e-mail is precisely NOT a valid consent (§ 7 Abs. 2 UWG with
     | Art. 7 DSGVO, and the burden of proof is the controller's under Art. 7(1)).
     |
-    | `confirm_within` is how long a request stays confirmable — a relative-time string Carbon can
-    | parse ('7 days', '48 hours'), or null for no limit. Null is the default because a limit
-    | nobody chose would start refusing confirmations an application was already accepting.
+    | `confirm_within` is how long a request stays confirmable — an English relative time ('7 days',
+    | '48 hours') or an ISO 8601 duration ('P7D'), or null for no limit. Null is the default because a
+    | limit nobody chose would start refusing confirmations an application was already accepting. A
+    | value that names no positive period makes `Consent::confirm()` refuse with this key's name,
+    | and `legal-consent:doctor` reports it. LEGAL_CONSENT_DOUBLE_OPT_IN_CONFIRM_WITHIN sets it from
+    | the environment; an empty value counts as unset.
     |
     | Set it and you get the ledger-side half of what a signed URL's expiry does inside the link.
     | An application that signs its confirmation links has that check twice, which is harmless; one
@@ -711,7 +721,7 @@ return [
     |
     */
     'double_opt_in' => [
-        'confirm_within' => null,
+        'confirm_within' => env('LEGAL_CONSENT_DOUBLE_OPT_IN_CONFIRM_WITHIN'),
     ],
 
     /*
@@ -790,9 +800,11 @@ return [
     | (§ 31 Abs. 2 OWiG / § 195 BGB). An English relative time such as '3 years',
     | or an ISO 8601 duration such as 'P3Y'. A value that does not put the cutoff
     | at least a day in the past is refused, and the sweep deletes nothing.
+    | LEGAL_CONSENT_RETENTION_AFTER_END sets it from the environment; an empty
+    | value counts as unset.
     |
     */
-    'retention_after_end' => '3 years',
+    'retention_after_end' => env('LEGAL_CONSENT_RETENTION_AFTER_END', '3 years'),
 
     /*
     |--------------------------------------------------------------------------
@@ -850,8 +862,11 @@ return [
     |
     | A disadvantageous or materially-adverse change must be delivered on a durable
     | medium (dauerhafter Datenträger / Textform § 126b BGB; CJEU C-375/15 BAWAG). When
-    | `proof` is on, the notice dispatch writes an append-only legal_notices proof row per
-    | subject. `channels` are the durable-medium delivery channels.
+    | `proof` is on, an append-only legal_notices proof row is written for each notice the
+    | mail channel has sent, at the moment it sent it. A notice still queued or refused by
+    | the transport has none, and a delivery on another channel adds none. The notice goes
+    | out on `notifications.channels`; `channels` here only names the medium the row
+    | records, `email` while it lists `mail` and `durable_message` otherwise.
     |
     */
     'durable_medium' => [
@@ -870,8 +885,9 @@ return [
     | subject's previous row via `prev_record_hash`, so a later edit, deletion,
     | insertion, or reorder within a subject's history is detectable. Audit the chain
     | with `php artisan legal-consent:verify-ledger` (non-zero exit on a break). The
-    | chain is per-subject; a legitimate retention prune shows as an expected
-    | discontinuity. Combine with the append-only DB trigger (Postgres/MySQL) for the
+    | chain is per-subject. A retention prune re-links the chains it shortens and leaves
+    | a chain that fails to verify untouched, so a break reported after a prune was not
+    | made by the prune. Combine with the append-only DB trigger (Postgres/MySQL) for the
     | strongest guarantee. Off by default (adds one read per write when on).
     */
     'tamper_evidence' => false,
@@ -917,7 +933,8 @@ return [
     ],
 
     /*
-    | Multi-tenancy. When enabled, legal documents and consents are scoped to a tenant.
+    | Multi-tenancy. When enabled, legal documents, consents, notices, drafts and change
+    | descriptions are scoped to a tenant.
     | Register a resolver in a service provider's boot() that returns the current tenant id:
     |
     |     app(\Pushery\LegalConsent\Support\TenantContext::class)
@@ -931,8 +948,10 @@ return [
     |         ->resolveSubjectUsing(fn ($user) => $user->tenant_id);
     |
     | Documents are published, gated, and recorded per tenant; each tenant gets its own
-    | active version of a (key, locale). Admin sweeps (prune, dispatch-notices) run across
-    | all tenants. The tenant column on both tables is the fixed constant `tenant_id`
+    | active version of a (key, locale). The sweeps (prune, dispatch-notices,
+    | close-objection-windows) and the checks (verify-documents, doctor) run across all
+    | tenants, and renotify-version repairs a named version in whichever tenant holds it. The
+    | five scoped tables carry the tenant in the fixed column `tenant_id`
     | (Pushery\LegalConsent\Support\TenantContext::COLUMN) — there is no config knob for it.
     */
     'tenancy' => [
@@ -974,7 +993,9 @@ return [
     | A host that needs its own relations, scopes or casts on a consent, document, notice, draft
     | or change row subclasses the model and maps it here, keyed by the package class. The package
     | then uses the subclass on every path: every query, every row it writes, and the relations
-    | between its models.
+    | between its models. The ledger's own upkeep is the exception: erasing a subject
+    | (`Consent::forget()`) and the retention sweep delete and re-insert ledger and notice rows at
+    | their original ids through the query builder, so no model event fires for those rows.
     |
     | The subclass inherits the package's table, its tenant scope and its mass-assignment guard.
     | Keep all three: these rows are the proof of what a subject was told and agreed to, and the

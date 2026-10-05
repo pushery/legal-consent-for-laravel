@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Support;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection as SupportCollection;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -31,33 +32,23 @@ final readonly class ConsentBanner
      * grace window.
      *
      * @param  array<string, int>|null  $accepted  the subject's CURRENT holdings — a presence map, see
-     *                                             ConsentGate::currentHoldings() — folded here when null and
-     *                                             handed back so a sibling banner can reuse it
+     *                                             ConsentGate::currentHoldings() — for at least the keys
+     *                                             this banner asks about; read here, for those keys only,
+     *                                             when null
      * @return list<array{key: string, version: string, title: string, announce_from: ?string, enforce_from: ?string, days_left: int}>
      */
-    public function pendingFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array &$accepted = null): array
+    public function pendingFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array $accepted = null): array
     {
         $now ??= CarbonImmutable::now();
-        $locale ??= $this->defaultLocale;
-
-        $upcoming = $this->resolvedFor($locale)
-            // The re-consent a document asks for is its major's: an editorial fix or an info-only
-            // change published inside the major keeps the countdown of the version that opened it.
-            // A document whose major asks for none stays itself, and the filter drops it.
-            ->map(fn (LegalDocument $document): LegalDocument => $this->cache()->gatingVersionOf($document) ?? $document)
-            ->filter(
-                fn (LegalDocument $document): bool => ! $document->requires_explicit_optin
-                    && $document->requires_reconsent
-                    && $this->announced($document, $now)
-                    && $document->enforce_from instanceof CarbonImmutable
-                    && $document->enforce_from->greaterThan($now)
-            );
+        $upcoming = $this->upcomingReconsent($locale ?? $this->defaultLocale, $now);
 
         if ($upcoming->isEmpty()) {
             return [];
         }
 
-        $accepted ??= $this->gate->currentHoldings($subject);
+        // Only the keys this banner asks about, as the gate reads them: the ledger grows for the life
+        // of the account, and the rows of every other document would be folded only to be dropped.
+        $accepted ??= $this->gate->currentHoldings($subject, $this->keysOf($upcoming));
         $pending = [];
 
         foreach ($upcoming as $document) {
@@ -152,31 +143,23 @@ final readonly class ConsentBanner
      * counts down to the objection deadline, not the effective date.
      *
      * @param  array<string, int>|null  $accepted  the subject's CURRENT holdings — a presence map, see
-     *                                             ConsentGate::currentHoldings() — folded here when null and
-     *                                             handed back so a sibling banner can reuse it. A key
-     *                                             present in it is a contract the subject is a party to
+     *                                             ConsentGate::currentHoldings() — for at least the keys
+     *                                             this banner asks about; read here, for those keys only,
+     *                                             when null. A key present in it is a contract the
+     *                                             subject is a party to
      * @return list<array{key: string, version: string, title: string, objection_deadline: ?string, objection_date: ?string, enforce_from: ?string, days_left: int}>
      */
-    public function deemedFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array &$accepted = null): array
+    public function deemedFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array $accepted = null): array
     {
         $now ??= CarbonImmutable::now();
-        $locale ??= $this->defaultLocale;
-
-        $upcoming = $this->resolvedFor($locale)
-            // An objection window stays open across a silent correction of the text it concerns.
-            ->map(fn (LegalDocument $document): LegalDocument => $this->cache()->governingVersionOf($document))
-            ->filter(
-                fn (LegalDocument $document): bool => $document->notice_mode === NoticeMode::DeemedConsent
-                    && $this->announced($document, $now)
-                    && $document->objection_deadline instanceof CarbonImmutable
-                    && $document->objection_deadline->greaterThan($now)
-            );
+        $upcoming = $this->upcomingDeemed($locale ?? $this->defaultLocale, $now);
 
         if ($upcoming->isEmpty()) {
             return [];
         }
 
-        $accepted ??= $this->gate->currentHoldings($subject);
+        $keys = $this->keysOf($upcoming);
+        $accepted ??= $this->gate->currentHoldings($subject, $keys);
         $deemed = [];
 
         // Resolved for the WHOLE set at once, and only once the first document actually needs it.
@@ -185,7 +168,6 @@ final readonly class ConsentBanner
         // at the same time. Those windows stay open for weeks and several contracts run in
         // parallel, so N is routinely more than one. Still lazy: a subject who is a party to none
         // of the changes pays nothing beyond the holdings.
-        $keys = array_values($upcoming->map(fn (LegalDocument $document): string => $document->key)->all());
         $standing = null;
 
         foreach ($upcoming as $document) {
@@ -243,10 +225,15 @@ final readonly class ConsentBanner
      */
     public function forSubject(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null): array
     {
-        // The two per-subject banners each fold the subject's held majors; share ONE fold so an open
-        // reconsent AND deemed window no longer pays for it twice. Still lazy — neither folds at all
-        // while its window is closed, so the common "nothing pending" render stays query-free.
-        $accepted = null;
+        $now ??= CarbonImmutable::now();
+        $locale ??= $this->defaultLocale;
+
+        // The two per-subject banners share ONE read of the subject's holdings, for the keys either
+        // of them asks about and no others: this runs on every authenticated render, for as long as
+        // a window is open. Still lazy — with both windows closed nothing is read, so the common
+        // "nothing pending" render stays query-free.
+        $keys = $this->keysOf($this->upcomingReconsent($locale, $now)->concat($this->upcomingDeemed($locale, $now)));
+        $accepted = $keys === [] ? null : $this->gate->currentHoldings($subject, $keys);
 
         return [
             'reconsent' => $this->pendingFor($subject, $locale, $now, $accepted),
@@ -256,15 +243,69 @@ final readonly class ConsentBanner
     }
 
     /**
-     * The document set a subject reading this locale is held to — the request locale, plus every
-     * mandatory document resolved through the locale chain ({@see EnforceableDocumentCache::resolvedFor()})
-     * — taken from the publish-invalidated cache the package already maintains — so the banner's three global lookups cost ZERO database queries on a warm
-     * cache, on a NON-DB cache store (redis/memcached/file/array), instead of three uncached
-     * legal_documents reads on every authenticated render. On the framework-default `database` cache
-     * store each lookup is itself a cache-table SELECT, so the reads move to the cache table rather
-     * than disappearing — point `LEGAL_CONSENT_CACHE_STORE` at a non-DB store for the full saving. The
-     * time filtering stays in memory: the announce/enforce windows move on a clock, so caching an
-     * already-filtered set would need a TTL short enough to be pointless.
+     * The documents whose re-consent window is open: announced, and not yet in force.
+     *
+     * @return SupportCollection<int, LegalDocument>
+     */
+    private function upcomingReconsent(string $locale, CarbonImmutable $now): SupportCollection
+    {
+        return $this->resolvedFor($locale)
+            // The re-consent a document asks for is its major's: an editorial fix or an info-only
+            // change published inside the major keeps the countdown of the version that opened it.
+            // A document whose major asks for none stays itself, and the filter drops it.
+            ->map(fn (LegalDocument $document): LegalDocument => $this->cache()->gatingVersionOf($document) ?? $document)
+            ->filter(
+                fn (LegalDocument $document): bool => ! $document->requires_explicit_optin
+                    && $document->requires_reconsent
+                    && $this->announced($document, $now)
+                    && $document->enforce_from instanceof CarbonImmutable
+                    && $document->enforce_from->greaterThan($now)
+            );
+    }
+
+    /**
+     * The deemed-consent changes whose objection window is open: announced, and the deadline not
+     * passed.
+     *
+     * @return SupportCollection<int, LegalDocument>
+     */
+    private function upcomingDeemed(string $locale, CarbonImmutable $now): SupportCollection
+    {
+        return $this->resolvedFor($locale)
+            // An objection window stays open across a silent correction of the text it concerns.
+            ->map(fn (LegalDocument $document): LegalDocument => $this->cache()->governingVersionOf($document))
+            ->filter(
+                fn (LegalDocument $document): bool => $document->notice_mode === NoticeMode::DeemedConsent
+                    && $this->announced($document, $now)
+                    && $document->objection_deadline instanceof CarbonImmutable
+                    && $document->objection_deadline->greaterThan($now)
+            );
+    }
+
+    /**
+     * The distinct keys of a set of documents, which is all a holdings read is filtered on.
+     *
+     * @param  SupportCollection<int, LegalDocument>  $documents
+     * @return list<string>
+     */
+    private function keysOf(SupportCollection $documents): array
+    {
+        return array_values(array_unique($documents->map(fn (LegalDocument $document): string => $document->key)->all()));
+    }
+
+    /**
+     * The document set a subject reading this locale is held to: the request locale, plus every
+     * mandatory document resolved through the locale chain
+     * ({@see EnforceableDocumentCache::resolvedFor()}), taken from the publish-invalidated cache
+     * the package already maintains. On a warm cache in a store that is not the database (redis,
+     * memcached, file, array), the banner's three global lookups cost no database query, instead of
+     * three uncached `legal_documents` reads on every authenticated render. On the
+     * framework-default `database` cache store the reads move to the cache table rather than
+     * disappearing: the first read of each cached set in a request is a cache-table SELECT, and the
+     * per-request memo answers every lookup after it. Point `LEGAL_CONSENT_CACHE_STORE` at a store
+     * that is not the database for the full saving. The time filtering stays in memory: the
+     * announce/enforce windows move on a clock, so caching an already-filtered set would need a TTL
+     * short enough to be pointless.
      *
      * @return Collection<int, LegalDocument>
      */

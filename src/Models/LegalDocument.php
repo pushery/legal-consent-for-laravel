@@ -20,6 +20,7 @@ use Pushery\LegalConsent\Models\Concerns\GuardsPublishedDocument;
 use Pushery\LegalConsent\Models\Concerns\Replaceable;
 use Pushery\LegalConsent\Support\ActivationLock;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
+use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\TenantContext;
 
 /**
@@ -190,17 +191,17 @@ class LegalDocument extends Model
     }
 
     /**
-     * Make this the single active version of its (key, locale). Portable guard for
-     * "one active version" on every engine; Postgres also has a partial unique index.
+     * Make this the single active version of its (key, locale). The database holds the same
+     * invariant on every engine: a partial unique index on PostgreSQL and SQLite, a unique
+     * index over a generated column on MySQL.
      */
     public function activate(): void
     {
-        // Serialize concurrent activations of the same document. PostgreSQL enforces
-        // one-active-version with a partial unique index, but MySQL and SQLite have none — so two
-        // concurrent publishes could each deactivate the other's predecessors and BOTH end up
-        // active, failing OPEN on a production engine. A row lock is not enough: on a first publish
-        // there are no rows to lock (the gap the chain race taught us), so the set is serialized by
-        // NAME instead.
+        // Serialize concurrent activations of the same document. Without the lock, two concurrent
+        // publishes would each deactivate the other's predecessors, and the database's
+        // one-active-version constraint would refuse the second one; with it, the second one
+        // waits its turn. A row lock is not enough: on a first publish there are no rows to lock,
+        // so the set is serialized by NAME instead.
         //
         // Already inside a transaction? Then an orchestrating caller — the atomic multi-locale
         // releaser — owns this: it holds the very same lock across the OUTER transaction, while a
@@ -235,7 +236,7 @@ class LegalDocument extends Model
     private function activateNow(): void
     {
         DB::transaction(function (): void {
-            self::query()
+            static::model()::query()
                 ->where('key', $this->key)
                 ->where('locale', $this->locale)
                 ->whereKeyNot($this->getKey())
@@ -248,10 +249,10 @@ class LegalDocument extends Model
     /**
      * The name the one-active-version set is serialized under: one lock per (tenant, KEY).
      *
-     * Deliberately NOT per locale, and deliberately the same name {@see LegalDocumentReleaser} takes:
-     * an atomic multi-locale release and a single `legal-consent:publish` of the same document must
-     * exclude each other. Two different lock names would let them interleave — which is exactly how
-     * a "serialized" activation still ends with two active rows.
+     * Deliberately NOT per locale, and deliberately the same name {@see LegalDocumentReleaser}
+     * takes: an atomic multi-locale release and a single `legal-consent:publish` of the same
+     * document must exclude each other. Two different lock names would let them interleave — which
+     * is exactly how a "serialized" activation still ends with two active rows.
      */
     public function activationLockKey(): string
     {
@@ -269,7 +270,7 @@ class LegalDocument extends Model
      * (`legal-consent.cache.store`), not whatever happens to be the app default.
      *
      * PUBLIC AND STATIC because it has two callers, and having had two spellings is what the
-     * method exists to prevent. {@see \Pushery\LegalConsent\Support\LegalDocumentReleaser} took the
+     * method exists to prevent. {@see LegalDocumentReleaser} took the
      * same lock NAME through the bare `Cache` facade, which resolves the app default. Both sides
      * agreed in every test because the package store is unset there and both fell back to the same
      * default; the moment an operator sets `LEGAL_CONSENT_CACHE_STORE` — which this very docblock
@@ -277,11 +278,11 @@ class LegalDocument extends Model
      * locks and stopped excluding each other, which is precisely how a serialized activation still
      * ends with two active rows. A comparison of lock names cannot see that class of defect.
      *
-     * Be honest about the limit: this guarantee is only as real as the store's lock. `array` and
-     * `null` both implement LockProvider — so an interface check alone would call them protected —
-     * but an array lock is process-local and a null lock always succeeds, so neither serializes
-     * anything. On those the one-active-version invariant rests on PostgreSQL's partial unique index
-     * alone (MySQL and SQLite have none). Use redis, memcached or database in production.
+     * The serialization is only as real as the store's lock. `array` and `null` both implement
+     * LockProvider — so an interface check alone would call them serializing — but an array lock is
+     * process-local and a null lock always succeeds, so neither serializes anything. On those stores
+     * the one-active-version constraint of the database still holds on every engine, and a second
+     * concurrent activation fails with a constraint violation instead of waiting its turn. Use redis, memcached or database in production.
      */
     public static function activationLockStore(): Store
     {

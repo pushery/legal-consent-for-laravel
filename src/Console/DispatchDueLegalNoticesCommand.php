@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\Isolatable;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,23 +22,27 @@ use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Events\NoticeDispatched;
 use Pushery\LegalConsent\Events\NoticeDispatching;
+use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Listeners\ReopenVersionOnNoticeFailure;
 use Pushery\LegalConsent\Listeners\WriteNoticeDeliveryProof;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
+use Pushery\LegalConsent\Notifications\ChangeNotification;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\IntegerSetting;
 use Pushery\LegalConsent\Support\NoticeAttempts;
 use Pushery\LegalConsent\Support\NoticeMailConfig;
+use Pushery\LegalConsent\Support\ReportedNotificationFailures;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Throwable;
 
 /**
  * Version-level sweep: for every active version that owes a notice (active re-consent,
  * info-only, or deemed consent) whose announcement date has passed but which has not yet been
  * notified, hand the affected subjects the notification that matches its NoticeMode. Streams
  * subjects lazily in batches and collects garbage per version, so peak memory does not grow with
- * the size of the audience: each chunk is queued with one send() call.
+ * the size of the audience: each subject's notice is handed over with its own send() call.
  *
  * Routing: ActiveReconsent → ReconsentRequired, InfoPush → LegalChangeInformational,
  * DeemedConsent → DeemedConsentNotice. A voluntary consent is never swept (Art. 7(4)).
@@ -67,16 +72,17 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * removes the bulk of duplication without a unique constraint; a proof written by a genuinely
  * simultaneous sweep in the same window is still tolerated (a duplicate email is acceptable, a
  * missed notice is not). A notice that FAILS is counted against its subject and brings the version
- * back while the subject has attempts left — see {@see ReopenVersionOnNoticeFailure}. A subject that
- * has none left is reported on every run, and the run exits non-zero, because its notice is still
- * owed.
+ * back while the subject has attempts left — see {@see ReopenVersionOnNoticeFailure}. On a
+ * synchronous queue that failure surfaces inside this run, and it ends the subject's notice on
+ * that channel, not the run ({@see self::sendTo()}). A subject that has no attempts left is
+ * reported on every run, and the run exits non-zero, because its notice is still owed.
  */
 #[AsCommand(name: 'legal-consent:dispatch-notices')]
 final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
 {
     use SkipsWhenTablesAreMissing;
 
-    /** Subjects processed per batch — one send() call and one token lookup per ledger per chunk. */
+    /** Subjects per batch — one attempts record and one token lookup per ledger per chunk. */
     private const int CHUNK = 500;
 
     protected $signature = 'legal-consent:dispatch-notices
@@ -85,7 +91,21 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
 
     protected $description = 'Notify subjects of a now-announced legal change with the notification matching its notice mode.';
 
-    public function handle(AffectedSubjectResolver $resolver, LegalConsentMonitor $monitor): int
+    /**
+     * The minutes a run holds its lock: the scheduler's overlap lock and the `--isolated` lock alike,
+     * inside the hour this sweep runs on, so a run that dies holding one does not cost the next sweep.
+     */
+    public const int LOCK_MINUTES = 55;
+
+    /**
+     * How long the `--isolated` lock is held, which every scheduled run takes too ({@see LegalConsentServiceProvider}).
+     */
+    public function isolationLockExpiresAt(): CarbonInterval
+    {
+        return CarbonInterval::minutes(self::LOCK_MINUTES);
+    }
+
+    public function handle(AffectedSubjectResolver $resolver, LegalConsentMonitor $monitor, ReportedNotificationFailures $reported): int
     {
         DB::disableQueryLog();
 
@@ -103,6 +123,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
 
         $notified = 0;
         $held = 0;
+        $canceled = 0;
         $deficient = 0;
         $expired = 0;
 
@@ -154,8 +175,9 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             if ($dispatching->cancel) {
                 // Held back WITHOUT stamping, exactly like the size brake: the notice stays owed
                 // and the next sweep picks it up. A cancel that stamped would waive a legally
-                // required communication rather than defer it.
-                $held++;
+                // required communication rather than defer it. Counted apart from the brake,
+                // because the two are lifted in different places.
+                $canceled++;
                 $this->warn('  held back: a NoticeDispatching listener canceled this version. Nothing was sent and the watermark is untouched.');
 
                 continue;
@@ -198,26 +220,39 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // emails under at-least-once), it simply writes no duplicate proof row.
             $resolver->forVersion($version, skipNotified: $proofEnabled)
                 ->chunk(self::CHUNK)
-                ->each(function (LazyCollection $chunk) use ($notification, $version, $proofEnabled, &$notified): void {
-                    $subjects = $chunk->collect();
+                ->each(function (LazyCollection $chunk) use ($notification, $version, $proofEnabled, $reported, &$notified): void {
+                    // Positions from 0, so that the subjects from a stopping one on can be sliced off.
+                    $subjects = $chunk->collect()->values();
 
                     // Recorded BEFORE the send: with a synchronous queue the notice is delivered or
                     // fails inside send(), and its outcome has to find the row already there. Only a
                     // notice that goes out by mail ever comes back as delivered or failed; one that
                     // does not would count as on its way until the window ends, and then be queued
                     // again as lost.
-                    if ($proofEnabled) {
-                        NoticeAttempts::queued($version, $subjects->filter(
-                            static fn (Model $subject): bool => method_exists($notification, 'via')
-                                && in_array('mail', (array) $notification->via($subject), true),
-                        )->values());
-                    }
+                    $queued = $proofEnabled ? NoticeAttempts::queued($version, $subjects->filter(
+                        static fn (Model $subject): bool => in_array('mail', $notification->via($subject), true),
+                    )->values()) : null;
 
-                    // One send() for the whole chunk — still one queued job per subject. The locale
-                    // is already pinned on the notification itself, which matters because the
-                    // notice is QUEUED: without a pin the worker would render it in whatever locale
-                    // it happens to run under.
-                    Notification::send($subjects, $notification);
+                    // One send() per subject, and still one queued job per subject and channel. On
+                    // a synchronous queue those jobs run inside send(), so one subject's refused
+                    // notice has to stay that subject's (see sendTo()). The locale is already
+                    // pinned on the notification itself, which matters because the notice is
+                    // QUEUED: without a pin the worker would render it in whatever locale it
+                    // happens to run under.
+                    foreach ($subjects as $position => $subject) {
+                        try {
+                            $this->sendTo($subject, $notification, $reported);
+                        } catch (Throwable $exception) {
+                            // A failure Laravel did not report ends the run (see sendTo()). From
+                            // this subject on no notice was handed over, so none of them may stand
+                            // as on its way: the next run would pass them over until the window
+                            // ends and then count an attempt nobody made. A notice of this subject
+                            // that did go out, or failed, already changed its row and keeps it.
+                            $queued?->putBack($subjects->slice($position));
+
+                            throw $exception;
+                        }
+                    }
 
                     $notified += $subjects->count();
                 });
@@ -254,6 +289,13 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             $monitor->heartbeat('legal-consent:dispatch-notices.held', $held);
         }
 
+        if ($canceled > 0) {
+            // Non-zero for the same reason, and named apart from the brake: a listener's hold is
+            // lifted where the listener decides, and neither --force nor a higher limit reaches it.
+            $this->error("{$canceled} version(s) held back by a NoticeDispatching listener. The notice is still owed and goes out on the first run the listener lets through; --force and notifications.max_recipients_per_run do not reach a listener.");
+            $monitor->heartbeat('legal-consent:dispatch-notices.canceled', $canceled);
+        }
+
         if ($expired > 0) {
             $this->error("{$expired} deemed-consent version(s) still owed a notice after their objection deadline had passed. Nothing was sent for them: silence cannot bind on a notice that arrives after the deadline it names, so publish a new version with a new objection deadline.");
             $monitor->heartbeat('legal-consent:dispatch-notices.expired', $expired);
@@ -265,7 +307,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             $monitor->heartbeat('legal-consent:dispatch-notices.unreachable', $unreachable);
         }
 
-        return $held > 0 || $deficient > 0 || $expired > 0 || $unreachable > 0 ? self::FAILURE : self::SUCCESS;
+        return $held > 0 || $canceled > 0 || $deficient > 0 || $expired > 0 || $unreachable > 0 ? self::FAILURE : self::SUCCESS;
     }
 
     /**
@@ -483,6 +525,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
         }
 
         $this->info('Dry run — nothing was sent, no proof was written, no watermark was stamped.');
+        $this->line('NoticeDispatching listeners are not asked in a dry run, so a version one of them would hold back is counted here as one that would be sent.');
 
         if ($held > 0) {
             $this->error("{$held} version(s) would be held back by notifications.max_recipients_per_run. Re-run with --force or raise the limit.");
@@ -511,7 +554,53 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             : null;
     }
 
-    private function notificationFor(LegalDocument $version): BaseNotification&SendsNoticeMail
+    /**
+     * Hand one subject's notice over, and carry on past a channel Laravel reported as failed.
+     *
+     * On a synchronous queue the queued job runs inside `Notification::send()`. A channel that
+     * throws there is reported as `NotificationFailed` and thrown on, by Laravel's notification
+     * sender and then by the queue, so the exception reaches this loop. A worker would end that one
+     * job and go on, and the sweep does the same: the failure is already counted against the
+     * subject ({@see ReopenVersionOnNoticeFailure}), and the next subject is served. Without this,
+     * the subjects after it in the chunk would be recorded as on their way and never sent, and the
+     * version would keep its watermark clear.
+     *
+     * Only the exception Laravel reported is caught ({@see ReportedNotificationFailures}). Any
+     * other one, from a queue that cannot be reached or a listener that throws, still ends the run.
+     *
+     * The queue takes a subject's channels one after another, so the channels after the refused one
+     * were never handed over. They run now, inline, as the synchronous queue would have run them,
+     * so a refused mail does not also cost the subject its notice on the other channels.
+     */
+    private function sendTo(Model $subject, ChangeNotification $notification, ReportedNotificationFailures $reported): void
+    {
+        try {
+            Notification::send($subject, $notification);
+
+            return;
+        } catch (Throwable $exception) {
+            $refused = $reported->channelOf($exception);
+
+            if ($refused === null) {
+                throw $exception;
+            }
+        }
+
+        $channels = $notification->via($subject);
+        $position = array_search($refused, $channels, true);
+
+        foreach ($position === false ? [] : array_slice($channels, $position + 1) as $channel) {
+            try {
+                Notification::sendNow($subject, $notification, [$channel]);
+            } catch (Throwable $exception) {
+                if ($reported->channelOf($exception) === null) {
+                    throw $exception;
+                }
+            }
+        }
+    }
+
+    private function notificationFor(LegalDocument $version): ChangeNotification
     {
         // Routed through the config seam rather than matched here, so a consumer's subclass is used
         // by the sweep and by the PROOF rendering alike. Two different resolutions would be the

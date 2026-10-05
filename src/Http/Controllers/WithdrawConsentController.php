@@ -132,11 +132,12 @@ final readonly class WithdrawConsentController
      */
     private function isSameOrigin(string $target, Request $request): bool
     {
-        // Rejected, not sanitized. A browser drops the C0 controls and whitespace in a URL
-        // wherever they sit rather than only at the ends, so `/<TAB>evil.example` is fetched as
-        // `//evil.example` — a check that trimmed the ends would approve a string that becomes a
-        // foreign authority afterwards. No legitimate Referer carries a raw control or space;
-        // browsers percent-encode them.
+        // Rejected, not sanitized. A browser removes a tab, a line feed and a carriage return
+        // wherever they sit in a URL, and other C0 controls and spaces only at its ends; inside, it
+        // percent-encodes them. So `/<TAB>/evil.example` is fetched as `//evil.example`, a foreign
+        // authority, and a check that trimmed the ends would approve it. The rest of the range is
+        // refused as well, because no legitimate Referer carries a raw control or space: browsers
+        // percent-encode them.
         //
         // The `=== ''` changes nothing observable: url()->previous() is handed a non-empty fallback
         // and never answers with an empty string, so the pattern test below would refuse one anyway.

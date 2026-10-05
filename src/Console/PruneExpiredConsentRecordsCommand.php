@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\Isolatable;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,6 +16,7 @@ use Pushery\LegalConsent\Console\Concerns\SkipsWhenTablesAreMissing;
 use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
 use Pushery\LegalConsent\Exceptions\InvalidRetentionPeriod;
 use Pushery\LegalConsent\Exceptions\LedgerCensusDoesNotVerify;
+use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
@@ -87,6 +89,21 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
 
     protected $description = 'Delete consent and notice records older than the configured retention period.';
 
+    /**
+     * The minutes a run holds its lock: the scheduler's overlap lock and the `--isolated` lock alike.
+     * Well inside the day this sweep runs on, and longer than Laravel's hour for `--isolated`, so a
+     * long prune keeps its lock while it deletes and a second run cannot start beside it.
+     */
+    public const int LOCK_MINUTES = 120;
+
+    /**
+     * How long the `--isolated` lock is held, which every scheduled run takes too ({@see LegalConsentServiceProvider}).
+     */
+    public function isolationLockExpiresAt(): CarbonInterval
+    {
+        return CarbonInterval::minutes(self::LOCK_MINUTES);
+    }
+
     public function handle(LegalConsentMonitor $monitor): int
     {
         DB::disableQueryLog();
@@ -146,9 +163,8 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
 
         // The sweep above re-links a chain in the same transaction that removes from it, so it
         // leaves no broken chain behind. This pass heals what a run of an earlier version left: one
-        // stopped between a delete and its repair (OOM, SIGKILL, host loss, none of which
-        // `releaseOnTerminationSignals` catches) left chains whose first link points at a row that
-        // is gone, and nothing left to delete there.
+        // stopped between a delete and its repair, by a signal, an OOM or a lost host, left chains
+        // whose first link points at a row that is gone, and nothing left to delete there.
         if ($ledgerHolds) {
             $relinked += $this->relinkChainsNotStartingAtGenesis($cutoff, $soundness, $refused);
         }

@@ -255,16 +255,17 @@ final class SubjectToken
 
     /**
      * The tokens for a WHOLE batch of subjects, resolved in one query per ledger per subject type
-     * instead of two queries per subject — the notice sweep resolves 500 at a time. Same precedence
-     * as {@see forSubject}: an existing consent token wins, then a notice token, else a freshly
-     * minted UUID. Keyed by "{morphClass}\0{key}" (see {@see mapKey}).
+     * instead of two queries per subject, for a caller that resolves a page of subjects at once.
+     * Same precedence as {@see forSubject}: an existing consent token wins, then a notice token,
+     * else a freshly minted UUID. Keyed by "{morphClass}\0{key}" (see {@see mapKey}). Both ledgers
+     * are read through the classes `legal-consent.models` maps, as every other path reads them.
      *
      * One query is not one ROW. A subject's ledger is append-only and holds one row per consent
      * action they have ever taken, all carrying the same token — so a lookup that does not collapse
      * them returns chunk-size x ledger-depth rows to arrive at chunk-size tokens, and the `??=` fold
      * below then discards every duplicate. `distinct()` collapses them in the engine instead, which
      * it can do exactly because the selection is already narrowed to the (subject_id, subject_token)
-     * pair. The sweep this feeds runs in 500-subject chunks and argues from a memory budget.
+     * pair, and a caller resolving a page at a time is one that argues from a memory budget.
      *
      * @param  Collection<int, Model>  $subjects
      * @return array<string, string>
@@ -275,7 +276,7 @@ final class SubjectToken
 
         // Consent tokens first (forSubject's precedence), then notice tokens for whoever is still
         // unresolved. `??=` keeps the first (consent) hit, so a later notice row never overrides it.
-        foreach ([LegalConsent::class, LegalNotice::class] as $model) {
+        foreach ([LegalConsent::model(), LegalNotice::model()] as $model) {
             // The cast is on the closure's own result, not decoration: a morph ALIAS may be
             // written as a number, and `getMorphClass()` then returns the int PHP made of that
             // array key. Without it the closure violates its own return type and the batch resolve

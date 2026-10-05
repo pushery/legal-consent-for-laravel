@@ -89,14 +89,17 @@ class LegalChangeInformational extends ChangeNotification
     }
 
     /**
-     * An info-only notice must state WHEN the change takes effect, and must reach the subject as
-     * a readable statement rather than an untranslated token — that, and only that, is what the
-     * proof row certifies here.
+     * What the proof row certifies for an info-only notice: that it states WHEN the change takes
+     * effect, that a contract carries its free-termination line wherever `rightApplies()` owes one,
+     * and that each of these lines reaches the subject as a readable statement rather than an
+     * untranslated token.
      *
-     * It deliberately does NOT claim to have checked that the notice says WHAT changed. Nothing
-     * in this class can: the intro line is a fixed sentence per (type, locale), so it names the
-     * document but never the change. Stating the substance of a change per version is a separate
-     * piece of work, and until it lands this must not certify it.
+     * It does not certify that the notice says WHAT changed. The notice renders the version's
+     * change description where one was written (`addChangeItems()` in `toMail()`), and whether one
+     * has to exist is decided before the version is: with `change_items.required` on, the release
+     * of a document from the draft store refuses a version that owes a notice and lacks a complete
+     * description in any of its locales (`LegalDocumentReleaser`). A row written at delivery
+     * cannot supply a description nobody wrote, so it does not claim to have checked one.
      */
     public function mandatoryContentPresent(): bool
     {

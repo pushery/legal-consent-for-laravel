@@ -21,6 +21,7 @@ use Pushery\LegalConsent\Http\Middleware\EnsureLegalConsent;
 use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
+use Pushery\LegalConsent\Support\ConfirmationWindow;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\IntegerSetting;
 use Pushery\LegalConsent\Support\LedgerHashChain;
@@ -271,10 +272,8 @@ final class DoctorCommand extends Command
      */
     private function servedByStandIn(string $key, string $locale, array $active): bool
     {
-        $basis = config("legal-consent.documents.{$key}.legal_basis");
-
         try {
-            $type = DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
+            $type = DocumentType::fromLegalBasis(DocumentMatrix::legalBasis($key));
         } catch (ValueError) {
             return false;
         }
@@ -329,7 +328,7 @@ final class DoctorCommand extends Command
         $gates = false;
 
         foreach (DocumentMatrix::keys() as $key) {
-            $gates = $gates || in_array(config("legal-consent.documents.{$key}.legal_basis"), ['contract', 'acknowledgement'], true);
+            $gates = $gates || in_array(DocumentMatrix::legalBasis($key), ['contract', 'acknowledgement'], true);
         }
 
         return $gates && $this->gateGuardsARoute();
@@ -564,7 +563,47 @@ final class DoctorCommand extends Command
             ];
         }
 
+        $zone = $this->unpinnedSessionTimeZone();
+
+        if ($zone !== null) {
+            $findings[] = [
+                "Tamper evidence is ON, and the session time zone its chain is hashed under is not pinned: it is '{$zone}' now.",
+                [
+                    '  A chained row hashes `accepted_at` as the database renders it, and on PostgreSQL and',
+                    '  MySQL that rendering follows the session time zone. Laravel sets the zone only from a',
+                    '  `timezone` key on the connection; without one the server decides, through its own',
+                    '  configuration, a database or role default, or PGTZ in the environment of the process.',
+                    '  A change there makes `verify-ledger` report every chained row as broken although none',
+                    '  was touched. Set the key to the zone the chained rows were written under, or, before',
+                    "  the first chained row, to 'UTC' on PostgreSQL and '+00:00' on MySQL.",
+                ],
+            ];
+        }
+
         return $findings;
+    }
+
+    /**
+     * The session time zone of the ledger's connection, when no `timezone` key pins it.
+     *
+     * Null on SQLite, which keeps no session zone and renders no offset, and for a connection whose
+     * configuration carries the key, which Laravel applies when it connects.
+     */
+    private function unpinnedSessionTimeZone(): ?string
+    {
+        $connection = DB::connection();
+
+        if (config('database.connections.'.$connection->getName().'.timezone') !== null) {
+            return null;
+        }
+
+        $zone = match ($connection->getDriverName()) {
+            'pgsql' => $connection->scalar('show timezone'),
+            'mysql' => $connection->scalar('select @@session.time_zone'),
+            default => null,
+        };
+
+        return is_string($zone) ? $zone : null;
     }
 
     /**
@@ -691,8 +730,7 @@ final class DoctorCommand extends Command
         }
 
         $key = DocumentMatrix::keys()[0] ?? null;
-        $locales = config('legal-consent.locales');
-        $locale = is_array($locales) ? ($locales[0] ?? null) : null;
+        $locale = DocumentMatrix::locales()[0] ?? null;
 
         // Nothing registered to link TO yet. The route is fine as far as anything here can tell,
         // and inventing a key to probe with would report on a document that does not exist.
@@ -712,11 +750,12 @@ final class DoctorCommand extends Command
     /**
      * The store the document cache actually reads from, when that store is the database.
      *
-     * THE ADVICE EXISTED AND ONLY A DOCBLOCK CARRIED IT. `EnforceableDocumentCache` explains
-     * that the enforceable set is asked for four times per request and that on Laravel's default
-     * `database` store each of those is a SELECT against the cache table — so the per-request memo
-     * hands part of its saving straight back. A consumer on a default install is in exactly that
-     * state, has done nothing wrong, and nothing anywhere tells them.
+     * The advice existed and only a docblock carried it. `EnforceableDocumentCache` explains that
+     * the enforceable set is asked for four times per request. Its per-request memo answers three
+     * of them, and the first read of each locale still goes to the store, which on Laravel's
+     * default `database` store is a SELECT against the cache table on every request. A consumer on
+     * a default install is in exactly that state, has done nothing wrong, and nothing anywhere
+     * tells them.
      *
      * Reported, never enforced: `database` is a legitimate choice on a small install and on a host
      * with no Redis, and a doctor that refuses a working configuration is a doctor people stop
@@ -788,11 +827,9 @@ final class DoctorCommand extends Command
             return [];
         }
 
-        // No `try` around this, and the coverage floor is what settled it. By the time this runs,
-        // `handle()` has already read the database several times -- the tamper-evidence findings ask
-        // `Schema::hasTable()` themselves, and the unpublished-combination check queries. An
-        // unreachable database has therefore already ended the command, so a guard here is a second
-        // answer to a question an earlier line answered by throwing, and a line no run can enter.
+        // No `try` around this: databaseFindings() opens the connection before any reader runs and
+        // reports the database as unreachable when it cannot, so a guard here would answer a question
+        // that is already answered, on a line no run can enter.
         return Schema::hasTable('notifications') ? [] : ['database'];
     }
 
@@ -833,6 +870,11 @@ final class DoctorCommand extends Command
     private function databaseFindings(): ?array
     {
         try {
+            // Asked first and on its own. The readers below treat a failed query as a schema that
+            // is not migrated yet, so a connection that cannot be opened has to be ruled out before
+            // any of them runs, or it would read as an installation with nothing to report.
+            LegalDocument::model()::query()->getConnection()->select('select 1');
+
             return [
                 'firstUse' => self::describeFirstUseGate($this->publishedMandatoryKeys(), config('legal-consent.gate.first_use')),
                 'incoherent' => $this->deemedConsentWithoutProof(),
@@ -859,6 +901,7 @@ final class DoctorCommand extends Command
             RetentionPeriod::configured(config('legal-consent.retention_after_end', '3 years')),
             CarbonImmutable::now(),
         );
+        $confirmWindowProblem = ConfirmationWindow::problem(config('legal-consent.double_opt_in.confirm_within'));
         $editorRoute = $this->unresolvableEditorRoute();
         $uncacheable = $this->uncacheableKeys();
         $refusedFallbacks = SourceLanguageFallback::refusedKeys();
@@ -946,6 +989,15 @@ final class DoctorCommand extends Command
             $this->newLine();
         }
 
+        if ($confirmWindowProblem !== null) {
+            $this->newLine();
+            $this->error('legal-consent.double_opt_in.confirm_within names no confirmation window:');
+            $this->line("  {$confirmWindowProblem}");
+            $this->line('  `Consent::confirm()` refuses with it, so no double opt-in is completed until the');
+            $this->line('  value is fixed.');
+            $this->newLine();
+        }
+
         if ($unknownMode !== null) {
             $this->newLine();
             $this->warn("legal-consent.registration.without_form_fields is '{$unknownMode}', which is not 'warn' or 'refuse'.");
@@ -974,10 +1026,10 @@ final class DoctorCommand extends Command
 
             $this->newLine();
             $this->warn("The document cache resolves to '{$store}', which is a database-backed store ({$origin}).");
-            $this->line('  The enforceable set is asked for four times in a documented request — once from the');
-            $this->line('  gate middleware, three times from the banner — so on this store that is four SELECTs');
-            $this->line('  against the cache table for one global fact. The per-request memo removes the repeats');
-            $this->line('  within a request and cannot remove the first read.');
+            $this->line('  The enforceable set is asked for four times in a documented request, once from the');
+            $this->line('  gate middleware and three times from the banner. The per-request memo answers three of');
+            $this->line('  them, so on this store every request still pays one SELECT against the cache table per');
+            $this->line('  locale it reads, for one global fact.');
             $this->line('  Point LEGAL_CONSENT_CACHE_STORE at a store that is not the database (redis, memcached,');
             $this->line('  an in-memory octane store) and the read stops touching it at all.');
             $this->line('  This is a note, not a fault: `database` works, and on a small install it is a reasonable');
@@ -1084,12 +1136,12 @@ final class DoctorCommand extends Command
         // returns each restating the rule is how the legal contradiction fell out of the exit code
         // on the third one: the same deemed-consent-without-proof installation ended 1 or 0
         // depending on whether the published config happened to carry an unrelated stale key.
-        $failed = $incoherent || $refusedFallbacks !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null;
+        $failed = $incoherent || $refusedFallbacks !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null || $confirmWindowProblem !== null;
 
-        // $this->laravel->configPath(), never the config_path() helper: that one lives in
-        // laravel/framework's Foundation, which this package does not import a symbol from. The
-        // methods used here are on Illuminate\Contracts\Foundation\Application, the type
-        // `$this->laravel` already has, so the report does not depend on a global function.
+        // $this->laravel->configPath() rather than the config_path() helper, as the provider does
+        // when it publishes: the path is the application's, so it is asked of the application this
+        // command already holds, and it follows an application that moved its config directory.
+        // The helper reads the same container one layer further away.
         $publishedPath = $this->laravel->configPath('legal-consent.php');
 
         if (! is_file($publishedPath)) {

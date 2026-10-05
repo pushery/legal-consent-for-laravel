@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Enums;
 
+use Pushery\LegalConsent\Support\ConsentGate;
+
 /**
  * What happened in a single append-only ledger entry.
  *
@@ -95,12 +97,12 @@ enum ConsentAction: string
      * The actions that leave whatever standing existed before them UNCHANGED — neither accepting
      * nor ending.
      *
-     * Both members are here for the same reason, and it is not a resemblance between them: the
-     * fold in {@see ConsentGate} is a two-way switch, so anything not accepting counts as ending
-     * and drops the holding to zero. An objection rebuts a *deemed change* (§ 308 Nr. 5 lit. a
-     * BGB), not the agreement; an opt-in request is a declaration awaiting confirmation. Letting
-     * either reset the holding would erase a consent the subject still has, in a ledger nothing
-     * can correct afterwards.
+     * Both members are here for the same reason, and it is not a resemblance between them: the fold
+     * in {@see ConsentGate} is a two-way switch, so anything not accepting counts as ending and
+     * drops the holding to zero. An objection rebuts a *deemed change* (§ 308 Nr. 5 lit. a BGB),
+     * not the agreement; an opt-in request is a declaration awaiting confirmation. Letting either
+     * reset the holding would erase a consent the subject still has, in a ledger nothing can
+     * correct afterwards.
      *
      * @return list<self>
      */

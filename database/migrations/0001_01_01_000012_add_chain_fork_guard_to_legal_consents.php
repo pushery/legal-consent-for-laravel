@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\IndexName;
 
 /**
  * Make a tamper-chain fork physically impossible.
@@ -26,14 +27,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('legal_consents', function (Blueprint $table): void {
-            $table->unique(['subject_token', 'prev_record_hash'], 'legal_consents_chain_link_unique');
+            $table->unique(['subject_token', 'prev_record_hash'], IndexName::of('legal_consents_chain_link_unique'));
         });
     }
 
     public function down(): void
     {
         Schema::table('legal_consents', function (Blueprint $table): void {
-            $table->dropUnique('legal_consents_chain_link_unique');
+            $table->dropUnique(IndexName::existing('legal_consents', 'legal_consents_chain_link_unique'));
         });
     }
 };

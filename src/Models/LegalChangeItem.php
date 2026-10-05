@@ -16,9 +16,9 @@ use Pushery\LegalConsent\Models\Concerns\Replaceable;
 /**
  * One typed entry in a change description: a clause added, a processor removed, a right narrowed.
  *
- * `state` mirrors the parent so the database trigger can decide without a cross-table subquery,
- * which MySQL refuses inside a BEFORE trigger. The invariant that the two agree is asserted by a
- * test rather than assumed.
+ * `state` mirrors the parent so the database trigger decides from the row it guards, with the same
+ * trigger the change set carries, rather than reading the parent. The invariant that the two agree
+ * is asserted by a test rather than assumed.
  *
  * @property int $id
  * @property int $change_set_id
@@ -75,8 +75,8 @@ class LegalChangeItem extends Model
      * NOT LOADED IS NOT "NOT PUBLISHED" — the same defect as on the parent set, for the same
      * reason. `getOriginal()` reads out of `$this->original`, so a row loaded as `select(['id', …])`
      * has no `state` there and answers null. Null is not `Published`, so the write went through on
-     * a frozen item. Partial selects are house style here, and on SQLite this hook IS the
-     * protection: the database triggers cover PostgreSQL and MySQL only.
+     * a frozen item. Partial selects are house style here. The database triggers refuse the write
+     * on every engine as well, but with a raw SQLSTATE rather than a refusal that names the item.
      *
      * It asks the database rather than guessing, fetching what the message needs in the same read,
      * and a row it cannot find is refused rather than waved through.
@@ -97,7 +97,7 @@ class LegalChangeItem extends Model
             return $item;
         }
 
-        return self::query()->whereKey($item->getKey())->first(['state', 'change_set_id', 'position']);
+        return static::model()::query()->whereKey($item->getKey())->first(['state', 'change_set_id', 'position']);
     }
 
     /**

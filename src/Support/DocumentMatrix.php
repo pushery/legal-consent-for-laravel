@@ -47,6 +47,20 @@ final readonly class DocumentMatrix
     }
 
     /**
+     * The legal basis the registry gives a document, or `contract` where it gives none.
+     *
+     * Every reader of the registry reads an entry without one as a contract, and the publisher
+     * publishes it as one. A check that read the missing basis as none at all would answer for a
+     * different document than the one in front of readers, so the default is kept here, once.
+     */
+    public static function legalBasis(string $key): string
+    {
+        $basis = config("legal-consent.documents.{$key}.legal_basis");
+
+        return is_string($basis) ? $basis : 'contract';
+    }
+
+    /**
      * An empty or missing list falls back to the default locale, so a host that never listed any
      * still has a matrix of one column rather than none — an empty matrix would make the bulk
      * publish a silent no-op and the doctor's report vacuously clean.

@@ -28,9 +28,10 @@ use Illuminate\Support\ServiceProvider;
  *    which is wrong for an application that does not have the component library installed. (It
  *    needs `--force` to actually replace an existing file — see the note at the group itself.)
  *
- * Groups stay global, so every documented `--tag=…` keeps working untouched: `pathsForGroup()`
- * searches `static::$publishGroups`, which is keyed by tag and not by provider. Only the
- * provider-scoped shortcut changes, and only by no longer reaching past the choice a consumer made.
+ * Groups stay global, so every documented `--tag=…` keeps working untouched: the framework's
+ * `pathsForProviderOrGroup()` answers a tag on its own from `static::$publishGroups`, which is keyed
+ * by tag and not by provider. Only the provider-scoped shortcut changes, and only by no longer
+ * reaching past the choice a consumer made.
  *
  * Registered from {@see LegalConsentServiceProvider::registerPublishing()} rather than declared in
  * `composer.json`. Package discovery would work equally well and would put a second class in front
@@ -62,13 +63,13 @@ final class LegalConsentOptInPublishing extends ServiceProvider
         ], 'legal-consent-backfill');
 
         // WireKit-native variants — this tag maps component-built views onto the SAME destinations
-        // the plain stubs use. IT DOES NOT OVERWRITE THEM ON ITS OWN: `vendor:publish` skips a
+        // the plain stubs use. It does not overwrite them on its own: `vendor:publish` skips a
         // target that already exists, so on an installation that has published views before, this
-        // tag needs `--force` or it is a silent no-op. Whichever tag ran FIRST wins otherwise, not
-        // whichever is more specific. It covers the Livewire views too: those are
-        // what the ConsentSettings/ReConsentForm components actually render, so a tag that skipped
-        // them would leave a WireKit+Livewire app with unstyled reactive screens while reporting
-        // that it had themed the UI.
+        // tag needs `--force`, or every file is reported as SKIPPED and nothing changes. Whichever
+        // tag ran FIRST wins otherwise, not whichever is more specific. It covers the Livewire views
+        // too: those are what the ConsentSettings/ReConsentForm components actually render, so a tag
+        // that skipped them would leave a WireKit+Livewire app with unstyled reactive screens while
+        // reporting that it had themed the UI.
         $this->publishes([
             __DIR__.'/../resources/views/wirekit/consent-checkboxes.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/consent-checkboxes.blade.php'),
             __DIR__.'/../resources/views/wirekit/consent-banner.blade.php' => $this->app->resourcePath('views/vendor/legal-consent/consent-banner.blade.php'),

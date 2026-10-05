@@ -31,6 +31,13 @@ use Pushery\LegalConsent\Support\CalendarDate;
  */
 final readonly class MarkdownFilesDriver implements LegalDocumentSource
 {
+    /**
+     * What an editor's "UTF-8 with BOM" writes in front of the first character. It is no part of the
+     * text, and left in place it stands before the opening `---`, so the frontmatter would be read
+     * as body.
+     */
+    private const string BYTE_ORDER_MARK = "\xEF\xBB\xBF";
+
     public function __construct(private string $basePath) {}
 
     public function resolve(string $type, string $locale): RawDocument
@@ -84,6 +91,10 @@ final readonly class MarkdownFilesDriver implements LegalDocumentSource
     private function splitFrontMatter(string $raw): array
     {
         $raw = str_replace(["\r\n", "\r"], "\n", $raw);
+
+        if (str_starts_with($raw, self::BYTE_ORDER_MARK)) {
+            $raw = substr($raw, strlen(self::BYTE_ORDER_MARK));
+        }
 
         if (preg_match('/^---\n(.*?)\n---\n?(.*)$/s', $raw, $matches) === 1) {
             return [$this->parseFlatYaml($matches[1]), ltrim($matches[2])];

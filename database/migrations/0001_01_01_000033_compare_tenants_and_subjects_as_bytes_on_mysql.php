@@ -7,6 +7,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\ProofColumnGuard;
+use Pushery\SQLens\Attributes\NoSqlOnDriver;
 
 /**
  * Compare tenants and subjects as bytes on MySQL, as SQLite and PostgreSQL already do.
@@ -29,7 +30,10 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * Nothing that was apart comes together: a no-pad binary collation tells more values apart than
  * either one it replaces, so no unique index gains a duplicate.
  */
-return new class extends Migration
+return new
+#[NoSqlOnDriver('pgsql', reason: 'PostgreSQL already compares these columns as bytes; only MySQL needs the binary collation')]
+#[NoSqlOnDriver('sqlite', reason: 'SQLite already compares these columns as bytes; only MySQL needs the binary collation')]
+class extends Migration
 {
     private const string BYTES = 'utf8mb4_0900_bin';
 

@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\IndexName;
 
 /**
  * Append-only consent ledger. One row per acceptance / acknowledgment /
@@ -66,10 +67,10 @@ return new class extends Migration
             $table->timestampTz('accepted_at');
             $table->timestampTz('created_at')->nullable();
 
-            $table->index(['subject_type', 'subject_id', 'document_key', 'accepted_at'], 'legal_consents_subject_doc_time_idx');
+            $table->index(['subject_type', 'subject_id', 'document_key', 'accepted_at'], IndexName::of('legal_consents_subject_doc_time_idx'));
             // Named, because the name Laravel would generate is 63 characters before a connection's
             // table prefix is put in front of it, and MySQL refuses an identifier over 64.
-            $table->index(['document_key', 'document_major_version', 'action'], 'legal_consents_doc_major_action_idx');
+            $table->index(['document_key', 'document_major_version', 'action'], IndexName::of('legal_consents_doc_major_action_idx'));
             $table->index('subject_token');
         });
 
@@ -102,15 +103,15 @@ return new class extends Migration
 
         if ($driver === 'pgsql') {
             $this->execute(<<<SQL
-                CREATE OR REPLACE FUNCTION {$function}() RETURNS trigger AS \$\$
+                CREATE OR REPLACE FUNCTION {$this->quoted($function)}() RETURNS trigger AS \$\$
                 BEGIN
                     RAISE EXCEPTION 'legal_consents is append-only (Art. 5(2) DSGVO Rechenschaftspflicht)';
                 END;
                 \$\$ LANGUAGE plpgsql;
 
-                CREATE TRIGGER {$trigger}
-                    BEFORE UPDATE ON {$table}
-                    FOR EACH ROW EXECUTE FUNCTION {$function}();
+                CREATE TRIGGER {$this->quoted($trigger)}
+                    BEFORE UPDATE ON {$this->quoted($table)}
+                    FOR EACH ROW EXECUTE FUNCTION {$this->quoted($function)}();
                 SQL);
         }
 
@@ -134,8 +135,8 @@ return new class extends Migration
         $function = $this->prefixed('legal_consents_block_update');
 
         if ($driver === 'pgsql') {
-            $this->execute("DROP TRIGGER IF EXISTS {$trigger} ON {$table};");
-            $this->execute("DROP FUNCTION IF EXISTS {$function}();");
+            $this->execute("DROP TRIGGER IF EXISTS {$this->quoted($trigger)} ON {$this->quoted($table)};");
+            $this->execute("DROP FUNCTION IF EXISTS {$this->quoted($function)}();");
         }
 
         // `mariadb` on the DROP side only — the engine is refused on install (ProofColumnGuard),
@@ -164,10 +165,20 @@ return new class extends Migration
     }
 
     /**
+     * A prefixed name for PostgreSQL DDL, quoted as the schema builder quotes the names it creates.
+     * PostgreSQL folds an unquoted name to lower case, so under a prefix with a capital letter the
+     * unquoted name would point at a table or function that does not exist.
+     */
+    private function quoted(string $name): string
+    {
+        return DB::connection()->getQueryGrammar()->wrap($name);
+    }
+
+    /**
      * The ONE place this migration's hand-built DDL reaches the connection.
      *
      * The statements carry a table prefix that is only known at runtime, so they cannot be literal
-     * strings. Funnelling them through a single method keeps the static exemption for
+     * strings. Funneling them through a single method keeps the static exemption for
      * `unprepared()`'s literal-string requirement to one line next to the validation that earns
      * it, rather than a file-wide waiver.
      */

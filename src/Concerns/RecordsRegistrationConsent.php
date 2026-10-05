@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Concerns;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Database\Eloquent\Model;
 use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Support\ConsentContext;
@@ -20,7 +21,7 @@ use Pushery\LegalConsent\Support\RegistrationRules;
 trait RecordsRegistrationConsent
 {
     /**
-     * @return array<string, list<string>>
+     * @return array<string, list<string|ValidationRule>>
      */
     protected function consentRules(): array
     {

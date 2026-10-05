@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Console\VerifyLedgerCommand;
 
 /**
  * The witness for the row that has none: a per-row mac, held OUTSIDE the append-only ledger.
@@ -173,10 +174,13 @@ final readonly class LedgerRecordMacs
      * boundary below every untouched row in a ledger whose first macs come from an erasure, and
      * demand a mac from each of them.
      *
-     * The check costs one indexed lookup on a two-row table per consent write, and a second, locking
-     * one only while the marker is missing ({@see LedgerHashChain::markerStamped()}). Said out loud
-     * rather than optimized away: the obvious cache is a cache of database state, and the write
-     * path already does four statements.
+     * Every chained write pays for the check: a catalog query for the marker table, after the one
+     * {@see available()} makes for the mac table, and one indexed lookup on a two-row table, with a
+     * second, locking one only while the marker is missing ({@see LedgerHashChain::markerStamped()}).
+     * Laravel answers `Schema::hasTable()` from the database on every call. The two catalog queries
+     * are not cached on purpose: an installation may lack either table, through a migration it
+     * ignored or rolled back, and a cached answer would outlive that in a long-running process,
+     * where the write would then fail instead of going on without a mac.
      */
     private function stampBoundary(): void
     {
@@ -229,7 +233,8 @@ final readonly class LedgerRecordMacs
                 ->get(['consent_id', 'mac']);
 
             // Later rows overwrite earlier ones, which is what makes the ascending order read as
-            // "the last one wins" without a second pass or a window function no engine here shares.
+            // "the last one wins" without a second pass and without the window-function subquery
+            // that would select the newest row per consent in SQL.
             // Keyed by the id as an INT, because the caller's key is one too — a bigint arrives as
             // a numeric string through some connections, and two spellings of one id would mean a
             // recorded mac that no lookup ever finds. Neither fallback is ever taken: `consent_id`

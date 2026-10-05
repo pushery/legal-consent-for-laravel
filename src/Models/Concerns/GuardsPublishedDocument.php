@@ -57,32 +57,23 @@ trait GuardsPublishedDocument
             }
         });
 
-        // Any write to this table can change WHICH versions are enforceable, so it drops the gate's
-        // cached set. Tying invalidation to the publish event alone would leave every other path
-        // stale — an activate(), a seeder, a consumer inserting a row by hand — and a stale
-        // enforceable set is a gate that fires late or not at all. The after-commit listener still
-        // exists for the release transaction's ordering; this is the net underneath it.
+        // Any write to this table can change WHICH versions are cached, so it drops the gate's sets.
+        // Tying invalidation to the publish event alone would leave every other path stale — an
+        // activate(), a seeder, a consumer inserting a row by hand — and a stale enforceable set is a
+        // gate that fires late or not at all. An inactive row counts too: the sets also hold the
+        // announced versions an active one replaced inside its major, and those are inactive.
+        //
+        // After the transaction commits, as the publish listener does, because a flush inside it
+        // achieves nothing: a request between the flush and the commit reads the old rows and
+        // caches them again. A reactivated version goes out with no publish event at all, so this
+        // is its only flush. Outside a transaction the flush runs at once.
+        //
+        // Under the row's own tenant, and its own locale first: flushFor() says why both matter.
+        // The model still carries its attributes here, after a delete as after a save.
         $flush = static function (self $document): void {
-            $cache = app(EnforceableDocumentCache::class);
-
-            // The row's OWN locale first, and only a delete needs it: `flushAll()` discovers
-            // locales from the declared list plus the ones currently published, and a deleted row
-            // is in neither by the time the listener runs. With `legal-consent.locales` undeclared
-            // — the one configuration that lets a document be published in ANY language, which is
-            // why this file's sibling guard exists — deleting the last document of a locale left
-            // its set cached for the full TTL, so the gate kept enforcing a version that no longer
-            // existed. The model still carries the attribute here; the table no longer does.
-            // The `!== ''` changes nothing observable: `locale` is a NOT NULL column no write path leaves
-            // empty, and flushing '' would drop nothing. It keeps an empty value from reading as a locale.
-            if ($document->locale !== '') {
-                $cache->flush($document->locale);
-            }
-
-            // Redundant for the row this listener was called with: every set is keyed per locale, and
-            // resolvedFor() walks a chain by reading each locale's own set, so the flush above already
-            // reaches every reader this write can change, through a locale chain too. It stays as the
-            // wider net the comment above `$flush` describes.
-            $cache->flushAll();
+            $document->getConnection()->afterCommit(
+                static fn () => app(EnforceableDocumentCache::class)->flushFor($document),
+            );
         };
 
         static::saved($flush);

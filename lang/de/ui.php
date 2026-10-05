@@ -66,7 +66,7 @@ return [
     'consent_given' => 'Erteilt',
     'consent_not_given' => 'Nicht erteilt',
 
-    // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
+    // Grace-period remaining time (trans_choice): pluralization + effective-today case.
     'days_left' => '{0}Ab heute wirksam|{1}Noch :count Tag|[2,*]Noch :count Tage',
     'updated_note' => 'Aktualisiert — keine Aktion erforderlich.',
     'object_review' => 'Ansehen oder widersprechen',
@@ -81,7 +81,6 @@ return [
     'admin_heading' => 'Rechtstexte',
     'admin_policy' => 'Texte werden je Sprache bearbeitet, von einem Menschen geprüft und dann über alle Sprachen zugleich freigegeben. Eine maschinelle Übersetzung kann nie publiziert werden, bevor sie jemand geprüft hat, und der Zustimmungssatz ist feste Copy — er wird nie maschinell übersetzt.',
     'admin_document' => 'Dokument',
-    'admin_release' => 'Freigabe',
     'admin_not_written' => 'Nicht geschrieben',
     'admin_not_written_short' => 'Fehlt',
     'review_state_draft' => 'Entwurf',
@@ -137,8 +136,6 @@ return [
     'reconsent_none_selected' => 'Bitte bestätige die aufgeführten Punkte, um fortzufahren.',
     'admin_body_label' => 'Text (bereinigtes HTML)',
     'admin_preview_label' => 'Vorschau des veröffentlichten Texts',
-    'admin_edit' => 'bearbeiten',
-    'admin_edit_for' => ':key bearbeiten (:locale)',
     'admin_edit_for_state' => ':key bearbeiten (:locale) — :state',
     'admin_status_saved' => 'Gespeichert. Vor der Veröffentlichung ist eine Prüfung erforderlich.',
     'admin_status_not_saved' => 'Nicht gespeichert — :reason',
@@ -190,4 +187,8 @@ return [
     'publish_refused_major_needs_reconsent' => 'Version :version hebt in :language die Hauptversion an und verlangt damit von allen eine erneute Zustimmung; als aktive erneute Zustimmung veröffentlichen',
     'publish_refused_gating_mode_keeps_the_major' => 'Version :version behält in :language die Hauptversion :major, eine erneute Zustimmung erreicht damit niemanden, der schon zugestimmt hat; als :next veröffentlichen',
     'publish_refused_objection_deadline_not_before_effective_date' => 'die Widerspruchsfrist (:deadline) muss vor dem Inkrafttreten (:enforce) enden',
+    'publish_refused_change_class_too_long' => 'die Änderungsklasse hat :length Zeichen und darf höchstens :max haben',
+    'draft_refused_no_translator' => 'für diese Anwendung ist keine maschinelle Übersetzung eingerichtet; übersetze den Text von Hand oder bitte die Entwicklung, einen Übersetzer anzubinden',
+    'draft_refused_too_large' => 'der Text hat :size KB, und ein Rechtstext darf höchstens :limit KB haben',
+    'draft_refused_unparsable' => 'der Text konnte nicht bis zum Ende gelesen werden und wäre abgeschnitten worden; meist ist sehr tief verschachteltes Markup die Ursache',
 ];

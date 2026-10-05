@@ -15,6 +15,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Pushery\LegalConsent\Contracts\LegalTextTranslator;
+use Pushery\LegalConsent\Enums\DraftRefusal;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\LegalDocumentUnparsable;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
@@ -60,9 +61,13 @@ use Throwable;
  * A `finally` DOES NOT COVER THE CASE THIS JOB EXISTS FOR. A worker killed at its timeout ends
  * inside a `SIGALRM` handler that calls `exit()`, so no `finally` in this file runs — and the marker
  * would stand for its full hour while the editor told the operator a translation was running that
- * died in the first minute. The same path covers `queue:restart` mid-job and an OOM kill. What still
- * fires there is Laravel's own failure route, so the answer is `failed()` rather than a block this
- * code hopes to reach.
+ * died in the first minute. What still fires there is Laravel's own failure route, so the answer is
+ * `failed()` rather than a block this code hopes to reach. The handler takes that route at the first
+ * timeout only for a job that fails on its timeout, which is why {@see $failOnTimeout} is set: under
+ * a worker started with `--tries=3`, a job without it would keep the marker standing through every
+ * attempt. A process the operating system kills, an out-of-memory kill for one, runs nothing at all;
+ * its job comes back when the reservation expires, and the attempt that finds it out of tries calls
+ * `failed()`. `queue:restart` is not one of these cases: the worker reads the signal after the job.
  *
  * IT IS A HINT, NOT A LOCK. Two operators translating the same draft at once is not a case this
  * prevents, and it never pretended to: `applyTranslation()` owns that question, and the one that
@@ -75,6 +80,13 @@ final class TranslateLegalDraft implements ShouldQueue
     use InteractsWithQueue;
     use Queueable;
     use SerializesModels;
+
+    /**
+     * A translation that outlasts the worker's timeout fails there, once, rather than being tried
+     * again: the translator is the application's binding and may bill per call, and a text that did
+     * not finish in time once is the operator's to send again, from a screen that says so.
+     */
+    public bool $failOnTimeout = true;
 
     public function __construct(
         private readonly string $key,
@@ -129,10 +141,9 @@ final class TranslateLegalDraft implements ShouldQueue
     /**
      * Record that a translation ended badly, for the screen to read once.
      *
-     * The reason is the sentence the inline path would have shown, and only for the refusals whose
-     * message is written FOR an operator. An unexpected defect passes none: an internal exception
+     * A reason given here is shown as it is. An unexpected defect passes none: an internal exception
      * message on an admin screen says nothing to the person reading it and can carry more than it
-     * should.
+     * should. A refusal the operator can act on is recorded through `markRefused()` instead.
      */
     public static function markFailed(string $key, string $locale, string $reason = '', string $tenant = ''): void
     {
@@ -140,11 +151,27 @@ final class TranslateLegalDraft implements ShouldQueue
     }
 
     /**
+     * Record a refusal the operator can act on, for the screen to read once.
+     *
+     * The record keeps the refusal's case and values rather than its message, an English sentence for
+     * a log: the worker knows no reader, so the sentence is worded when a screen reads the record.
+     */
+    public static function markRefused(string $key, string $locale, TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable $refusal, string $tenant = ''): void
+    {
+        Cache::put(self::markerFor($key, $locale, $tenant), [
+            'failed' => '',
+            'refusal' => DraftRefusal::of($refusal)->value,
+            'values' => DraftRefusal::valuesOf($refusal),
+        ], now()->addHour());
+    }
+
+    /**
      * The failure reason if the last run left one, removing it as it reads.
      *
      * Null means no failure is recorded; an empty string means it failed without a sentence to pass
-     * on. Read once, because a failure already spoken is not news on the next render — the TTL is
-     * only there for the reader who never comes back.
+     * on. A refusal is worded here, in the language of the request that reads it, which is the
+     * screen's. Read once, because a failure already spoken is not news on the next render — the TTL
+     * is only there for the reader who never comes back.
      */
     public static function takeFailure(string $key, string $locale, string $tenant = ''): ?string
     {
@@ -156,7 +183,32 @@ final class TranslateLegalDraft implements ShouldQueue
 
         Cache::forget(self::markerFor($key, $locale, $tenant));
 
+        $recorded = $marker['refusal'] ?? null;
+        $refusal = is_string($recorded) ? DraftRefusal::tryFrom($recorded) : null;
+
+        if ($refusal instanceof DraftRefusal) {
+            return (string) __($refusal->label(), self::recordedValues($marker['values'] ?? null));
+        }
+
         return is_string($marker['failed']) ? $marker['failed'] : '';
+    }
+
+    /**
+     * The values a refusal was recorded with, as its sentence takes them.
+     *
+     * @return array<string, int>
+     */
+    private static function recordedValues(mixed $values): array
+    {
+        $recorded = [];
+
+        foreach (is_array($values) ? $values : [] as $name => $value) {
+            if (is_string($name) && is_int($value)) {
+                $recorded[$name] = $value;
+            }
+        }
+
+        return $recorded;
     }
 
     /**
@@ -208,8 +260,8 @@ final class TranslateLegalDraft implements ShouldQueue
             // The same three the inline path answers for, and they are not re-raised here for a
             // reason rather than out of tidiness: putting "your translator is not configured" in
             // `failed_jobs` is right for a defect and wrong for a state somebody can fix on the
-            // screen they are already looking at. Their message travels to that screen instead.
-            self::markFailed($this->key, $this->locale, $e->getMessage(), $tenant);
+            // screen they are already looking at. The refusal travels to that screen instead.
+            self::markRefused($this->key, $this->locale, $e, $tenant);
 
             return;
         }
@@ -286,8 +338,9 @@ final class TranslateLegalDraft implements ShouldQueue
      *
      * Without it the marker stands for its full hour: the editor keeps polling and keeps telling the
      * operator that a translation is running, over a worker that died in the first minute. Nothing
-     * is on the screen, nothing is in a log they read. The same path covers `queue:restart` during a
-     * job and an OOM kill.
+     * is on the screen, nothing is in a log they read. The handler arrives here at the first timeout
+     * because the job fails on its timeout ({@see $failOnTimeout}); a job killed by the operating
+     * system arrives here once it comes back with no tries left.
      *
      * No reason travels with it. The throwable here describes a defect or a limit the worker hit;
      * either is for whoever reads `failed_jobs`, not for the person waiting on a text.

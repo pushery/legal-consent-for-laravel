@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Http\Controllers;
 
-use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Pushery\LegalConsent\Content\PublishedDocument;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Contracts\NamesLegalTexts;
@@ -56,15 +56,20 @@ use Pushery\LegalConsent\Support\DocumentMatrix;
  * header already names the document, and the fragment's heading directly under it read as the same
  * title twice. Without the parameter the fragment keeps its heading, so a caller that shows the
  * fragment somewhere with no title of its own gets exactly what it got before.
+ *
+ * ## It asks not to be indexed
+ *
+ * The fragment's address stands in the markup of every registration form that opens it in a dialog,
+ * and what it answers is the published text without the host's page around it. Indexed, it would be
+ * a thin copy of the page the checkbox links to, so it answers with `X-Robots-Tag: noindex`. The
+ * header binds search engines only; the dialog that fetches the fragment reads it as before.
  */
 final readonly class LegalDocumentFragmentController
 {
     public function __construct(private ConsentManager $consent, private NamesLegalTexts $names) {}
 
-    public function __invoke(Request $request, string $key, string $locale): View
+    public function __invoke(Request $request, string $key, string $locale): Response
     {
-        $locales = config('legal-consent.locales', ['de']);
-
         // The registry decides, not the request. Reading `published()` for an unregistered key would
         // answer 404 anyway most of the time — but "most of the time" is the part that makes a
         // surface hard to reason about, so the answer comes from the configuration either way.
@@ -73,7 +78,7 @@ final readonly class LegalDocumentFragmentController
         // serve a fragment for `0` on a config written as a list, which is a name that defines
         // nothing — and this route is one a consent checkbox links to.
         abort_unless(in_array($key, DocumentMatrix::keys(), true), 404);
-        abort_unless(is_array($locales) && in_array($locale, $locales, true), 404);
+        abort_unless(in_array($locale, DocumentMatrix::locales(), true), 404);
 
         $document = $this->consent->published($key, $locale);
 
@@ -82,11 +87,11 @@ final readonly class LegalDocumentFragmentController
         // is the opposite of what an unpublished document means.
         abort_unless($document instanceof PublishedDocument, 404);
 
-        return view('legal-consent::document-fragment', [
+        return response()->view('legal-consent::document-fragment', [
             'document' => $document,
             'heading' => $request->query('heading') !== '0',
             'shownIn' => $this->shownIn($document, $locale),
-        ]);
+        ])->header('X-Robots-Tag', 'noindex');
     }
 
     /**

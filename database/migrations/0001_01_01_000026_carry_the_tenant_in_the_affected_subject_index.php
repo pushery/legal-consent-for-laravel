@@ -5,10 +5,12 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\IndexName;
 
 /**
- * The affected-subject index gains `tenant_id`, so the sweep's linearity claim holds for a
- * multi-tenant installation too.
+ * The affected-subject index gains `tenant_id`, so a multi-tenant installation filters its tenant
+ * inside the index rather than against the table. The seek still passes the entries of every tenant
+ * within one (document_key, locale), because the column trails the index.
  *
  * Migration 000013 indexed `(document_key, locale, subject_type, subject_id)` and its docblock
  * promises the notice sweep walks the population linearly. `AffectedSubjectResolver` adds
@@ -31,10 +33,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('legal_consents', function (Blueprint $table): void {
-            $table->dropIndex('legal_consents_affected_subject_idx');
+            $table->dropIndex(IndexName::existing('legal_consents', 'legal_consents_affected_subject_idx'));
             $table->index(
                 ['document_key', 'locale', 'subject_type', 'subject_id', 'tenant_id'],
-                'legal_consents_affected_subject_idx',
+                IndexName::of('legal_consents_affected_subject_idx'),
             );
         });
     }
@@ -42,10 +44,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('legal_consents', function (Blueprint $table): void {
-            $table->dropIndex('legal_consents_affected_subject_idx');
+            $table->dropIndex(IndexName::existing('legal_consents', 'legal_consents_affected_subject_idx'));
             $table->index(
                 ['document_key', 'locale', 'subject_type', 'subject_id'],
-                'legal_consents_affected_subject_idx',
+                IndexName::of('legal_consents_affected_subject_idx'),
             );
         });
     }

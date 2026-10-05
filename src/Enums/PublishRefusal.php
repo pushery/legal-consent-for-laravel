@@ -45,6 +45,9 @@ enum PublishRefusal: string
     /** An objection deadline on or after the day the change takes effect. */
     case ObjectionDeadlineNotBeforeEffectiveDate = 'objection_deadline_not_before_effective_date';
 
+    /** A change class longer than the column it is frozen into. */
+    case ChangeClassTooLong = 'change_class_too_long';
+
     /**
      * The translation key of the sentence that words this refusal for a person.
      *

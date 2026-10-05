@@ -331,6 +331,8 @@ final class ConsentFake implements ConsentManager
                 'objection_deadline' => null,
                 'offers_termination' => false,
                 'is_active' => true,
+                // The shared bucket: the fake arranges no tenants, and a single-tenant app reads ''.
+                'tenant_id' => '',
             ],
             array_keys($keys),
             $keys,
@@ -355,6 +357,15 @@ final class ConsentFake implements ConsentManager
     }
 
     /**
+     * The arranged set, each document once. The fake answers {@see outstanding()} and
+     * {@see firstAcceptance()} from one arrangement, so asking for both adds nothing.
+     */
+    public function owed(Model $subject, ?string $locale = null, bool $firstAcceptance = false): Collection
+    {
+        return $this->outstanding($subject, $locale);
+    }
+
+    /**
      * The acceptance sentence for an arranged document, resolved the way the render pipeline
      * resolves it: the document's own line, then the generic one. A consuming test that renders
      * the gate therefore sees a real sentence rather than an empty label.
@@ -367,6 +378,23 @@ final class ConsentFake implements ConsentManager
     public function hasCurrent(Model $subject, string $documentKey, ?string $locale = null): bool
     {
         return ! in_array($documentKey, $this->owed[$this->identify($subject)] ?? [], true);
+    }
+
+    /**
+     * {@see hasCurrent()} for each key: `false` for an arranged one, `true` for the rest.
+     *
+     * @param  list<string>  $documentKeys
+     * @return array<string, bool>
+     */
+    public function hasCurrentMany(Model $subject, array $documentKeys, ?string $locale = null): array
+    {
+        $held = [];
+
+        foreach ($documentKeys as $documentKey) {
+            $held[$documentKey] = $this->hasCurrent($subject, $documentKey, $locale);
+        }
+
+        return $held;
     }
 
     /**

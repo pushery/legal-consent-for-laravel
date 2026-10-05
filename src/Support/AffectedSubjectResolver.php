@@ -87,15 +87,14 @@ readonly class AffectedSubjectResolver
 
     /**
      * @param  int|null  $maxConsentId  Only consider ledger rows up to this id — a snapshot of the
-     *                                  ledger taken before the caller starts writing. The stream
-     *                                  keyset-pages over a `HAVING MAX(major) < …` set, so a caller
-     *                                  that APPENDS an accepting row per subject while iterating
-     *                                  (the deemed-acceptance sweep) would shrink that set
-     *                                  mid-stream and a later page could skip subjects it never
-     *                                  returned. Pinning the ledger to a snapshot
-     *                                  keeps the paged set immutable for the whole sweep; a re-run
-     *                                  takes a fresh snapshot, which then correctly excludes the
-     *                                  subjects already accepted.
+     *                                  ledger taken before the caller starts writing. It fixes the
+     *                                  population to the parties as they stood at that moment: a
+     *                                  subject whose first accepting row lands while the stream is
+     *                                  still paging is not part of it, so a long run does not
+     *                                  chase a growing population. Rows the caller appends for
+     *                                  subjects it was already handed change nothing about the
+     *                                  pages still to come, because the keyset cursor is past
+     *                                  them. A re-run takes a fresh snapshot.
      * @return LazyCollection<int, Model>
      */
     public function forVersion(LegalDocument $version, ?int $maxConsentId = null, bool $skipNotified = false): LazyCollection
@@ -121,8 +120,8 @@ readonly class AffectedSubjectResolver
             // in both modes, but with tenancy off a version that belongs to a tenant must still
             // reach subjects whose consents sit in the shared bucket: the stamping hook is inert
             // while tenancy is off, and the proof row would otherwise be invisible to the tenant
-            // it belongs to. That is also why 000013 leaves tenant_id out of the index: a leading
-            // column that is sometimes absent from the predicate cannot be one.
+            // it belongs to. That is also why tenant_id does not lead the index: a leading column
+            // that is sometimes absent from the predicate cannot be one. It trails it instead.
             ->when($this->tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $version->tenant_id ?? ''))
             ->when($maxConsentId !== null, fn (QueryBuilder $query): QueryBuilder => $query->where('id', '<=', $maxConsentId))
             ->when($skipNotified, fn (QueryBuilder $query): QueryBuilder => $this->withoutAlreadyNotified($query, $version))
@@ -147,22 +146,20 @@ readonly class AffectedSubjectResolver
         // strict `> (lastType, lastId)` resumes where the last page ended — but HOW that seek is
         // written decides whether the whole sweep is linear (see the engine branch below). Both
         // forms lean on `legal_consents_affected_subject_idx` (document_key, locale, subject_type,
-        // subject_id; migration 000013). Filtering those columns pre-aggregation is equivalent to
-        // filtering groups — each group is one (subject_type, subject_id) pair.
+        // subject_id, tenant_id; migrations 000013 and 000026). Filtering those columns
+        // pre-aggregation is equivalent to filtering groups — each group is one (subject_type,
+        // subject_id) pair.
         //
-        // THE LINEARITY BELOW IS A SINGLE-TENANT CLAIM, and it is stated rather than left for a
-        // reader to discover from a slow sweep. With tenancy ON, `tenant_id`
-        // is a RESIDUAL filter — it is not in the index, so the seek still walks (document_key,
-        // locale) in order but reads and discards the rows of every other tenant on the way. The
-        // sweep stays linear in the row count for that (document_key, locale), not in the calling
-        // tenant's own share of it, and a page can come back short after filtering.
+        // With tenancy on, the linearity holds per (document_key, locale), not per tenant. The
+        // tenant filter is evaluated inside the index, so a row of another tenant costs an index
+        // entry rather than a table read. But `tenant_id` trails the index, so the seek still walks
+        // the entries of every tenant within (document_key, locale): the sweep is linear in that
+        // pair's entries, not in the calling tenant's own share of them.
         //
-        // The obvious repair — filter unconditionally so `tenant_id` can LEAD the index — was built
-        // and REFUTED by the dispatch suite, which is why the index is unchanged. See the note at
-        // the filter itself: with tenancy off, a version that belongs to a tenant must still reach
-        // subjects whose consents sit in the shared bucket, so the predicate cannot be
-        // unconditional, and a leading column that is sometimes absent from the predicate cannot
-        // lead an index.
+        // `tenant_id` cannot lead the index. See the note at the filter itself: with tenancy off, a
+        // version that belongs to a tenant must still reach subjects whose consents sit in the
+        // shared bucket, so the predicate cannot be unconditional, and a column that is sometimes
+        // absent from the predicate cannot lead an index.
         $driver = $this->keysetSeekDriver();
 
         return LazyCollection::make(function () use ($page, $driver, $size): Generator {
@@ -214,7 +211,8 @@ readonly class AffectedSubjectResolver
     /**
      * How MANY subjects a version reaches, without hydrating any of them. `affects()` only needs the
      * number for an advisory line, so counting the grouped set with one aggregate query
-     * (`COUNT(*) FROM (… GROUP BY subject HAVING MAX(major) < ?)`) is the right shape — the streaming
+     * (`COUNT(*) FROM (… GROUP BY subject …)`, with `HAVING MAX(major) < ?` for a re-consent) is the
+     * right shape — the streaming
      * hydrate path of {@see forVersion} loads real subject models 500 at a time, which is wasteful
      * (and slow, and memory-heavy) purely to arrive at a count in a Livewire web request.
      *
@@ -222,7 +220,7 @@ readonly class AffectedSubjectResolver
      * from `forVersion(...)->count()` only for an ORPHANED group whose `subject_type` no longer maps
      * to a live model class — the hydrate path silently drops those (it cannot build the model),
      * this counts them. For any app whose subjects still exist the two are identical; and counting
-     * every ledger population on the older major is the more faithful answer for an advisory number.
+     * every ledger population the version reaches is the more faithful answer for an advisory number.
      *
      * `$skipNotified` applies {@see forVersion}'s resume predicate to the SAME grouped set, so a
      * caller that wants "how many does a resumed run still owe" no longer has to stream and hydrate

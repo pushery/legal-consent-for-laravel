@@ -70,8 +70,10 @@ final readonly class RegistrationChecklistItem
     /**
      * The hidden field a form renders to ACTIVATE the accept-time content-hash guard for this
      * document: it carries {@see $contentHash} (the render-time fingerprint), and
-     * RegistrationConsentRecorder passes it to `accept()` so a version released mid-form is caught
-     * (a 409) instead of silently frozen. Named `{field}_hash`.
+     * RegistrationConsentRecorder passes it to `accept()`, so a version released mid-form raises a
+     * `DocumentChangedException` instead of being silently frozen. On the registration path the
+     * application decides how to answer it; the JSON API answers it with a 409. Named
+     * `legal_{key}_hash`, after the document, whatever the control is called.
      *
      * Rendering it is OPT-IN and adds no behavior by itself: a form that omits it keeps the prior
      * no-guard registration path (the recorder simply receives no expected hash). Empty for an

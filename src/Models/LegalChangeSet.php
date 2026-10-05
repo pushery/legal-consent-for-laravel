@@ -91,8 +91,8 @@ class LegalChangeSet extends Model
      * the rows it exists to protect. `getOriginal()` is `Arr::get($this->original, $key, $default)`
      * — on a partially hydrated row, `select(['id', …])`, the key is simply absent and the answer
      * is null. Null is not `Published`, so the write went through. Partial selects are house style
-     * here, and on SQLite this hook IS the protection: the database triggers cover PostgreSQL and
-     * MySQL only.
+     * here. The database triggers refuse the write on every engine as well, but with a raw SQLSTATE
+     * rather than a refusal that names the document.
      *
      * So it asks the database rather than guessing — one read, only on the path that was wrong,
      * and it fetches what the MESSAGE needs too. Refusing without being able to say which document
@@ -114,7 +114,7 @@ class LegalChangeSet extends Model
             return $set;
         }
 
-        return self::query()->whereKey($set->getKey())->first(['state', 'key', 'locale', 'version']);
+        return static::model()::query()->whereKey($set->getKey())->first(['state', 'key', 'locale', 'version']);
     }
 
     /**

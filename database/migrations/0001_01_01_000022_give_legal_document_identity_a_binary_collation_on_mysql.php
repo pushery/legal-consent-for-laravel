@@ -20,12 +20,12 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
  * WHAT WAS MEASURED. On SQLite, a document published under `key = 'terms'` is not found by
  * `where('key', 'TERMS')` (`exact=1 upper=0`), and publishing a second document under `'TERMS'`
  * succeeds — two rows, two identities. PostgreSQL behaves the same way under the collations its
- * usual locales carry. MySQL is the outlier in BOTH directions at once, because every collation
- * Laravel configures by default (`utf8mb4_unicode_ci`, `utf8mb4_0900_ai_ci`) is case- AND
- * accent-insensitive: the mis-cased lookup silently resolves, and the second publish is refused by
- * `legal_documents_key_locale_version_tenant_id_unique`. The MySQL half is read from the schema and
- * the documented collation semantics, not executed — no MySQL server was contacted for this
- * change.
+ * usual locales carry. MySQL is the outlier in BOTH directions at once, because Laravel's default
+ * collation (`utf8mb4_unicode_ci`) and MySQL's own server default (`utf8mb4_0900_ai_ci`) are both
+ * case- AND accent-insensitive: the mis-cased lookup silently resolves, and the second publish is
+ * refused by `legal_documents_key_locale_version_tenant_id_unique`. The MySQL half is read from the
+ * schema and the documented collation semantics, not executed — no MySQL server was contacted for
+ * this change.
  *
  * WHY THIS IS FIXED RATHER THAN DOCUMENTED. A lookup that answers differently per engine is a
  * caller error handled two ways, and prose could cover it. The unique index is not: it decides

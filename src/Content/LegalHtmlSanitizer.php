@@ -171,12 +171,13 @@ final class LegalHtmlSanitizer
         // Strip comments, processing instructions, and CDATA sections; keep plain text.
         // A CDATA section serializes its content VERBATIM (unescaped), so it must never
         // reach the {!! !!} sink — defense in depth on top of removing raw-text elements.
-        // ONLY THE COMMENT ENTRY IS REACHABLE, so removing either of the other two would change
-        // nothing. Measured on the HTML path this sanitizer uses: libxml folds both a processing
-        // instruction and a CDATA section into COMMENT nodes, so no input produces an XML_PI_NODE
-        // or an XML_CDATA_SECTION_NODE, and removing either name from the list below changes
-        // nothing. The arm above that says it strips a processing instruction passes through the
-        // comment branch, not through XML_PI_NODE.
+        // Which node type a processing instruction or a CDATA section arrives as depends on the
+        // libxml2 version PHP is built against, through the same loadHTML() call and flags. Under
+        // libxml 2.9.14 a processing instruction (a PHP one or an xml-stylesheet one) is an
+        // XML_PI_NODE; under libxml 2.15.4 both, and a CDATA section, arrive as COMMENT nodes. So
+        // every entry is reachable on some installation, and removing one is not dead-code
+        // cleanup: on an older libxml the instruction then survives into shipped HTML, while a
+        // newer one would keep every parser-driven test green.
         //
         // Both names stay: the list describes what must never survive into shipped HTML, not what
         // today's parser happens to emit. A processing instruction reaching a legal document is

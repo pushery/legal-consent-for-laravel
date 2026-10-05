@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\IndexName;
 
 /**
  * Carry the notice mode of a change as first-class data (see Pushery\LegalConsent\
@@ -49,13 +50,20 @@ return new class extends Migration
             // (enforced at publish). Silence past it is deemed acceptance.
             $table->timestampTz('objection_deadline')->nullable();
 
-            $table->index('notice_mode', 'legal_documents_notice_mode_index');
+            $table->index('notice_mode', IndexName::of('legal_documents_notice_mode_index'));
         });
 
-        // Backfill legacy rows from the boolean so downstream notice-mode queries never
-        // miss a pre-existing version. Raw string values (not the enum) — a migration is a
-        // historical record and must not depend on evolving app code. Mirrors
-        // NoticeMode::fromLegacyReconsent(): true -> active_reconsent, false -> silent_editorial.
+        $this->backfill();
+    }
+
+    /**
+     * Backfill legacy rows from the boolean so downstream notice-mode queries never miss a
+     * pre-existing version. Raw string values (not the enum): a migration is a historical record
+     * and must not depend on evolving app code. Mirrors NoticeMode::fromLegacyReconsent(): true ->
+     * active_reconsent, false -> silent_editorial.
+     */
+    public function backfill(): void
+    {
         DB::table('legal_documents')->whereNull('notice_mode')->where('requires_reconsent', true)
             ->update(['notice_mode' => 'active_reconsent']);
 
@@ -66,7 +74,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('legal_documents', function (Blueprint $table): void {
-            $table->dropIndex('legal_documents_notice_mode_index');
+            $table->dropIndex(IndexName::existing('legal_documents', 'legal_documents_notice_mode_index'));
             $table->dropColumn([
                 'notice_mode',
                 'change_class',

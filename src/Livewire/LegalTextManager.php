@@ -324,9 +324,7 @@ final class LegalTextManager extends Component
     /** The document type this key is registered under, from the documents registry. */
     private function typeFor(string $key): DocumentType
     {
-        $basis = config("legal-consent.documents.{$key}.legal_basis");
-
-        return DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
+        return DocumentType::fromLegalBasis(DocumentMatrix::legalBasis($key));
     }
 
     /** @return list<string> */
@@ -339,13 +337,14 @@ final class LegalTextManager extends Component
         return DocumentMatrix::keys();
     }
 
-    /** @return list<string> */
+    /**
+     * The locales the overview shows and releases, read through {@see DocumentMatrix} like
+     * everywhere else.
+     *
+     * @return list<string>
+     */
     private function locales(): array
     {
-        $locales = config('legal-consent.locales');
-
-        // array_values() changes nothing observable: its readers, in_array() and a foreach in the
-        // releaser, never read a key. It stays for the list<string> this returns.
-        return is_array($locales) ? array_values(array_filter($locales, is_string(...))) : [];
+        return DocumentMatrix::locales();
     }
 }

@@ -69,6 +69,7 @@ use Pushery\LegalConsent\Support\PublishedDocumentReader;
 use Pushery\LegalConsent\Support\PublishedTitleNames;
 use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
 use Pushery\LegalConsent\Support\RegistrationRules;
+use Pushery\LegalConsent\Support\ReportedNotificationFailures;
 use Pushery\LegalConsent\Support\TenantContext;
 use Pushery\LegalConsent\Support\UnavailableTranslator;
 use Pushery\WireKit\WireKitServiceProvider;
@@ -274,6 +275,11 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $app->make(LegalDocumentPublisher::class),
             $app->make(AffectedSubjectResolver::class),
         ));
+
+        // One instance, because two parties share it: the listener below writes into it, and the
+        // notice sweep reads from it. Laravel resolves a class listener from the container on every
+        // event, so any other binding would hand each event a record nobody reads.
+        $this->app->singleton(ReportedNotificationFailures::class);
     }
 
     public function boot(): void
@@ -308,6 +314,10 @@ final class LegalConsentServiceProvider extends ServiceProvider
         Event::listen(NotificationSent::class, WriteNoticeDeliveryProof::class);
         Event::listen(NotificationFailed::class, ReopenVersionOnNoticeFailure::class);
 
+        // Which exception a failed notice was reported with, so the sweep can carry on past a
+        // refusal that surfaces inside its own run on a synchronous queue.
+        Event::listen(NotificationFailed::class, ReportedNotificationFailures::class);
+
         if ((bool) config('legal-consent.registration.listen_to_registered_event', true)) {
             Event::listen(Registered::class, RecordConsentOnRegistration::class);
         }
@@ -332,26 +342,32 @@ final class LegalConsentServiceProvider extends ServiceProvider
             }
 
             if ((bool) config('legal-consent.schedule.dispatch_notices', true)) {
-                $schedule->command('legal-consent:dispatch-notices')
+                // With `--isolated` on every sweep, so a run started by hand with it and the scheduled
+                // one take the same lock: the scheduler's overlap lock is named after the schedule
+                // entry, and a hand-started run never takes it.
+                $schedule->command('legal-consent:dispatch-notices', ['--isolated'])
                     ->hourly()
                     // The overlap lock expires after 55 minutes, inside the hour, rather than after
-                    // the 24h default. The expiry only matters when a run dies holding the lock (a
-                    // SIGKILL, an OOM or a lost host, none of which `releaseOnTerminationSignals`
-                    // catches) or outlives it. A dead run must not cost the next hourly sweep as
-                    // well, so the lock is gone before that sweep is due. A run longer than 55
-                    // minutes is overtaken by one that resumes: it skips subjects that carry a
-                    // proof row for the version or whose notice is still on its way.
-                    ->withoutOverlapping(55)
+                    // the 24h default. The expiry only matters when a run dies holding the lock or
+                    // outlives it. From laravel/framework 13.2 the scheduler releases the lock
+                    // itself when a foreground run is stopped by SIGTERM, SIGINT or SIGQUIT and
+                    // `pcntl` is loaded; a SIGKILL, an OOM or a lost host it cannot see. On 13.0
+                    // and 13.1, which this package supports as well, no stopped run releases the
+                    // lock. A dead run must not cost the next hourly sweep as well, so the lock is
+                    // gone before that sweep is due. A run longer than 55 minutes is overtaken by
+                    // one that resumes: it skips subjects that carry a proof row for the version or
+                    // whose notice is still on its way.
+                    ->withoutOverlapping(DispatchDueLegalNoticesCommand::LOCK_MINUTES)
                     ->onOneServer();
             }
 
             if ((bool) config('legal-consent.schedule.close_objection_windows', true)) {
-                $schedule->command('legal-consent:close-objection-windows')
+                $schedule->command('legal-consent:close-objection-windows', ['--isolated'])
                     ->hourly()
                     // 55 minutes, for the reason given at dispatch-notices above. A run that
                     // overtakes a long one deems nobody twice: a subject who already holds the
                     // version is refused.
-                    ->withoutOverlapping(55)
+                    ->withoutOverlapping(CloseObjectionWindowsCommand::LOCK_MINUTES)
                     ->onOneServer();
             }
 
@@ -360,15 +376,17 @@ final class LegalConsentServiceProvider extends ServiceProvider
             // decision belongs to the consumer, once, deliberately. Daily is enough for a
             // period measured in years, and it keeps the nightly window small.
             if ((bool) config('legal-consent.schedule.prune', false)) {
-                $schedule->command('legal-consent:prune')
+                $schedule->command('legal-consent:prune', ['--isolated'])
                     ->daily()
                     // Capped like its two siblings, and here the bare default is worse than
                     // anywhere else: 1440 minutes is exactly the interval `daily()` repeats on,
-                    // so a hard-killed run (SIGKILL or an OOM — neither is released by
-                    // `releaseOnTerminationSignals`) holds the lock right up to the next due
-                    // moment and can swallow a whole day's sweep. Laravel does not report a
-                    // skipped overlapping event, so the only sign would be a missing heartbeat.
-                    ->withoutOverlapping(120)
+                    // so a run that dies holding the lock (a SIGKILL or an OOM, and below
+                    // laravel/framework 13.2 any signal, see dispatch-notices above) holds it right
+                    // up to the next due moment and can swallow a whole day's sweep. Laravel logs
+                    // nothing when it skips an overlapping run; it dispatches ScheduledTaskSkipped,
+                    // so an application that listens for that event sees the skipped sweep at once,
+                    // and one that does not sees a missing heartbeat.
+                    ->withoutOverlapping(PruneExpiredConsentRecordsCommand::LOCK_MINUTES)
                     ->onOneServer();
             }
         });
@@ -413,9 +431,9 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * The view paths this package registers under the `legal-consent` namespace, in lookup order.
      *
      * A single path for the plain set; two for the WireKit set, the WireKit directory FIRST. The
-     * finder returns the first hint that has the file, so the WireKit variant wins for the seven
-     * screens it covers and everything else (the mail shell, its theme) falls through to the
-     * plain directory — which is why this is a path list rather than a swap.
+     * finder returns the first hint that has the file, so the WireKit variant wins for every view
+     * it carries and everything else (the mail shell, its theme) falls through to the plain
+     * directory — which is why this is a path list rather than a swap.
      *
      * A view the consumer published into `resources/views/vendor/legal-consent` is still checked
      * BEFORE either of these: `loadViewsFrom()` registers the host's vendor path first, so
@@ -453,10 +471,8 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * WireKit views.
      *
      * The class check comes first because it is the only one that works when the package was
-     * placed on the autoloader by something other than Composer. A version Composer cannot state
-     * as a release — a branch checkout, reported as `dev-…` — counts as satisfied: somebody who
-     * develops against a branch has chosen it, and refusing them the themed views on a string
-     * comparison that has no meaning would be arbitrary.
+     * placed on the autoloader by something other than Composer. A branch checkout counts as
+     * satisfied when its line reaches the floor; wireKitVersionSatisfies() says how a branch is read.
      */
     public static function wireKitMeetsMinimum(): bool
     {
@@ -473,15 +489,22 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * gives for an older one. That is the branch that matters, since getting it wrong hands a
      * consumer a hard exception on the re-consent gate.
      *
-     * A version Composer cannot state as a release — a branch checkout, reported as `dev-…`, or no
-     * answer at all — counts as satisfied: somebody developing against a branch has chosen it, and
-     * refusing them the themed views on a string comparison with no meaning would be arbitrary.
+     * A branch checkout is read the way Composer orders it. A named branch, reported as `dev-…`, has
+     * no number to compare and counts as satisfied, as does no answer at all: somebody developing
+     * against a branch has chosen it, and refusing them the themed views on a string comparison with
+     * no meaning would be arbitrary. A branch named like a version, reported as `2.x-dev` or
+     * `2.55.x-dev`, sits above every release of its line, so its `x` is compared as the highest
+     * number there is: `2.x-dev` clears a 2.56.0 floor and `2.55.x-dev` does not.
      */
     public static function wireKitVersionSatisfies(?string $version): bool
     {
-        return ! is_string($version)
-            || str_starts_with($version, 'dev-')
-            || version_compare(ltrim($version, 'vV'), self::WIREKIT_MINIMUM, '>=');
+        if (! is_string($version) || str_starts_with($version, 'dev-')) {
+            return true;
+        }
+
+        $release = (string) preg_replace('/\.x-dev$/', '.'.PHP_INT_MAX, ltrim($version, 'vV'));
+
+        return version_compare($release, self::WIREKIT_MINIMUM, '>=');
     }
 
     /**
@@ -653,10 +676,11 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $normalized = [];
 
         foreach ($documents as $key => $config) {
-            // Decided by the VALUE, as {@see DocumentMatrix::keys()} decides it. A document whose key
-            // looks like a number, `'2025' => [...]`, is an int once PHP holds it as an array key and is
-            // still a document with a definition; an entry of a config written as a list is a bare
-            // name. Every reader that walks these keys casts them back to the string they were.
+            // Decided by the VALUE, as {@see \Pushery\LegalConsent\Support\DocumentMatrix::keys()}
+            // decides it. A document whose key looks like a number, `'2025' => [...]`, is an int
+            // once PHP holds it as an array key and is still a document with a definition; an entry
+            // of a config written as a list is a bare name. Every reader that walks these keys
+            // casts them back to the string they were.
             if (is_array($config)) {
                 /** @var array<string, mixed> $config */
                 $normalized[(string) $key] = $config;
@@ -809,10 +833,12 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * user for consent to a document nobody meant to serve, which is a worse failure than a
      * missing default. {@see HOST_OWNED_REGISTRIES}.
      *
-     * NOTE THE EARLY RETURN, because it bounds what this can rescue. A host with a CACHED config is
-     * never merged at all -- the framework's design, not this method's limit. For those installs
-     * the published file is the whole truth, which is why a read site for a nested key needs a
-     * fallback that agrees with the shipped default. The two are halves of one guarantee.
+     * The early return bounds what this can rescue. A cached configuration was merged when it was
+     * built: `config:cache` boots a fresh application without the cache, so this method runs there,
+     * and the result is what gets cached. A boot that reads the cache skips the merge, so after a
+     * package upgrade without a fresh `config:cache` the keys the new release adds are absent until
+     * the cache is rebuilt. That is why a read site for a nested key needs a fallback that agrees
+     * with the shipped default. The two are halves of one guarantee.
      */
     private function mergeConfigRecursivelyFrom(string $path, string $key): void
     {

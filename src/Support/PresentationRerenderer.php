@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Carbon\CarbonImmutable;
+use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Content\Document;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Models\LegalDocument;
 use RuntimeException;
 
@@ -43,8 +45,6 @@ final readonly class PresentationRerenderer
      */
     public function rerender(string $key, string $locale): ?LegalDocument
     {
-        $rendered = $this->publisher->preview($key, $locale);
-
         $active = LegalDocument::model()::query()
             ->where('key', $key)
             ->where('locale', $locale)
@@ -53,6 +53,19 @@ final readonly class PresentationRerenderer
 
         if (! $active instanceof LegalDocument) {
             return null;
+        }
+
+        try {
+            $rendered = $this->publisher->preview($key, $locale);
+        } catch (LegalDocumentNotFound $missing) {
+            // A text still being written is the editor's state and passes as nothing to re-render.
+            // A published version whose provisioned source cannot be read cannot be re-frozen, and
+            // saying nothing would read as "already current".
+            if ($this->publisher->sourceFor($key) instanceof AwaitsAuthoring) {
+                throw $missing;
+            }
+
+            throw new RuntimeException("Cannot re-render '{$key}' ({$locale}): its active version {$active->version} has no readable source — {$missing->getMessage()}", $missing->getCode(), previous: $missing);
         }
 
         if ($active->source_hash === null) {

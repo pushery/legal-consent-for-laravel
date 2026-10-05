@@ -14,14 +14,14 @@ use Pushery\LegalConsent\Notifications\ReconsentRequired;
 /**
  * Reads the `notice_mail` block — the seams a developer activates on the change notices.
  *
- * TOP-LEVEL, and that is load-bearing rather than tidy: `mergeConfigFrom()` merges one level deep,
- * so a key added inside `notifications` would be ABSENT AT RUNTIME for every installation that has
- * published the config — not undocumented, gone, with no message anywhere. The comment saying so
- * lives in the config file too, because the next feature will want to put its key there.
+ * A top-level block, placed there while this package merged its configuration one level deep, and
+ * kept there so a published copy that carries it goes on working. The provider merges recursively
+ * now, so a key a later release adds inside a block arrives with its default; where a key lives no
+ * longer decides whether it arrives.
  *
- * Every seam here is inert by default. That is not politeness: the notice body is hashed into an
- * append-only proof row, so a value that changed the mail without being asked for would move the
- * bytes of a document nobody can correct afterwards.
+ * Every seam here is inert by default except `view`, the package's own Markdown shell. That is not
+ * politeness: the notice body is hashed into an append-only proof row, so a value that changed the
+ * mail without being asked for would move the bytes of a document nobody can correct afterwards.
  */
 final readonly class NoticeMailConfig
 {
@@ -36,9 +36,10 @@ final readonly class NoticeMailConfig
      * The Markdown view the notice renders through, or null to keep Laravel's global template.
      *
      * It is a MARKDOWN view, and swapping in a plain one is not a styling choice. `->view()`
-     * nulls `$markdown` and leaves `introLines`/`outroLines` empty, so the proof body would
-     * collapse to the subject line while `mandatory_content_ok` kept reporting true — a row
-     * certifying content that is not in it. The base notification only ever calls `->markdown()`.
+     * nulls `$markdown` and renders only its own template, which does not have to print
+     * `introLines`/`outroLines`. The proof body is still built from those lines, so
+     * `mandatory_content_ok` would keep reporting true for content the mail may not show — a row
+     * certifying what the subject never saw. The base notification only ever calls `->markdown()`.
      */
     public static function view(): ?string
     {

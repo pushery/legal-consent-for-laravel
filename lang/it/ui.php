@@ -66,7 +66,7 @@ return [
     'consent_given' => 'Concesso',
     'consent_not_given' => 'Non concesso',
 
-    // Grace-period remaining time (trans_choice): pluralisation + effective-today case.
+    // Grace-period remaining time (trans_choice): pluralization + effective-today case.
     'days_left' => '{0}In vigore da oggi|{1}Ancora :count giorno|[2,*]Ancora :count giorni',
     'updated_note' => 'Aggiornato — non è richiesta alcuna azione.',
     'object_review' => 'Vedi o opponiti',
@@ -81,7 +81,6 @@ return [
     'admin_heading' => 'Testi legali',
     'admin_policy' => 'I testi si modificano per lingua, li rivede una persona e poi si pubblicano in tutte le lingue insieme. Una traduzione automatica non può mai essere pubblicata finché qualcuno non la rivede, e la frase di accettazione è testo fisso: non viene mai tradotta automaticamente.',
     'admin_document' => 'Documento',
-    'admin_release' => 'Pubblica',
     'admin_not_written' => 'Non scritto',
     'admin_not_written_short' => 'Assente',
     'review_state_draft' => 'Bozza',
@@ -137,8 +136,6 @@ return [
     'reconsent_none_selected' => 'Seleziona ogni voce che accetti prima di continuare.',
     'admin_body_label' => 'Testo (HTML sanificato)',
     'admin_preview_label' => 'Anteprima del testo pubblicato',
-    'admin_edit' => 'modifica',
-    'admin_edit_for' => 'Modifica :key (:locale)',
     'admin_edit_for_state' => 'Modifica :key (:locale) — :state',
     'admin_status_saved' => 'Salvato. Prima della pubblicazione è necessaria una revisione.',
     'admin_status_not_saved' => 'Non salvato — :reason',
@@ -190,4 +187,8 @@ return [
     'publish_refused_major_needs_reconsent' => 'la versione :version aumenta la versione principale in :language, il che chiede a tutti di accettare di nuovo la modifica; pubblicala come nuovo consenso attivo',
     'publish_refused_gating_mode_keeps_the_major' => 'la versione :version mantiene la versione principale :major in :language, quindi un nuovo consenso non raggiungerebbe nessuno che ha già accettato; pubblicala come :next',
     'publish_refused_objection_deadline_not_before_effective_date' => 'il termine di opposizione (:deadline) deve scadere prima del giorno in cui la modifica entra in vigore (:enforce)',
+    'publish_refused_change_class_too_long' => 'la classe di modifica ha :length caratteri e può averne al massimo :max',
+    'draft_refused_no_translator' => 'per questa applicazione non è configurata alcuna traduzione automatica; traduci il testo a mano o chiedi a uno sviluppatore di collegare un traduttore',
+    'draft_refused_too_large' => 'il testo è di :size KB, e un testo legale può essere al massimo di :limit KB',
+    'draft_refused_unparsable' => 'non è stato possibile leggere il testo fino alla fine e sarebbe stato troncato; la causa abituale è un markup annidato molto in profondità',
 ];

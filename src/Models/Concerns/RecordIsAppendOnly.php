@@ -23,8 +23,17 @@ trait RecordIsAppendOnly
             $row->created_at ??= CarbonImmutable::now();
         });
 
-        static::updating(function (): never {
-            throw LedgerImmutableException::onUpdate();
+        static::updating(function (self $row): never {
+            throw $row::appendOnlyViolation();
         });
+    }
+
+    /**
+     * The refusal an update raises, in the words of what the row is evidence of. A recorded consent
+     * by default; a table that proves something else, such as a delivered notice, says so itself.
+     */
+    protected static function appendOnlyViolation(): LedgerImmutableException
+    {
+        return LedgerImmutableException::onUpdate();
     }
 }

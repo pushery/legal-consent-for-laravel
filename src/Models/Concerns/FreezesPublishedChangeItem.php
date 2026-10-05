@@ -19,11 +19,14 @@ trait FreezesPublishedChangeItem
 {
     public static function bootFreezesPublishedChangeItem(): void
     {
-        static::updating(function (self $item): void {
+        // One check for an update and a delete, reading the stored row rather than the attribute,
+        // for the reasons FreezesPublishedChangeSet gives.
+        $refuseWhileFrozen = static function (self $item): void {
             $stored = self::storedRow($item);
+            $state = $stored?->getOriginal('state');
 
-            // A row that cannot be found is REFUSED, not waved through.
-            if ($stored instanceof self && $stored->getOriginal('state') !== ChangeSetState::Published) {
+            // A row that cannot be found is refused, not waved through.
+            if ($stored instanceof self && (! $state instanceof ChangeSetState || ! $state->isFrozen())) {
                 return;
             }
 
@@ -34,12 +37,9 @@ trait FreezesPublishedChangeItem
                 is_int($changeSetId) ? $changeSetId : 0,
                 is_int($position) ? $position : 0,
             );
-        });
+        };
 
-        static::deleting(function (self $item): void {
-            if ($item->state->isFrozen()) {
-                throw LegalDocumentFrozenException::forChangeItem($item->change_set_id, $item->position);
-            }
-        });
+        static::updating($refuseWhileFrozen);
+        static::deleting($refuseWhileFrozen);
     }
 }

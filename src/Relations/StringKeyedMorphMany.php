@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Relations;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Query\Grammars\MySqlGrammar;
@@ -38,6 +39,19 @@ use Pushery\LegalConsent\Support\SubjectKey;
 final class StringKeyedMorphMany extends MorphMany
 {
     /**
+     * The parent keys one eager statement binds, below the 65 535 parameters PostgreSQL and MySQL
+     * take, with room for the bindings of a constraint the application adds to the eager load.
+     */
+    public const int EAGER_KEYS_PER_STATEMENT = 10000;
+
+    /**
+     * The parent keys of the current eager load, as strings.
+     *
+     * @var list<string>
+     */
+    private array $eagerKeys = [];
+
+    /**
      * The parent key as `subject_id` holds it: a string, so that the lazy constraint and a create
      * through the relation bind the value the column compares as text.
      */
@@ -56,6 +70,8 @@ final class StringKeyedMorphMany extends MorphMany
      * refuses the comparison. A bound parameter is sent without a declared type, so the server
      * infers it from the column it meets.
      *
+     * The keys are kept here and bound in getEager(), a share of them per statement.
+     *
      * @param  array<int, TDeclaringModel>  $models
      */
     public function addEagerConstraints(array $models): void
@@ -70,9 +86,36 @@ final class StringKeyedMorphMany extends MorphMany
             }
         }
 
-        $this->whereInEager('whereIn', $this->foreignKey, $keys, $this->getRelationQuery());
+        $this->eagerKeys = $keys;
+        $this->eagerKeysWereEmpty = $keys === [];
 
         $this->getRelationQuery()->where($this->morphType, $this->morphClass);
+    }
+
+    /**
+     * The rows of every eager-loaded parent, read with at most EAGER_KEYS_PER_STATEMENT parent keys
+     * bound per statement.
+     *
+     * A prepared statement takes at most 65 535 bound parameters on PostgreSQL and on MySQL, so one
+     * statement for every parent key fails once more parents are loaded at a time. Each statement
+     * carries the whole relation query, the constraints an eager load adds to it included, and a
+     * parent's rows all come from one statement, so their order is the order the query asks for.
+     *
+     * @return Collection<int, TRelatedModel>
+     */
+    public function getEager(): Collection
+    {
+        $models = [];
+
+        if (! $this->eagerKeysWereEmpty) {
+            foreach (array_chunk($this->eagerKeys, self::EAGER_KEYS_PER_STATEMENT) as $keys) {
+                foreach ((clone $this->query)->whereIn($this->foreignKey, $keys)->get() as $model) {
+                    $models[] = $model;
+                }
+            }
+        }
+
+        return $this->related->newCollection($models);
     }
 
     /**

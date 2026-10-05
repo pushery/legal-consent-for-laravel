@@ -19,18 +19,21 @@ trait FreezesPublishedChangeSet
 {
     public static function bootFreezesPublishedChangeSet(): void
     {
-        // The app-layer half of the freeze. The database triggers cover PostgreSQL and MySQL; this
-        // covers SQLite and every path that goes through a model, and it produces a typed failure
-        // instead of a raw SQLSTATE.
-        static::updating(function (self $set): void {
-            // getOriginal(), not the current attribute: the question is whether the row WAS frozen,
-            // and reading the incoming value would let an update that also rewrites `state` walk
-            // straight past the guard. The database triggers ask OLD.state for the same reason.
+        // The app-layer half of the freeze, for an update and a delete alike. The database triggers
+        // refuse both on every engine, with a raw SQLSTATE; this answers first, on every path that
+        // goes through a model, with a typed refusal that names the document.
+        //
+        // It reads the stored row, never the attribute: the question is whether the row WAS frozen.
+        // The attribute carries whatever the caller assigned, so a write that also rewrites `state`
+        // would walk past the guard, and on a row loaded with a partial select it carries nothing at
+        // all. The database triggers ask OLD.state for the same reason.
+        $refuseWhileFrozen = static function (self $set): void {
             $stored = self::storedRow($set);
+            $state = $stored?->getOriginal('state');
 
-            // A row that cannot be found is REFUSED, not waved through: a guard that cannot decide
+            // A row that cannot be found is refused, not waved through: a guard that cannot decide
             // must not decide in favor of the write.
-            if ($stored instanceof self && $stored->getOriginal('state') !== ChangeSetState::Published) {
+            if ($stored instanceof self && (! $state instanceof ChangeSetState || ! $state->isFrozen())) {
                 return;
             }
 
@@ -43,12 +46,9 @@ trait FreezesPublishedChangeSet
                 is_string($locale) ? $locale : '?',
                 is_string($version) ? $version : '',
             );
-        });
+        };
 
-        static::deleting(function (self $set): void {
-            if ($set->state->isFrozen()) {
-                throw LegalDocumentFrozenException::forChangeSet($set->key, $set->locale, $set->version);
-            }
-        });
+        static::updating($refuseWhileFrozen);
+        static::deleting($refuseWhileFrozen);
     }
 }

@@ -61,12 +61,14 @@ class LegalConsent extends Model
     public $timestamps = false;
 
     /**
-     * Nothing is mass-assignable. A consent row is court-proof evidence, and every legitimate write
-     * goes through the curated attribute array in {@see DefaultConsentManager}
-     * (forceCreate / forceFill). Blocking mass assignment makes "the manager is the only door"
-     * structural: a stray LegalConsent::create($request->all()) can never forge or backdate a FRESH
-     * proof row — subject_id, subject_token, prev_record_hash, accepted_at, content_hash. Mutation
-     * AFTER insert is already refused by the append-only guard; this closes the insert side.
+     * Nothing is mass-assignable. A consent row is evidence, and every row this model
+     * writes comes from the curated attribute array in {@see DefaultConsentManager} (forceCreate /
+     * forceFill). The retention prune, which removes expired rows and re-links the chains it
+     * shortens, and the erasure of a subject write through the query builder. Blocking mass
+     * assignment makes "the manager is the only door into this model" structural: a stray
+     * LegalConsent::create($request->all()) can never forge or backdate a FRESH proof row —
+     * subject_id, subject_token, prev_record_hash, accepted_at, content_hash. Mutation AFTER insert
+     * is already refused by the append-only guard; this closes the insert side.
      *
      * @var list<string>
      */

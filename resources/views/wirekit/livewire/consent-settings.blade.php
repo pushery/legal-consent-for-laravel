@@ -166,8 +166,14 @@
                                          key and with nothing logged. On Art. 7(3) that is the one
                                          control that must not be decorative. An echo IS compiled in
                                          that position and emits what `@js()` emits on a plain
-                                         element, which is the form the plain stub uses. --}}
-                                    <x-wirekit::button intent="danger" wire:click="withdraw({{ \Illuminate\Support\Js::from($item['key']) }})" loading-target="withdraw" :disable-on-loading="false">
+                                         element, which is the form the plain stub uses.
+
+                                         The busy state names the same call, argument included,
+                                         so only this row's button reports `aria-busy` while its
+                                         withdrawal runs. Bound rather than echoed: the button
+                                         prints `loading-target` with its own escaping, and an echo
+                                         would reach the page escaped twice. --}}
+                                    <x-wirekit::button intent="danger" wire:click="withdraw({{ \Illuminate\Support\Js::from($item['key']) }})" :loading-target="'withdraw('.\Illuminate\Support\Js::from($item['key']).')'" :disable-on-loading="false">
                                         @if (filled($icons['withdraw']))
                                             <x-slot:iconLeft><x-wirekit::icon :name="$icons['withdraw']" /></x-slot:iconLeft>
                                         @endif
@@ -194,8 +200,9 @@
                              one — the exact opposite of what Art. 7(3) is about. --}}
                         @elseif (! $item['held'] && $this->allowGrant)
                             {{-- An echo, not `@js()` — see the withdraw button above for why the
-                                 directive never compiles in a component tag attribute. --}}
-                            <x-wirekit::button surface="outline" wire:click="grant({{ \Illuminate\Support\Js::from($item['key']) }})" loading-target="grant" :disable-on-loading="false" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
+                                 directive never compiles in a component tag attribute, and why
+                                 the busy state is bound with its argument. --}}
+                            <x-wirekit::button surface="outline" wire:click="grant({{ \Illuminate\Support\Js::from($item['key']) }})" :loading-target="'grant('.\Illuminate\Support\Js::from($item['key']).')'" :disable-on-loading="false" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
                                 @if (filled($icons['grant']))
                                     <x-slot:iconLeft><x-wirekit::icon :name="$icons['grant']" /></x-slot:iconLeft>
                                 @endif

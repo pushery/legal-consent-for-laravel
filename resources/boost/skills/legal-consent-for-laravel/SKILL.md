@@ -103,6 +103,8 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   the notice is byte-for-byte what it was. Multi-tenant apps bind `ResolvesNoticeIdentity` instead
   — one global declarant names the wrong legal person in every tenant but one.
 - `retention_after_end` + `schedule.prune` — retention is a statement until the sweep is switched on.
+  `LEGAL_CONSENT_RETENTION_AFTER_END` sets it without publishing the config, as
+  `LEGAL_CONSENT_DOUBLE_OPT_IN_CONFIRM_WITHIN` sets `double_opt_in.confirm_within`.
 
 ### 3. Apply the package
 
@@ -199,7 +201,8 @@ $document = Consent::published('terms', app()->getLocale()); // null when unpubl
 
 A form that only shows the acceptance sentence beside a link, on every page, reads
 `Consent::publishedVersion($key, $locale)` instead: the same version without its text, from the
-cache the consent gate reads, with `uiWording` and `acceptanceFingerprint()`.
+cache the consent gate reads, with `uiWording`, `acceptanceFingerprint()` and, under multi-tenancy,
+`tenantId`.
 
 **Collect acceptance at registration** from what is actually published, instead of a hardcoded list:
 
@@ -327,7 +330,11 @@ Set `legal-consent.gate.first_use` to `true` to have the middleware stop people 
 been through that screen — and only together with the screen, or they land on a consent route that
 tells them nothing is due.
 
-Asking about several documents at once costs one read rather than two per key:
+A middleware of your own asks the same question as the package's with
+`Consent::owed($user, firstAcceptance: true)`: both sets, each document once, from one read of the
+ledger.
+
+Asking about several documents at once costs one read of the ledger rather than one per key:
 
 ```php
 $held = $user->hasAcceptedCurrentLegalMany(['terms', 'privacy']);
@@ -337,13 +344,16 @@ $held = $user->hasAcceptedCurrentLegalMany(['terms', 'privacy']);
 **Alert on the scheduled sweeps.** Bind `Pushery\LegalConsent\Contracts\LegalConsentMonitor` (the
 default binding discards everything) and each sweep calls `heartbeat(string $task, int $processed)`.
 Three task names are the ordinary beat — `legal-consent:prune`, `legal-consent:dispatch-notices`,
-`legal-consent:close-objection-windows` — and six are sent ONLY when a run failed:
+`legal-consent:close-objection-windows` — and seven are sent ONLY when a run failed:
 
 - `legal-consent:dispatch-notices.deficient` — a version went out WITHOUT its mandatory notice
   content. § 308 Nr. 5 lit. b makes the silence warning a validity condition, so silence cannot bind
   against those notices at all: the wording has to be fixed and the notice re-sent.
 - `legal-consent:dispatch-notices.held` — a notice still owed because the audience exceeded
   `notifications.max_recipients_per_run`.
+- `legal-consent:dispatch-notices.canceled` — a notice still owed because a `NoticeDispatching`
+  listener held it back. It goes out on the first run the listener lets through; `--force` does not
+  reach a listener.
 - `legal-consent:dispatch-notices.unreachable` — subjects whose notice failed
   `notifications.max_attempts` times. It is still owed: correct the address and run
   `legal-consent:renotify`, or erase the subject.

@@ -13,6 +13,7 @@ use Pushery\LegalConsent\Contracts\LegalTextTranslator;
 use Pushery\LegalConsent\Contracts\NamesLegalTexts;
 use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\DocumentType;
+use Pushery\LegalConsent\Enums\DraftRefusal;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
@@ -249,7 +250,7 @@ final class LegalTextEditor extends Component
             // they belong on the screen rather than in a 500. The unparsable one is the sharper
             // case: it means the HTML parser stopped part-way, and the alternative to refusing is
             // freezing a hash over the fragment.
-            $this->setStatus(__('legal-consent::ui.admin_status_not_saved', ['reason' => $e->getMessage()]));
+            $this->setStatus($this->notSavedBecause($e));
 
             return;
         }
@@ -320,7 +321,7 @@ final class LegalTextEditor extends Component
         try {
             $translated = app(LegalTextTranslator::class)->translate($source->body, $sourceLocale, $this->locale);
         } catch (TranslatorNotConfigured $e) {
-            $this->setStatus($e->getMessage());
+            $this->setStatus($this->notSavedBecause($e));
 
             return;
         }
@@ -330,13 +331,42 @@ final class LegalTextEditor extends Component
         } catch (LegalDocumentTooLarge|LegalDocumentUnparsable $e) {
             // The translator's output travels the same pipeline and is not privileged — a service
             // that returns something the parser gives up on must not freeze a fragment either.
-            $this->setStatus(__('legal-consent::ui.admin_status_not_saved', ['reason' => $e->getMessage()]));
+            $this->setStatus($this->notSavedBecause($e));
 
             return;
         }
 
         $this->replaceBody($draft->body);
         $this->setStatus(__('legal-consent::ui.admin_status_machine_translated'));
+    }
+
+    /**
+     * One tick of the poll the views run while a queued translation of this draft is underway.
+     *
+     * While the marker stands the run is still going: there is no result to take and nothing on the
+     * screen to change, so the tick answers without a render. That spares every tick the draft
+     * read, the lookups for the view and the text traveling back in the response. The first tick
+     * after the marker is gone renders, and render() takes the result as it does on any request.
+     */
+    public function pollTranslation(): void
+    {
+        if ($this->translating()) {
+            $this->skipRender();
+        }
+    }
+
+    /**
+     * A refused text, in the words of this screen.
+     *
+     * The exception's message is an English sentence for a log, and it can name a class to bind or
+     * quote the HTML parser. The status line is for the person who has to act on it, on the screen or
+     * through a screen reader.
+     */
+    private function notSavedBecause(TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable $refusal): string
+    {
+        return (string) __('legal-consent::ui.admin_status_not_saved', [
+            'reason' => (string) __(DraftRefusal::of($refusal)->label(), DraftRefusal::valuesOf($refusal)),
+        ]);
     }
 
     /** Whether this application asked for the translation to leave the request. */
@@ -348,10 +378,9 @@ final class LegalTextEditor extends Component
     /**
      * Whether a translation of THIS draft is running right now.
      *
-     * PRIVATE, and the views read it as view DATA rather than calling it. A public method on a
-     * Livewire component is a client-callable ACTION, and this package's own trust-boundary check
-     * refuses one that announces no result — correctly, because this is a reader rather than an
-     * action, and the only caller that needs it is `render()`.
+     * Private, and the views read it as view data rather than calling it: a public method on a
+     * Livewire component is an action a client can call, and this is a reader. The poll asks
+     * through {@see pollTranslation()}, which reads it and changes nothing.
      *
      * It is a hint rather than a lock — see the job — and it answers false when the feature is off,
      * so a screen without a queue never polls.
@@ -380,10 +409,15 @@ final class LegalTextEditor extends Component
      * machine translation there would be a report about something that did not happen. The record
      * is read once, though, and a page that finds none still needs to know whether the run wrote:
      * {@see $heldRevision} answers that.
+     *
+     * `$translating` is the marker as render() read it, before the draft, for the reason mount()
+     * gives for its own order: a translation that lands between the two reads is taken on the next
+     * request. In the other order it would leave the old text beside a marker that is gone, which
+     * reads as a run that wrote nothing.
      */
-    private function takeQueuedTranslation(?LegalDraft $draft): void
+    private function takeQueuedTranslation(?LegalDraft $draft, bool $translating): void
     {
-        if (! $this->awaitingTranslation || $this->translating()) {
+        if (! $this->awaitingTranslation || $translating) {
             return;
         }
 
@@ -641,10 +675,12 @@ final class LegalTextEditor extends Component
 
     public function render(): View
     {
+        // Once per request, and before the draft: takeQueuedTranslation() says why the order matters.
+        $translating = $this->translating();
         $set = LegalDraftSet::for($this->key);
         $draft = $set->draft($this->locale);
 
-        $this->takeQueuedTranslation($draft);
+        $this->takeQueuedTranslation($draft, $translating);
 
         // WHICH sentence, decided here rather than in each view. The judgment has two reasons —
         // the source moved under a reviewed translation, or nobody ever confirmed this one — and
@@ -665,7 +701,7 @@ final class LegalTextEditor extends Component
         }
 
         return view('legal-consent::livewire.legal-text-editor', [
-            'translating' => $this->translating(),
+            'translating' => $translating,
             'sourceLocale' => $this->sourceLocale(),
             // The button said "Translate from de" on a German screen, because the code went
             // straight into the sentence. The binding is what an application's own switcher
@@ -694,9 +730,7 @@ final class LegalTextEditor extends Component
     /** The document type this key is registered under, from the documents registry. */
     private function documentType(): DocumentType
     {
-        $basis = config("legal-consent.documents.{$this->key}.legal_basis");
-
-        return DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
+        return DocumentType::fromLegalBasis(DocumentMatrix::legalBasis($this->key));
     }
 
     /**
@@ -801,18 +835,14 @@ final class LegalTextEditor extends Component
     }
 
     /**
-     * The locales a release covers — the same `legal-consent.locales` the manager reads, so the
-     * two admin surfaces cannot disagree about which set a release touches.
+     * The locales a release covers, read through {@see DocumentMatrix} like everywhere else, so
+     * the two admin surfaces and the commands cannot disagree about which set a release touches.
      *
      * @return list<string>
      */
     private function locales(): array
     {
-        $locales = config('legal-consent.locales');
-
-        // array_values() changes nothing observable: its readers, in_array() and a foreach in the
-        // releaser, never read a key. It stays for the list<string> this returns.
-        return is_array($locales) ? array_values(array_filter($locales, is_string(...))) : [];
+        return DocumentMatrix::locales();
     }
 
     private function sourceLocale(): string

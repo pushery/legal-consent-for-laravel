@@ -22,8 +22,8 @@ use Pushery\LegalConsent\Models\LegalDocument;
  *
  * A mandatory document (contract/notice) is validation-required regardless of locale, so
  * if it has no active version in the recording locale we fall back to the default-locale
- * version rather than silently dropping the proof (which would leave a court-proof gap
- * behind a ticked box). Only when the key is entirely unpublished — or is an optional
+ * version rather than silently dropping the proof (which would leave a ticked box with
+ * nothing to show for it). Only when the key is entirely unpublished — or is an optional
  * consent — is it skipped (there is no version to prove acceptance of).
  */
 final readonly class RegistrationConsentRecorder

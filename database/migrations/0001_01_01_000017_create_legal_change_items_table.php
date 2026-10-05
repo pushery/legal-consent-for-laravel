@@ -24,9 +24,10 @@ use Pushery\LegalConsent\Support\ChangeSetFreezeGuard;
  * object keys on write — so a hashed JSON payload would read back different from what was stored
  * and make every load look dirty.
  *
- * `state` is denormalized from the parent so the freeze trigger can decide without a cross-table
- * subquery, which MySQL will not allow inside a BEFORE trigger on the same statement. The price is
- * a value that could drift; the invariant `item.state === set.state` is asserted by its own test.
+ * `state` is denormalized from the parent so the freeze guard protects an item with the trigger it
+ * installs on the set: each tests `OLD.state` of the row it guards, on every engine, without
+ * reading another table. The price is a value that could drift; the invariant
+ * `item.state === set.state` is asserted by its own test.
  */
 return new class extends Migration
 {

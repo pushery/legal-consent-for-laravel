@@ -19,8 +19,9 @@
 ![Databases](https://img.shields.io/badge/tested%20on-PostgreSQL%20%2B%20MySQL-336791.svg)
 ![Mutation](https://img.shields.io/badge/mutation-%E2%89%A580%25-blueviolet.svg)
 
-Court-proof, versioned legal consent for Laravel. It is a **document-acceptance
-ledger**: the package **renders and proves** your legal texts — it does not own them.
+Versioned legal consent for Laravel, recorded with the exact text each person accepted. It is a
+**document-acceptance ledger**: the package **renders and proves** your legal texts — it does not
+own them.
 
 A registration does three legally distinct things — accepting a contract, taking notice of a
 privacy notice, and giving a real consent — and treating them as one "I accept everything"
@@ -78,9 +79,7 @@ tested against a real PostgreSQL and a real MySQL, not just SQLite.
 
 Every change is held to Laravel Pint, Larastan at `max`, Rector, and a test suite at 100% line
 and type coverage, plus a real-browser end-to-end suite and cross-engine tests against a real
-PostgreSQL and MySQL 8.4 — the engines it runs on in production. That gate runs before every
-release. Mutation testing runs on its own schedule and never gates a release: a score is a
-measurement to act on, not a number to hold a version behind.
+PostgreSQL and MySQL 8.4, the engines it runs on in production, before it is released.
 
 The suite is not part of the published package: the tests and their PHPUnit configuration stay in
 the development repository, so `composer test` has nothing to run from an installed copy. See
@@ -98,7 +97,7 @@ Berlin-based studio building Laravel applications, SaaS products, and open-sourc
 tools.
 
 Building a Laravel UI? [WireKit](https://wirekit.app), Pushery's open-source
-Livewire component kit, gives you a polished component library out of the box.
+Livewire component kit, is the library this package's WireKit views are built with.
 Browse the rest of our work at [pushery.com](https://www.pushery.com).
 
 ## License

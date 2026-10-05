@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\Isolatable;
 use Illuminate\Database\Eloquent\Model;
@@ -17,6 +18,7 @@ use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
 use Pushery\LegalConsent\Enums\ConsentAction;
 use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalNotice;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
@@ -72,6 +74,20 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
     protected $description = 'Deem acceptance for deemed-consent changes whose objection window has closed with no objection.';
 
+    /**
+     * The minutes a run holds its lock: the scheduler's overlap lock and the `--isolated` lock alike,
+     * inside the hour this sweep runs on, so a run that dies holding one does not cost the next sweep.
+     */
+    public const int LOCK_MINUTES = 55;
+
+    /**
+     * How long the `--isolated` lock is held, which every scheduled run takes too ({@see LegalConsentServiceProvider}).
+     */
+    public function isolationLockExpiresAt(): CarbonInterval
+    {
+        return CarbonInterval::minutes(self::LOCK_MINUTES);
+    }
+
     public function handle(AffectedSubjectResolver $resolver, ConsentManager $consent, LegalConsentMonitor $monitor, TenantContext $tenant, DeemedAcceptanceDecision $decision, LegalDocumentPublisher $publisher): int
     {
         DB::disableQueryLog();
@@ -82,10 +98,11 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
         $now = CarbonImmutable::now();
 
-        // Snapshot the ledger BEFORE writing anything: this sweep appends an accepting
-        // (DeemedAccepted) row per subject, which would otherwise drop that subject out of the
-        // resolver's `HAVING MAX(major) < …` set mid-stream and make the LIMIT/OFFSET paging skip
-        // subjects it never returns — who would then be locked out for good by objection_closed_at.
+        // Snapshot the ledger BEFORE writing anything, so the run sweeps the parties as they stood
+        // when it started. A subject whose first agreement lands while the run is still paging
+        // never received this version's notice, so the run leaves them out. The DeemedAccepted
+        // rows this sweep appends belong to subjects it was already handed, so they change nothing
+        // about the pages still to come.
         $latestConsentId = DB::table('legal_consents')->max('id');
         // The cast makes the watermark the int forVersion() takes: through a connection that
         // stringifies fetched values, the highest id arrives as a string. The 0 is the watermark of
@@ -176,10 +193,10 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
             // STAMP ONLY A VERSION THAT WAS FULLY WORKED THROUGH — the rule the notice sweep
             // already applies to both of its hold-backs ("Skip WITHOUT stamping. The version stays
-            // due"). Line 78 above selects on `objection_closed_at is null`, so stamping a version
-            // that could not deem part of its population retires it while that population stays
-            // unbound: the first run exits 1, every run after it exits 0 over a state nothing
-            // restored, and § 308 Nr. 5 BGB never takes hold for those subjects.
+            // due"). The selection above takes only versions whose `objection_closed_at` is null,
+            // so stamping a version that could not deem part of its population retires it while
+            // that population stays unbound: the first run exits 1, every run after it exits 0 over
+            // a state nothing restored, and § 308 Nr. 5 BGB never takes hold for those subjects.
             //
             // Leaving it open keeps the alarm STICKY, which is the point. It does not promise that
             // a late notice can still bind anyone — a § 308 Nr. 5 lit. b warning served after the

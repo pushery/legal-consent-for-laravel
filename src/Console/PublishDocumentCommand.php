@@ -400,7 +400,7 @@ final class PublishDocumentCommand extends Command
 
                 $available[] = "{$key}|{$locale}";
 
-                if ($active instanceof LegalDocument && $active->content_hash === $rendered->contentHash) {
+                if ($this->unchanged($active, $rendered)) {
                     $current++;
                     $this->line("  = {$key} ({$locale}) — v{$rendered->version} already active, unchanged.");
 
@@ -454,10 +454,8 @@ final class PublishDocumentCommand extends Command
      */
     private function standInFor(string $key, string $locale, array $available = []): ?string
     {
-        $basis = config("legal-consent.documents.{$key}.legal_basis");
-
         try {
-            $type = DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
+            $type = DocumentType::fromLegalBasis(DocumentMatrix::legalBasis($key));
         } catch (ValueError) {
             return null;
         }
@@ -554,7 +552,7 @@ final class PublishDocumentCommand extends Command
 
             $active = $this->activeVersion($key, $locale);
 
-            $unchanged = $active instanceof LegalDocument && $active->content_hash === $rendered->contentHash;
+            $unchanged = $this->unchanged($active, $rendered);
 
             $lines[] = [$locale, $rendered->uiWording, $active, $unchanged, match (true) {
                 $unchanged => "Dry run: {$key} ({$locale}) v{$rendered->version} is already the active version, unchanged.",
@@ -611,7 +609,7 @@ final class PublishDocumentCommand extends Command
 
         $active = $this->activeVersion($key, $locale);
 
-        if ($active instanceof LegalDocument && $active->content_hash === $rendered->contentHash) {
+        if ($this->unchanged($active, $rendered)) {
             $this->line("Dry run: {$key} ({$locale}) v{$rendered->version} is already the active version, unchanged. Nothing would be written.");
 
             return self::SUCCESS;
@@ -624,6 +622,19 @@ final class PublishDocumentCommand extends Command
         $this->reportWordingChange($key, $locale, $active, $rendered->uiWording, preview: true);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Whether a run would leave the active version as it is: the same number and the same text.
+     *
+     * The real run looks a version up by its number. A source that raised only the number publishes
+     * a new row over the same text, and under a mode that gates, asks everybody again.
+     */
+    private function unchanged(?LegalDocument $active, Document $rendered): bool
+    {
+        return $active instanceof LegalDocument
+            && $active->version === $rendered->version
+            && $active->content_hash === $rendered->contentHash;
     }
 
     /**

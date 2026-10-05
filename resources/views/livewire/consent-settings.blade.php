@@ -107,7 +107,7 @@
                          offers no Give button shows a consent that is not given as a bare title. --}}
                     <span class="legal-consent-state">{{ $item['held'] ? __('legal-consent::ui.consent_given') : __('legal-consent::ui.consent_not_given') }}</span>
                     @if ($item['held'] && $item['withdrawable'])
-                        <button type="button" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $item['title']]) }}" wire:click="withdraw(@js($item['key']))" wire:loading.attr="aria-busy" wire:target="withdraw">
+                        <button type="button" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $item['title']]) }}" wire:click="withdraw(@js($item['key']))" wire:loading.attr="aria-busy" wire:target="withdraw(@js($item['key']))">
                             {{ __('legal-consent::ui.withdraw') }}
                         </button>
                     {{-- A document retired out from under a holding: `is_active = false` does not
@@ -127,7 +127,7 @@
                          a screen reader's button list of five identical "Give" entries names
                          nothing. --}}
                     @elseif (! $item['held'] && $this->allowGrant)
-                        <button type="button" aria-label="{{ __('legal-consent::ui.grant_for', ['title' => $item['title']]) }}" wire:click="grant(@js($item['key']))" wire:loading.attr="aria-busy" wire:target="grant">
+                        <button type="button" aria-label="{{ __('legal-consent::ui.grant_for', ['title' => $item['title']]) }}" wire:click="grant(@js($item['key']))" wire:loading.attr="aria-busy" wire:target="grant(@js($item['key']))">
                             {{ __('legal-consent::ui.grant') }}
                         </button>
                     @endif

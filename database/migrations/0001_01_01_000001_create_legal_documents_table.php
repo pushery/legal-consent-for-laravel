@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\IndexName;
 
 /**
  * Immutable, versioned legal texts. Each published version is a FROZEN row: the
@@ -69,7 +70,7 @@ return new class extends Migration
             $table->unique(['key', 'locale', 'version', 'tenant_id']);
             // Named for the same reason as the index on legal_consents: the generated name is 55
             // characters before the prefix, and MySQL stops at 64.
-            $table->index(['key', 'locale', 'is_active', 'enforce_from'], 'legal_documents_key_locale_active_idx');
+            $table->index(['key', 'locale', 'is_active', 'enforce_from'], IndexName::of('legal_documents_key_locale_active_idx'));
             $table->index(['key', 'locale', 'major_version']);
             $table->index(['key', 'content_hash']);
         });
@@ -83,10 +84,11 @@ return new class extends Migration
         // an application with a configured prefix runs `migrate` and gets a missing table
         // half-way through the chain. The INDEX name takes the prefix too: an index lives in the
         // schema namespace rather than under its table, so two prefixed installations sharing one
-        // database would otherwise collide on the second install.
+        // database would otherwise collide on the second install. Both names are quoted as the
+        // schema builder quotes them, because PostgreSQL folds an unquoted name to lower case.
         if (DB::connection()->getDriverName() === 'pgsql') {
-            $table = $this->prefixed('legal_documents');
-            $index = $this->prefixed('legal_documents_one_active_per_key_locale');
+            $table = $this->quoted($this->prefixed('legal_documents'));
+            $index = $this->quoted($this->prefixed('legal_documents_one_active_per_key_locale'));
 
             DB::statement(
                 "CREATE UNIQUE INDEX {$index} "
@@ -116,5 +118,15 @@ return new class extends Migration
         }
 
         return $prefix.$name;
+    }
+
+    /**
+     * A prefixed name for PostgreSQL DDL, quoted as the schema builder quotes the names it creates.
+     * PostgreSQL folds an unquoted name to lower case, so under a prefix with a capital letter the
+     * unquoted name would point at a table or function that does not exist.
+     */
+    private function quoted(string $name): string
+    {
+        return DB::connection()->getQueryGrammar()->wrap($name);
     }
 };

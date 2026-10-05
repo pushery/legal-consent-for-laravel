@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Content\Document;
+use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Exceptions\InvalidDocumentDate;
@@ -41,6 +43,14 @@ final readonly class LegalDriftChecker
      */
     public function driftFor(string $key, string $locale): ?string
     {
+        return $this->check($key, $locale)->reason;
+    }
+
+    /**
+     * The drift reason for (key, locale), with whether a published version was compared to find it.
+     */
+    public function check(string $key, string $locale): DriftCheck
+    {
         $active = LegalDocument::model()::query()
             ->select(['id', 'version', 'content_hash', 'source_hash', 'render_fingerprint'])
             ->where('key', $key)
@@ -48,29 +58,49 @@ final readonly class LegalDriftChecker
             ->where('is_active', true)
             ->first();
 
+        $source = null;
+
         try {
-            $rendered = $this->pipeline->process($this->sources->for($key)->resolve($key, $locale));
-        } catch (LegalDocumentNotFound) {
-            // No source text to compare — not this checker's concern.
-            return null;
+            $source = $this->sources->for($key);
+            $rendered = $this->pipeline->process($source->resolve($key, $locale));
+        } catch (LegalDocumentNotFound $e) {
+            return $this->withoutSource($active, $source, $key, $locale, $e);
         } catch (InvalidDocumentDate|InvalidDocumentVersion|MissingAcceptanceWording $e) {
             // A source that cannot even be rendered into a valid document is a specific,
             // actionable drift — surface it clearly rather than as a vague "could not be
             // rendered", which reads like an infrastructure hiccup and hides the real cause.
-            return "'{$key}' ({$locale}) source is invalid — {$e->getMessage()}";
+            return DriftCheck::reported("'{$key}' ({$locale}) source is invalid — {$e->getMessage()}", false);
         } catch (Throwable $e) {
-            return "source for '{$key}' ({$locale}) could not be rendered: {$e->getMessage()}";
+            return DriftCheck::reported("source for '{$key}' ({$locale}) could not be rendered: {$e->getMessage()}", false);
         }
 
         if (! $active instanceof LegalDocument) {
-            return "'{$key}' ({$locale}) has source text but no published version — run legal-consent:publish.";
+            return DriftCheck::reported("'{$key}' ({$locale}) has source text but no published version — run legal-consent:publish.", false);
         }
 
         if ($active->content_hash !== $rendered->contentHash) {
-            return $this->classify($active, $rendered, $key, $locale);
+            return DriftCheck::reported($this->classify($active, $rendered, $key, $locale), true);
         }
 
-        return null;
+        return DriftCheck::clean();
+    }
+
+    /**
+     * No source text to compare with.
+     *
+     * Without a published version that is a key not written in this language, which is no drift.
+     * With one, the published text is in front of readers and nothing can say whether it still
+     * matches its source, so it is reported, unless the source is written by people
+     * ({@see AwaitsAuthoring}): their text is absent while it is being written or reviewed, and the
+     * editor shows that state.
+     */
+    private function withoutSource(?LegalDocument $active, ?LegalDocumentSource $source, string $key, string $locale, LegalDocumentNotFound $missing): DriftCheck
+    {
+        if (! $active instanceof LegalDocument || $source instanceof AwaitsAuthoring) {
+            return DriftCheck::nothingToCompare();
+        }
+
+        return DriftCheck::reported("'{$key}' ({$locale}) published v{$active->version} has no readable source, so it cannot be checked — {$missing->getMessage()}", false);
     }
 
     /**

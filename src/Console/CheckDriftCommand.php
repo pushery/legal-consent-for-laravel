@@ -42,21 +42,26 @@ final class CheckDriftCommand extends Command
         // key merely LOOKS like a number, `'2024' => [...]`, has a definition and is kept, which is
         // the support this command already had.
         $keys = is_string($key) ? [$key] : DocumentMatrix::keys();
-        $locales = is_string($locale) ? [$locale] : $this->configuredLocales();
+        $locales = is_string($locale) ? [$locale] : DocumentMatrix::locales();
 
         $drifts = [];
+        $compared = 0;
 
         // Every tenant with tenancy on, the way the sweeps run. The console resolves no tenant, so a
         // check of the ambient one alone read the shared bucket and reported no drift for a tenant
         // it never looked at.
         foreach ($this->tenantsToCheck($named) as $tenant) {
-            $tenants->forTenant($tenant, function () use ($checker, $keys, $locales, $tenant, &$drifts): void {
+            $tenants->forTenant($tenant, function () use ($checker, $keys, $locales, $tenant, &$drifts, &$compared): void {
                 foreach ($keys as $documentKey) {
                     foreach ($locales as $documentLocale) {
-                        $reason = $checker->driftFor((string) $documentKey, $documentLocale);
+                        $check = $checker->check((string) $documentKey, $documentLocale);
 
-                        if ($reason !== null) {
-                            $drifts[] = 'Drift'.$this->tenantLabel($tenant).': '.$reason;
+                        if ($check->compared) {
+                            $compared++;
+                        }
+
+                        if ($check->reason !== null) {
+                            $drifts[] = 'Drift'.$this->tenantLabel($tenant).': '.$check->reason;
                         }
                     }
                 }
@@ -64,7 +69,9 @@ final class CheckDriftCommand extends Command
         }
 
         if ($drifts === []) {
-            $this->info('No legal-document drift detected.');
+            // The count, because "no drift" is only as good as what was compared, and a run over no
+            // published version at all says so here instead of reading like a clean one.
+            $this->info("No legal-document drift detected. {$compared} published version(s) compared with their source.");
 
             return self::SUCCESS;
         }
@@ -76,27 +83,5 @@ final class CheckDriftCommand extends Command
         $this->error(count($drifts).' legal document(s) have drifted from their published version.');
 
         return self::FAILURE;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function configuredLocales(): array
-    {
-        $locales = config('legal-consent.locales');
-
-        if (is_array($locales)) {
-            // array_values() changes nothing observable, since every caller only iterates the list. It is
-            // there for the list<string> return type.
-            $strings = array_values(array_filter($locales, is_string(...)));
-
-            if ($strings !== []) {
-                return $strings;
-            }
-        }
-
-        $default = config('legal-consent.default_locale', 'de');
-
-        return [is_string($default) ? $default : 'de'];
     }
 }

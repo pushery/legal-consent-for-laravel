@@ -116,7 +116,8 @@ interface ConsentManager
      *
      * Guaranteed attributes: `id`, `key`, `locale`, `type`, `major_version`, `version`, `title`,
      * `ui_wording`, `content_hash`, `requires_explicit_optin`, `requires_reconsent`, `notice_mode`,
-     * `announce_from`, `enforce_from`, `objection_deadline`, `offers_termination`, `is_active`.
+     * `announce_from`, `enforce_from`, `objection_deadline`, `offers_termination`, `is_active`,
+     * `tenant_id`.
      *
      * @return Collection<int, LegalDocument>
      */
@@ -150,9 +151,38 @@ interface ConsentManager
     public function firstAcceptance(Model $subject, ?string $locale = null): Collection;
 
     /**
+     * What `EnsureLegalConsent` stops a subject for: the documents {@see outstanding()} returns
+     * and, with `$firstAcceptance`, the ones {@see firstAcceptance()} returns, from one read of the
+     * ledger.
+     *
+     * Asked one at a time, the two questions read the subject's ledger twice, and the ledger grows
+     * with the age of the account. A document owed under both, a gating version the subject has
+     * never accepted, is in the result once. A screen that records the answers asks the two one at
+     * a time, so that each acceptance carries the method its own question implies.
+     *
+     * Partially hydrated with the same guaranteed attributes as `outstanding()`.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    public function owed(Model $subject, ?string $locale = null, bool $firstAcceptance = false): Collection;
+
+    /**
      * Whether the subject currently holds the active major version of a document.
      */
     public function hasCurrent(Model $subject, string $documentKey, ?string $locale = null): bool;
+
+    /**
+     * The same question as {@see hasCurrent()}, asked about several documents at once, from one read
+     * of the subject's ledger for the keys that have a published document.
+     *
+     * A key with no active document is `false`. So is one whose document is an informational page,
+     * unless the operator flagged that page for acknowledgment: then the answer says whether the
+     * subject saw its CURRENT version, which never means they are bound by it.
+     *
+     * @param  list<string>  $documentKeys
+     * @return array<string, bool>
+     */
+    public function hasCurrentMany(Model $subject, array $documentKeys, ?string $locale = null): array;
 
     /**
      * A per-document status map for the subject.

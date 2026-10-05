@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\ChangeSetFreezeGuard;
+use Pushery\LegalConsent\Support\IndexName;
 
 /**
  * What a version CHANGED, in the operator's own words, per locale — the content every real-world
@@ -21,10 +22,9 @@ use Pushery\LegalConsent\Support\ChangeSetFreezeGuard;
  * same row gains the version and flips to `published` — rather than copying it, so the frozen text
  * and the authored text cannot drift apart.
  *
- * The empty string, not NULL, is what makes "one draft per key+locale+tenant" enforceable: SQLite
- * and PostgreSQL treat NULLs in a unique index as distinct from each other, so a nullable column
- * would allow any number of concurrent drafts, while MySQL would allow one. A default that means
- * something different per engine is not a default.
+ * The empty string, not NULL, is what makes "one draft per key+locale+tenant" enforceable: all three
+ * engines treat NULLs in a unique index as distinct from each other, so a nullable column would allow
+ * any number of concurrent drafts. An empty string is a value, and the index allows one.
  */
 return new class extends Migration
 {
@@ -70,7 +70,7 @@ return new class extends Migration
             $table->timestampTz('published_at')->nullable();
             $table->timestampsTz();
 
-            $table->unique(['key', 'locale', 'tenant_id', 'version'], 'legal_change_sets_identity_unique');
+            $table->unique(['key', 'locale', 'tenant_id', 'version'], IndexName::of('legal_change_sets_identity_unique'));
             $table->index(['key', 'locale', 'state']);
             $table->index('document_id');
         });
