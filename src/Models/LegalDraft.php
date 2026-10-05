@@ -12,6 +12,7 @@ use Pushery\LegalConsent\Enums\ReviewState;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
 use Pushery\LegalConsent\Models\Concerns\Replaceable;
 use Pushery\LegalConsent\Support\LegalDraftSet;
+use Pushery\LegalConsent\Support\LegalDraftWriter;
 
 /**
  * The editable working copy of one legal text in one locale — the input a publish freezes.
@@ -45,13 +46,47 @@ class LegalDraft extends Model
     /**
      * Nothing is mass-assignable. `body` is the sole input to the editor's raw-HTML `{!! !!}`
      * preview, and the sanitize-on-store invariant lives entirely in {@see LegalDraftWriter} (which
-     * writes via forceFill / DB::table, bypassing this guard). Blocking mass-assignment makes "the
+     * writes via forceFill, bypassing this guard). Blocking mass-assignment makes "the
      * writer is the only door" structural: a stray LegalDraft::create($input) / ->fill($input) can
      * never land an unsanitized body straight into the preview sink.
      *
      * @var list<string>
      */
     protected $guarded = ['*'];
+
+    /**
+     * Writes `$attributes` and moves the revision on by one, in a single statement and as an update
+     * of this model: `updating` is fired before it and `updated` after it, so a host's subclass and
+     * its observers see a change of a draft like any other write. The revision moves inside the
+     * statement rather than after reading it, because `lockForUpdate()` compiles away on SQLite.
+     *
+     * With `$expectedRevision` the statement matches the row only while it is still at that
+     * revision. A row that moved on is left as it is, and the method answers false without firing
+     * `updated`. The events announce the write and do not offer it for veto: the revision has to
+     * move with the text it numbers.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function advanceRevision(array $attributes, ?int $expectedRevision = null): bool
+    {
+        $this->forceFill($attributes);
+        $this->fireModelEvent('updating', false);
+
+        $query = $this->setKeysForSaveQuery($this->newQueryWithoutScopes());
+
+        if ($expectedRevision !== null) {
+            $query->where('revision', $expectedRevision);
+        }
+
+        if ($query->increment('revision', 1, $this->getDirty()) === 0) {
+            return false;
+        }
+
+        $this->syncChanges();
+        $this->fireModelEvent('updated', false);
+
+        return true;
+    }
 
     /**
      * @return array<string, string>

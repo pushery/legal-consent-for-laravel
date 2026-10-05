@@ -69,9 +69,10 @@ final class ChangeItemsFreezer
             'published_at' => CarbonImmutable::now(),
         ])->save();
 
-        // The children carry the state too, so the database trigger can decide on one row. Written
-        // with a bulk update rather than through the model, because the model hook would refuse the
-        // very transition it is there to protect.
+        // The children carry the state too, so the database trigger can decide on one row. One
+        // statement for every item of the set rather than a save per item; the model hook would
+        // allow either, since it refuses only a row that is already published, as it did for the
+        // set above.
         LegalChangeItem::model()::query()
             ->where('change_set_id', $draft->getKey())
             ->update(['state' => ChangeSetState::Published->value]);

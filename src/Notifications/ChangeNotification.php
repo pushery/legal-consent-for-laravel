@@ -181,9 +181,10 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
             // failure a legal notice should have: loud and before anything is sent, rather than a
             // silent fall back to the global template.
             //
-            // ->markdown(), NEVER ->view(). A plain view nulls $markdown and leaves introLines and
-            // outroLines empty, so the proof body would collapse to the subject line while
-            // mandatory_content_ok kept saying true.
+            // ->markdown(), NEVER ->view(). A plain view renders only its own template, which does
+            // not have to print introLines and outroLines, while the proof body is still built
+            // from them: the proof would certify lines the subject may never have seen, and
+            // mandatory_content_ok would keep saying true.
             /** @var view-string $view */
             $mail->markdown($view, [
                 'identity' => $identity,

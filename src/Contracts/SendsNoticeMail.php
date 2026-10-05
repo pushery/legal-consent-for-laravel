@@ -7,10 +7,12 @@ namespace Pushery\LegalConsent\Contracts;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * A legal-change notification that renders a mail message — implemented by every notice-mode
- * notification (ReconsentRequired, LegalChangeInformational, DeemedConsentNotice). Lets the
- * dispatch command render the notice body for the durable-medium proof without depending on
- * a concrete notification class.
+ * A legal-change notification that renders a mail message and says whether it carries the
+ * mandatory content of its notice mode. Every notice-mode notification implements it through
+ * `ChangeNotification`, and the dispatch command asks `mandatoryContentPresent()` once per
+ * version and reports a notice that lacks the content. The durable-medium proof is written by
+ * the delivery listener, and only for a `ChangeNotification`: `notice_mail.notification` accepts
+ * no other class for the sweep, and a notice that implements this contract alone gets no proof.
  */
 interface SendsNoticeMail
 {

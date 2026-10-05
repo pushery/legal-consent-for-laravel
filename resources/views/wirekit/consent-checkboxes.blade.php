@@ -28,15 +28,16 @@
     `field` is the input name and comes from the item, never from this template — see the plain
     stub for why building it as `legal_{key}` broke the age attestation.
 --}}
-{{-- Block form on purpose. The inline one-line form strips its expression with
-     `trim('()')`, which removes EVERY leading and trailing parenthesis rather than the one pair
-     it wrapped — so an expression that itself opens with a bracket loses that bracket and the
-     view dies with `unexpected token "@"` pointing at the line below. Measured on this line.
+{{-- A block, and the only one in this file: it stands above every one-line statement, which is
+     the one place a block is safe. Before it compiles anything else, Blade lifts PHP blocks out
+     of a template by pairing each opening of the directive, one-line or block, with the next
+     `@endphp` after it, so a block opened anywhere below would be paired with the first one-line
+     statement above it and swallow everything between. A statement added below stays in the
+     one-line form, which may span lines as long as its parentheses balance.
 
-     And the first attempt to say so here broke the view a second way: the raw-block scanner runs
-     before comments are stripped and is non-greedy from the FIRST match, so spelling the inline
-     directive out inside this comment opened a block that closed at the real `@endphp` and
-     swallowed everything between. Describe it, do not spell it. --}}
+     That pairing also runs before comments are stripped, so this comment describes the directive
+     instead of spelling it: spelled out here, it would open a block that closes at the real
+     `@endphp` and swallow everything between. --}}
 @php
     $bindTo = ($bind ?? '') !== '' ? $bind : null;
 

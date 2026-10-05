@@ -11,7 +11,7 @@ use Pushery\LegalConsent\Support\LedgerRecordMacs;
 /**
  * Give the NEWEST row of every chain the witness it never had.
  *
- * The hole this closes is the one {@see LedgerHashChain} names under "STILL OPEN": a row is
+ * The hole this closes is the second structural gap {@see LedgerHashChain} lists: a row is
  * vouched for by the link its SUCCESSOR stores, and the newest row of a chain has no successor.
  * So it could be REPLACED — not merely truncated — with nothing to mismatch against, and the
  * newest row is the one that says what somebody currently holds. `verify-ledger` exited 0 over a

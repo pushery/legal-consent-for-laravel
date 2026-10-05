@@ -12,9 +12,10 @@ use InvalidArgumentException;
  *
  * The chain hashes the STRING representation of each field on purpose, so that a driver
  * returning `2` and one returning `'2'` for the same column agree. A value that string-casts
- * lossily has no place in that scheme: `false` and an array both cast to `''`, which is also a
- * legitimate value, so folding them in would let three different rows share one hash. Refusing
- * is the only option that neither collides nor changes an existing row's hash.
+ * lossily has no place in that scheme: a bool casts to `''` or `'1'` and an array to `'Array'`,
+ * each the string form of a legitimate value, so folding them in would let two different rows
+ * share one hash, and an object without `__toString()` does not cast at all. Refusing is the only
+ * option that neither collides nor changes an existing row's hash.
  *
  * In practice this means the caller passed something that is not a database row — most often an
  * Eloquent model, whose casts turn four proof columns into enums and a date object.

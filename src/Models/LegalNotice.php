@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Override;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Exceptions\LedgerImmutableException;
 use Pushery\LegalConsent\Models\Concerns\BelongsToTenant;
 use Pushery\LegalConsent\Models\Concerns\RecordIsAppendOnly;
 use Pushery\LegalConsent\Models\Concerns\Replaceable;
@@ -54,9 +55,12 @@ class LegalNotice extends Model
 
     /**
      * Nothing is mass-assignable. A notice row is the durable-medium proof that a legally required
-     * notice actually went out; its only legitimate writer is the dispatch sweep's curated attribute
-     * array (forceCreate). Blocking mass assignment keeps a stray LegalNotice::create($input) from
-     * fabricating proof of a notice nobody ever sent.
+     * notice actually went out. This model creates one in a single place: the curated attribute
+     * array `WriteNoticeDeliveryProof` hands to forceCreate() once the mail channel has sent the
+     * notice. The erasure of a subject re-inserts its rows without the personal columns, and the
+     * retention prune removes expired ones, both through the query builder. Blocking mass
+     * assignment keeps a stray LegalNotice::create($input) from fabricating proof of a notice
+     * nobody ever sent.
      *
      * @var list<string>
      */
@@ -93,5 +97,10 @@ class LegalNotice extends Model
             'subject_erased_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
         ];
+    }
+
+    protected static function appendOnlyViolation(): LedgerImmutableException
+    {
+        return LedgerImmutableException::onNoticeUpdate();
     }
 }

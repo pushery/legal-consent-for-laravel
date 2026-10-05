@@ -21,8 +21,8 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * notice leaves the mailer rather than when its job is enqueued. With a synchronous queue the two
  * agree; with a worker `$proofed` is whatever has been delivered so far, which is usually nothing
  * yet, and a metric watching it climb afterwards is watching the notices arrive. It stays at
- * nought for good when `durable_medium.proof` is off, or when the notice goes out on a channel
- * outside `durable_medium.channels`.
+ * zero for good when `durable_medium.proof` is off, or when `notifications.channels` does not
+ * send the notice by mail: only the mail channel's delivery writes a proof row.
  */
 final readonly class NoticeDispatched
 {

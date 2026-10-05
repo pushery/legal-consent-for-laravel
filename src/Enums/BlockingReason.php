@@ -52,8 +52,8 @@ enum BlockingReason: string
     /**
      * The translation key for a screen a person reads.
      *
-     * Written case by case rather than derived from the name. A derivation would hand a seventh
-     * case a key nobody wrote a translation for, and the surface would render the key itself;
+     * Written case by case rather than derived from the name. A derivation would hand a new case
+     * a key nobody wrote a translation for, and the surface would render the key itself;
      * `match` without a default throws while the case is still being added, which is the only
      * moment the mistake is cheap.
      */

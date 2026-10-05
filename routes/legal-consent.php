@@ -93,9 +93,11 @@ $stack = is_array($middleware) ? $middleware : ['api', 'auth'];
 $throttle = config('legal-consent.routes.api_throttle', '60,1');
 
 if (is_string($throttle) && trim($throttle) !== '') {
-    // First in the stack, so a flood is refused before anything else does work for it, and so the
-    // limiter keys on the authenticated subject where there is one (it reads the user off the
-    // request, which resolves through the guard regardless of middleware order).
+    // First in the declared stack. Against Laravel's own `auth` that changes nothing: the
+    // framework's middleware priority runs the guard before any throttle, whatever the order here,
+    // so the limiter counts authenticated writers, keyed on their subject, and never sees a request
+    // the guard refuses. It bounds how many rows one subject can append, not how often a token is
+    // guessed. A middleware outside that list keeps its declared place, after the throttle.
     array_unshift($stack, 'throttle:'.$throttle);
 }
 

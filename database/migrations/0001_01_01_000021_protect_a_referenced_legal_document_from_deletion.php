@@ -33,9 +33,10 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * touching this table has to be able to put both back. `install()` is idempotent — it drops first —
  * so re-running it here is how an installation that already ran 000011 receives the new arm.
  *
- * NOTE for anyone reading a failing DELETE as a defect: it is the guard, and the message says
- * which column to write instead. Deleting the ledger rows first is not the way around it either —
- * `legal_consents` is append-only on every engine.
+ * A failing DELETE here is the guard, and its message names the column to write instead. Deleting
+ * the version's ledger rows first does get past it: `legal_consents` refuses UPDATE, not DELETE,
+ * which stays allowed for retention and erasure. That path destroys the evidence the guard exists
+ * to keep, so a version that binds somebody is retired with `is_active = false` instead.
  */
 return new class extends Migration
 {

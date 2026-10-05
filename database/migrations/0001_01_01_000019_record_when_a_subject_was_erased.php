@@ -21,7 +21,9 @@ use Illuminate\Support\Facades\Schema;
  * retention sweep, never a claim the chain vouches for.
  *
  * Adding a column does not rebuild the table on any engine here (only CHANGING one does), so the
- * triggers on both ledgers stay installed — the hazard 000011 and 000018 both had to plan around.
+ * append-only triggers PostgreSQL and MySQL keep on both ledgers stay installed, and on SQLite the
+ * proof guard on `legal_documents`, which reads `legal_consents`, is never caught by a rebuild —
+ * the hazard 000011 and 000018 both had to plan around.
  */
 return new class extends Migration
 {

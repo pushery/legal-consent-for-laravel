@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\IndexName;
 
 /**
  * Record each change notice that is on its way, or failed, per subject and version.
@@ -37,7 +38,7 @@ return new class extends Migration
             $table->unsignedSmallInteger('failures')->default(0);
             $table->timestamp('failed_at')->nullable();
 
-            $table->unique(['document_id', 'subject_type', 'subject_id'], 'legal_notice_attempts_subject_unique');
+            $table->unique(['document_id', 'subject_type', 'subject_id'], IndexName::of('legal_notice_attempts_subject_unique'));
         });
     }
 

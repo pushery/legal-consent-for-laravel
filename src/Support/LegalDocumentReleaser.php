@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
@@ -43,6 +44,12 @@ final readonly class LegalDocumentReleaser
      */
     public function release(string $key, NoticeMode $mode, array $locales, ReleaseOptions $options = new ReleaseOptions): Collection
     {
+        // A release covers at least one language. Asked to cover none, it would stamp the draft with
+        // a version, write no row, and hand its caller an empty release to report as done.
+        if ($locales === []) {
+            throw new InvalidArgumentException("A release of '{$key}' has to name at least one locale.");
+        }
+
         // Serialize concurrent releases of the same text: two admins pressing "Release" at once
         // would otherwise race on the one-active-version guard and leave a half-applied set. The
         // SAME lock name LegalDocument::activate() uses, so a direct `legal-consent:publish` cannot

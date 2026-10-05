@@ -128,8 +128,9 @@ return new class extends Migration
         }
 
         if ($driver === 'mysql' || $driver === 'mariadb') {
-            // The index goes first: MySQL refuses to drop a column an index still references. Each
-            // is checked on its own, because a failed up() can leave the column without the index.
+            // Each is checked on its own, because a failed up() can leave the column without the
+            // index. Dropping the column would take the index with it, as its only column; the
+            // index is named anyway, so down() undoes exactly what up() created.
             if (Schema::hasIndex('legal_documents', $index)) {
                 DB::statement("DROP INDEX {$index} ON {$table}");
             }

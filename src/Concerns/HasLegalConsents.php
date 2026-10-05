@@ -91,11 +91,10 @@ trait HasLegalConsents
     /**
      * The same question as {@see hasAcceptedCurrentLegal()}, asked about several documents at once.
      *
-     * The single-key method costs an active-document read plus a full fold of the subject's ledger,
-     * and neither is memoized — so a template or a policy that checks three documents pays for the
-     * same two reads three times, and the fold's cost grows with how long the subject has been a
-     * customer. This resolves the whole set from the status map the manager already builds in one
-     * fold and one document query, so the cost is flat in the number of keys.
+     * One read of the subject's ledger for all the keys, scoped to those that have a published
+     * document, where the single-key method reads its one key per call. Both read the active set
+     * from the cache the gate already keeps, so a few keys cost little either way; this one stays
+     * flat as the list grows.
      *
      * A key with no active document — a typo, a deactivated version, an informational page nobody
      * ever acknowledges — is `false`, the same answer the single-key method gives.
@@ -110,23 +109,6 @@ trait HasLegalConsents
      */
     public function hasAcceptedCurrentLegalMany(array $documentKeys, ?string $locale = null): array
     {
-        $status = app(ConsentManager::class)->statusFor($this, $locale);
-
-        $held = [];
-
-        foreach ($documentKeys as $documentKey) {
-            $row = $status[$documentKey] ?? null;
-
-            // The single-key method's three conditions, read off the row: an active document, a
-            // holding that exists, and at least the current major. A retired row names the held
-            // major as its current one, and an empty ledger reads as major 0, which a 0.x document
-            // matches, so the comparison alone answered true for both.
-            $held[$documentKey] = $row !== null
-                && ! $row['retired']
-                && $row['accepted_version'] !== null
-                && $row['accepted_major'] >= $row['current_major'];
-        }
-
-        return $held;
+        return app(ConsentManager::class)->hasCurrentMany($this, $documentKeys, $locale);
     }
 }

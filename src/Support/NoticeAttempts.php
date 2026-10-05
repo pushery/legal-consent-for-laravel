@@ -61,22 +61,43 @@ final class NoticeAttempts
      * on the way, and that counts as an attempt: otherwise a queue that never runs would have the
      * same subjects queued again after every window, without end.
      *
+     * Returns the record with the rows as they stood before it, so that a run which stops before
+     * handing these notices over can put them back ({@see QueuedNotices::putBack()}), and null where
+     * nothing was recorded.
+     *
      * @param  Collection<int, Model>  $subjects
      */
-    public static function queued(LegalDocument $version, Collection $subjects): void
+    public static function queued(LegalDocument $version, Collection $subjects): ?QueuedNotices
     {
         if ($subjects->isEmpty() || ! self::tracked()) {
-            return;
+            return null;
         }
 
         $now = CarbonImmutable::now();
         $stale = self::staleBefore();
+        $before = $subjects->mapWithKeys(static fn (Model $subject): array => [(string) SubjectKey::pairFor($subject) => null])->all();
 
         foreach ($subjects->groupBy(static fn (Model $subject): string => (string) $subject->getMorphClass()) as $type => $group) {
+            $ids = $group->map(SubjectKey::for(...))->all();
+
+            $rows = DB::table(self::TABLE)
+                ->where('document_id', $version->getKey())
+                ->where('subject_type', (string) $type)
+                ->whereIn('subject_id', $ids)
+                ->get(['subject_id', 'queued_at', 'failures', 'failed_at']);
+
+            foreach ($rows as $row) {
+                $before[SubjectKey::pair((string) $type, (string) SubjectKey::from($row->subject_id))] = [
+                    'queued_at' => $row->queued_at,
+                    'failures' => $row->failures,
+                    'failed_at' => $row->failed_at,
+                ];
+            }
+
             DB::table(self::TABLE)
                 ->where('document_id', $version->getKey())
                 ->where('subject_type', (string) $type)
-                ->whereIn('subject_id', $group->map(SubjectKey::for(...))->all())
+                ->whereIn('subject_id', $ids)
                 ->whereNull('failed_at')
                 ->where('queued_at', '<=', $stale)
                 ->increment('failures');
@@ -95,6 +116,8 @@ final class NoticeAttempts
             // An existing row keeps its count of failures and is on its way again.
             ['queued_at', 'failed_at'],
         );
+
+        return new QueuedNotices($version, $now, $before);
     }
 
     /**

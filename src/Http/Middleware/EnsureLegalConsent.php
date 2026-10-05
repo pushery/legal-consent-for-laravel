@@ -38,19 +38,15 @@ final readonly class EnsureLegalConsent
             return $next($request);
         }
 
-        $locale = app()->getLocale();
-        $owed = $this->consent->outstanding($subject, $locale);
-
         // A FIRST acceptance is a different question and is off by default. `outstanding()` asks
         // whether a CHANGE is owed; a subject who never accepted anything has had no change, so
         // that read is silent about them — and an application whose sign-up carries no consent
         // checkbox then treats people as having accepted a text they were never shown. The two
         // sets are merged rather than chosen between: a subject can owe a first acceptance of one
         // document and a re-consent of another at the same time, and stopping for one while
-        // ignoring the other would be arbitrary.
-        if ($this->gatesFirstUse()) {
-            $owed = $owed->concat($this->consent->firstAcceptance($subject, $locale))->values();
-        }
+        // ignoring the other would be arbitrary. `owed()` answers both from one read of the
+        // subject's ledger, because this runs on every request it guards.
+        $owed = $this->consent->owed($subject, app()->getLocale(), $this->gatesFirstUse());
 
         if ($owed->isEmpty()) {
             return $next($request);
@@ -159,8 +155,10 @@ final readonly class EnsureLegalConsent
      * green in development and dead in production, where APP_KEY differs.
      *
      * Consequence to be honest about: a gated subject can still reach OTHER Livewire components.
-     * That is Livewire's own security model, not a hole opened here — a component must authorize
-     * itself (route middleware never protects a Livewire action), which is exactly what this
+     * Livewire re-applies a page's route middleware to the actions of its components only when that
+     * middleware is on Livewire's persistent list (`Authenticate` and `Authorize` are there by
+     * default, and `Livewire::addPersistentMiddleware()` adds more). Whatever is not on that list
+     * does not guard an action, so a component must authorize itself, which is exactly what this
      * package's own admin screens do in `boot()`.
      */
     private function isLivewireEndpoint(Request $request): bool

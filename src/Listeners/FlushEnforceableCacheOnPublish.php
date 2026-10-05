@@ -24,6 +24,7 @@ final readonly class FlushEnforceableCacheOnPublish implements ShouldHandleEvent
 
     public function handle(LegalDocumentPublished $event): void
     {
-        $this->cache->flushAll();
+        // Under the published version's tenant, which a console publish does not share.
+        $this->cache->flushFor($event->document);
     }
 }

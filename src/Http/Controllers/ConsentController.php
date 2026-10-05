@@ -51,7 +51,7 @@ final readonly class ConsentController
             ], JsonResponse::HTTP_CONFLICT);
         } catch (NotConsentBearingException $e) {
             // The sibling of not_withdrawable / not_objectable / not_terminable below, and the one
-            // that was missing: `impressum` ships in the default registry as an informational
+            // that was missing: `imprint` ships in the default registry as an informational
             // document, so a client can name a published key that accepts nothing without ever
             // having typed it. That is a client error, not an outage of this package.
             return response()->json(['error' => 'not_consent_bearing', 'message' => $e->getMessage()], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);

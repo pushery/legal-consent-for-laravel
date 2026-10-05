@@ -24,9 +24,10 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * the tamper-evidence chain reads exactly as it did before the type moved. Asserted rather than
  * assumed, by each engine suite, against rows written before the type moved.
  *
- * PER-DRIVER SQL RATHER THAN `->change()`, and only for PostgreSQL: PostgreSQL refuses to widen
- * `bigint` to `varchar` without a `USING` clause ("column cannot be cast automatically"), and the
- * schema builder emits none. MySQL and SQLite take the portable path.
+ * Per-driver SQL for PostgreSQL, because of the way back: PostgreSQL widens `bigint` to `varchar`
+ * on its own, but narrowing `varchar` to `bigint` in `down()` needs a `USING` clause ("column
+ * cannot be cast automatically"). Both directions are written out with `USING`, so the pair reads
+ * as one. MySQL and SQLite take the portable path.
  *
  * SQLite REBUILDS THE TABLE to change a column, and a rebuild keeps the indexes but DROPS the
  * triggers (see 000011). Neither `legal_consents` nor `legal_notices` carries a trigger of its own
@@ -108,7 +109,7 @@ return new class extends Migration
     private function widen(string $table): void
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
-            $qualified = $this->prefixed($table);
+            $qualified = $this->quoted($this->prefixed($table));
 
             DB::statement("ALTER TABLE {$qualified} ALTER COLUMN subject_id TYPE varchar(64) USING subject_id::varchar");
 
@@ -123,7 +124,7 @@ return new class extends Migration
     private function narrow(string $table): void
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
-            $qualified = $this->prefixed($table);
+            $qualified = $this->quoted($this->prefixed($table));
 
             DB::statement("ALTER TABLE {$qualified} ALTER COLUMN subject_id TYPE bigint USING subject_id::bigint");
 
@@ -157,5 +158,15 @@ return new class extends Migration
     private function prefixed(string $name): string
     {
         return DB::connection()->getTablePrefix().$name;
+    }
+
+    /**
+     * A prefixed name for PostgreSQL DDL, quoted as the schema builder quotes the names it creates.
+     * PostgreSQL folds an unquoted name to lower case, so under a prefix with a capital letter the
+     * unquoted name would point at a table or function that does not exist.
+     */
+    private function quoted(string $name): string
+    {
+        return DB::connection()->getQueryGrammar()->wrap($name);
     }
 };

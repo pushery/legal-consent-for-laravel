@@ -6,4 +6,5 @@ return [
     'contract_required' => 'Aceita os termos de utilização para continuar.',
     'acknowledgement_required' => 'Confirma que leste a política de privacidade.',
     'age_required' => 'Confirma que tens pelo menos :threshold anos.',
+    'checkbox_answer' => 'O campo :attribute tem de ser aceite ou recusado.',
 ];

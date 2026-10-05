@@ -43,15 +43,16 @@
     box the visitor could tick and never satisfy. The fallback below keeps the minimal shape above
     working — that shape lists documents only, and a document IS `legal_{key}`.
 --}}
-{{-- Block form on purpose. The inline one-line form strips its expression with
-     `trim('()')`, which removes EVERY leading and trailing parenthesis rather than the one pair
-     it wrapped — so an expression that itself opens with a bracket loses that bracket and the
-     view dies with `unexpected token "@"` pointing at the line below. Measured on this line.
+{{-- Block form on purpose. Before it compiles anything else, Blade lifts PHP blocks out of a
+     template by pairing each opening of the directive, one-line or block, with the next
+     `@endphp` after it. The loop below opens a block, so this statement in the one-line form
+     would be paired with the end of that block and swallow everything between, the loop
+     included, and the compiled view would no longer parse. A one-line statement is safe only
+     below the last block of a file.
 
-     And the first attempt to say so here broke the view a second way: the raw-block scanner runs
-     before comments are stripped and is non-greedy from the FIRST match, so spelling the inline
-     directive out inside this comment opened a block that closed at the real `@endphp` and
-     swallowed everything between. Describe it, do not spell it. --}}
+     That pairing also runs before comments are stripped, so this comment describes the directive
+     instead of spelling it: spelled out here, it would open a block that closes at the real
+     `@endphp` and swallow everything between. --}}
 @php
     $bindTo = ($bind ?? '') !== '' ? $bind : null;
 

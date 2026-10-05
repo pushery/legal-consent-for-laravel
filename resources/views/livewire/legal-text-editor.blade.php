@@ -6,8 +6,11 @@
      `?? false` because this view is ALSO rendered standalone, by the tests that check its markup
      against real components. There is no Livewire component behind those, so the flag is absent —
      and absent means "do not poll", which is the only thing a render without a component could
-     honestly mean. Calling `$this->translating()` here instead threw on every one of them. --}}
-<div @if ($translating ?? false) wire:poll.3s @endif>
+     honestly mean. Calling `$this->translating()` here instead threw on every one of them.
+
+     Each tick calls `pollTranslation`, which answers without a render while the run is still going.
+     The tick after it ends renders, takes the result, and stops the poll. --}}
+<div @if ($translating ?? false) wire:poll.3s="pollTranslation" @endif>
     {{-- Left out where the embedding page titles itself (`:heading="false"`), the same switch the
          consent panel carries. The landmark then takes its name DIRECTLY rather than pointing at a
          heading that is no longer in the document: `aria-labelledby` at a missing id names nothing,
@@ -129,7 +132,7 @@
             </select>
 
             <label for="legal-deemed-change-class">{{ __('legal-consent::ui.admin_deemed_change_class') }}</label>
-            <input id="legal-deemed-change-class" type="text" wire:model="changeClass" aria-describedby="legal-deemed-change-class-hint">
+            <input id="legal-deemed-change-class" type="text" wire:model="changeClass" maxlength="{{ \Pushery\LegalConsent\Support\LegalDocumentPublisher::CHANGE_CLASS_MAX_LENGTH }}" aria-describedby="legal-deemed-change-class-hint">
             <p id="legal-deemed-change-class-hint">{{ __('legal-consent::ui.admin_deemed_change_class_hint') }}</p>
 
             <label for="legal-deemed-termination">

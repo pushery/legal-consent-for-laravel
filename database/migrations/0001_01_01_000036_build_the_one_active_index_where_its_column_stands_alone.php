@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Pushery\SQLens\Attributes\NoSqlOnDriver;
 
 /**
  * Build the unique index that holds one active version per document on MySQL, where migration
@@ -18,7 +19,10 @@ use Illuminate\Support\Facades\Schema;
  * that. Where two active versions of one document are still stored, it fails the way 000025 did,
  * and succeeds on the next run once one of them is retired.
  */
-return new class extends Migration
+return new
+#[NoSqlOnDriver('pgsql', reason: 'PostgreSQL holds one active version with a partial unique index; only MySQL indexes active_identity')]
+#[NoSqlOnDriver('sqlite', reason: 'SQLite holds one active version with a partial unique index; only MySQL indexes active_identity')]
+class extends Migration
 {
     public function up(): void
     {
@@ -39,6 +43,7 @@ return new class extends Migration
     /**
      * Nothing to undo: the index belongs to migration 000025, whose down() drops it with the column.
      */
+    #[NoSqlOnDriver('mysql', reason: 'the index belongs to migration 000025, whose down() drops it with the column')]
     public function down(): void {}
 
     /**

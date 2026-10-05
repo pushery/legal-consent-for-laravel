@@ -33,6 +33,19 @@ final class VerifyLedgerCommand extends Command
     /** Chained rows per keyset page. */
     private const int PAGE = 1000;
 
+    /** Breaks the report names one by one. The rest are counted. */
+    private const int NAMED_BREAKS = 20;
+
+    /** Every break this run found, named or not. */
+    private int $breakCount = 0;
+
+    /**
+     * The first {@see NAMED_BREAKS} breaks, in the order they were found.
+     *
+     * @var list<string>
+     */
+    private array $namedBreaks = [];
+
     protected $signature = 'legal-consent:verify-ledger';
 
     protected $description = 'Verify the tamper-evidence hash chain of the consent ledger.';
@@ -54,8 +67,11 @@ final class VerifyLedgerCommand extends Command
         $expectedPrev = $genesis;
         $subjects = 0;
         $rows = 0;
-        /** @var list<string> $breaks */
-        $breaks = [];
+
+        // Reset per run: the console resolves a command once and reuses it for every call in the
+        // process.
+        $this->breakCount = 0;
+        $this->namedBreaks = [];
 
         // THE BOUNDARY IS CHECKED BEFORE A SINGLE LEDGER ROW IS READ, and it is checked at all
         // because a boundary an attacker can raise exempts whatever they put below it. Recomputing
@@ -67,7 +83,7 @@ final class VerifyLedgerCommand extends Command
         $boundary = $this->rootBoundary();
 
         if ($boundary instanceof LedgerRootBoundary && ! hash_equals($boundary->proof, $chain->boundaryProof($boundary->id))) {
-            $breaks[] = "chain-root boundary marker #{$boundary->id}: proof does not verify — the marker was altered, or this environment holds a different tamper_evidence_key";
+            $this->recordBreak("chain-root boundary marker #{$boundary->id}: proof does not verify — the marker was altered, or this environment holds a different tamper_evidence_key");
         }
 
         // The second marker, read for the same reason and checked the same way: a boundary an
@@ -76,7 +92,7 @@ final class VerifyLedgerCommand extends Command
         $macBoundary = $macs->boundary();
 
         if ($macBoundary instanceof LedgerRootBoundary && ! hash_equals($macBoundary->proof, $macs->boundaryProof($macBoundary->id))) {
-            $breaks[] = "record-mac boundary marker #{$macBoundary->id}: proof does not verify — the marker was altered, or this environment holds a different tamper_evidence_key";
+            $this->recordBreak("record-mac boundary marker #{$macBoundary->id}: proof does not verify — the marker was altered, or this environment holds a different tamper_evidence_key");
         }
 
         // A marker that is gone while the evidence it bounds exists was deleted: the package writes
@@ -87,11 +103,11 @@ final class VerifyLedgerCommand extends Command
         $macRemoved = $macs->boundaryRemoved();
 
         if ($rootRemoved) {
-            $breaks[] = 'chain-root boundary marker is missing although rows carry root proofs — it was deleted, and the rows it bounded can no longer be told from rows added since';
+            $this->recordBreak('chain-root boundary marker is missing although rows carry root proofs — it was deleted, and the rows it bounded can no longer be told from rows added since');
         }
 
         if ($macRemoved) {
-            $breaks[] = 'record-mac boundary marker is missing although macs were recorded — it was deleted, and the rows it bounded can no longer be told from rows added since';
+            $this->recordBreak('record-mac boundary marker is missing although macs were recorded — it was deleted, and the rows it bounded can no longer be told from rows added since');
         }
 
         // The rows below a boundary are exempt because they were there when it was stamped, and an
@@ -102,12 +118,12 @@ final class VerifyLedgerCommand extends Command
 
         foreach ([LedgerHashChain::ROOT_BOUNDARY_MARKER => 'chain-root', LedgerRecordMacs::BOUNDARY_MARKER => 'record-mac'] as $marker => $label) {
             foreach ($census->breaks($marker, $label) as $break) {
-                $breaks[] = $break;
+                $this->recordBreak($break);
             }
         }
 
         foreach ($census->impossibleIds() as $break) {
-            $breaks[] = $break;
+            $this->recordBreak($break);
         }
 
         // The TAIL of each chain — the only row a mac has anything to say about, and the reason is
@@ -157,7 +173,7 @@ final class VerifyLedgerCommand extends Command
                 // history and cannot be anything else; unkeyed there is no secret, so demanding a
                 // proof would fail every honest install for a guarantee it never bought.
                 foreach ($this->rootProofBreak($chain, $row, $boundary) as $break) {
-                    $breaks[] = $break;
+                    $this->recordBreak($break);
                 }
             }
 
@@ -171,7 +187,7 @@ final class VerifyLedgerCommand extends Command
                     : 'link does not match the previous row (edit, deletion, insertion, or reorder)';
                 $rowId = is_int($row->id) || is_string($row->id) ? $row->id : '?';
                 $token = is_string($row->subject_token) ? $row->subject_token : '?';
-                $breaks[] = "subject_token {$token}, row #{$rowId}: {$reason}";
+                $this->recordBreak("subject_token {$token}, row #{$rowId}: {$reason}");
             }
 
             $expectedPrev = $chain->hashRow($row);
@@ -192,7 +208,7 @@ final class VerifyLedgerCommand extends Command
         }
 
         foreach ($this->macBreaks($macs, $tails, $macBoundary) as $break) {
-            $breaks[] = $break;
+            $this->recordBreak($break);
         }
 
         // A forged row inserted with prev_record_hash = NULL is skipped by the walk above (it
@@ -207,15 +223,17 @@ final class VerifyLedgerCommand extends Command
         $unprotected = 0;
 
         if ($firstChainedId !== null) {
+            // Paged by id, so a ledger with many direct inserts is read a page at a time rather
+            // than whole.
             $suspects = DB::table('legal_consents')
+                ->select('id')
                 ->whereNull('prev_record_hash')
                 ->where('id', '>', $firstChainedId)
-                ->orderBy('id')
-                ->get(['id']);
+                ->lazyById(self::PAGE);
 
             foreach ($suspects as $suspect) {
                 $rowId = is_int($suspect->id) || is_string($suspect->id) ? $suspect->id : '?';
-                $breaks[] = "row #{$rowId}: unchained row inserted after tamper-evidence began — a chained ledger has no unchained inserts (direct DB write?)";
+                $this->recordBreak("row #{$rowId}: unchained row inserted after tamper-evidence began — a chained ledger has no unchained inserts (direct DB write?)");
             }
 
             $unprotected = DB::table('legal_consents')
@@ -236,7 +254,7 @@ final class VerifyLedgerCommand extends Command
         // the whole point"). This check is structural, so it holds with or without a key, and it sees
         // rows that predate any of it.
         foreach ($this->tokenBindingBreaks() as $break) {
-            $breaks[] = $break;
+            $this->recordBreak($break);
         }
 
         // Hoisted above the branch because BOTH outcomes need it. It used to be computed inside
@@ -271,7 +289,7 @@ final class VerifyLedgerCommand extends Command
             $this->warn('The chain-root boundary is NOT stamped, so the root-proof check did not run: a chain opened by a direct insert cannot be detected here. Not migrated yet: run the package migrations with the key set, and 000024 stamps it. Already migrated: running them again changes nothing; the first consent recorded with the key stamps it, and every row already in the ledger then counts as history.');
         }
 
-        if ($breaks === []) {
+        if ($this->breakCount === 0) {
             $this->info("Ledger chain intact: verified {$rows} chained record(s) across {$subjects} subject(s).");
 
             if ($unprotected > 0) {
@@ -301,14 +319,14 @@ final class VerifyLedgerCommand extends Command
             return self::SUCCESS;
         }
 
-        $this->error(sprintf('Ledger tamper check FAILED: %d break(s) across %d chained record(s).', count($breaks), $rows));
+        $this->error(sprintf('Ledger tamper check FAILED: %d break(s) across %d chained record(s).', $this->breakCount, $rows));
 
-        foreach (array_slice($breaks, 0, 20) as $break) {
+        foreach ($this->namedBreaks as $break) {
             $this->line("  • {$break}");
         }
 
-        if (count($breaks) > 20) {
-            $this->line(sprintf('  … and %d more.', count($breaks) - 20));
+        if ($this->breakCount > self::NAMED_BREAKS) {
+            $this->line(sprintf('  … and %d more.', $this->breakCount - self::NAMED_BREAKS));
         }
 
         // A KEYED RUN HAS TWO CAUSES FOR THIS OUTPUT AND THEY DEMAND OPPOSITE RESPONSES, so
@@ -329,11 +347,29 @@ final class VerifyLedgerCommand extends Command
     }
 
     /**
+     * Counts a break, and keeps its text while the report still names breaks one by one.
+     *
+     * Every break is counted, because the summary and the key-mismatch hint compare that count
+     * with the chained records. The text is kept for the first {@see NAMED_BREAKS} only, so the
+     * memory a run needs does not grow with the breaks it finds: a wrong key breaks every chained
+     * row, and the run has to get as far as the hint that says so.
+     */
+    private function recordBreak(string $break): void
+    {
+        $this->breakCount++;
+
+        if (count($this->namedBreaks) < self::NAMED_BREAKS) {
+            $this->namedBreaks[] = $break;
+        }
+    }
+
+    /**
      * Every chained row, once, in (subject_token, id) order — KEYSET-paged over a pinned ledger.
      *
      * Two things were wrong with `->lazy()`, and only one of them was about speed. Laravel's
-     * lazy() pages with `forPage()`, which is LIMIT/OFFSET: page N makes the engine sort and
-     * discard N*1000 rows before it yields its own, on a table this package expects to be large.
+     * lazy() pages with `offset()` and `limit()`, which is LIMIT/OFFSET: page N makes the engine
+     * sort and discard N*1000 rows before it yields its own, on a table this package expects to be
+     * large.
      *
      * The other is a correctness bug, and it is not exotic. The ledger is append-only and takes
      * rows WHILE this runs; a row whose subject_token sorts before the current window shifts the
@@ -353,7 +389,7 @@ final class VerifyLedgerCommand extends Command
      *
      * `select *` STAYS. The 18 columns {@see LedgerHashChain}
      * folds into a row hash include `user_agent` and `ui_wording_snapshot`; narrowing the list
-     * would drop the verifier'."'".'s own inputs to save three columns.
+     * would drop the verifier's own inputs to save three columns.
      *
      * @return iterable<int, stdClass>
      */
@@ -567,13 +603,14 @@ final class VerifyLedgerCommand extends Command
         //
         // AND THE GROUPING IS COMPARED AS BYTES, because on MySQL it otherwise is not.
         //
-        // GROUP BY follows the column's collation, and every collation Laravel configures by
-        // default (utf8mb4_unicode_ci, utf8mb4_0900_ai_ci) is case- and accent-insensitive and
-        // PAD SPACE. Measured against a real MySQL 8.4: two tokens differing only in case, and
-        // `subject_id` '5' against '5 ', each collapse into ONE group — so the fabricated second
-        // chain and the stolen token, the two shapes this whole method exists to find, arrive in
-        // PHP already merged and are never reported. PHP compares bytes; the two layers disagreed,
-        // and the database's answer was the one that reached the fold.
+        // GROUP BY follows the column's collation. Laravel's default, utf8mb4_unicode_ci, is case-
+        // and accent-insensitive and PAD SPACE; MySQL's own server default, utf8mb4_0900_ai_ci, is
+        // NO PAD but just as case- and accent-insensitive. Measured against a real MySQL 8.4 under
+        // Laravel's default: two tokens differing only in case, and `subject_id` '5' against '5 ',
+        // each collapse into ONE group, the case half under either collation — so the fabricated
+        // second chain and the stolen token, the two shapes this whole method exists to find,
+        // arrive in PHP already merged and are never reported. PHP compares bytes; the two layers
+        // disagreed, and the database's answer was the one that reached the fold.
         //
         // CAST(… AS BINARY) restores byte grouping. It is the same repair, for the same reason,
         // that ProofColumnGuard::installMysql() already carries — that one is about `<=>` on a

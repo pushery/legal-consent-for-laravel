@@ -229,7 +229,7 @@ readonly class DefaultConsentManager implements ConsentManager
     {
         $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
 
-        // The court-proof ledger must never hold a legally impossible entry: only a real
+        // The evidence ledger must never hold a legally impossible entry: only a real
         // consent can be withdrawn or declined (Art. 7(3)). Kept here rather than left to the
         // type matrix in append() so the caller still gets the named exception and its wording;
         // the matrix is the backstop for every other pairing.
@@ -471,7 +471,8 @@ readonly class DefaultConsentManager implements ConsentManager
      * Whether a pending request has aged out of the configured confirmation window.
      *
      * Unconfigured means no window, and therefore never closed — a limit nobody chose must not
-     * start refusing confirmations an application was already accepting.
+     * start refusing confirmations an application was already accepting. A value that names no
+     * window is refused with the key's name ({@see ConfirmationWindow}), not read as a closed one.
      */
     private function confirmWindowClosed(LegalConsent $pending): bool
     {
@@ -479,7 +480,7 @@ readonly class DefaultConsentManager implements ConsentManager
             return false;
         }
 
-        return $pending->accepted_at->add($this->confirmWithin)->isBefore(CarbonImmutable::now());
+        return ConfirmationWindow::closesAt($this->confirmWithin, $pending->accepted_at)->isBefore(CarbonImmutable::now());
     }
 
     public function outstanding(Model $subject, ?string $locale = null): Collection
@@ -490,6 +491,11 @@ readonly class DefaultConsentManager implements ConsentManager
     public function firstAcceptance(Model $subject, ?string $locale = null): Collection
     {
         return $this->gate->firstAcceptanceFor($subject, $locale ?? $this->defaultLocale);
+    }
+
+    public function owed(Model $subject, ?string $locale = null, bool $firstAcceptance = false): Collection
+    {
+        return $this->gate->owedFor($subject, $locale ?? $this->defaultLocale, $firstAcceptance);
     }
 
     public function hasCurrent(Model $subject, string $documentKey, ?string $locale = null): bool
@@ -525,6 +531,43 @@ readonly class DefaultConsentManager implements ConsentManager
         // (document_key, accepted_at, id) and each key folds on its own — so filtering cannot
         // change the answer for the key that survives it.
         return ConsentGate::holds($this->gate->currentHoldings($subject, [$documentKey]), $documentKey, $active->major_version);
+    }
+
+    public function hasCurrentMany(Model $subject, array $documentKeys, ?string $locale = null): array
+    {
+        // The documents statusFor() reports a standing for, as hasAcceptedCurrentLegalMany() read
+        // them off its map before: those a subject can accept, plus an informational page the
+        // operator flagged for acknowledgment.
+        $documents = app(EnforceableDocumentCache::class)
+            ->resolvedFor($locale ?? $this->defaultLocale)
+            ->filter(static fn (LegalDocument $document): bool => in_array($document->key, $documentKeys, true)
+                && ($document->type->isConsentBearing() || RegistrationAcknowledgment::covers($document->key)))
+            ->values();
+
+        $keys = array_values($documents->map(static fn (LegalDocument $document): string => $document->key)->all());
+
+        if ($keys === []) {
+            return array_fill_keys($documentKeys, false);
+        }
+
+        // ONE read of the ledger, for the keys asked about that have a document to hold. The fold is
+        // per-key independent, so the answer for each key is the one a fold of the whole ledger gives,
+        // without the rows of every other document, which grow for the life of the account.
+        $standing = $this->gate->standingFor($subject, $keys);
+        $byKey = $documents->keyBy(static fn (LegalDocument $document): string => $document->key);
+        $held = [];
+
+        foreach ($documentKeys as $documentKey) {
+            $document = $byKey->get($documentKey);
+
+            // Present, and at least the current major. A holding an ending action dropped carries no
+            // version, and at major 0 the number alone cannot tell a holding from none.
+            $held[$documentKey] = $document instanceof LegalDocument
+                && ($standing['version'][$documentKey] ?? null) !== null
+                && ($standing['held'][$documentKey] ?? 0) >= $document->major_version;
+        }
+
+        return $held;
     }
 
     public function statusFor(Model $subject, ?string $locale = null): array
@@ -1074,10 +1117,12 @@ readonly class DefaultConsentManager implements ConsentManager
      * What the subject was shown, as one comparable value: the document body's content hash folded
      * with the acceptance sentence rendered next to it.
      *
-     * Public and static so every capture point (the bundled form, a consumer's own screen, the JSON
-     * API) derives it identically — a guard whose two sides compute the value differently is not a
-     * guard. A bare `content_hash` is still accepted for the body-only case, so an existing consumer
-     * passing one keeps working.
+     * Public and static so every capture point (the bundled form, a consumer's own screen, the backend
+     * an API client asks for the sentence it shows) derives it identically, and accept() compares
+     * against the same function on every path, the JSON API's included. A guard whose two sides
+     * compute the value differently is not a guard. The JSON API hands out neither the sentence nor
+     * this value. A bare `content_hash` is still accepted for the body-only case, so an existing
+     * consumer passing one keeps working.
      *
      * Takes the PublishedDocument too, because that is the only type the documented public read
      * path hands out ({@see ConsentManager::published()}). Without it a consumer rendering its own

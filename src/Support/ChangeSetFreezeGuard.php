@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Support\Facades\DB;
+use Pushery\LegalConsent\Enums\ChangeSetState;
 use RuntimeException;
 
 /**
@@ -13,15 +14,20 @@ use RuntimeException;
  *
  * This is a CONDITIONAL freeze, and that is the difference from `ProofColumnGuard`.
  * `legal_documents` needs a column allowlist because four of its columns must stay writable
- * forever (the activation flag, the two sweep watermarks). A change set has no such split: it is
- * entirely editable until it is published and entirely frozen afterwards. So the condition is the
- * row's own state, not a list of columns — the layering of `legal_notices`, which blocks
- * unconditionally, with one predicate added.
+ * forever (the activation flag, `updated_at` and the two sweep watermarks). A change set has no
+ * such split: it is entirely editable until it is published and entirely frozen afterwards. So
+ * the condition is the row's own state, not a list of columns — the layering of `legal_notices`,
+ * which blocks unconditionally, with one predicate added.
  *
  * DELETE is blocked as well as UPDATE, which `legal_notices` does not do. A notice row holds
  * personal data and must remain prunable under a retention rule; a change set describes the change
  * rather than a subject, so nothing ages out of it, and the only reason to delete one would be to
  * make a published description disappear.
+ *
+ * On PostgreSQL a third trigger per table refuses a `TRUNCATE` while the table holds a published
+ * row, because a `TRUNCATE` fires no row trigger. It runs the same function, which answers that
+ * statement for the whole table. Laravel's `truncate()` is a `DELETE` on SQLite, which the row
+ * trigger answers, and MySQL runs no trigger on `TRUNCATE TABLE`.
  *
  * It ships on ALL THREE engines. SQLite used to be left to the model hook alone, on the reasoning
  * that the app layer is the portable baseline — but the hook cannot see the paths this guard is
@@ -47,19 +53,21 @@ final class ChangeSetFreezeGuard
 
     public const string ITEM_TRIGGER_DELETE = 'legal_change_items_no_frozen_delete';
 
+    public const string SET_TRIGGER_TRUNCATE = 'legal_change_sets_no_frozen_truncate';
+
+    public const string ITEM_TRIGGER_TRUNCATE = 'legal_change_items_no_frozen_truncate';
+
     private const string MESSAGE = 'a published legal change description is frozen: it is the record of what a subject was told';
 
     /**
-     * The stored value the triggers below test `OLD.state` against.
+     * The stored value the triggers below test `OLD.state` against, on every engine.
      *
-     * It is spelled out here rather than interpolated from {@see ChangeSetState::Published} because
-     * the trigger bodies below are literal SQL — a requirement that is itself a guard, and not one
-     * worth weakening for a constant. So this IS a second copy of the enum's backing value, and the
-     * drift it invites is the dangerous kind: rename the enum case and the triggers keep running,
-     * comparing against a value no row can hold. They would freeze nothing and still report success,
-     * because a dead trigger and a live one look identical from the outside.
-     *
-     * A lockstep test holds the two together.
+     * Every trigger body interpolates this constant, so the value is spelled once in this class. It
+     * copies the backing value of {@see ChangeSetState::Published} rather than reading it, because it
+     * is a storage format: published rows already carry it, and a changed backing value needs a data
+     * migration, not triggers that move away from the rows already stored. A lockstep test holds the
+     * copy to the enum. Without it a rename would leave every trigger comparing against a value no
+     * row holds, freezing nothing and still reporting success.
      */
     public const string FROZEN_STATE = 'published';
 
@@ -70,7 +78,7 @@ final class ChangeSetFreezeGuard
         self::drop();
 
         match ($driver) {
-            'pgsql' => self::installPostgres('legal_change_sets', self::SET_TRIGGER_UPDATE, self::SET_TRIGGER_DELETE),
+            'pgsql' => self::installPostgres('legal_change_sets', self::SET_TRIGGER_UPDATE, self::SET_TRIGGER_DELETE, self::SET_TRIGGER_TRUNCATE),
             'mysql' => self::installMysql('legal_change_sets', self::SET_TRIGGER_UPDATE, self::SET_TRIGGER_DELETE),
             'sqlite' => self::installSqlite('legal_change_sets', self::SET_TRIGGER_UPDATE, self::SET_TRIGGER_DELETE),
         };
@@ -83,7 +91,7 @@ final class ChangeSetFreezeGuard
         self::dropItems();
 
         match ($driver) {
-            'pgsql' => self::installPostgres('legal_change_items', self::ITEM_TRIGGER_UPDATE, self::ITEM_TRIGGER_DELETE),
+            'pgsql' => self::installPostgres('legal_change_items', self::ITEM_TRIGGER_UPDATE, self::ITEM_TRIGGER_DELETE, self::ITEM_TRIGGER_TRUNCATE),
             'mysql' => self::installMysql('legal_change_items', self::ITEM_TRIGGER_UPDATE, self::ITEM_TRIGGER_DELETE),
             'sqlite' => self::installSqlite('legal_change_items', self::ITEM_TRIGGER_UPDATE, self::ITEM_TRIGGER_DELETE),
         };
@@ -143,7 +151,7 @@ final class ChangeSetFreezeGuard
         }
 
         foreach (['legal_change_sets', 'legal_change_items'] as $table) {
-            $function = self::qualify($table.'_guard_frozen');
+            $function = self::quoted($table.'_guard_frozen');
 
             if (data_get(DB::selectOne('SELECT to_regprocedure(?) AS oid', [$function.'()']), 'oid') === null) {
                 continue;
@@ -155,12 +163,12 @@ final class ChangeSetFreezeGuard
 
     public static function drop(): void
     {
-        self::dropFor('legal_change_sets', self::SET_TRIGGER_UPDATE, self::SET_TRIGGER_DELETE, 'legal_change_sets_guard_frozen');
+        self::dropFor('legal_change_sets', self::SET_TRIGGER_UPDATE, self::SET_TRIGGER_DELETE, self::SET_TRIGGER_TRUNCATE, 'legal_change_sets_guard_frozen');
     }
 
     public static function dropItems(): void
     {
-        self::dropFor('legal_change_items', self::ITEM_TRIGGER_UPDATE, self::ITEM_TRIGGER_DELETE, 'legal_change_items_guard_frozen');
+        self::dropFor('legal_change_items', self::ITEM_TRIGGER_UPDATE, self::ITEM_TRIGGER_DELETE, self::ITEM_TRIGGER_TRUNCATE, 'legal_change_items_guard_frozen');
     }
 
     /**
@@ -187,16 +195,30 @@ final class ChangeSetFreezeGuard
     }
 
     /**
+     * A name for PostgreSQL DDL: prefixed by {@see self::qualify()} and quoted as the schema
+     * builder quotes the names it creates. PostgreSQL folds an unquoted name to lower case, in a
+     * catalog lookup as in a statement, so under a prefix with a capital letter the unquoted name
+     * would point at a table or function that does not exist.
+     *
+     * @param  literal-string  $name
+     */
+    private static function quoted(string $name): string
+    {
+        return DB::connection()->getQueryGrammar()->wrap(self::qualify($name));
+    }
+
+    /**
      * The ONE place hand-built DDL from this class reaches the connection.
      *
      * Every statement below is assembled rather than literal, because a table prefix and the
-     * trigger names derived from it are only known at runtime. Funnelling them through a single
+     * trigger names derived from it are only known at runtime. Funneling them through a single
      * method keeps that fact auditable: the static exemption for `unprepared()`'s literal-string
      * requirement is one line pointing here, next to the validation that earns it, instead of a
      * file-wide waiver that would also cover a statement built from something less careful.
      *
      * What may reach this method: names produced by {@see self::qualify()}, which refuses anything
-     * that is not a bare identifier fragment, and the class's own constants. Nothing else.
+     * that is not a bare identifier fragment, quoted by {@see self::quoted()} for PostgreSQL, and
+     * the class's own constants. Nothing else.
      */
     private static function execute(string $sql): void
     {
@@ -207,15 +229,17 @@ final class ChangeSetFreezeGuard
      * @param  literal-string  $table
      * @param  literal-string  $updateTrigger
      * @param  literal-string  $deleteTrigger
+     * @param  literal-string  $truncateTrigger
      */
-    private static function installPostgres(string $table, string $updateTrigger, string $deleteTrigger): void
+    private static function installPostgres(string $table, string $updateTrigger, string $deleteTrigger, string $truncateTrigger): void
     {
         self::postgresFunction($table);
 
-        $function = self::qualify($table.'_guard_frozen');
-        $table = self::qualify($table);
-        $updateTrigger = self::qualify($updateTrigger);
-        $deleteTrigger = self::qualify($deleteTrigger);
+        $function = self::quoted($table.'_guard_frozen');
+        $table = self::quoted($table);
+        $updateTrigger = self::quoted($updateTrigger);
+        $deleteTrigger = self::quoted($deleteTrigger);
+        $truncateTrigger = self::quoted($truncateTrigger);
 
         self::execute(<<<SQL
             CREATE TRIGGER {$updateTrigger}
@@ -225,11 +249,18 @@ final class ChangeSetFreezeGuard
             CREATE TRIGGER {$deleteTrigger}
                 BEFORE DELETE ON {$table}
                 FOR EACH ROW EXECUTE FUNCTION {$function}();
+
+            CREATE TRIGGER {$truncateTrigger}
+                BEFORE TRUNCATE ON {$table}
+                FOR EACH STATEMENT EXECUTE FUNCTION {$function}();
             SQL);
     }
 
     /**
-     * The one function both triggers of a table run.
+     * The one function all three triggers of a table run.
+     *
+     * A TRUNCATE has no row to read, so it asks whether the table holds a published row at all and
+     * refuses if it does. A statement trigger's return value is ignored.
      *
      * OLD.state, never NEW.state: the question is whether the row WAS frozen, and reading the
      * incoming value would let an update that also rewrites `state` walk straight past the guard.
@@ -242,13 +273,23 @@ final class ChangeSetFreezeGuard
      */
     private static function postgresFunction(string $table): void
     {
-        $function = self::qualify($table.'_guard_frozen');
+        $function = self::quoted($table.'_guard_frozen');
+        $guarded = self::quoted($table);
         $message = self::MESSAGE;
+        $frozen = self::FROZEN_STATE;
 
         self::execute(<<<SQL
             CREATE OR REPLACE FUNCTION {$function}() RETURNS trigger SET search_path FROM CURRENT AS \$\$
             BEGIN
-                IF OLD.state = 'published' THEN
+                IF TG_OP = 'TRUNCATE' THEN
+                    IF EXISTS (SELECT 1 FROM {$guarded} WHERE state = '{$frozen}') THEN
+                        RAISE EXCEPTION '{$message}';
+                    END IF;
+
+                    RETURN NULL;
+                END IF;
+
+                IF OLD.state = '{$frozen}' THEN
                     RAISE EXCEPTION '{$message}';
                 END IF;
 
@@ -270,6 +311,7 @@ final class ChangeSetFreezeGuard
     private static function installMysql(string $table, string $updateTrigger, string $deleteTrigger): void
     {
         $message = self::MESSAGE;
+        $frozen = self::FROZEN_STATE;
         $table = self::qualify($table);
         $updateTrigger = self::qualify($updateTrigger);
         $deleteTrigger = self::qualify($deleteTrigger);
@@ -279,7 +321,7 @@ final class ChangeSetFreezeGuard
                 BEFORE UPDATE ON {$table}
                 FOR EACH ROW
                 BEGIN
-                    IF OLD.state = 'published' THEN
+                    IF OLD.state = '{$frozen}' THEN
                         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '{$message}';
                     END IF;
                 END
@@ -290,7 +332,7 @@ final class ChangeSetFreezeGuard
                 BEFORE DELETE ON {$table}
                 FOR EACH ROW
                 BEGIN
-                    IF OLD.state = 'published' THEN
+                    IF OLD.state = '{$frozen}' THEN
                         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '{$message}';
                     END IF;
                 END
@@ -346,21 +388,25 @@ final class ChangeSetFreezeGuard
      * @param  literal-string  $table
      * @param  literal-string  $updateTrigger
      * @param  literal-string  $deleteTrigger
+     * @param  literal-string  $truncateTrigger
      * @param  literal-string  $function
      */
-    private static function dropFor(string $table, string $updateTrigger, string $deleteTrigger, string $function): void
+    private static function dropFor(string $table, string $updateTrigger, string $deleteTrigger, string $truncateTrigger, string $function): void
     {
         $driver = DB::connection()->getDriverName();
-        $table = self::qualify($table);
-        $updateTrigger = self::qualify($updateTrigger);
-        $deleteTrigger = self::qualify($deleteTrigger);
-        $function = self::qualify($function);
 
         if ($driver === 'pgsql') {
-            self::execute("DROP TRIGGER IF EXISTS {$updateTrigger} ON {$table}");
-            self::execute("DROP TRIGGER IF EXISTS {$deleteTrigger} ON {$table}");
-            self::execute("DROP FUNCTION IF EXISTS {$function}()");
+            $quotedTable = self::quoted($table);
+
+            foreach ([$updateTrigger, $deleteTrigger, $truncateTrigger] as $trigger) {
+                self::execute('DROP TRIGGER IF EXISTS '.self::quoted($trigger)." ON {$quotedTable}");
+            }
+
+            self::execute('DROP FUNCTION IF EXISTS '.self::quoted($function).'()');
         }
+
+        $updateTrigger = self::qualify($updateTrigger);
+        $deleteTrigger = self::qualify($deleteTrigger);
 
         // DROP side names `mariadb` on purpose; see ProofColumnGuard::drop(). The engine is
         // refused on install, but an installation that received these under 0.13.0 must be able to

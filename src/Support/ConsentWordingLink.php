@@ -68,7 +68,7 @@ final readonly class ConsentWordingLink
         return new self(
             mb_substr($wording, 0, $at),
             // From the WORDING, not the title: this is what keeps the sentence unaltered when the
-            // two differ in case, which is twelve of the fourteen measured rows.
+            // two differ in case, which is every shipped locale but German.
             mb_substr($wording, $at, $length),
             mb_substr($wording, $at + $length),
         );

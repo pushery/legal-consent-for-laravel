@@ -73,9 +73,7 @@ final class SourceLanguageFallback
         $refused = [];
 
         foreach (DocumentMatrix::keys() as $key) {
-            $basis = config("legal-consent.documents.{$key}.legal_basis");
-
-            if (config("legal-consent.documents.{$key}.locale_fallback") === true && in_array($basis, ['contract', 'consent'], true)) {
+            if (config("legal-consent.documents.{$key}.locale_fallback") === true && in_array(DocumentMatrix::legalBasis($key), ['contract', 'consent'], true)) {
                 $refused[] = $key;
             }
         }

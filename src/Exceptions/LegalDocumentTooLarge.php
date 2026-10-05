@@ -15,10 +15,24 @@ use RuntimeException;
  */
 final class LegalDocumentTooLarge extends RuntimeException
 {
+    /**
+     * @param  int  $bytes  the size of the text that was refused
+     * @param  int  $maxBytes  the limit it went over
+     */
+    public function __construct(
+        string $message = '',
+        public readonly int $bytes = 0,
+        public readonly int $maxBytes = 0,
+    ) {
+        parent::__construct($message);
+    }
+
     public static function for(string $type, string $locale, int $bytes, int $maxBytes): self
     {
         return new self(
-            "Legal document '{$type}' ({$locale}) is {$bytes} bytes, exceeding the {$maxBytes}-byte limit."
+            "Legal document '{$type}' ({$locale}) is {$bytes} bytes, exceeding the {$maxBytes}-byte limit.",
+            $bytes,
+            $maxBytes,
         );
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\ChangeSetState;
 use Pushery\LegalConsent\Models\LegalChangeSet;
@@ -13,8 +14,9 @@ use Pushery\LegalConsent\Models\Scopes\TenantScope;
  * The entry point for describing a pending change, and the read side for everything that renders
  * or gates on one.
  *
- * Resolved from the container so a consuming app can bind its own; reached most easily through the
- * `ChangeItems` facade.
+ * Bound in the container as a singleton and reached most easily through the `ChangeItems` facade.
+ * The class is final and implements no contract, so the binding is not an extension point: what the
+ * releaser and `legal-consent:changes` receive is always this class.
  */
 final readonly class ChangeItemsAuthor
 {
@@ -70,8 +72,13 @@ final readonly class ChangeItemsAuthor
             return false;
         }
 
-        $draft->items()->delete();
-        $draft->delete();
+        // Both rows or neither. Entries removed under a header that stays would leave a description
+        // with nothing in it, and isAuthored() reads only the headline and the impact, so the next
+        // release would freeze it as a change without entries.
+        DB::transaction(function () use ($draft): void {
+            $draft->items()->delete();
+            $draft->delete();
+        });
 
         return true;
     }

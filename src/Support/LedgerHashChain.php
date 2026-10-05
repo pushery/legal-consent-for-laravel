@@ -67,19 +67,22 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  *
  * Chaining is per SUBJECT (keyed by the stable `subject_token`, which survives
  * anonymization), not global — so it detects unauthorized tampering of a subject's proof
- * without serializing every write on a single global tail. A LEGITIMATE retention prune of
- * a superseded row will therefore show as an expected discontinuity at that point; correlate
- * it with your retention schedule.
+ * without serializing every write on a single global tail. A retention prune re-links the
+ * chains it shortens, in the transaction that removes the rows, and leaves a chain that fails
+ * to verify untouched, so a break reported after a prune was not made by the prune.
  *
  * THE CHAIN IS BOUND TO THE ENGINE AND THE CONNECTION TIME ZONE IT WAS STARTED ON. Both the
  * writer and the verifier hash the SAME database-read representation, so there is no
  * write-vs-read drift while those two facts hold — and they are facts about the deployment, not
  * about the code. `accepted_at` enters the hash as the string the driver hands back, and that
  * string differs between engines (PostgreSQL renders `timestamptz` with an offset, MySQL and
- * SQLite render none) and moves with the connection's `timezone` setting on PostgreSQL and MySQL.
- * So a dump restored onto the other engine, or a `database.connections.*.timezone` added or
- * changed after the first chained row, invalidates every stored link at once: `verify-ledger`
- * then reports the whole ledger as tampered although nobody touched a row.
+ * SQLite render none) and moves with the session time zone on PostgreSQL and MySQL. Laravel sets
+ * that zone from `database.connections.*.timezone` when the key exists; without it the server
+ * decides, through its own configuration, a database or role default, or `PGTZ` in the
+ * environment of the process that connects. So a dump restored onto the other engine, a change of
+ * that key, or without one a change on the server side, invalidates every stored link at once:
+ * `verify-ledger` then reports the whole ledger as tampered although nobody touched a row.
+ * `legal-consent:doctor` names a session zone no key pins.
  *
  * That is a precondition of the same shape as the HMAC secret above — fix it before the first
  * chained row — and it is stated rather than removed on purpose. Normalizing the instant would
@@ -123,7 +126,11 @@ final class LedgerHashChain
      *  - `prev_record_hash` is the link itself and is folded in separately by {@see hashRow()};
      *  - `subject_erased_at` records that an Art. 17 erasure rewrote the row, and migration
      *    000019 declares it as not a hashed proof field — it is a trace for the operator, never
-     *    a claim the chain vouches for.
+     *    a claim the chain vouches for;
+     *  - `root_proof` is the HMAC over the token that the row opening a chain carries beside the
+     *    genesis link, and the verifier checks it on its own. A lawful prune that removes the
+     *    opener writes it onto the row that becomes the opener, which must not change that row's
+     *    hash.
      *
      * @var list<string>
      */
@@ -185,6 +192,10 @@ final class LedgerHashChain
      * opener stamps it before its own proof. It is left missing, and the verifier reports that
      * ({@see rootBoundaryRemoved()}). Stamped again, it would sit above every row written since and
      * exempt whatever was slipped in among them.
+     *
+     * The row that opens a chain under a key pays for it: a catalog query for the marker table and
+     * an indexed lookup on it, with more only while the marker is missing. The catalog query stays
+     * uncached for the reason {@see LedgerRecordMacs} gives for its own.
      */
     public function stampRootBoundary(): void
     {
@@ -353,9 +364,10 @@ final class LedgerHashChain
      * RENDERED differently (`accepted_at` on PostgreSQL versus MySQL, and either one under a
      * different connection time zone) is a different string here, and the class docblock states that
      * binding. The cost of the choice is that a value with no lossless string form cannot be
-     * admitted at all — `false`, an array and an object all cast to `''`, which is itself a
-     * legitimate value, so admitting them would put four different rows on one hash. They are
-     * REFUSED (UnhashableProofFieldException) rather than folded.
+     * admitted at all. A bool casts to `''` or `'1'` and an array to `'Array'`, each the string form
+     * of a legitimate value, so admitting them would put two different rows on one hash; an object
+     * without `__toString()` does not cast at all. All of them are REFUSED
+     * (UnhashableProofFieldException) rather than folded.
      */
     private function canonical(object $row): string
     {

@@ -170,9 +170,7 @@ final readonly class LegalDraftSet
     /** This document's type, from the registry entry its key names. */
     public function type(): DocumentType
     {
-        $basis = config("legal-consent.documents.{$this->key}.legal_basis");
-
-        return DocumentType::fromLegalBasis(is_string($basis) ? $basis : 'contract');
+        return DocumentType::fromLegalBasis(DocumentMatrix::legalBasis($this->key));
     }
 
     /**

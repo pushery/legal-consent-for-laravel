@@ -15,17 +15,18 @@
              aria-live region added at the same time as its text is not announced).
 
              tabindex="-1" + x-effect is the FOCUS half, and it is not decoration here. The release
-             is confirmed in a modal that closes itself on click; without somewhere to send focus it
-             lands on <body>, which is WCAG 2.4.3 and leaves a keyboard user at the top of the
-             document after an irreversible action. wire:key alone cannot do it: the element is
+             button of this view takes effect on one click, without a confirmation (the WireKit twin
+             asks in a dialog), and it stays where it is; the focus move takes a keyboard user from
+             it to the outcome of an irreversible action. wire:key alone cannot do it: the element is
              always present and Livewire morphs it rather than replacing it, so nothing re-runs.
              x-effect re-runs whenever $wire.statusNonce changes — exactly when a release sets it.
              Same pattern as consent-settings and reconsent-form; this screen was the one left out. --}}
         {{-- `status`/`polite`, not `alert`/`assertive`, and the focus move is why. `role="alert"`
              implies an assertive live region, and this same element also receives focus — so
              assistive technology says the message TWICE: once as a live-region interruption, once
-             as the name of the newly focused element. Dropping the focus move instead would send a
-             keyboard user to <body> after an irreversible action (WCAG 2.4.3), which is worse.
+             as the name of the newly focused element. Dropping the focus move instead would leave a
+             keyboard user on the button, away from the outcome of an irreversible action, which is
+             worse.
              The focus move is already immediate, so politeness costs no urgency.
              This also brings the screen in line with the other three status regions of the package,
              which have used `status` + focus all along. The WireKit twin was raised to `assertive`
@@ -63,8 +64,9 @@
              live" is the most expensive confusion available, and it goes wrong in both directions:
              a text believed live that is not, or a release pressed because it seemed to have
              happened already. The second answers the question that follows immediately -- why the
-             release is held while my own language is finished -- and that answer lived only behind
-             the confirm dialog, which nobody opens while they still have the question.
+             release is held while my own language is finished. In the WireKit twin that answer
+             otherwise stood only behind its confirm dialog, which nobody opens while they still have
+             the question, and both twins carry the two sentences so the screens say the same.
 
              Override either with an empty string to drop it, the same way every other ui.* key
              here can be overridden. --}}
@@ -113,12 +115,8 @@
                                      that is unchanged rather than a leftover: the package brings no
                                      admin routes, so with no name configured anything here would have
                                      to point at `#` — a link with a fully worded promise standing in a
-                                     screen reader's link list, one per cell, that moves focus to the
-                                     top of the document when activated. `wire:navigate` would make it
-                                     worse rather than inert: Livewire decides natively on protocol,
-                                     origin, `download` and `target` alone, so a hash href is same-origin
-                                     http(s), Livewire takes over, and it runs a full fetch and DOM morph
-                                     against the page the visitor is already on.
+                                     screen reader's link list, one per cell, that only scrolls the page
+                                     back to its top when activated.
 
                                      With a name configured the href is real, so none of that applies —
                                      and the accessible name names the document, the locale and the
@@ -151,7 +149,7 @@
                                      "Release all locales" are indistinguishable in a screen reader's
                                      button list (WCAG 2.4.6) — the same rule this package already
                                      enforces for the withdraw control. --}}
-                                <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key) }}" wire:click="releaseAll(@js($key))" wire:loading.attr="aria-busy" wire:target="releaseAll">{{ __('legal-consent::ui.admin_release_all') }}</button>
+                                <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key) }}" wire:click="releaseAll(@js($key))" wire:loading.attr="aria-busy" wire:target="releaseAll(@js($key))">{{ __('legal-consent::ui.admin_release_all') }}</button>
                                 {{-- Visible before the click: the languages this release leaves out keep the
                                      version they already have live, so leaving them out is a decision
                                      somebody saw. --}}

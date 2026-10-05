@@ -25,7 +25,7 @@
     $consentUrl:    where the subject acts.
 
     The countdown carries its OWN `role="timer"` (an implicit aria-live=off), so its ticking value
-    is never announced every second — it is safe inside the region landmark above.
+    is never announced as it ticks — it is safe inside the region landmark above.
 --}}
 @php
     // A legal deadline is an ABSOLUTE instant. The countdown is driven by that instant, never a
@@ -57,11 +57,11 @@
                              open change, on every authenticated page. It is the only continuous
                              client work this package ships, and it buys nothing here.
 
-                             It does NOT stop the timer, and saying so matters: `countdown.js`
-                             calls `setInterval(…, 1000)` in `init()` unconditionally, whatever this
-                             prop says. What goes away is the rendered change per tick — the string
-                             stops moving, so Alpine writes the same value and the DOM stays put.
-                             The interval itself is upstream's to narrow, and it is filed there. --}}
+                             It slows the timer as well. The kit derives its interval from the
+                             smallest unit it shows: without seconds that is minutes, so the
+                             countdown ticks every 30 seconds rather than every second. From 2.56.0,
+                             the version these views are served from, it also stops while the tab
+                             is hidden. --}}
                         <x-wirekit::countdown
                             :until="$item['enforce_from']"
                             :warn-threshold="$lcWarn"

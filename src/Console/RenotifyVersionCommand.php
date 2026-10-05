@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\NoticeAttempts;
+use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
@@ -44,7 +45,29 @@ final class RenotifyVersionCommand extends Command
 
     public function handle(): int
     {
-        $version = $this->locate();
+        // Every tenant that published this version matches it when no tenant is named, and taking
+        // any one of them could re-open another tenant's notices while the intended one stays
+        // stamped. A unique active version per (key, locale, tenant) means more than one match is
+        // more than one tenant.
+        $tenants = $this->matching()
+            ->orderBy(TenantContext::COLUMN)
+            ->pluck(TenantContext::COLUMN)
+            ->map(static fn (mixed $tenant): string => is_string($tenant) || is_int($tenant) ? (string) $tenant : '')
+            ->all();
+
+        if (count($tenants) > 1) {
+            $this->error(sprintf(
+                '%s (%s) names a version in %d tenants: %s. Name the one to repair with --tenant=. Nothing was changed.',
+                $this->stringArgument('key'),
+                $this->stringArgument('locale'),
+                count($tenants),
+                implode(', ', array_map(static fn (string $tenant): string => $tenant === '' ? "'' (shared)" : $tenant, $tenants)),
+            ));
+
+            return self::FAILURE;
+        }
+
+        $version = $this->matching()->first();
 
         if (! $version instanceof LegalDocument) {
             $this->error('No such version. Nothing was changed.');
@@ -52,19 +75,21 @@ final class RenotifyVersionCommand extends Command
             return self::FAILURE;
         }
 
+        $label = $this->label($version);
+
         // The sweep stops trying a subject whose notice failed notifications.max_attempts times,
         // and skips one whose notice is still queued. A re-notify is the repair once the cause is
         // fixed, so every subject of the version is tried again.
         $forgotten = NoticeAttempts::forgetVersion($version);
 
         if ($forgotten > 0) {
-            $this->info("Forgot {$forgotten} recorded notice attempt(s) of {$version->key} {$version->version} ({$version->locale}), so every subject is tried again.");
+            $this->info("Forgot {$forgotten} recorded notice attempt(s) of {$label}, so every subject is tried again.");
         }
 
         if ($version->notified_at === null) {
             // Not an error, and deliberately not silent: reporting success over a version that was
             // never swept would read as "repaired" for the one case where nothing was wrong.
-            $this->info("{$version->key} {$version->version} ({$version->locale}) was never swept — its watermark is already clear.");
+            $this->info("{$label} was never swept — its watermark is already clear.");
 
             return self::SUCCESS;
         }
@@ -73,13 +98,18 @@ final class RenotifyVersionCommand extends Command
 
         $version->forceFill(['notified_at' => null])->saveQuietly();
 
-        $this->info("Cleared the notice watermark on {$version->key} {$version->version} ({$version->locale}), stamped {$stamped}.");
+        $this->info("Cleared the notice watermark on {$label}, stamped {$stamped}.");
         $this->line('Run `legal-consent:dispatch-notices --dry-run` to see the audience before the next sweep sends anything.');
 
         return self::SUCCESS;
     }
 
-    private function locate(): ?LegalDocument
+    /**
+     * The rows the arguments name, across tenants unless `--tenant` names one.
+     *
+     * @return Builder<LegalDocument>
+     */
+    private function matching(): Builder
     {
         $tenant = $this->option('tenant');
         $requested = $this->argument('version');
@@ -93,7 +123,24 @@ final class RenotifyVersionCommand extends Command
                 is_string($requested) && $requested !== '',
                 fn (Builder $query): Builder => $query->where('version', $requested),
                 fn (Builder $query): Builder => $query->where('is_active', true),
-            )
-            ->first();
+            );
+    }
+
+    /** Key, version and locale, and the tenant when the version belongs to one. */
+    private function label(LegalDocument $version): string
+    {
+        $tenant = $version->getAttribute(TenantContext::COLUMN);
+        $tenant = is_string($tenant) || is_int($tenant) ? (string) $tenant : '';
+
+        return $tenant === ''
+            ? "{$version->key} {$version->version} ({$version->locale})"
+            : "{$version->key} {$version->version} ({$version->locale}, tenant {$tenant})";
+    }
+
+    private function stringArgument(string $name): string
+    {
+        $value = $this->argument($name);
+
+        return is_string($value) ? $value : '';
     }
 }

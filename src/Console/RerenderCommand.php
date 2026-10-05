@@ -94,10 +94,12 @@ final class RerenderCommand extends Command
     /**
      * One document, with its refusal collected rather than raised.
      *
-     * A missing source is passed over in silence and is the one exception to that: over the whole
-     * matrix it means a key that is not authored in this locale, which the bulk publish reports and
-     * this command has no business repeating. Every other refusal is a decision the operator owes —
-     * a text that moved, or a row too old to prove it did not — and those set the exit code.
+     * A missing source is passed over in silence where nothing is published, or where the source is
+     * written by people and its text is still being written: over the whole matrix that is a key not
+     * authored in this locale, which the bulk publish reports and this command has no business
+     * repeating. Every other refusal is a decision the operator owes — a text that moved, a row too
+     * old to prove it did not, or a published version whose source cannot be read — and those set
+     * the exit code.
      *
      * @param  list<string>  $refusals
      */

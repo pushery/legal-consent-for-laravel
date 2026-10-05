@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Database\Eloquent\Collection;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Exceptions\AmbiguousRegistrationFieldException;
@@ -13,7 +14,8 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * Builds registration validation rules + messages for the documents that are ACTUALLY PUBLISHED.
  * Each becomes a `legal_{key}` field, or the one the document declares as `registration_field`
  * when a single control covers several pages ({@see RegistrationField}). Mandatory documents (contract/notice) must be `accepted`; a
- * real consent is NEVER required (Kopplungsverbot Art. 7(4)) — it is `nullable|boolean`.
+ * real consent is NEVER required (Kopplungsverbot Art. 7(4)) — it is `nullable` plus {@see CheckboxAnswer},
+ * which takes any value a checkbox submits, ticked or not.
  * Acknowledgment messages say "zur Kenntnis genommen", never "eingewilligt" (EDPB 05/2020 Rz. 122).
  *
  * The resolution deliberately MIRRORS {@see RegistrationConsentRecorder}: the configured keys
@@ -55,17 +57,20 @@ final class RegistrationRules
     ) {}
 
     /**
-     * @return array<string, list<string>>
+     * @return array<string, list<string|ValidationRule>>
      */
     public function required(): array
     {
         $rules = [];
         $claimedBy = [];
+        // One instance for every voluntary consent, so the comparison below reads two of them behind
+        // one control as the same rule rather than as two different objects.
+        $voluntary = ['nullable', new CheckboxAnswer];
 
         foreach ($this->resolvedTypes() as $key => $type) {
             $field = RegistrationField::forDocument((string) $key);
             $rule = $type->requiresExplicitOptin()
-                ? ['nullable', 'boolean']
+                ? $voluntary
                 : ['accepted'];
 
             // Several documents behind ONE control collapse into one rule, which is the whole

@@ -36,15 +36,17 @@ final readonly class RenderPipeline
 
     /**
      * The markdown settings this package renders with, and the value the shipped config file
-     * declares. They are applied PER KEY, and that is load-bearing rather than tidy.
+     * declares. They are applied per key, under whatever array the pipeline is given.
      *
-     * `mergeConfigFrom()` merges one level deep, so an application that publishes
-     * `'markdown' => ['max_nesting_level' => 10]` replaces this whole block instead of overriding
-     * one key of it. Handing that array to CommonMark unmerged would fall back to ITS defaults for
-     * the two keys that went missing — `html_input: allow`, `allow_unsafe_links: true`, no nesting
-     * cap. The sanitizer still holds the security line, so the visible damage is subtler and
-     * permanent: different HTML, therefore a different `content_hash`, therefore a drift report on
-     * a text nobody edited and a fresh version of an unchanged document.
+     * The provider merges the shipped configuration under a published one recursively, so a
+     * published `'markdown' => ['max_nesting_level' => 10]` receives the other two keys. A
+     * configuration cached before an update is not merged at all, though, and a pipeline built by
+     * hand receives exactly the array it was handed. Handing such an array to CommonMark unmerged
+     * would fall back to its defaults for the keys that are missing — `html_input: allow`,
+     * `allow_unsafe_links: true`, no nesting cap. The sanitizer still holds the security line, so
+     * the visible damage is subtler and permanent: different HTML, therefore a different
+     * `content_hash`, therefore a drift report on a text nobody edited and a fresh version of an
+     * unchanged document.
      *
      * @var array<string, mixed>
      */
@@ -219,7 +221,7 @@ final readonly class RenderPipeline
      * The SHA-256 content hash over the sanitized, canonicalized HTML — the exact value
      * frozen into `legal_documents.content_hash` and snapshotted by the ledger. Public so a
      * frozen-row reader can re-derive it from stored bytes and prove the row is intact, using
-     * the ONE canonicaliser (a second hasher anywhere would mean the ledger hashes one form
+     * the ONE canonicalizer (a second hasher anywhere would mean the ledger hashes one form
      * and the page renders another).
      */
     public function hashOf(string $html): string

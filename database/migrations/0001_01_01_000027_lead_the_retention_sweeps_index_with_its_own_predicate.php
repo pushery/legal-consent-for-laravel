@@ -5,54 +5,57 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\IndexName;
 
 /**
- * The retention sweep gets an index that LEADS with the column it filters on.
+ * An index for the retention sweep that leads with the column the sweep filters on.
  *
  * `legal-consent:prune` selects `where accepted_at < :cutoff` (and `sent_at` on the notice ledger)
- * and pages by `id`. No index led with either column: `accepted_at` sat fourth in
- * `legal_consents_subject_doc_time_idx` and `sent_at` fourth in its notice twin, so neither was
- * reachable as a prefix and the predicate was evaluated against the table.
+ * and pages by `id`. `accepted_at` sits fourth in `legal_consents_subject_doc_time_idx` and
+ * `sent_at` fourth in its notice twin, so neither of those indexes can serve the predicate as a
+ * prefix.
  *
- * THE DELETING PAGES WERE NEVER THE PROBLEM, AND THAT IS WHY THIS LOOKED FINE. In an append-only
- * ledger `id` and `accepted_at` correlate, so a page that has rows to delete is a cheap primary-key
- * range scan — measured on PostgreSQL 18 over 200 000 rows: `Index Scan using legal_consents_pkey`,
- * 35 shared buffers for 1 000 rows.
+ * In an append-only ledger `id` and `accepted_at` correlate, so a page with rows to delete is a
+ * short primary-key range either way. The page this index is for is the one that finds nothing: a
+ * scheduled run often deletes nothing at all, and without the index that page reads the whole
+ * table to say so. With it, the rows older than the cutoff are found without reading the others,
+ * so while no row is older than the cutoff a run costs a few pages however large the ledger is.
  *
- * The expensive page is the LAST one, the one that finds nothing and ends the sweep: a parallel
- * scan over the whole table, 5 339 shared buffers for 0 rows. And in normal operation a scheduled
- * run deletes nothing at all — so that page is not the tail of the cost, it is the ENTIRE cost of
- * every run, and it grows with the ledger, which is exactly where retention starts to matter.
+ * Rows older than the cutoff are still each checked for a newer row of the same subject, document
+ * and locale, through `legal_consents_affected_subject_idx`, because a row that names its subject
+ * goes only once a newer row has superseded it. A subject's current row is never deleted, so once
+ * it ages past the cutoff it is checked on every run: the cost of a run grows with the rows older
+ * than the cutoff, which in a ledger where most subjects accepted their current version long ago is
+ * most of the ledger.
  *
  * `id` is the second column rather than the only other one: the sweep orders and pages by it
- * (`chunkById`), so the pair answers "nothing older than the cutoff above the last id I saw"
- * inside the index instead of against the table.
+ * (`chunkById`), so the pair answers "nothing older than the cutoff above the last id seen" inside
+ * the index instead of against the table.
  *
- * Both ledgers get it, because both sweeps have the same shape. Nothing about the existing
- * `subject_doc_time` indexes changes — they serve a different question (one subject's history) and
- * remain the right index for it.
+ * Both ledgers get it, because both sweeps have the same shape. The `subject_doc_time` indexes
+ * serve a different question, one subject's history, and stay as they are.
  */
 return new class extends Migration
 {
     public function up(): void
     {
         Schema::table('legal_consents', function (Blueprint $table): void {
-            $table->index(['accepted_at', 'id'], 'legal_consents_retention_idx');
+            $table->index(['accepted_at', 'id'], IndexName::of('legal_consents_retention_idx'));
         });
 
         Schema::table('legal_notices', function (Blueprint $table): void {
-            $table->index(['sent_at', 'id'], 'legal_notices_retention_idx');
+            $table->index(['sent_at', 'id'], IndexName::of('legal_notices_retention_idx'));
         });
     }
 
     public function down(): void
     {
         Schema::table('legal_consents', function (Blueprint $table): void {
-            $table->dropIndex('legal_consents_retention_idx');
+            $table->dropIndex(IndexName::existing('legal_consents', 'legal_consents_retention_idx'));
         });
 
         Schema::table('legal_notices', function (Blueprint $table): void {
-            $table->dropIndex('legal_notices_retention_idx');
+            $table->dropIndex(IndexName::existing('legal_notices', 'legal_notices_retention_idx'));
         });
     }
 };

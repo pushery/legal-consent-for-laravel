@@ -123,10 +123,15 @@
 
                                      The accessible name repeats the states on purpose. An `aria-label`
                                      REPLACES the content it sits on, so a link announcing only "Edit
-                                     Terms (de)" would hide the one fact the cell exists to state. --}}
-                                @if ($cell['url'] !== null)
-                                    <x-wirekit::link :href="$cell['url']" underline="none" :aria-label="$cell['label']">
-                                @endif
+                                     Terms (de)" would hide the one fact the cell exists to state.
+
+                                     The badges are rendered once into `$badges` and then either wrapped
+                                     in the link or echoed as they are. Blade pairs a component's opening
+                                     and closing tags when it compiles the view, so the link cannot be
+                                     opened in one `@if` and closed in another: the compiled blocks nest
+                                     differently from the written ones, and every badge would land inside
+                                     the first `@if`, which renders nothing without an editor route. --}}
+                                @php(ob_start())
                                 @if (! $cell['written'])
                                     <x-wirekit::badge intent="neutral" size="sm" :aria-label="__('legal-consent::ui.admin_not_written')" :title="__('legal-consent::ui.admin_not_written')">{{ __('legal-consent::ui.admin_not_written_short') }}</x-wirekit::badge>
                                 @else
@@ -140,8 +145,11 @@
                                         <x-wirekit::badge intent="neutral" size="sm" :aria-label="__('legal-consent::ui.admin_unpublished')" :title="__('legal-consent::ui.admin_unpublished')">{{ __('legal-consent::ui.admin_unpublished_short') }}</x-wirekit::badge>
                                     @endif
                                 @endif
+                                @php($badges = new \Illuminate\Support\HtmlString((string) ob_get_clean()))
                                 @if ($cell['url'] !== null)
-                                    </x-wirekit::link>
+                                    <x-wirekit::link :href="$cell['url']" underline="none" :aria-label="$cell['label']">{{ $badges }}</x-wirekit::link>
+                                @else
+                                    {{ $badges }}
                                 @endif
                             </x-wirekit::table.td>
                         @endforeach

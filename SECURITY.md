@@ -6,8 +6,8 @@ While this package is in its `0.x` line, security fixes are released against the
 
 | Version | Supported |
 |---|---|
-| `0.x` (latest) | :white_check_mark: |
-| older | :x: |
+| `0.x` (latest) | Yes |
+| older | No |
 
 ## Reporting a vulnerability
 

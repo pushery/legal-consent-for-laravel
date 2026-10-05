@@ -8,6 +8,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Pushery\LegalConsent\Content\PublishedVersion;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalDocument;
 
@@ -19,15 +20,16 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * an empty result, so a fresh install spent its entire pre-launch life paying one SELECT per
  * request to be told nothing is published.
  *
- * It cannot weaken the gate: only the enforceable SET is cached, never a subject's satisfaction.
- * Whether a given human still owes acceptance is always computed live from the ledger. The worst a
- * stale entry can do is delay the ONSET of a gate by the TTL — and the gate's own grace period is
- * measured in weeks, while the proof (what gets recorded when someone accepts) is never cached.
+ * Only the SET of active versions is cached, never a subject's satisfaction and never the clock.
+ * Whether a given human still owes acceptance is always computed live from the ledger, and the
+ * callers compare `announce_from` and `enforce_from` with the time on every read, so a scheduled
+ * boundary takes effect on time. The proof, what gets recorded when someone accepts, is never
+ * cached either.
  *
- * Invalidated by publish (the listener on LegalDocumentPublished) plus a short TTL that backstops
- * the one change no event announces: a scheduled `enforce_from` boundary passing. An out-of-band
- * `is_active` write — a manual UPDATE, a restored dump — is not seen by either, so it needs
- * `legal-consent:cache-flush`.
+ * Invalidated by publish (the listener on LegalDocumentPublished). The TTL backstops the one change
+ * no event announces: an `is_active` write made outside a publish, such as a manual UPDATE or a
+ * restored dump. Such a change stays unseen until the entry expires, or until
+ * `legal-consent:cache-flush` drops it at once.
  */
 final class EnforceableDocumentCache
 {
@@ -44,8 +46,11 @@ final class EnforceableDocumentCache
      *
      * Versioning the key costs one string and makes the two payloads unable to meet. The orphaned
      * v1 entries expire on their own TTL; nothing has to clean them up.
+     *
+     * v3 adds `tenant_id` to each row, which {@see PublishedVersion} carries. A v2 row read under
+     * the new code would hand every version the shared bucket's '' as its tenant.
      */
-    public const string PREFIX = 'legal:enforceable:v2';
+    public const string PREFIX = 'legal:enforceable:v3';
 
     /**
      * The suffix of the second entry per (tenant, locale): the announced versions an active one has
@@ -67,6 +72,7 @@ final class EnforceableDocumentCache
         'id', 'key', 'locale', 'type', 'major_version', 'version', 'title', 'ui_wording',
         'content_hash', 'requires_explicit_optin', 'requires_reconsent', 'notice_mode',
         'announce_from', 'enforce_from', 'objection_deadline', 'offers_termination', 'is_active',
+        'tenant_id',
     ];
 
     /**
@@ -78,11 +84,12 @@ final class EnforceableDocumentCache
      * `database` store it is also four identical cache-table SELECTs. The set is one global fact
      * per (tenant, locale), so all four asks are the same answer.
      *
-     * The lifetime is capped at the store TTL rather than left open, which is what makes this safe
-     * for an object that may live longer than a request (a queue worker, an Octane process): the
-     * memo can never be staler than the cache entry it was built from, so the class's standing
-     * promise — the worst a stale entry can do is delay the ONSET of a gate by the TTL — holds
-     * either way. A flush drops it immediately, so an in-process publish is never invisible.
+     * The lifetime is capped at the store TTL rather than left open, counted from when the memo was
+     * built. A memo built from an entry read near its end can therefore outlive that entry by up to
+     * the TTL, which takes a process that keeps one instance that long: the binding is scoped, so a
+     * request, an Octane request and a queued job each start with a fresh instance, and a single
+     * long-running command is the case that remains. A flush drops it immediately, so an
+     * in-process publish is never invisible.
      *
      * It also means callers share one instance of each document rather than getting a private copy.
      * Every caller in the package reads; a caller that MUTATES a document handed out here would be
@@ -163,15 +170,15 @@ final class EnforceableDocumentCache
      * cached OBJECT back as `__PHP_Incomplete_Class`, which would then fail this method's
      * `: Collection` return on every cache HIT — an app-wide 500 on the gate's per-request path.
      *
-     * THAT SETTING IS OPT-IN, NOT THE SHIPPED DEFAULT, and this docblock used to say the
-     * opposite. `cache.serializable_classes` appears nowhere in the framework's own `config/cache.php`
-     * — `CacheManager::serializableClasses()` reads it as `?? null` — so an application only has it
-     * because someone hardened the cache deliberately. Getting that backwards makes the hazard sound
-     * universal and the fix sound like table stakes; it is neither. It is a real configuration that
-     * real applications adopt, which is why the shape here is primitive anyway. Scalar rows survive `unserialize(..., ['allowed_classes' => false])` untouched and are
-     * rehydrated to models here. A cached value that is not a row list (a legacy object entry, a
-     * corrupt payload) is treated as a miss and recomputed, so the gate degrades to a fresh read
-     * rather than throwing.
+     * Laravel 13's application skeleton ships `'serializable_classes' => false` in its
+     * `config/cache.php`, so an application created from it runs under this setting unless someone
+     * removed it. Only the framework's own fallback configuration leaves the key unset, which
+     * `CacheManager::getSerializableClasses()` reads as null. An object in this cache is therefore
+     * the common failure, not a rare one, and the shape here is primitive for that reason. Scalar
+     * rows survive `unserialize(..., ['allowed_classes' => false])` untouched and are rehydrated to
+     * models here. A cached value that is not a row list (a legacy object entry, a corrupt payload)
+     * is treated as a miss and recomputed, so the gate degrades to a fresh read rather than
+     * throwing.
      *
      * @return Collection<int, LegalDocument>
      */
@@ -293,6 +300,37 @@ final class EnforceableDocumentCache
         $this->cache->forget($behind);
     }
 
+    /**
+     * Forget the sets a write to this row can change, under the row's own tenant.
+     *
+     * The sets are keyed by the ambient tenant, and the ambient tenant is not always the row's: a
+     * console command, a scheduled sweep and an operator writing across tenants run in the shared
+     * bucket while the row belongs to its tenant. Flushed under the ambient tenant, that tenant's
+     * gate kept the old set for its TTL.
+     *
+     * The row's own locale goes first, because a delete needs it: `flushAll()` finds locales in the
+     * declared list and among the published rows, and a deleted row is in neither by then. A row can
+     * carry a locale the list does not declare, one published before the list changed, and deleting
+     * the last document of that locale would otherwise leave its set cached.
+     */
+    public function flushFor(LegalDocument $document): void
+    {
+        $tenant = $document->getAttribute(TenantContext::COLUMN);
+
+        $this->tenant->forTenant(is_string($tenant) || is_int($tenant) ? (string) $tenant : '', function () use ($document): void {
+            // `locale` is a NOT NULL column no write path leaves empty; the check keeps an empty
+            // value from reading as a locale.
+            if ($document->locale !== '') {
+                $this->flush($document->locale);
+            }
+
+            // Every set is keyed per locale, and resolvedFor() walks a chain by reading each
+            // locale's own set, so the flush above reaches every reader of this row. The full
+            // flush is the wider net for a write that moved a version between locales.
+            $this->flushAll();
+        });
+    }
+
     /** Forget every locale that could be cached — what a publish or an explicit flush needs. */
     public function flushAll(): void
     {
@@ -323,16 +361,16 @@ final class EnforceableDocumentCache
      * Every locale a cached set could exist under: the declared ones, plus the ones actually
      * published.
      *
-     * THE CONFIG ALONE IS NOT ENOUGH, and the gap is total rather than partial. `locales()`
-     * returns `[]` whenever `legal-consent.locales` is absent or not an array — and in exactly
-     * that case `LegalDocumentPublisher::assertLocaleSupported()` returns early and permits ANY
-     * locale. So the one configuration that lets a document be published in any language is the
-     * one where a publish, and `legal-consent:cache-flush`, forget nothing at all. Not one missed
-     * locale: every one of them, silently, while the command reports success.
+     * THE CONFIG ALONE IS NOT ENOUGH. A version stays published in a locale the list no longer
+     * declares, because removing a locale from `legal-consent.locales` unpublishes nothing, and a
+     * flush that read the list alone would leave that locale's set cached while the command
+     * reports success.
      *
      * Reading the published locales back closes it at the only place that knows them. It is one
-     * SELECT DISTINCT over a table with a row per document version — paid on a publish or an
-     * explicit flush, never on the request path.
+     * SELECT DISTINCT over a table with a row per document version, and it is paid for every row a
+     * model write touches, after the write's transaction commits: a release pays it for each
+     * version it inserts and activates, and once more per locale through the publish listener.
+     * An explicit flush pays it once. Never on the request path.
      *
      * @return list<string>
      */
@@ -445,8 +483,6 @@ final class EnforceableDocumentCache
     /** @return list<string> */
     private function locales(): array
     {
-        $locales = config('legal-consent.locales');
-
-        return is_array($locales) ? array_values(array_filter($locales, is_string(...))) : [];
+        return DocumentMatrix::locales();
     }
 }

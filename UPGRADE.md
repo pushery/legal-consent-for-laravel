@@ -4,6 +4,40 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.44.0 → 0.45.0
+
+**Run `php artisan migrate`.** Migration 000039 adds a guard on PostgreSQL that refuses a `TRUNCATE` of `legal_documents` while a consent points at one of its versions, and of `legal_change_sets` or `legal_change_items` while they hold a published change description. On MySQL and SQLite it changes nothing. Migration 000040 adds an index on `legal_documents` on every engine, for the reads that know the tenant and the locale. If you publish the migrations instead of loading them, publish the new ones first: `php artisan vendor:publish --tag=legal-consent-migrations`.
+
+**A test suite that empties the tables with `DatabaseTruncation` on PostgreSQL can meet that guard.** It truncates the tables one at a time, and the guard refuses `legal_change_items` while a test has left a published change description behind, as the delete guard on SQLite already does. Tests that run inside a transaction, with `RefreshDatabase` or `LazilyRefreshDatabase`, are not affected.
+
+**If you lint the migrations with sqlens and published them, publish them again.** Migrations 000033 and 000036 now carry the attribute that tells sqlens on which drivers they write nothing: `php artisan vendor:publish --tag=legal-consent-migrations --force`. A database that ran them needs nothing, because the SQL they apply is unchanged.
+
+**A listener of `LegalDocumentPublished` runs after the release commits.** The event used to be dispatched inside the release transaction, so an exception a listener threw rolled the whole release back. It now waits for the commit: a listener sees only versions that were released, and an exception it throws leaves the release in place. If a listener of yours relied on stopping a release, check it before you publish.
+
+**Publish the views again if you published them.** The withdraw and grant buttons of the consent settings screen and the release button of the legal-text overview now name the call of their own control as their loading target, so only the control whose action is running reports itself busy, and a screen reader no longer hears every row of the list as busy. The change-class field of the legal-text editor now takes at most 48 characters, the width of the column the class is frozen into. While a queued translation runs, the editor polls `pollTranslation`, which answers without a render until the run ends; a copy published earlier still polls with a full render every three seconds, which works and costs the draft reads on each tick. The WireKit legal-text overview draws each language's state now when no editor route is configured, and a WireKit copy of it published from 0.36.0 on leaves every cell empty in that case. A view published before this release keeps the old markup until it is published again: `php artisan vendor:publish --tag=legal-consent-views --force`, and `php artisan vendor:publish --tag=legal-consent-wirekit --force` for the WireKit variant. A copy you changed keeps your changes only if you carry them over.
+
+**Three translation keys that no view reads are gone:** `ui.admin_release`, `ui.admin_edit` and `ui.admin_edit_for`. A copy of the legal-text overview published before 0.36.0 reads `ui.admin_release` as the heading of its release column, and one published before 0.19.0 reads the other two for the edit link in each cell. On this release such a copy shows the key itself in their place, and publishing the views again, as above, replaces it. An override of the three keys in `lang/vendor/legal-consent` changes nothing on a screen of the current views and can go.
+
+**If you published the config, three of its comments describe an older mechanism.** A chain break that `legal-consent:verify-ledger` reports after a retention prune was not made by the prune: the prune re-links the chains it shortens and leaves a chain that fails to verify untouched, so treat such a break like any other. `durable_medium.channels` only names the medium the proof row records. The notice goes out on `notifications.channels`, and the row is written when the mail channel has sent it. And `cache.enforceable_ttl` does not delay a scheduled `enforce_from`, which takes effect on time: it bounds how long an `is_active` change made outside a publish stays unseen. None of these behaviors changed in this release, so the values in your copy need no change.
+
+**The rule for a voluntary consent's control is an object now.** `RegistrationRules::required()`, and with it `consentRules()`, returned `['nullable', 'boolean']` for a voluntary consent and returns `['nullable', new CheckboxAnswer]` now (`Pushery\LegalConsent\Support\CheckboxAnswer`), which also takes the `on` a checkbox without a `value` attribute submits. Passing the rules to `Validator::make()` or `$request->validate()` needs no change. Code that joins them into a string with `implode('|', …)` or compares them as strings has to handle the object.
+
+**A `ConsentContext` you build yourself is checked when it is built.** A `source` over 32 characters, a `requestId` over 64, a `userAgent` over 65,535 bytes or an `ipAddress` that is not an IPv4 or IPv6 address throws `InvalidConsentContext`. PostgreSQL and MySQL refused such a value at the write already; on SQLite it was stored, so a test suite on SQLite can meet the refusal for the first time. Pass null for an address you do not have.
+
+**A change description is checked when it is described.** A `subject`, `partyName`, `partyLocation` or `partyContact` longer than the default string length, 255 characters unless your application sets another, or a `headline`, `impact`, `detail` or `purpose` over 65,535 bytes throws `InvalidChangeDescription` from the `ChangeItems` builder. MySQL refused such a value at the save already, and PostgreSQL the long one; SQLite stored it, so a test suite on SQLite can meet the refusal for the first time.
+
+**A class of your own that implements `Pushery\LegalConsent\Contracts\ConsentManager` gains two methods,** `owed(Model $subject, ?string $locale = null, bool $firstAcceptance = false): Collection` and `hasCurrentMany(Model $subject, array $documentKeys, ?string $locale = null): array`. `EnsureLegalConsent` asks the first in place of `outstanding()` and `firstAcceptance()`, so a manager of your own that lacks it fails on the first request the middleware guards, and `hasAcceptedCurrentLegalMany()` on your model asks the second. The package's own manager and `Consent::fake()` have both. A class that decorates the package's manager can pass the calls through.
+
+**Under `Consent::fake()`, `hasAcceptedCurrentLegalMany()` answers what `hasAcceptedCurrentLegal()` answers for each key.** It read the fake's `statusIs()` arrangement, so a fresh fake answered `false` for every key while the single-key method answered `true`. Arrange it with `owes()` as you arrange the single-key question.
+
+**With tamper evidence on, pin the session time zone of your database connection.** The chain hashes `accepted_at` as the database renders it, and on PostgreSQL and MySQL that follows the session time zone. Laravel sets it only from a `timezone` key on the connection, which Laravel's own `pgsql` and `mysql` connections do not carry, so without one the server decides, and a change of its setting makes `legal-consent:verify-ledger` report every chained row as broken. Set the key to the zone your chained rows were written under: `SHOW TimeZone` on PostgreSQL and `SELECT @@session.time_zone` on MySQL report the one in effect now. `legal-consent:doctor` warns while the key is missing.
+
+**A queued translation that outlasts the worker's timeout is not tried again.** `TranslateLegalDraft` fails on its timeout now, so the editor says at once that the translation did not finish, where a worker started with `--tries` above 1 used to run the translator again on each attempt while the editor kept saying it was running. If you raised `--tries` to give a slow translator another chance, give its lane a longer `--timeout` instead: `translation.connection` and `translation.queue_name` put the job on a worker of its own.
+
+**`ConsentBanner::pendingFor()` and `deemedFor()` take `$accepted` by value.** They used to fold the subject's holdings into the variable you passed and hand it back for the other banner to reuse. They now read only the keys their own window concerns and leave your variable as it was, so a map handed on from one to the other could no longer be missing the keys the second one asks about. Code that reused it pays one more read and gets the same answer. `forSubject()` shares one read between the two banners itself.
+
+**An empty or missing `legal-consent.locales` means the default locale alone, everywhere.** The publisher allowed any locale for it, while the admin screens and the document route knew none and the commands took the default locale. If your configuration leaves the list empty and you publish in more than the default locale, list those locales: a publish to another one is refused now. A release that names no locale at all throws `InvalidArgumentException`.
+
 ## 0.43.1 → 0.44.0
 
 **A later version of a major now keeps what the major asked for, and the first sweep after the upgrade may send notices.** The gate, the banner, the notice sweep and `legal-consent:close-objection-windows` used to read the mode of the active version alone. If you published an editorial fix or an info-only change inside a major that went out as an active re-consent, everyone who has not accepted that major is asked again after the upgrade. If you published a correction while a change's notices were still going out, the notices that change still owes go out with the next sweep, and an objection window left open by a correction closes with the next run of `close-objection-windows`. Run `php artisan legal-consent:dispatch-notices --dry-run` before the first sweep to see who will be written to.
@@ -170,7 +204,7 @@ A published script is a copy, so composer cannot bring this one to you:
 php artisan vendor:publish --tag=legal-consent-assets --force
 ```
 
-⚠️ **Until you do, the dialog opens without its text, under either build.** The view no longer carries `x-html`, and the old script only ever set the value `x-html` read. The dialog's footer now carries a link that opens the document as a page, so the text stays reachable in the meantime — but that is the way out, not the dialog working.
+**Until you do, the dialog opens without its text, under either build.** The view no longer carries `x-html`, and the old script only ever set the value `x-html` read. The dialog's footer now carries a link that opens the document as a page, so the text stays reachable in the meantime — but that is the way out, not the dialog working.
 
 So the next change to the script cannot catch you the same way, publish it on every update:
 
@@ -190,7 +224,7 @@ Only if you published the WireKit stub. Your copy still carries `x-html`, so it 
 php artisan vendor:publish --tag=legal-consent-wirekit --force
 ```
 
-⚠️ **`--force` overwrites your file.** If you changed it, port the changes by hand: `x-ref="body"` in place of `x-html="body"` on the dialog body, the `url` and `locale` entries in the `$deferredDialogs` collector, and the page link in the dialog's footer, in front of `<x-wirekit::modal.close>`. A grouped control also gives each member a dialog of its own now: the `$memberDialog`, `$memberDialogName` and `$memberTrigger` closures beside `$memberLinkId`, the trigger on each member link, and the loop after the collector that adds a dialog per member. Without that part your copy keeps working as before, with member links that go to the page.
+**`--force` overwrites your file.** If you changed it, port the changes by hand: `x-ref="body"` in place of `x-html="body"` on the dialog body, the `url` and `locale` entries in the `$deferredDialogs` collector, and the page link in the dialog's footer, in front of `<x-wirekit::modal.close>`. A grouped control also gives each member a dialog of its own now: the `$memberDialog`, `$memberDialogName` and `$memberTrigger` closures beside `$memberLinkId`, the trigger on each member link, and the loop after the collector that adds a dialog per member. Without that part your copy keeps working as before, with member links that go to the page.
 
 **The failed state is one sentence now.** `legal-consent::ui.dialog_failed` used to add that the link beside it opens the page, which was not true: that link is the one that opened the dialog. If you published the language files, shorten the entry and add `dialog_open_page`, the footer link's text.
 
@@ -211,7 +245,7 @@ element that has no gap.
 php artisan vendor:publish --tag=legal-consent-wirekit --force
 ```
 
-⚠️ **`--force` overwrites your file.** If you changed it, diff first and port the three pieces by
+**`--force` overwrites your file.** If you changed it, diff first and port the three pieces by
 hand instead: the `$deferredDialogs` array declared beside `$bindTo`, the collector that replaces
 the in-loop `<x-wirekit::modal>` block, and the loop that emits them after `</x-wirekit::stack>`
 inside the new root `<div class="legal-consent">`.
@@ -538,15 +572,13 @@ The floor is deliberately not a hard `require`: raising it would force every con
 
 ## 0.25.2 → 0.25.3
 
-**Almost certainly nothing is required of you.** No code, schema or configuration key changed. One thing can stop a `composer update`, and only on a PHP build that could not have run this package anyway.
+**Nothing is required of you.** No code, schema or configuration key changed, and nothing new can stop a `composer update`.
 
 ### The manifest now names the PHP extensions the code already used
 
-`ext-ctype`, `ext-filter`, `ext-hash` and `ext-mbstring` are now declared in `require`. They were always needed — the shipped code calls into all four — and nothing declared them, because the `illuminate/*` split packages this package builds against declare no extensions at all. Only the `laravel/framework` metapackage names them, and a package that depends on the splits inherits nothing.
+`ext-ctype`, `ext-filter`, `ext-hash` and `ext-mbstring` are now declared in `require`. The shipped code calls into all four, and until this release only `laravel/framework`, which this package requires, named them.
 
-**What this can do to you, and it is one thing:** if your PHP was built without one of the four, Composer will now refuse the install instead of accepting it. That is the intended direction. The same PHP already could not run this package — a missing `mbstring` surfaced as a fatal deep inside a normalization call rather than as a sentence naming the extension.
-
-In practice only `mbstring` is a live concern: `hash` has been compiled in and not disableable since PHP 7.4, while `ctype` and `filter` are on by default and have to be switched off deliberately. If Composer names one of them, install it — `php -m` lists what your build has.
+**What this changes for an install: nothing.** Composer already refused a PHP built without one of the four, through the requirements of `laravel/framework` itself. The declaration makes this package's own needs readable from its own manifest, so they stay declared whatever the framework requires next.
 
 ## 0.25.1 → 0.25.2
 
@@ -833,7 +865,7 @@ The set it shows is *the mandatory documents the subject does not hold*, which i
 accepted": somebody who withdrew, declined or terminated holds nothing either and is asked again.
 Voluntary consents are never in it (Art. 7(4)), and informational pages never are.
 
-⚠️ **Check the spelling of your mount.** A Blade template compiles into a file with no namespace, so
+**Check the spelling of your mount.** A Blade template compiles into a file with no namespace, so
 a bare `ConsentMethod::FirstUseGate` in the attribute throws `Class "ConsentMethod" not found`. Our
 own documentation carried the short form in four places until this release. The form that works:
 
@@ -921,12 +953,15 @@ Rows written after the upgrade chain and verify normally either way.
 This is not new behavior — it has always been true and was not written down. The chain hashes
 `accepted_at` as the string the driver returns. PostgreSQL renders a `timestamptz` with an offset
 while MySQL and SQLite render none, and on PostgreSQL and MySQL that rendering follows the session
-time zone, which Laravel sets from `database.connections.*.timezone`.
+time zone, which Laravel sets from `database.connections.*.timezone` when that key exists. Without
+the key the server decides.
 
 So once the first row is chained, each of these invalidates every stored `prev_record_hash` at once:
 
 - restoring a dump onto a different engine;
-- adding, changing or removing that `timezone` key.
+- adding, changing or removing that `timezone` key;
+- without the key, a change of the server's time zone setting, a database or role default, or
+  `PGTZ` in the environment of the process that connects.
 
 `legal-consent:verify-ledger` then reports the whole ledger as tampered although nothing was
 touched. Treat both as a re-chain event, exactly like `tamper_evidence_key`: fix the engine and the
@@ -1048,7 +1083,7 @@ public function forget(\Illuminate\Database\Eloquent\Model $subject): \Pushery\L
 Nothing changes for an application using the bundled manager or the facade — and if you are
 performing Art. 17 erasures with your own code today, this is what replaces it.
 
-⚠️ **Check that hand-rolled version before you delete it.** It almost certainly does not re-link
+**Check that hand-rolled version before you delete it.** It almost certainly does not re-link
 the tamper chain, because the need for that is not obvious: the erased columns are inputs to the
 row hash. If yours does not and you have `tamper_evidence` on, `legal-consent:verify-ledger` has
 been reporting a break for every erasure you have already performed — those breaks are real and
@@ -1257,9 +1292,9 @@ It used to name twelve `illuminate/*` split packages. `laravel/framework` `repla
 them at the same version, so **the resolved dependency graph is identical** and no lock file moves.
 
 The old manifest promised an install without the framework and did not keep it: shipped code calls
-fifteen helpers that only `Illuminate\Foundation\helpers.php` defines — `config()`, `app()`,
-`trans()`, `view()`, `request()` and ten more — at 185 call sites, and no split package provides a
-single one of them. Such an install resolved cleanly and then fatalled at the first of those calls.
+at least a dozen helpers that only `Illuminate\Foundation\helpers.php` defines, `config()`, `app()`,
+`trans()`, `view()` and `request()` among them, at well over a hundred call sites, and no split
+package provides a single one of them. Such an install resolved cleanly and then fatalled at the first of those calls.
 Nobody saw it because `orchestra/testbench` pulls the whole framework into the vendor tree.
 
 If your application is a Laravel application, you already have the framework and nothing changes.
@@ -1575,7 +1610,7 @@ WireKit itself, so upgrading WireKit is enough and re-publishing is not required
 everything else below is invisible to an application that installs this package into a normal
 Laravel project.
 
-⚠️ **On MariaDB, SQL Server or any other engine the migration now stops instead of running.** If
+**On MariaDB, SQL Server or any other engine the migration now stops instead of running.** If
 that is you, read *The migration now REFUSES an engine it cannot protect* below **before** you run
 `php artisan migrate`.
 
@@ -1588,7 +1623,7 @@ php artisan migrate
 It makes `legal_documents.ui_wording` nullable, so an `informational` document — a page that is
 published and binds nobody — can carry no acceptance sentence. It changes no existing row.
 
-⚠️ **On SQLite this migration rebuilds the table**, because SQLite cannot alter a column in
+**On SQLite this migration rebuilds the table**, because SQLite cannot alter a column in
 place. That is handled: the migration re-installs the proof-column trigger afterwards, on both
 `up()` and `down()`. If you have written your OWN triggers on `legal_documents`, re-create them
 after upgrading — a rebuild keeps indexes and drops triggers, and nothing warns you.
@@ -1917,7 +1952,7 @@ re-consent form already has. It is **opt-in** and off by default:
 
 `0.5.0` is a **minor** bump with two changes that alter existing behavior.
 
-> ⚠️ **Correction (2026-09-05).** This paragraph said *"No new migrations ship — nothing in your schema changes"*, and that was wrong: `0.5.0` shipped **two** migrations, `…000013_add_affected_subject_index_to_legal_consents_table` and `…000014_drop_legal_consents_document_foreign_key_on_sqlite`. Anyone following this guide across `0.4.0 → 0.5.0` was told not to migrate. Run `php artisan migrate` for this step. The sentence is corrected rather than deleted, so that a reader who acted on the old one can see what changed.
+> **Correction (2026-09-05).** This paragraph said *"No new migrations ship — nothing in your schema changes"*, and that was wrong: `0.5.0` shipped **two** migrations, `…000013_add_affected_subject_index_to_legal_consents_table` and `…000014_drop_legal_consents_document_foreign_key_on_sqlite`. Anyone following this guide across `0.4.0 → 0.5.0` was told not to migrate. Run `php artisan migrate` for this step. The sentence is corrected rather than deleted, so that a reader who acted on the old one can see what changed.
 
 **On SQLite, migration 000014 rebuilds the `legal_consents` table.** That is how SQLite drops a foreign key — the table is copied, and anything attached to the old one goes with it. The package's own append-only triggers are not affected (they are created on PostgreSQL and MySQL only), but **a trigger you wrote yourself on `legal_consents` is dropped and not restored**, and the migration does not run inside a transaction because SQLite's schema grammar is not transactional. Re-create your own triggers after this step.
 

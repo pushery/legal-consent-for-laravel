@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\IndexName;
 
 /**
  * Index `legal_consents (document_key, locale, subject_type, subject_id)` for the re-consent
@@ -28,7 +29,7 @@ return new class extends Migration
         Schema::table('legal_consents', function (Blueprint $table): void {
             $table->index(
                 ['document_key', 'locale', 'subject_type', 'subject_id'],
-                'legal_consents_affected_subject_idx',
+                IndexName::of('legal_consents_affected_subject_idx'),
             );
         });
     }
@@ -36,7 +37,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('legal_consents', function (Blueprint $table): void {
-            $table->dropIndex('legal_consents_affected_subject_idx');
+            $table->dropIndex(IndexName::existing('legal_consents', 'legal_consents_affected_subject_idx'));
         });
     }
 };

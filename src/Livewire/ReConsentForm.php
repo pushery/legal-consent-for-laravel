@@ -430,11 +430,11 @@ final class ReConsentForm extends Component
     /**
      * The provenance to write for one key.
      *
-     * A named mount answers with itself. Under a null mount the answer comes from the set the key
-     * was rendered from; a key that is in neither set is not on this screen, and `ReConsentGate`
-     * is the honest fallback there because the only actions that can reach it — objection and
-     * termination — act on a holding the subject already has, which is by definition not a first
-     * acceptance.
+     * A named mount answers with itself. Under a gate-question mount (`answersGateQuestion`) the
+     * answer comes from the set the key was rendered from; a key that is in neither set is not on
+     * this screen, and `ReConsentGate` is the honest fallback there because the only actions that
+     * can reach it — objection and termination — act on a holding the subject already has, which is
+     * by definition not a first acceptance.
      */
     private function questionFor(string $key): ConsentMethod
     {

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
-use Illuminate\Database\Query\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Content\ContentFormat;
@@ -267,17 +266,11 @@ readonly class LegalDraftWriter
             }
         }
 
-        // The query builder, not the model: `revision + 1` must be one atomic statement, and this
-        // row is already identified by its primary key, so no scope is needed to find it.
-        $updated = DB::table('legal_drafts')
-            ->where('id', $existing->getKey())
-            ->when($expectedRevision !== null, fn (Builder $query): Builder => $query->where('revision', $expectedRevision))
-            ->update(array_merge($attributes, [
-                'revision' => DB::raw('revision + 1'),
-                'updated_at' => now(),
-            ]));
+        // Through the model, so the class configured in `legal-consent.models` writes the change
+        // and its observers hear it, while `revision + 1` stays one atomic statement.
+        $written = $existing->advanceRevision($attributes, $expectedRevision);
 
-        if ($expectedRevision !== null && $updated === 0) {
+        if ($expectedRevision !== null && ! $written) {
             throw LegalDraftChanged::sinceShown($key, $locale);
         }
 

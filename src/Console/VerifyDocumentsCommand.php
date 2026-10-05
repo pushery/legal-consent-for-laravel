@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\LazyCollection;
 use Pushery\LegalConsent\Content\AcceptanceWording;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
+use Pushery\LegalConsent\Support\DocumentMatrix;
+use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
@@ -39,10 +41,17 @@ use Symfony\Component\Console\Attribute\AsCommand;
  *    subjects are asked to agree to it. A warning by default, because a version frozen on 0.0.0 by
  *    an earlier release path stays in the table either way; a release check that must not ship a
  *    placeholder asks for the failure. Fixed, like the others, by publishing a new version.
+ *
+ * The walk pages through the active rows by id, so it holds one page of rendered text at a time
+ * however many tenants, documents and locales the installation has. The notice-mode check keeps
+ * only the tenant, key, major, locale and mode of each row it has passed.
  */
 #[AsCommand(name: 'legal-consent:verify-documents')]
 final class VerifyDocumentsCommand extends Command
 {
+    /** Active versions read per page. A version carries its rendered text, so this bounds the walk's memory. */
+    private const int PAGE = 50;
+
     protected $signature = 'legal-consent:verify-documents
                             {--placeholders-fail : Count a placeholder in an active version as a failure, not as a warning}';
 
@@ -56,29 +65,28 @@ final class VerifyDocumentsCommand extends Command
         $failures = [];
         /** @var list<string> $advisories */
         $advisories = [];
+        /** @var array<string, array{identity: string, tenant: string, modes: array<string, list<string>>}> $noticeModes */
+        $noticeModes = [];
+        $walked = 0;
 
-        $active = LegalDocument::model()::query()
-            ->withoutGlobalScope(TenantScope::class) // audit every tenant's documents
-            ->where('is_active', true)
-            ->orderBy('key')
-            ->orderBy('locale')
-            ->get();
+        foreach ($this->activeVersions() as $document) {
+            $walked++;
+            $this->foldNoticeMode($noticeModes, $document);
 
-        foreach ($active as $document) {
             if ($pipeline->hashOf($document->content) !== $document->content_hash) {
-                $failures[] = "'{$document->key}' ({$document->locale}) v{$document->version}: stored content does not match its content_hash — the row cannot prove the text it carries.";
+                $failures[] = $this->versionLabel($document).': stored content does not match its content_hash — the row cannot prove the text it carries.';
             }
 
             $foreign = $this->foreignWordingLocale($document);
 
             if ($foreign !== null) {
-                $advisories[] = "'{$document->key}' ({$document->locale}) v{$document->version}: ui_wording is the '{$foreign}' acceptance sentence, not '{$document->locale}' — published before the wording locale fix; the row and its consent snapshots are frozen and cannot be corrected. Publish a new version to move forward.";
+                $advisories[] = $this->versionLabel($document).": ui_wording is the '{$foreign}' acceptance sentence, not '{$document->locale}' — published before the wording locale fix; the row and its consent snapshots are frozen and cannot be corrected. Publish a new version to move forward.";
             }
 
             $placeholder = $this->placeholderIn($document);
 
             if ($placeholder !== null) {
-                $finding = "'{$document->key}' ({$document->locale}) v{$document->version}: {$placeholder}, so subjects are asked to agree to a placeholder. Publish the real text as a new version.";
+                $finding = $this->versionLabel($document).": {$placeholder}, so subjects are asked to agree to a placeholder. Publish the real text as a new version.";
 
                 if ($this->option('placeholders-fail') === true) {
                     $failures[] = $finding;
@@ -88,7 +96,7 @@ final class VerifyDocumentsCommand extends Command
             }
         }
 
-        foreach ($this->divergentNoticeModes($active) as $divergence) {
+        foreach ($this->divergentNoticeModes($noticeModes) as $divergence) {
             $failures[] = $divergence;
         }
 
@@ -97,18 +105,33 @@ final class VerifyDocumentsCommand extends Command
         }
 
         if ($failures === []) {
-            $this->info("Documents verified: {$active->count()} active version(s) intact and consistent.");
+            $this->info("Documents verified: {$walked} active version(s) intact and consistent.");
 
             return self::SUCCESS;
         }
 
-        $this->error(sprintf('Document verification FAILED: %d problem(s) across %d active version(s).', count($failures), $active->count()));
+        $this->error(sprintf('Document verification FAILED: %d problem(s) across %d active version(s).', count($failures), $walked));
 
         foreach ($failures as $failure) {
             $this->line("  • {$failure}");
         }
 
         return self::FAILURE;
+    }
+
+    /**
+     * Every tenant's active versions, one page at a time in id order. Paging after the last id
+     * seen, rather than by offset, means a version published while the walk runs cannot shift a
+     * page and hide a row that was active all along.
+     *
+     * @return LazyCollection<int, LegalDocument>
+     */
+    private function activeVersions(): LazyCollection
+    {
+        return LegalDocument::model()::query()
+            ->withoutGlobalScope(TenantScope::class) // audit every tenant's documents
+            ->where('is_active', true)
+            ->lazyById(self::PAGE);
     }
 
     /**
@@ -122,7 +145,7 @@ final class VerifyDocumentsCommand extends Command
             return null;
         }
 
-        foreach ($this->configuredLocales() as $locale) {
+        foreach (DocumentMatrix::locales() as $locale) {
             if ($locale !== $document->locale && $document->ui_wording === $this->cannedWording($document->key, $locale)) {
                 return $locale;
             }
@@ -179,22 +202,17 @@ final class VerifyDocumentsCommand extends Command
      * mode, or a weaker-proof acceptance in one language satisfies a stronger requirement in
      * another.
      *
-     * @param  Collection<int, LegalDocument>  $active
+     * Per tenant, because each tenant publishes its own versions: the same major in two tenants is
+     * two changes, and their modes have nothing to agree on.
+     *
+     * @param  array<string, array{identity: string, tenant: string, modes: array<string, list<string>>}>  $groups
      * @return list<string>
      */
-    private function divergentNoticeModes(Collection $active): array
+    private function divergentNoticeModes(array $groups): array
     {
-        /** @var array<string, array<string, list<string>>> $modes */
-        $modes = [];
-
-        foreach ($active as $document) {
-            $identity = "{$document->key}@{$document->major_version}";
-            $modes[$identity][$document->noticeMode()->value][] = $document->locale;
-        }
-
         $divergences = [];
 
-        foreach ($modes as $identity => $byMode) {
+        foreach ($groups as ['identity' => $identity, 'tenant' => $tenant, 'modes' => $byMode]) {
             if (count($byMode) < 2) {
                 continue;
             }
@@ -205,20 +223,48 @@ final class VerifyDocumentsCommand extends Command
                 $detail[] = $mode.' ('.implode(', ', $locales).')';
             }
 
-            $divergences[] = "'{$identity}' carries different notice modes across locales: ".implode(' vs ', $detail)
+            $named = $tenant === '' ? "'{$identity}'" : "'{$identity}' (tenant {$tenant})";
+
+            $divergences[] = "{$named} carries different notice modes across locales: ".implode(' vs ', $detail)
                 .'. Acceptance is identity-keyed, so one locale\'s weaker-proof acceptance would satisfy another\'s gate. Publish a new version with one mode for every locale.';
         }
 
         return $divergences;
     }
 
-    /** @return list<string> */
-    private function configuredLocales(): array
+    /**
+     * Files the row's locale under its tenant, its (key, major) and its notice mode, which is all
+     * {@see divergentNoticeModes()} reads, so the check needs none of the rows the walk has passed.
+     *
+     * @param  array<string, array{identity: string, tenant: string, modes: array<string, list<string>>}>  $groups
+     */
+    private function foldNoticeMode(array &$groups, LegalDocument $document): void
     {
-        $locales = config('legal-consent.locales');
+        $tenant = $this->tenantOf($document);
+        $identity = "{$document->key}@{$document->major_version}";
+        $group = $tenant."\0".$identity;
 
-        // array_values() changes nothing observable, since every caller only iterates the list. It is
-        // there for the list<string> return type.
-        return is_array($locales) ? array_values(array_filter($locales, is_string(...))) : [];
+        $groups[$group] ??= ['identity' => $identity, 'tenant' => $tenant, 'modes' => []];
+        $groups[$group]['modes'][$document->noticeMode()->value][] = $document->locale;
+    }
+
+    /**
+     * How a finding names a version: key, locale and version, and the tenant when the row has one,
+     * because the command reads every tenant's documents at once.
+     */
+    private function versionLabel(LegalDocument $document): string
+    {
+        $tenant = $this->tenantOf($document);
+        $where = $tenant === '' ? $document->locale : "{$document->locale}, tenant {$tenant}";
+
+        return "'{$document->key}' ({$where}) v{$document->version}";
+    }
+
+    /** The row's tenant, or '' for the shared bucket, as PublishedDocument narrows it. */
+    private function tenantOf(LegalDocument $document): string
+    {
+        $tenant = $document->getAttribute(TenantContext::COLUMN);
+
+        return is_string($tenant) || is_int($tenant) ? (string) $tenant : '';
     }
 }

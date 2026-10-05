@@ -18,7 +18,8 @@ use Illuminate\Support\Facades\Schema;
  *
  * Not auto-loaded. Publish + run only if you are migrating from that schema:
  *   php artisan vendor:publish --tag=legal-consent-backfill
- * A no-op when neither legacy column exists, and idempotent (skips if already run).
+ * A no-op when neither legacy column exists. All or nothing: a run that fails leaves no row behind
+ * and can simply be run again, and a run that finished is skipped.
  *
  * Adapt the column/type mapping to your own legacy schema before running.
  */
@@ -33,7 +34,7 @@ return new class extends Migration
             return;
         }
 
-        // Idempotent: if a previous run already backfilled, do nothing.
+        // A backfilled row means a finished import, because the import below is one transaction.
         if (DB::table('legal_consents')->where('source', 'v1_backfill')->exists()) {
             return;
         }
@@ -68,7 +69,11 @@ return new class extends Migration
             $hasPrivacy ? 'privacy_accepted_at' : null,
         ]));
 
-        DB::table('users')
+        // One transaction for the whole import, so a run that fails leaves no row behind and the
+        // check above can read a backfilled row as a finished import. Laravel wraps a migration in a
+        // transaction only where the schema grammar supports one, which PostgreSQL does and MySQL
+        // and SQLite do not.
+        DB::transaction(fn () => DB::table('users')
             ->select($columns)
             ->orderBy('id')
             ->chunkById(1000, /** @param Collection<int, stdClass> $users */ function (Collection $users) use ($hasTerms, $hasPrivacy, $subjectType, $locale, $now): void {
@@ -90,9 +95,10 @@ return new class extends Migration
                     // operator would see a green backfill and an empty ledger.
                     //
                     // What is refused instead is the same class the proof chain refuses: a value
-                    // with no lossless string form. `false`, an array and an object all cast to
-                    // '', which is itself a legitimate value, so admitting them would put four
-                    // different subjects on one key.
+                    // with no lossless string form. `true` casts to '1' and an array to 'Array',
+                    // both keys a real subject can hold, so admitting them would put two subjects
+                    // on one key. `false` casts to '', which this check refuses as an empty key
+                    // anyway, and an object without __toString() does not cast at all.
                     $id = $user->id;
 
                     if (! is_int($id) && (! is_string($id) || $id === '')) {
@@ -112,7 +118,7 @@ return new class extends Migration
                 }
 
                 unset($rows);
-            });
+            }));
     }
 
     public function down(): void

@@ -40,14 +40,72 @@ final class ConsentGate
      */
     public function outstandingFor(Model $subject, string $locale, ?CarbonImmutable $now = null): Collection
     {
-        $now ??= CarbonImmutable::now();
+        $enforceable = $this->enforceable($locale, $now ?? CarbonImmutable::now());
 
+        if ($enforceable->isEmpty()) {
+            return $enforceable;
+        }
+
+        // Ask the ledger only about the keys this answer can possibly turn on. The ledger is
+        // append-only and grows for the life of the account, while the enforceable set is a
+        // handful of documents — without the filter the per-request cost rises with how long the
+        // subject has been a customer, for rows the fold then discards.
+        $held = $this->currentHoldings($subject, $this->keysOf($enforceable));
+
+        return $enforceable
+            ->filter(fn (LegalDocument $document): bool => ! self::holds($held, $document->key, $document->major_version))
+            ->values();
+    }
+
+    /**
+     * What {@see outstandingFor()} returns and, with `$firstAcceptance`, what
+     * {@see firstAcceptanceFor()} returns, from one read of the ledger.
+     *
+     * The question `EnsureLegalConsent` asks on every request it guards. Asked one at a time, the
+     * two read the subject's ledger twice. A document owed under both, a gating major the subject
+     * has never accepted, is in the result once.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    public function owedFor(Model $subject, string $locale, bool $firstAcceptance = false, ?CarbonImmutable $now = null): Collection
+    {
+        $enforceable = $this->enforceable($locale, $now ?? CarbonImmutable::now());
+        $mandatory = $this->mandatory($locale);
+        $asked = $firstAcceptance ? $enforceable->concat($mandatory) : $enforceable;
+
+        // The short-circuit of the two questions it joins: nothing to ask about, no ledger read.
+        if ($asked->isEmpty()) {
+            return $asked;
+        }
+
+        $held = $this->currentHoldings($subject, $this->keysOf($asked));
+
+        $owed = $enforceable->filter(fn (LegalDocument $document): bool => ! self::holds($held, $document->key, $document->major_version));
+
+        if ($firstAcceptance) {
+            $owed = $owed->concat($mandatory->filter(fn (LegalDocument $document): bool => ! isset($held[$document->key])));
+        }
+
+        return $owed->unique(fn (LegalDocument $document): string => $document->key)->values();
+    }
+
+    /**
+     * The active documents an active re-consent gates at `$now`: the set {@see outstandingFor()}
+     * asks the ledger about.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    private function enforceable(string $locale, CarbonImmutable $now): Collection
+    {
         // The active set is cached (a global, publish-driven fact); the time/mode filter runs here
-        // because those windows move on a clock. A dormant install now pays no query at all — it
-        // used to run this on every authenticated request just to be told nothing is published.
+        // because those windows move on a clock. So an install with nothing published does not
+        // query `legal_documents` on every authenticated request just to learn that. The cache read
+        // remains: on a warm store that is not the database it costs no database query, and on the
+        // framework-default `database` store it is one cache-table SELECT for each locale read,
+        // once per request.
         $cache = app(EnforceableDocumentCache::class);
 
-        $enforceable = $cache
+        return $cache
             ->resolvedFor($locale)
             ->filter(fn (LegalDocument $document): bool => $document->type->isConsentBearing()
                 // Informational is checked FIRST and separately, because the opt-in flag cannot
@@ -61,20 +119,17 @@ final class ConsentGate
                 // opened it, from that version's effective date.
                 && $this->gateIsOpen($cache->gatingVersionOf($document), $now))
             ->values();
+    }
 
-        if ($enforceable->isEmpty()) {
-            return $enforceable;
-        }
-
-        // Ask the ledger only about the keys this answer can possibly turn on. The ledger is
-        // append-only and grows for the life of the account, while the enforceable set is a
-        // handful of documents — without the filter the per-request cost rises with how long the
-        // subject has been a customer, for rows the fold then discards.
-        $held = $this->currentHoldings($subject, array_values($enforceable->map(fn (LegalDocument $document): string => $document->key)->all()));
-
-        return $enforceable
-            ->filter(fn (LegalDocument $document): bool => ! self::holds($held, $document->key, $document->major_version))
-            ->values();
+    /**
+     * The distinct keys of a set of documents, which is all the ledger read is filtered on.
+     *
+     * @param  Collection<int, LegalDocument>  $documents
+     * @return list<string>
+     */
+    private function keysOf(Collection $documents): array
+    {
+        return array_values(array_unique($documents->map(fn (LegalDocument $document): string => $document->key)->all()));
     }
 
     /** Whether a major's active re-consent has reached its effective date. */
@@ -118,22 +173,33 @@ final class ConsentGate
     {
         // Same cache and same short-circuit as outstandingFor(): an install that has published
         // nothing must not pay a ledger read on a path a consumer may put on every request.
-        $mandatory = app(EnforceableDocumentCache::class)
-            ->resolvedFor($locale)
-            ->filter(fn (LegalDocument $document): bool => $document->type->isMandatory()
-                && ! $document->requires_explicit_optin)
-            ->values();
+        $mandatory = $this->mandatory($locale);
 
         if ($mandatory->isEmpty()) {
             return $mandatory;
         }
 
-        $held = $this->currentHoldings($subject, array_values($mandatory->map(fn (LegalDocument $document): string => $document->key)->all()));
+        $held = $this->currentHoldings($subject, $this->keysOf($mandatory));
 
         // `! isset` rather than `=== 0`: at major 0 the old spelling called an ACCEPTED document
         // unaccepted, because the fold stores that holding as the same 0 it uses for "none".
         return $mandatory
             ->filter(fn (LegalDocument $document): bool => ! isset($held[$document->key]))
+            ->values();
+    }
+
+    /**
+     * The active mandatory documents nobody may decline: the set {@see firstAcceptanceFor()} asks
+     * the ledger about.
+     *
+     * @return Collection<int, LegalDocument>
+     */
+    private function mandatory(string $locale): Collection
+    {
+        return app(EnforceableDocumentCache::class)
+            ->resolvedFor($locale)
+            ->filter(fn (LegalDocument $document): bool => $document->type->isMandatory()
+                && ! $document->requires_explicit_optin)
             ->values();
     }
 
@@ -167,8 +233,8 @@ final class ConsentGate
      *
      * A holding is a presence. This map carries a key only while an ACCEPTING row is the subject's
      * latest state for it. The discriminator is `standingFor()['version']`, which the fold clears
-     * to null on an ending action and which is NOT NULL in the schema (`document_version` is
-     * `string(20)`) — so null there means "no live accepting row" and can mean nothing else.
+     * to null on an ending action and which is NOT NULL in the schema — so null there means "no
+     * live accepting row" and can mean nothing else.
      *
      * `heldMajorByKey()` keeps its published contract (0 on ending) because consumers read it; the
      * two derive from the same single fold, so they cannot drift.
@@ -400,10 +466,11 @@ final class ConsentGate
             if (is_string($key) && is_string($actionValue)) {
                 $action = ConsentAction::from($actionValue);
                 $major = is_numeric($row->document_major_version) ? (int) $row->document_major_version : 0;
-                // Normalized to a string here rather than left as whatever the driver returns:
-                // SQLite hands back a string, Postgres a string, and a consumer comparing two
-                // of these should not have to know which engine produced them.
-                $when = is_scalar($row->accepted_at) ? (string) $row->accepted_at : null;
+                // As ISO 8601 with its offset, the form history() gives for the same row. The driver
+                // renders the column differently by engine: PostgreSQL adds the session's offset,
+                // MySQL and SQLite add none, and a value without one is read in the application's
+                // timezone, as the model's own cast reads it.
+                $when = is_scalar($row->accepted_at) ? CarbonImmutable::parse((string) $row->accepted_at)->toIso8601String() : null;
 
                 $latest[$key] = ['action' => $action->value, 'at' => $when];
 

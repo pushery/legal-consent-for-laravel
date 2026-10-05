@@ -6,4 +6,5 @@ return [
     'contract_required' => 'Bitte akzeptiere die Nutzungsbedingungen, um fortzufahren.',
     'acknowledgement_required' => 'Bitte bestätige, dass du die Datenschutzerklärung zur Kenntnis genommen hast.',
     'age_required' => 'Bitte bestätige, dass du mindestens :threshold Jahre alt bist.',
+    'checkbox_answer' => 'Das Feld :attribute muss akzeptiert oder abgelehnt werden.',
 ];

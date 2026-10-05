@@ -30,7 +30,7 @@ use Pushery\LegalConsent\Enums\BlockingReason;
  * The key is the translated sentence rather than the enum, because the view renders it and a view
  * that translated a key would be the second place deciding what a reason is called. Insertion order
  * is kept on purpose: the locales arrive in the application's configured order, and an operator
- * reading "not reviewed: de, en" is reading their own list rather than an alphabetised one.
+ * reading "not reviewed: de, en" is reading their own list rather than an alphabetized one.
  */
 final readonly class BlockingReasonGroups
 {

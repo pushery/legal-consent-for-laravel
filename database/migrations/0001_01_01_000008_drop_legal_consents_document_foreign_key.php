@@ -25,7 +25,9 @@ use Illuminate\Support\Facades\Schema;
  * foreign key leaves the column unindexed on PostgreSQL and SQLite); it simply resolves to null
  * once the document is gone — exactly what the SET NULL was reaching for, without the illegal write.
  *
- * Only Postgres and MySQL carry the trigger (and the FK), so only they need the drop.
+ * Only PostgreSQL and MySQL carry the append-only trigger the cascade collides with, so this
+ * migration drops the key there. SQLite carries the foreign key as well, and migration 000014 drops
+ * it on that engine too.
  */
 return new class extends Migration
 {
