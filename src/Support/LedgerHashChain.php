@@ -199,7 +199,7 @@ final class LedgerHashChain
      */
     public function stampRootBoundary(): void
     {
-        if (! Schema::hasTable('legal_ledger_markers')) {
+        if (! TableLookup::exists('legal_ledger_markers')) {
             return;
         }
 
@@ -242,14 +242,14 @@ final class LedgerHashChain
      */
     public function rootBoundaryRemoved(): bool
     {
-        return Schema::hasTable('legal_ledger_markers')
+        return TableLookup::exists('legal_ledger_markers')
             && ! DB::table('legal_ledger_markers')->where('name', self::ROOT_BOUNDARY_MARKER)->exists()
             && $this->rootProofsExist();
     }
 
     private function rootProofsExist(): bool
     {
-        return Schema::hasColumn('legal_consents', 'root_proof')
+        return Schema::hasColumn(TableLookup::qualified('legal_consents'), 'root_proof')
             && DB::table('legal_consents')->whereNotNull('root_proof')->exists();
     }
 

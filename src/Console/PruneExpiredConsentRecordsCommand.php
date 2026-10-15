@@ -26,14 +26,14 @@ use Pushery\LegalConsent\Support\LedgerChainSoundness;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\LedgerRecordMacs;
 use Pushery\LegalConsent\Support\LockedRows;
-use Pushery\LegalConsent\Support\RetentionPeriod;
+use Pushery\LegalConsent\Support\RetentionCutoffs;
 use Pushery\LegalConsent\Support\SubjectToken;
 use stdClass;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
  * Delete consent records past the retention period (default 3 years, § 31 Abs. 2 OWiG /
- * § 195 BGB). DELETE is the one mutation the append-only ledger allows; anonymization of a
+ * § 195 BGB), or past the period `retention_by_document` gives their document. DELETE is the one mutation the append-only ledger allows; anonymization of a
  * live record is deliberately NOT offered (it would be an UPDATE, which the ledger blocks).
  * Chunked with per-chunk garbage collection, and chained rows are pruned one subject_token at a
  * time, so peak memory does not grow with the size of the table: the sweep holds one chunk of ids,
@@ -112,13 +112,15 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
             return self::SUCCESS;
         }
 
-        $retention = RetentionPeriod::configured(config('legal-consent.retention_after_end', '3 years'));
-
         // Refused before anything is deleted: a value that gives no cutoff in the past would make
         // every superseded record count as expired. The run fails without a heartbeat, which is
-        // what a monitor alerts on.
+        // what a monitor alerts on. A document's period of its own is checked the same way.
         try {
-            $cutoff = RetentionPeriod::cutoff($retention, CarbonImmutable::now());
+            $cutoffs = RetentionCutoffs::configured(
+                config('legal-consent.retention_after_end', '3 years'),
+                config('legal-consent.retention_by_document', []),
+                CarbonImmutable::now(),
+            );
         } catch (InvalidRetentionPeriod $refusal) {
             $this->error($refusal->getMessage());
             $this->line('Nothing was pruned.');
@@ -138,8 +140,8 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
 
         if ($ledgerHolds) {
             try {
-                $consents = $this->pruneUnchained(LegalConsent::model()::query(), 'legal_consents', 'accepted_at', $cutoff, chained: true)
-                    + $this->pruneChains($cutoff, $soundness, $relinked, $refused);
+                $consents = $this->pruneUnchained(LegalConsent::model()::query(), 'legal_consents', 'accepted_at', $cutoffs, chained: true)
+                    + $this->pruneChains($cutoffs, $soundness, $relinked, $refused);
             } catch (LedgerCensusDoesNotVerify $refusal) {
                 // Changed while this run swept: what was removed before it is consistent, since
                 // every delete and the count it lowered commit together.
@@ -149,9 +151,9 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
             }
         }
 
-        $notices = $this->pruneUnchained(LegalNotice::model()::query(), 'legal_notices', 'sent_at', $cutoff);
+        $notices = $this->pruneUnchained(LegalNotice::model()::query(), 'legal_notices', 'sent_at', $cutoffs);
 
-        $this->info("Pruned {$consents} consent record(s) and {$notices} notice record(s) older than {$retention}.");
+        $this->info("Pruned {$consents} consent record(s) and {$notices} notice record(s) older than {$cutoffs->described()}.");
 
         // A subject whose last records went leaves their row in the token registry behind, holding
         // a token no record carries any more. Said only when it happened, like the re-link below.
@@ -166,7 +168,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         // stopped between a delete and its repair, by a signal, an OOM or a lost host, left chains
         // whose first link points at a row that is gone, and nothing left to delete there.
         if ($ledgerHolds) {
-            $relinked += $this->relinkChainsNotStartingAtGenesis($cutoff, $soundness, $refused);
+            $relinked += $this->relinkChainsNotStartingAtGenesis($cutoffs, $soundness, $refused);
         }
 
         // Said out loud, and only when it happened. A line printed on every nightly run is one
@@ -219,12 +221,12 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      *                         `legal_consents` does; reading the column on `legal_notices` would
      *                         be an error rather than an empty list.
      */
-    private function pruneUnchained(Builder $query, string $table, string $timestamp, CarbonImmutable $cutoff, bool $chained = false): int
+    private function pruneUnchained(Builder $query, string $table, string $timestamp, RetentionCutoffs $cutoffs, bool $chained = false): int
     {
         $deleted = 0;
         $census = $chained ? new LedgerBoundaryCensus : null;
 
-        $this->eligible($query, $table, $timestamp, $cutoff)
+        $this->eligible($query, $table, $timestamp, $cutoffs)
             ->when($chained, fn (Builder $unchained): Builder => $unchained->where(
                 fn (Builder $outside): Builder => $outside->whereNull('prev_record_hash')->orWhereNull('subject_token'),
             ))
@@ -260,7 +262,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      * @param  int  $relinked  out-param: chains re-linked, added to what it holds
      * @param  int  $refused  out-param: chains left alone because they do not verify
      */
-    private function pruneChains(CarbonImmutable $cutoff, LedgerChainSoundness $soundness, int &$relinked, int &$refused): int
+    private function pruneChains(RetentionCutoffs $cutoffs, LedgerChainSoundness $soundness, int &$relinked, int &$refused): int
     {
         $deleted = 0;
         $after = null;
@@ -268,7 +270,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         do {
             $tokens = [];
 
-            $page = $this->eligible(LegalConsent::model()::query(), 'legal_consents', 'accepted_at', $cutoff)
+            $page = $this->eligible(LegalConsent::model()::query(), 'legal_consents', 'accepted_at', $cutoffs)
                 ->whereNotNull('prev_record_hash')
                 ->whereNotNull('subject_token')
                 ->when($after !== null, fn (Builder $query): Builder => $query->where('subject_token', '>', $after))
@@ -284,7 +286,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
             }
 
             foreach ($tokens as $token) {
-                $outcome = DB::transaction(fn (): ?array => $this->pruneChain($token, $cutoff, $soundness));
+                $outcome = DB::transaction(fn (): ?array => $this->pruneChain($token, $cutoffs, $soundness));
 
                 if ($outcome === null) {
                     $refused++;
@@ -311,7 +313,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      *
      * @return array{0: int, 1: bool}|null rows deleted and whether a link moved, or null when the chain does not verify
      */
-    private function pruneChain(string $token, CarbonImmutable $cutoff, LedgerChainSoundness $soundness): ?array
+    private function pruneChain(string $token, RetentionCutoffs $cutoffs, LedgerChainSoundness $soundness): ?array
     {
         $rows = $this->lockedChain($token);
 
@@ -321,7 +323,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
 
         $ids = [];
 
-        $eligible = $this->eligible(LegalConsent::model()::query(), 'legal_consents', 'accepted_at', $cutoff)
+        $eligible = $this->eligible(LegalConsent::model()::query(), 'legal_consents', 'accepted_at', $cutoffs)
             ->where('subject_token', $token)
             ->whereNotNull('prev_record_hash')
             ->pluck('id');
@@ -377,7 +379,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      *
      * @param  int  $refused  out-param: chains left alone because they do not verify
      */
-    private function relinkChainsNotStartingAtGenesis(CarbonImmutable $cutoff, LedgerChainSoundness $soundness, int &$refused): int
+    private function relinkChainsNotStartingAtGenesis(RetentionCutoffs $cutoffs, LedgerChainSoundness $soundness, int &$refused): int
     {
         $relinked = 0;
         $after = 0;
@@ -399,7 +401,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
             unset($page);
 
             foreach ($tokens as $token) {
-                $pruned = $this->eligible(LegalConsent::model()::query(), 'legal_consents', 'accepted_at', $cutoff)
+                $pruned = $this->eligible(LegalConsent::model()::query(), 'legal_consents', 'accepted_at', $cutoffs)
                     ->where('subject_token', $token)
                     ->whereNotNull('prev_record_hash')
                     ->exists();
@@ -581,11 +583,10 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      *                                 something a caller should be able to choose either way.
      * @return Builder<TModel>
      */
-    private function eligible(Builder $query, string $table, string $timestamp, CarbonImmutable $cutoff): Builder
+    private function eligible(Builder $query, string $table, string $timestamp, RetentionCutoffs $cutoffs): Builder
     {
-        return $query
-            ->withoutGlobalScope(TenantScope::class) // retention runs across all tenants
-            ->where($timestamp, '<', $cutoff)
+        // Retention runs across all tenants, and past the cutoff of each record's own document.
+        return $cutoffs->expired($query->withoutGlobalScope(TenantScope::class), $timestamp)
             // BUILT, NOT WRITTEN, and that is the whole repair. This was the package's last
             // hand-assembled runtime statement: a `whereRaw` naming `legal_consents` literally on
             // both sides of the correlation. Everything else on this sweep is builder work, and a

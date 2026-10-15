@@ -7,6 +7,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\ProofColumnGuard;
+use Pushery\LegalConsent\Support\TableLookup;
 use Pushery\SQLens\Attributes\NoSqlOnDriver;
 
 /**
@@ -118,7 +119,7 @@ class extends Migration
 
         // The derived column of the one-active index (000025) states its own collation, and a
         // stored generated column is modified with its expression restated.
-        if (Schema::hasColumn('legal_documents', 'active_identity')) {
+        if (Schema::hasColumn(TableLookup::qualified('legal_documents'), 'active_identity')) {
             DB::statement(
                 "ALTER TABLE {$prefix}legal_documents MODIFY COLUMN active_identity VARCHAR(600) COLLATE {$collation} "
                 .'GENERATED ALWAYS AS (IF(is_active, CONCAT(`key`, 0x1f, locale, 0x1f, tenant_id), NULL)) STORED'

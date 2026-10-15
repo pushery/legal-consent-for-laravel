@@ -305,8 +305,10 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
      * notice (§ 308 Nr. 5 lit. b BGB), and it has to read as a date in the sentence around it. The
      * `toArray()` payloads keep the ISO form, because a program reads those.
      *
-     * A language the date library has no data for formats to an empty string, which would leave a
-     * gap where the deadline belongs. The ISO date stands in there: it reads the same everywhere.
+     * A language Carbon has no long date format (`LL`) for gets the ISO date instead, which reads
+     * the same everywhere. Carbon is asked for that format itself, with an empty string standing for
+     * none, because the output of `isoFormat('LL')` cannot tell a missing format from a date: it is
+     * an empty string from Carbon 3.14.2 on and the bare letter "L" before it.
      */
     protected function readableDate(?CarbonImmutable $date): string
     {
@@ -314,9 +316,11 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
             return '';
         }
 
-        $readable = $date->settings(['locale' => app()->getLocale()])->isoFormat('LL');
+        $localized = $date->settings(['locale' => app()->getLocale()]);
 
-        return $readable !== '' ? $readable : $date->toDateString();
+        return $localized->getTranslationMessage('formats.LL', default: '') !== ''
+            ? $localized->isoFormat('LL')
+            : $date->toDateString();
     }
 
     /**

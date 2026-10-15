@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\TableLookup;
 use Pushery\SQLens\Attributes\NoSqlOnDriver;
 
 /**
@@ -35,7 +36,7 @@ class extends Migration
         $table = $this->prefixed('legal_documents');
         $index = $this->prefixed('legal_documents_one_active_per_key_locale');
 
-        if (! Schema::hasIndex('legal_documents', $index)) {
+        if (! Schema::hasIndex(TableLookup::qualified('legal_documents'), $index)) {
             DB::statement("CREATE UNIQUE INDEX {$index} ON {$table} (active_identity)");
         }
     }

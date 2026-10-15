@@ -16,7 +16,6 @@ use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 use Override;
@@ -70,6 +69,7 @@ use Pushery\LegalConsent\Support\PublishedTitleNames;
 use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
 use Pushery\LegalConsent\Support\RegistrationRules;
 use Pushery\LegalConsent\Support\ReportedNotificationFailures;
+use Pushery\LegalConsent\Support\TableLookup;
 use Pushery\LegalConsent\Support\TenantContext;
 use Pushery\LegalConsent\Support\UnavailableTranslator;
 use Pushery\WireKit\WireKitServiceProvider;
@@ -537,7 +537,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
     {
         try {
             foreach (['legal_documents', 'legal_consents', 'legal_notices'] as $table) {
-                if (! Schema::hasTable($table)) {
+                if (! TableLookup::exists($table)) {
                     return false;
                 }
             }

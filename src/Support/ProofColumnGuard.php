@@ -309,7 +309,7 @@ final class ProofColumnGuard
     private static function protectedColumns(): array
     {
         $columns = array_values(array_diff(
-            array_filter(Schema::getColumnListing('legal_documents'), is_string(...)),
+            array_filter(Schema::getColumnListing(TableLookup::qualified('legal_documents')), is_string(...)),
             LegalDocument::MUTABLE_AFTER_PUBLISH,
             self::generatedColumns(),
         ));
@@ -354,7 +354,7 @@ final class ProofColumnGuard
         // filter below would be an assumption dressed as a check. The builder declares
         // `list<array{name: string, …, generation: array{…}|null}>`, which is the shape this
         // method depends on.
-        $columns = DB::connection()->getSchemaBuilder()->getColumns('legal_documents');
+        $columns = DB::connection()->getSchemaBuilder()->getColumns(TableLookup::qualified('legal_documents'));
 
         return array_values(array_map(
             static fn (array $column): string => $column['name'],

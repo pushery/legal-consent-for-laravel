@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\TableLookup;
 
 /**
  * One active version per (key, locale, tenant) — enforced by the DATABASE on every engine, not
@@ -100,7 +101,7 @@ return new class extends Migration
             // `ADD COLUMN IF NOT EXISTS`, so a second run of this migration — a consumer
             // re-applying it by hand, or coming out of a partial rollback — died on
             // `ERROR 1060 Duplicate column name` while the SQLite arm beside it was idempotent.
-            if (! Schema::hasColumn('legal_documents', 'active_identity')) {
+            if (! Schema::hasColumn(TableLookup::qualified('legal_documents'), 'active_identity')) {
                 DB::statement(
                     "ALTER TABLE {$table} ADD COLUMN active_identity VARCHAR(600) COLLATE utf8mb4_bin "
                     .'GENERATED ALWAYS AS (IF(is_active, CONCAT(`key`, 0x1f, locale, 0x1f, tenant_id), NULL)) STORED'
@@ -111,7 +112,7 @@ return new class extends Migration
             // after the column was added (two active versions of one document, 1062) leaves the
             // column behind. Behind the column's check, the run after the clean-up skipped the
             // index as well, and the migration was recorded with the index missing.
-            if (! Schema::hasIndex('legal_documents', $index)) {
+            if (! Schema::hasIndex(TableLookup::qualified('legal_documents'), $index)) {
                 DB::statement("CREATE UNIQUE INDEX {$index} ON {$table} (active_identity)");
             }
         }
@@ -131,11 +132,11 @@ return new class extends Migration
             // Each is checked on its own, because a failed up() can leave the column without the
             // index. Dropping the column would take the index with it, as its only column; the
             // index is named anyway, so down() undoes exactly what up() created.
-            if (Schema::hasIndex('legal_documents', $index)) {
+            if (Schema::hasIndex(TableLookup::qualified('legal_documents'), $index)) {
                 DB::statement("DROP INDEX {$index} ON {$table}");
             }
 
-            if (Schema::hasColumn('legal_documents', 'active_identity')) {
+            if (Schema::hasColumn(TableLookup::qualified('legal_documents'), 'active_identity')) {
                 DB::statement("ALTER TABLE {$table} DROP COLUMN active_identity");
             }
         }

@@ -4,6 +4,23 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.46.0] - 2026-10-15
+
+### Added
+
+- **A document can keep its records for longer than `retention_after_end`.** `retention_by_document` gives a document a retention period of its own, such as `'partner_terms' => '10 years'` for an agreement that self-billed invoices rest on, and `legal-consent:prune` keeps that document's superseded and orphaned consent records and its delivery proofs until the period ends. Every other document keeps the default. A value that is not a period stops the sweep before it deletes anything, and `legal-consent:doctor` names the document.
+- **`legal-consent:verify-documents` names a document on the draft store that was never released.** Such a document has no active version, so the placeholder check never saw it, while its page shows the file it ships with under `resources/legal` until the first release. The command now reports it with its key and locale, as a warning, and with `--placeholders-fail` as a failure. A document whose source is a file is never reported: the file is its text.
+
+### Fixed
+
+- **On PostgreSQL with a schema per tenant, the package finds its own tables.** With `search_path` set to `tenant, public` and the tables in `public`, Laravel's schema builder looks only in `current_schema()`, the tenant schema, while every query walks the whole path. So the sweeps reported the database unmigrated and swept nothing, the ledger wrote its records without their macs and its root boundary went unstamped, `legal-consent:check-drift` and the other commands that run in every tenant skipped a tenant holding only drafts, and a migration could add a column or a marker table the database already had. Every table, column and index lookup now asks where a query finds the table.
+- **A change notice in a language Carbon has no date format for writes its dates as ISO dates with every Carbon release.** Since 0.44.0 such a notice was meant to fall back to the ISO date, and it did so only with `nesbot/carbon` 3.14.2 or later. The releases before it, which Laravel 13 installs from 3.8.4 on, format a date in such a language as the letter `L`, so the built-in German wording read "Bitte stimme bis zum L zu" where the deadline belongs, and the effective date, in the notice and in a subject that carries it, read the same way. The notice now asks Carbon for the language's long date format and writes the ISO date when there is none.
+- **A ticked checkbox that a mandatory document shares with published documents records them while that document has no published version.** With `registration_field` naming one control for a privacy notice and the pages beside it, a registration whose box was ticked threw `UnrecordableConsentException` for the privacy notice as long as it was unpublished, and recorded nothing at all, not even the pages. The validation rules ask nothing for a document with no published version, so the tick answers for the documents behind the box that are published: the registration now records them, leaves the unpublished document open and logs a warning naming it. A box of its own that comes back ticked for such a document still throws, and so does a shared box with nothing published behind it.
+
+### Security
+
+- **`league/commonmark` is required from 2.10.2.** Two denial-of-service advisories reach the Markdown pipeline every legal document renders through: crafted code fences, reference links and emphasis delimiters slow down the core parser (PKSA-9q1p-3s19-bp1q, fixed in 2.9.1), and a crafted table makes the table extension's block-start scan take quadratic time (PKSA-m4t9-vsgq-8khn, fixed in 2.10.2). The previous constraint, `^2.9`, still admitted releases with both open. An application on 2.10.2 or later needs no change; see the upgrade guide for one that holds an older release.
+
 ## [0.45.0] - 2026-10-05
 
 ### Added
@@ -3150,7 +3167,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.45.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.46.0...HEAD
+[0.46.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.43.1...v0.44.0
 [0.43.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.43.0...v0.43.1

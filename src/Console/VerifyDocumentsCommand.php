@@ -7,11 +7,14 @@ namespace Pushery\LegalConsent\Console;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\LazyCollection;
+use InvalidArgumentException;
 use Pushery\LegalConsent\Content\AcceptanceWording;
+use Pushery\LegalConsent\Content\Drivers\DraftDocumentSource;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\DocumentMatrix;
+use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -20,7 +23,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * (which verifies the consent chain). Read-only: it never mutates a row, because a published row
  * is frozen proof and a "repair" would be exactly the tampering the guard exists to prevent.
  *
- * Four checks:
+ * Five checks:
  *
  * 1. INTEGRITY (hard error) — every active row's stored `content` is re-hashed and compared to its
  *    stored `content_hash`. A mismatch means the two disagree: the row cannot prove what it claims.
@@ -41,6 +44,11 @@ use Symfony\Component\Console\Attribute\AsCommand;
  *    subjects are asked to agree to it. A warning by default, because a version frozen on 0.0.0 by
  *    an earlier release path stays in the table either way; a release check that must not ship a
  *    placeholder asks for the failure. Fixed, like the others, by publishing a new version.
+ * 5. UNRELEASED DRAFT (advisory, or a hard error with `--placeholders-fail`) — a document on the
+ *    draft store with no active version in a configured locale. Its page shows the file the
+ *    package ships under `resources/legal` until the first release, which a reader cannot tell
+ *    from a released text, so it counts like a placeholder. A document whose source is a file
+ *    is never reported here: the file is its text. Fixed by releasing the draft.
  *
  * The walk pages through the active rows by id, so it holds one page of rendered text at a time
  * however many tenants, documents and locales the installation has. The notice-mode check keeps
@@ -53,9 +61,9 @@ final class VerifyDocumentsCommand extends Command
     private const int PAGE = 50;
 
     protected $signature = 'legal-consent:verify-documents
-                            {--placeholders-fail : Count a placeholder in an active version as a failure, not as a warning}';
+                            {--placeholders-fail : Count a placeholder in an active version, or a draft never released, as a failure, not as a warning}';
 
-    protected $description = 'Verify published legal documents: content integrity, notice-mode consistency, wording locale, placeholders.';
+    protected $description = 'Verify published legal documents: content integrity, notice-mode consistency, wording locale, placeholders, unreleased drafts.';
 
     public function handle(RenderPipeline $pipeline): int
     {
@@ -100,6 +108,14 @@ final class VerifyDocumentsCommand extends Command
             $failures[] = $divergence;
         }
 
+        foreach ($this->unreleasedDrafts() as $unreleased) {
+            if ($this->option('placeholders-fail') === true) {
+                $failures[] = $unreleased;
+            } else {
+                $advisories[] = $unreleased;
+            }
+        }
+
         foreach ($advisories as $advisory) {
             $this->warn($advisory);
         }
@@ -132,6 +148,51 @@ final class VerifyDocumentsCommand extends Command
             ->withoutGlobalScope(TenantScope::class) // audit every tenant's documents
             ->where('is_active', true)
             ->lazyById(self::PAGE);
+    }
+
+    /**
+     * Each document on the draft store that has no active version in a configured locale, in any
+     * tenant, as a finding naming its key and locale.
+     *
+     * @return list<string>
+     */
+    private function unreleasedDrafts(): array
+    {
+        $findings = [];
+
+        foreach (DocumentMatrix::keys() as $key) {
+            if (! $this->onTheDraftStore($key)) {
+                continue;
+            }
+
+            foreach (DocumentMatrix::locales() as $locale) {
+                $released = LegalDocument::model()::query()
+                    ->withoutGlobalScope(TenantScope::class)
+                    ->where('is_active', true)
+                    ->where('key', $key)
+                    ->where('locale', $locale)
+                    ->exists();
+
+                if (! $released) {
+                    $findings[] = "'{$key}' ({$locale}) is on the draft store and has no published version yet, so its page shows the file it ships with until the draft is released.";
+                }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Whether the document takes its text from the draft store. A document whose source does not
+     * resolve is reported where it is used, by the publisher and the draft pre-flight, not here.
+     */
+    private function onTheDraftStore(string $key): bool
+    {
+        try {
+            return app(LegalDocumentPublisher::class)->sourceFor($key) instanceof DraftDocumentSource;
+        } catch (InvalidArgumentException) {
+            return false;
+        }
     }
 
     /**

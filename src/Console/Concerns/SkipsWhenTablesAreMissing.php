@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Console\Concerns;
 
-use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\TableLookup;
 
 /**
  * A sweep on a database that has not been migrated yet reports it and stops.
@@ -29,7 +29,7 @@ trait SkipsWhenTablesAreMissing
     private function tablesAreMissing(array $tables): bool
     {
         foreach ($tables as $table) {
-            if (! Schema::hasTable($table)) {
+            if (! TableLookup::exists($table)) {
                 $this->warn("`{$table}` does not exist yet — run `php artisan migrate` to create this package's tables. Nothing was swept.");
 
                 return true;

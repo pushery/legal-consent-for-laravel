@@ -34,30 +34,32 @@ final class RetentionPeriod
      * An ISO 8601 duration (`P3Y`) is subtracted as an interval, anything else is read as a
      * relative time (`3 years`) the way the sweep always read it.
      *
+     * @param  string  $key  the setting the value comes from, which a refusal names
+     *
      * @throws InvalidRetentionPeriod when the value gives no cutoff at least a day before now
      */
-    public static function cutoff(string $retention, CarbonImmutable $now): CarbonImmutable
+    public static function cutoff(string $retention, CarbonImmutable $now, string $key = 'legal-consent.retention_after_end'): CarbonImmutable
     {
         try {
             $cutoff = str_starts_with($retention, 'P')
                 ? $now->sub(new DateInterval($retention))
                 : $now->modify("-{$retention}");
         } catch (Throwable) {
-            throw InvalidRetentionPeriod::unreadable($retention);
+            throw InvalidRetentionPeriod::unreadable($retention, $key);
         }
 
         if ($cutoff->greaterThan($now->subDay())) {
-            throw InvalidRetentionPeriod::notInThePast($retention, $cutoff, $now);
+            throw InvalidRetentionPeriod::notInThePast($retention, $cutoff, $now, $key);
         }
 
         return $cutoff;
     }
 
     /** Why this value gives no retention cutoff, or null when it gives one. */
-    public static function problem(string $retention, CarbonImmutable $now): ?string
+    public static function problem(string $retention, CarbonImmutable $now, string $key = 'legal-consent.retention_after_end'): ?string
     {
         try {
-            self::cutoff($retention, $now);
+            self::cutoff($retention, $now, $key);
         } catch (InvalidRetentionPeriod $refusal) {
             return $refusal->getMessage();
         }

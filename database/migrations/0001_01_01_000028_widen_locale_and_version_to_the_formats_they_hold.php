@@ -7,6 +7,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\ProofColumnGuard;
+use Pushery\LegalConsent\Support\TableLookup;
 
 /**
  * `locale` and `version` get the width their own formats need.
@@ -94,7 +95,7 @@ return new class extends Migration
         // where it is NOT belt and braces is the one that fails silently.
         ProofColumnGuard::whileDisarmed(function () use ($locale, $version): void {
             foreach (self::WIDENED as $target) {
-                if (! Schema::hasTable($target['table'])) {
+                if (! TableLookup::exists($target['table'])) {
                     continue;
                 }
 
@@ -113,7 +114,7 @@ return new class extends Migration
     {
         $name = $target['columns'][$role];
 
-        if (! Schema::hasColumn($target['table'], $name)) {
+        if (! Schema::hasColumn(TableLookup::qualified($target['table']), $name)) {
             return;
         }
 

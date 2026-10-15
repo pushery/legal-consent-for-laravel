@@ -11,7 +11,6 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
@@ -31,7 +30,7 @@ final class NoticeAttempts
 
     public static function tracked(): bool
     {
-        return Schema::hasTable(self::TABLE);
+        return TableLookup::exists(self::TABLE);
     }
 
     /**

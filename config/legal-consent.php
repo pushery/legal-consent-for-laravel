@@ -806,6 +806,13 @@ return [
     */
     'retention_after_end' => env('LEGAL_CONSENT_RETENTION_AFTER_END', '3 years'),
 
+    // A period of its own for a document whose acceptance has to stay provable for longer,
+    // keyed by document key and written like `retention_after_end`: 'partner_terms' =>
+    // '10 years' keeps that document's superseded and orphaned records, and its delivery
+    // proofs, for ten years. Every other document keeps the default. A value that is not a
+    // period is refused, and the sweep deletes nothing.
+    'retention_by_document' => [],
+
     /*
     |--------------------------------------------------------------------------
     | Advance-notice periods (per regime)

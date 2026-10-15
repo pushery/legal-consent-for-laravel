@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Exceptions\LedgerCensusDoesNotVerify;
 
 /**
@@ -63,7 +62,7 @@ final readonly class LedgerBoundaryCensus
      */
     public function breaks(string $marker, string $label): array
     {
-        if (! Schema::hasTable('legal_ledger_markers')) {
+        if (! TableLookup::exists('legal_ledger_markers')) {
             return [];
         }
 
@@ -177,7 +176,7 @@ final readonly class LedgerBoundaryCensus
      */
     private function lockedCensuses(): array
     {
-        if (! Schema::hasTable('legal_ledger_markers')) {
+        if (! TableLookup::exists('legal_ledger_markers')) {
             return [];
         }
 
