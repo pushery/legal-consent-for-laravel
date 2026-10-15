@@ -118,6 +118,11 @@ final readonly class RegistrationConsentRecorder
         // shown to acknowledge. Collected for one warning, for the reason given above.
         $unshown = [];
 
+        // Mandatory documents with no published version behind a ticked control they share with a
+        // document that does resolve, left open rather than refused. Collected for one warning, for
+        // the same reason.
+        $open = [];
+
         // Resolution is separated from writing, and the separation is the whole reason `refuse`
         // can be honest: it decides before the first accept(), so a registration records all of
         // its consents or none. Refusing mid-loop would leave a partial ledger in the one table
@@ -131,42 +136,45 @@ final readonly class RegistrationConsentRecorder
 
             if (! $document instanceof LegalDocument) {
                 // Not published in the locale the subject saw. A MANDATORY document was
-                // validation-required, so walk the rest of the chain rather than drop its proof;
-                // an optional consent has nothing to fall back to (Art. 7(4): it may never be
-                // required, so offering a language nobody asked for is no improvement).
-                // Mandatory-ness comes from the resolved row's own type — the DB is the source of
-                // truth, not the config registry.
-                foreach ($chain as $candidate) {
-                    $row = $resolved[$candidate]->get($key);
+                // validation-required, so walk the rest of the chain rather than drop its proof.
+                $document = $this->mandatoryFallback((string) $key, $resolved, $chain);
 
-                    if ($row instanceof LegalDocument && $row->type->isMandatory()) {
-                        $document = $row;
-
-                        // A fallback means the subject agreed to a text in a language they may not
-                        // have been shown. The row itself records WHICH locale was frozen, so the
-                        // proof stays self-describing — but this is worth surfacing, not swallowing.
-                        Log::warning('legal-consent: recorded a mandatory consent from a fallback locale', [
-                            'document_key' => $key,
-                            'seen_locale' => $locale,
-                            'recorded_locale' => $row->locale,
-                            'subject_type' => (string) $subject->getMorphClass(),
-                        ]);
-
-                        break;
-                    }
+                if ($document instanceof LegalDocument) {
+                    // A fallback means the subject agreed to a text in a language they may not
+                    // have been shown. The row itself records WHICH locale was frozen, so the
+                    // proof stays self-describing — but this is worth surfacing, not swallowing.
+                    Log::warning('legal-consent: recorded a mandatory consent from a fallback locale', [
+                        'document_key' => $key,
+                        'seen_locale' => $locale,
+                        'recorded_locale' => $document->locale,
+                        'subject_type' => (string) $subject->getMorphClass(),
+                    ]);
                 }
             }
 
             if (! $document instanceof LegalDocument) {
-                // A MANDATORY document that resolves in NO locale of the chain: validation demanded
-                // the checkbox and there is no version to freeze. Silently skipping is exactly the
-                // hole this fix exists to close — a ticked box with an empty ledger is a consent the
-                // app believes it holds and cannot prove (Art. 7(1)). Fail loudly instead.
-                if ($this->isMandatoryByConfig((string) $key) && $this->wasGiven($input[RegistrationField::forDocument((string) $key)] ?? null)) {
-                    throw UnrecordableConsentException::for((string) $key, $chain);
+                // A MANDATORY document that resolves in NO locale of the chain, behind a box that came
+                // back ticked, has no version to freeze. When no other document behind that box
+                // resolves, the tick was for this one alone, and a ticked box with an empty ledger is
+                // a consent the application believes it holds and cannot prove (Art. 7(1)), so the
+                // registration is refused.
+                //
+                // A box several documents share is ticked for the documents the form showed under
+                // it. While one of them resolves here, that one accounts for the tick: the rules
+                // asked nothing for a document with no published version, so this one was not part
+                // of the answer. It stays open until a version is published, and the warning after
+                // the writes names it.
+                $field = RegistrationField::forDocument((string) $key);
+
+                if ($this->isMandatoryByConfig((string) $key) && $this->wasGiven($input[$field] ?? null)) {
+                    if (! $this->fieldCoversAResolvedDocument($field, $active, $resolved, $chain)) {
+                        throw UnrecordableConsentException::for((string) $key, $chain);
+                    }
+
+                    $open[] = (string) $key;
                 }
 
-                continue; // optional consent, or the key is entirely unpublished
+                continue; // optional consent, the key is entirely unpublished, or it stays open
             }
 
             // An informational page binds nobody, so by default there is nothing to freeze: writing
@@ -293,6 +301,18 @@ final readonly class RegistrationConsentRecorder
             $this->consent->accept($subject, $key, $context, $documentLocale, $expectedHash, $registrationWording);
         }
 
+        if ($open !== []) {
+            Log::warning('legal-consent: recorded no consent for a mandatory document with no published version behind a shared registration field', [
+                'document_keys' => $open,
+                'fields' => array_map(RegistrationField::forDocument(...), $open),
+                'locales' => $chain,
+                'subject_type' => (string) $subject->getMorphClass(),
+                'hint' => 'A tick on a shared control answers for the documents published behind it, so a '
+                    .'document without a version stays open. Publish it (legal-consent:publish): the subject '
+                    .'then owes its first acceptance, which legal-consent.gate.first_use asks for.',
+            ]);
+        }
+
         if ($unshown !== []) {
             Log::warning('legal-consent: acknowledged no page flagged for registration whose field the request does not carry', [
                 'document_keys' => $unshown,
@@ -402,5 +422,58 @@ final readonly class RegistrationConsentRecorder
         }
 
         return DocumentType::fromLegalBasis($basis)->isMandatory();
+    }
+
+    /**
+     * The version of a MANDATORY document the rest of the chain resolves, for a key with nothing
+     * published in the locale the subject saw.
+     *
+     * Only a mandatory document falls back: it is validation-required whatever the language, so its
+     * proof is not dropped for want of a translation. An optional consent has nothing to fall back to
+     * (Art. 7(4): it may never be required, so offering a language nobody asked for is no
+     * improvement). Mandatory-ness comes from the resolved row's own type, because the database is the
+     * source of truth, not the config registry.
+     *
+     * @param  array<string, Collection<string, LegalDocument>>  $resolved
+     * @param  list<string>  $chain
+     */
+    private function mandatoryFallback(string $key, array $resolved, array $chain): ?LegalDocument
+    {
+        foreach ($chain as $candidate) {
+            $row = $resolved[$candidate]->get($key);
+
+            if ($row instanceof LegalDocument && $row->type->isMandatory()) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether a document this registration resolves stands behind the field.
+     *
+     * A field that several documents name is one control, and a tick on it answers for the documents
+     * the form could show there. A document resolves as it does in the recording loop: published in
+     * the locale the subject saw, or, for a mandatory one, through the rest of the chain. The document
+     * asking resolves nowhere, which is why it asks, so it never answers for itself.
+     *
+     * @param  Collection<string, LegalDocument>  $active
+     * @param  array<string, Collection<string, LegalDocument>>  $resolved
+     * @param  list<string>  $chain
+     */
+    private function fieldCoversAResolvedDocument(string $field, Collection $active, array $resolved, array $chain): bool
+    {
+        foreach (array_keys($this->documents) as $key) {
+            if (RegistrationField::forDocument((string) $key) !== $field) {
+                continue;
+            }
+
+            if ($active->get($key) instanceof LegalDocument || $this->mandatoryFallback((string) $key, $resolved, $chain) instanceof LegalDocument) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

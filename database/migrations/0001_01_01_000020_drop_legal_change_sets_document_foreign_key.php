@@ -6,6 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\ChangeSetFreezeGuard;
+use Pushery\LegalConsent\Support\TableLookup;
 
 /**
  * Remove the `legal_change_sets.document_id` foreign key: its `ON DELETE SET NULL` is an UPDATE of
@@ -74,7 +75,7 @@ return new class extends Migration
          *
          * @var list<array{columns: list<string>}> $foreignKeys
          */
-        $foreignKeys = Schema::getForeignKeys('legal_change_sets');
+        $foreignKeys = Schema::getForeignKeys(TableLookup::qualified('legal_change_sets'));
 
         foreach ($foreignKeys as $foreignKey) {
             if (in_array('document_id', $foreignKey['columns'], true)) {

@@ -4,6 +4,10 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.45.0 → 0.46.0
+
+**This release requires `league/commonmark` 2.10.2 or later.** Every release below it carries the table extension's denial-of-service advisory, and those below 2.9.1 the core parser's as well, both on the path every document renders through. If your lock holds an older release, update both together: `composer update pushery/legal-consent-for-laravel league/commonmark --with-dependencies`. If your own `composer.json` caps `league/commonmark` below 2.10.2, lift the cap first.
+
 ## 0.44.0 → 0.45.0
 
 **Run `php artisan migrate`.** Migration 000039 adds a guard on PostgreSQL that refuses a `TRUNCATE` of `legal_documents` while a consent points at one of its versions, and of `legal_change_sets` or `legal_change_items` while they hold a published change description. On MySQL and SQLite it changes nothing. Migration 000040 adds an index on `legal_documents` on every engine, for the reads that know the tenant and the locale. If you publish the migrations instead of loading them, publish the new ones first: `php artisan vendor:publish --tag=legal-consent-migrations`.

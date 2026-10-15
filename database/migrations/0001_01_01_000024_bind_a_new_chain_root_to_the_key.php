@@ -7,6 +7,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\LedgerHashChain;
+use Pushery\LegalConsent\Support\TableLookup;
 
 /**
  * Give a NEW chain a root only a key-holder can produce, and record where "new" begins.
@@ -53,13 +54,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasColumn('legal_consents', 'root_proof')) {
+        if (! Schema::hasColumn(TableLookup::qualified('legal_consents'), 'root_proof')) {
             Schema::table('legal_consents', function (Blueprint $blueprint): void {
                 $blueprint->string('root_proof', 64)->nullable();
             });
         }
 
-        if (! Schema::hasTable('legal_ledger_markers')) {
+        if (! TableLookup::exists('legal_ledger_markers')) {
             Schema::create('legal_ledger_markers', function (Blueprint $blueprint): void {
                 $blueprint->id();
                 $blueprint->string('name', 64)->unique();
@@ -108,7 +109,7 @@ return new class extends Migration
     {
         Schema::dropIfExists('legal_ledger_markers');
 
-        if (Schema::hasColumn('legal_consents', 'root_proof')) {
+        if (Schema::hasColumn(TableLookup::qualified('legal_consents'), 'root_proof')) {
             Schema::table('legal_consents', function (Blueprint $blueprint): void {
                 $blueprint->dropColumn('root_proof');
             });

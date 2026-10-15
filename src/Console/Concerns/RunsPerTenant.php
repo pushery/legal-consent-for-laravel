@@ -6,7 +6,7 @@ namespace Pushery\LegalConsent\Console\Concerns;
 
 use Closure;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\TableLookup;
 use Pushery\LegalConsent\Support\TenantContext;
 
 /**
@@ -63,7 +63,7 @@ trait RunsPerTenant
         // tenant, and the point is to see every one.
         $tenants = DB::table('legal_documents')->distinct()->pluck('tenant_id');
 
-        if (Schema::hasTable('legal_drafts')) {
+        if (TableLookup::exists('legal_drafts')) {
             $tenants = $tenants->merge(DB::table('legal_drafts')->distinct()->pluck('tenant_id'));
         }
 

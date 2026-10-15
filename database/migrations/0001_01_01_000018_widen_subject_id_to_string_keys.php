@@ -7,6 +7,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\ProofColumnGuard;
+use Pushery\LegalConsent\Support\TableLookup;
 
 /**
  * Widen `subject_id` on both proof tables from an integer key to a 64-character string one, so a
@@ -89,7 +90,7 @@ return new class extends Migration
      */
     private function holdsStringKeys(string $table): bool
     {
-        $type = strtolower(Schema::getColumnType($table, 'subject_id'));
+        $type = strtolower(Schema::getColumnType(TableLookup::qualified($table), 'subject_id'));
 
         return str_contains($type, 'char') || str_contains($type, 'text') || $type === 'string';
     }

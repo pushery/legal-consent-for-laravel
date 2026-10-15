@@ -114,7 +114,7 @@ final class SubjectToken
      */
     public function registered(): bool
     {
-        return LegalConsent::resolve()->getConnection()->getSchemaBuilder()->hasTable(self::REGISTRY);
+        return TableLookup::exists(self::REGISTRY, LegalConsent::resolve()->getConnectionName());
     }
 
     /**

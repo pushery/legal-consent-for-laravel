@@ -34,6 +34,6 @@ final class IndexName
     {
         $prefixed = self::of($name);
 
-        return $prefixed === $name || Schema::hasIndex($table, $prefixed) ? $prefixed : $name;
+        return $prefixed === $name || Schema::hasIndex(TableLookup::qualified($table), $prefixed) ? $prefixed : $name;
     }
 }

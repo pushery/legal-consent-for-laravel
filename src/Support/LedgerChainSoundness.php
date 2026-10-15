@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use stdClass;
 
 /**
@@ -148,7 +147,7 @@ final class LedgerChainSoundness
     private function rootBoundary(): ?LedgerRootBoundary
     {
         if ($this->rootBoundary === null) {
-            $marker = Schema::hasTable('legal_ledger_markers') ? DB::table('legal_ledger_markers')->where('name', LedgerHashChain::ROOT_BOUNDARY_MARKER)->first() : null;
+            $marker = TableLookup::exists('legal_ledger_markers') ? DB::table('legal_ledger_markers')->where('name', LedgerHashChain::ROOT_BOUNDARY_MARKER)->first() : null;
 
             $this->rootBoundary = [$marker === null ? null : new LedgerRootBoundary(
                 is_int($marker->boundary_id) || is_string($marker->boundary_id) ? (int) $marker->boundary_id : 0,

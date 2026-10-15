@@ -8,12 +8,12 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\LedgerBoundaryCensus;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\LedgerRecordMacs;
 use Pushery\LegalConsent\Support\LedgerRootBoundary;
+use Pushery\LegalConsent\Support\TableLookup;
 use stdClass;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -455,7 +455,7 @@ final class VerifyLedgerCommand extends Command
      */
     private function rootBoundary(): ?LedgerRootBoundary
     {
-        if (! Schema::hasTable('legal_ledger_markers')) {
+        if (! TableLookup::exists('legal_ledger_markers')) {
             return null;
         }
 

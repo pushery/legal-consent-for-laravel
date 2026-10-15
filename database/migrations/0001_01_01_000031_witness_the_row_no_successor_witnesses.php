@@ -7,6 +7,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\LedgerRecordMacs;
+use Pushery\LegalConsent\Support\TableLookup;
 
 /**
  * Give the NEWEST row of every chain the witness it never had.
@@ -65,7 +66,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable(LedgerRecordMacs::TABLE)) {
+        if (! TableLookup::exists(LedgerRecordMacs::TABLE)) {
             Schema::create(LedgerRecordMacs::TABLE, function (Blueprint $blueprint): void {
                 $blueprint->id();
 

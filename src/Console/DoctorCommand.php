@@ -12,7 +12,6 @@ use Illuminate\Routing\Exceptions\UrlGenerationException;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Enums\DocumentType;
@@ -27,8 +26,10 @@ use Pushery\LegalConsent\Support\IntegerSetting;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\RegistrationConsentRecorder;
+use Pushery\LegalConsent\Support\RetentionCutoffs;
 use Pushery\LegalConsent\Support\RetentionPeriod;
 use Pushery\LegalConsent\Support\SourceLanguageFallback;
+use Pushery\LegalConsent\Support\TableLookup;
 use Pushery\WireKit\WireKitServiceProvider;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
@@ -613,7 +614,7 @@ final class DoctorCommand extends Command
      */
     private function rootBoundaryStamped(): bool
     {
-        if (! Schema::hasTable('legal_ledger_markers')) {
+        if (! TableLookup::exists('legal_ledger_markers')) {
             return false;
         }
 
@@ -830,7 +831,7 @@ final class DoctorCommand extends Command
         // No `try` around this: databaseFindings() opens the connection before any reader runs and
         // reports the database as unreachable when it cannot, so a guard here would answer a question
         // that is already answered, on a line no run can enter.
-        return Schema::hasTable('notifications') ? [] : ['database'];
+        return TableLookup::exists('notifications') ? [] : ['database'];
     }
 
     /**
@@ -901,6 +902,7 @@ final class DoctorCommand extends Command
             RetentionPeriod::configured(config('legal-consent.retention_after_end', '3 years')),
             CarbonImmutable::now(),
         );
+        $documentRetentionProblems = RetentionCutoffs::problems(config('legal-consent.retention_by_document', []), CarbonImmutable::now());
         $confirmWindowProblem = ConfirmationWindow::problem(config('legal-consent.double_opt_in.confirm_within'));
         $editorRoute = $this->unresolvableEditorRoute();
         $uncacheable = $this->uncacheableKeys();
@@ -984,6 +986,19 @@ final class DoctorCommand extends Command
             $this->newLine();
             $this->error('legal-consent.retention_after_end names no retention period:');
             $this->line("  {$retentionProblem}");
+            $this->line('  `legal-consent:prune` refuses to run with it, so nothing past its retention is removed');
+            $this->line('  until the value is fixed.');
+            $this->newLine();
+        }
+
+        if ($documentRetentionProblems !== []) {
+            $this->newLine();
+            $this->error('legal-consent.retention_by_document names no retention period for '.implode(', ', array_keys($documentRetentionProblems)).':');
+
+            foreach ($documentRetentionProblems as $problem) {
+                $this->line("  {$problem}");
+            }
+
             $this->line('  `legal-consent:prune` refuses to run with it, so nothing past its retention is removed');
             $this->line('  until the value is fixed.');
             $this->newLine();
@@ -1136,7 +1151,7 @@ final class DoctorCommand extends Command
         // returns each restating the rule is how the legal contradiction fell out of the exit code
         // on the third one: the same deemed-consent-without-proof installation ended 1 or 0
         // depending on whether the published config happened to carry an unrelated stale key.
-        $failed = $incoherent || $refusedFallbacks !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null || $confirmWindowProblem !== null;
+        $failed = $incoherent || $refusedFallbacks !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null || $documentRetentionProblems !== [] || $confirmWindowProblem !== null;
 
         // $this->laravel->configPath() rather than the config_path() helper, as the provider does
         // when it publishes: the path is the application's, so it is asked of the application this

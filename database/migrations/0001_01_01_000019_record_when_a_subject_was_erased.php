@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Pushery\LegalConsent\Support\TableLookup;
 
 /**
  * When the subject was stripped from a proof row under Art. 17, on both ledgers.
@@ -33,7 +34,7 @@ return new class extends Migration
     public function up(): void
     {
         foreach (self::TABLES as $table) {
-            if (Schema::hasColumn($table, 'subject_erased_at')) {
+            if (Schema::hasColumn(TableLookup::qualified($table), 'subject_erased_at')) {
                 continue;
             }
 
@@ -46,7 +47,7 @@ return new class extends Migration
     public function down(): void
     {
         foreach (self::TABLES as $table) {
-            if (! Schema::hasColumn($table, 'subject_erased_at')) {
+            if (! Schema::hasColumn(TableLookup::qualified($table), 'subject_erased_at')) {
                 continue;
             }
 

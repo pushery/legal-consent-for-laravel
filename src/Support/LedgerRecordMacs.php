@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Console\VerifyLedgerCommand;
 
 /**
@@ -67,7 +66,7 @@ final readonly class LedgerRecordMacs
      */
     public function available(): bool
     {
-        return Schema::hasTable(self::TABLE);
+        return TableLookup::exists(self::TABLE);
     }
 
     /**
@@ -177,14 +176,14 @@ final readonly class LedgerRecordMacs
      * Every chained write pays for the check: a catalog query for the marker table, after the one
      * {@see available()} makes for the mac table, and one indexed lookup on a two-row table, with a
      * second, locking one only while the marker is missing ({@see LedgerHashChain::markerStamped()}).
-     * Laravel answers `Schema::hasTable()` from the database on every call. The two catalog queries
+     * `TableLookup::exists()` asks the database on every call. The two catalog queries
      * are not cached on purpose: an installation may lack either table, through a migration it
      * ignored or rolled back, and a cached answer would outlive that in a long-running process,
      * where the write would then fail instead of going on without a mac.
      */
     private function stampBoundary(): void
     {
-        if (! Schema::hasTable('legal_ledger_markers')) {
+        if (! TableLookup::exists('legal_ledger_markers')) {
             return;
         }
 
@@ -258,7 +257,7 @@ final readonly class LedgerRecordMacs
      */
     public function boundary(): ?LedgerRootBoundary
     {
-        if (! Schema::hasTable('legal_ledger_markers')) {
+        if (! TableLookup::exists('legal_ledger_markers')) {
             return null;
         }
 
@@ -283,7 +282,7 @@ final readonly class LedgerRecordMacs
      */
     public function boundaryRemoved(): bool
     {
-        return Schema::hasTable('legal_ledger_markers')
+        return TableLookup::exists('legal_ledger_markers')
             && $this->available()
             && ! DB::table('legal_ledger_markers')->where('name', self::BOUNDARY_MARKER)->exists()
             && DB::table(self::TABLE)->exists();

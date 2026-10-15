@@ -15,6 +15,10 @@ use RuntimeException;
  * able to demonstrate consent). Failing the registration is the lesser harm, and it is actionable:
  * publish the document, or stop declaring the key mandatory in `legal-consent.documents`.
  *
+ * A box the document shares with others (`registration_field`) is not this case while another
+ * document behind it resolves: the tick answers for the documents the form showed under it, so the
+ * registration records those, leaves this document open and logs it.
+ *
  * Distinct from {@see LegalDocumentNotFound}, which means a content SOURCE could not render a text.
  * That one is caught by the drift checker on purpose; this must not be.
  */
