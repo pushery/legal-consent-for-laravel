@@ -16,14 +16,14 @@ use Pushery\LegalConsent\Models\LegalDocument;
 use stdClass;
 
 /**
- * Yields the subjects a version is owed to — and WHICH subjects those are depends on the notice
+ * Yields the subjects a version is owed to — and which subjects those are depends on the notice
  * mode, because "must re-consent" and "must be told" are two different populations.
  *
- * A GATING version (active re-consent) is owed to whoever the gate will actually stop: those who
+ * A gating version (active re-consent) is owed to whoever the gate will actually stop: those who
  * accepted this document only at an older major. That is the same set the middleware enforces
  * against, so the notice and the block agree.
  *
- * A NON-GATING version (info-only, deemed consent) is owed to every current party, full stop.
+ * A non-gating version (info-only, deemed consent) is owed to every current party, full stop.
  * § 327r Abs. 2, § 675g Abs. 1, P2B Art. 3(2) and DSA Art. 14(2) attach the duty to being a party,
  * not to holding an outdated version — and P2B Art. 3(3) makes a change implemented without it
  * void, so under-reaching here is the expensive direction.
@@ -34,7 +34,7 @@ use stdClass;
  * then reported success over an empty set and stamped its watermark, which is why nothing surfaced
  * it.
  *
- * Streamed lazily in bounded chunks and hydrated per subject_type in ONE query each (no N+1), so
+ * Streamed lazily in bounded chunks and hydrated per subject_type in one query each (no N+1), so
  * peak memory is bounded by the chunk size rather than by the size of the population — a large
  * user base never loads at once.
  *
@@ -58,7 +58,7 @@ readonly class AffectedSubjectResolver
     }
 
     /**
-     * Whether {@see forVersion}'s keyset seek uses the sargable ROW-VALUE tuple. Only PostgreSQL and
+     * Whether {@see forVersion}'s keyset seek uses the sargable row-value tuple. Only PostgreSQL and
      * SQLite range-scan the composite index for it. Every other engine keeps the portable OR/tie-break
      * form: MySQL will not range-scan the tuple, MariaDB reports its own driver name (`mariadb`, never
      * `mysql`, since Laravel 11), SQL Server does not compile the tuple to valid syntax, and an unknown
@@ -71,13 +71,13 @@ readonly class AffectedSubjectResolver
 
     /**
      * How many subjects {@see forVersion} loads per page. A protected seam for the same reason
-     * {@see keysetSeekDriver} is one: the paging is only exercised by CROSSING this boundary, and at
+     * {@see keysetSeekDriver} is one: the paging is only exercised by crossing this boundary, and at
      * the production value that costs 501 rows per test. The three real-engine suites are exactly
      * where the seek shapes have to be proven — an engine decides whether the seek agrees with the
      * sort — and paying that fixture three times for a boundary a test can reach with six rows is
      * what kept them from being written at all.
      *
-     * Read ONCE per call and reused for the limit, the loop condition and the hydration batch. A
+     * Read once per call and reused for the limit, the loop condition and the hydration batch. A
      * value that changed between them would page past subjects it never yielded.
      */
     protected function chunkSize(): int
@@ -106,14 +106,14 @@ readonly class AffectedSubjectResolver
             ->select('subject_type', 'subject_id')
             ->where('document_key', $version->key)
             ->where('locale', $version->locale)
-            // The notice sweep crosses tenants, so scope subjects to THIS version's tenant.
+            // The notice sweep crosses tenants, so scope subjects to this version's tenant.
             //
-            // `?? ''` IS THE FIX, AND THE `->when()` AROUND IT IS DELIBERATE — see below.
-            // The column is NOT NULL DEFAULT '', but a model that was just CREATED has no value
+            // `?? ''` is the fix, and the `->when()` around it is deliberate — see below.
+            // The column is NOT NULL DEFAULT '', but a model that was just created has no value
             // loaded for it: measured, `$version->tenant_id` is null on a fresh insert and only
             // becomes '' after a refresh. `where('tenant_id', null)` compiles to IS NULL, which
-            // matches no row of a NOT NULL column — the sweep resolves ZERO subjects and notifies
-            // nobody, silently. With tenancy ON that was one un-refreshed model away.
+            // matches no row of a NOT NULL column — the sweep resolves zero subjects and notifies
+            // nobody, silently. With tenancy on that was one un-refreshed model away.
             //
             // The filter stays conditional. Unconditional, it would let `tenant_id` lead the
             // affected-subject index, since a NOT NULL DEFAULT '' column makes the predicate hold
@@ -140,10 +140,10 @@ readonly class AffectedSubjectResolver
             ->orderBy('subject_id')
             ->limit($size);
 
-        // KEYSET paging on (subject_type, subject_id), NOT lazy()/chunk(): those page with
+        // Keyset paging on (subject_type, subject_id), not lazy()/chunk(): those page with
         // LIMIT/OFFSET, and OFFSET on a GROUP BY … HAVING query re-runs the whole aggregation every
         // page and discards the first OFFSET groups — quadratic. The group key is the sort key, so a
-        // strict `> (lastType, lastId)` resumes where the last page ended — but HOW that seek is
+        // strict `> (lastType, lastId)` resumes where the last page ended — but how that seek is
         // written decides whether the whole sweep is linear (see the engine branch below). Both
         // forms lean on `legal_consents_affected_subject_idx` (document_key, locale, subject_type,
         // subject_id, tenant_id; migrations 000013 and 000026). Filtering those columns
@@ -170,16 +170,16 @@ readonly class AffectedSubjectResolver
                 $query = $page();
 
                 if ($lastType !== null) {
-                    // PostgreSQL + SQLite range-scan the composite index for the sargable ROW-VALUE
-                    // tuple form, so the whole sweep is LINEAR (measured ~20x faster than the OR form
-                    // at 160k rows). Every OTHER engine keeps the portable OR/tie-break form (see
+                    // PostgreSQL + SQLite range-scan the composite index for the sargable row-value
+                    // tuple form, so the whole sweep is linear (measured ~20x faster than the OR form
+                    // at 160k rows). Every other engine keeps the portable OR/tie-break form (see
                     // {@see usesRowValueSeek}): MySQL will not range-scan the index for a row-value
                     // comparison, MariaDB reports its own driver name, and an unknown driver may not
                     // compile whereRowValues at all — the index still cuts the constant enormously
                     // there, though that path stays super-linear. An engine-appropriate seek.
-                    // INVERTING THIS BRANCH CHANGES NO RESULT, and the paragraph above says
+                    // Inverting this branch changes no result, and the paragraph above says
                     // why: both seek forms resume at the same place and return the same rows.
-                    // What the branch decides is whether the sweep stays LINEAR on this engine, and
+                    // What the branch decides is whether the sweep stays linear on this engine, and
                     // no assertion about the result can see that. The engine-shape arm covers which
                     // driver gets which form; the paging arms cover that both forms page correctly.
                     // Neither can see the difference, and a test that could would be timing the query.
@@ -209,7 +209,7 @@ readonly class AffectedSubjectResolver
     }
 
     /**
-     * How MANY subjects a version reaches, without hydrating any of them. `affects()` only needs the
+     * How many subjects a version reaches, without hydrating any of them. `affects()` only needs the
      * number for an advisory line, so counting the grouped set with one aggregate query
      * (`COUNT(*) FROM (… GROUP BY subject …)`, with `HAVING MAX(major) < ?` for a re-consent) is the
      * right shape — the streaming
@@ -217,19 +217,19 @@ readonly class AffectedSubjectResolver
      * (and slow, and memory-heavy) purely to arrive at a count in a Livewire web request.
      *
      * This counts distinct (subject_type, subject_id) acceptance-groups in the ledger. It differs
-     * from `forVersion(...)->count()` only for an ORPHANED group whose `subject_type` no longer maps
+     * from `forVersion(...)->count()` only for an orphaned group whose `subject_type` no longer maps
      * to a live model class — the hydrate path silently drops those (it cannot build the model),
      * this counts them. For any app whose subjects still exist the two are identical; and counting
      * every ledger population the version reaches is the more faithful answer for an advisory number.
      *
-     * `$skipNotified` applies {@see forVersion}'s resume predicate to the SAME grouped set, so a
+     * `$skipNotified` applies {@see forVersion}'s resume predicate to the same grouped set, so a
      * caller that wants "how many does a resumed run still owe" no longer has to stream and hydrate
      * the remaining population to arrive at a number. It is the same predicate, from the same
      * method, so the two answers cannot drift.
      *
-     * SWAPPING `forVersion(...)->count()` FOR THIS CHANGES THE REPORTED NUMBER for an orphaned
+     * Swapping `forVersion(...)->count()` for this changes the reported number for an orphaned
      * group, in the direction the paragraph above describes: such a group is counted here and
-     * dropped there. That is the honest answer for an audience SIZE — the acceptance is on file and
+     * dropped there. That is the honest answer for an audience size — the acceptance is on file and
      * the notice is owed to it — but it is not the number of notifications a run will manage to
      * send, so a line that promises deliveries has to say which of the two it is reporting.
      */
@@ -239,12 +239,12 @@ readonly class AffectedSubjectResolver
     }
 
     /**
-     * How many subjects a RELEASE reaches — one document across several locales, counted once each.
+     * How many subjects a release reaches — one document across several locales, counted once each.
      *
      * {@see countForVersion} answers per (key, locale), because that is the unit a notice sweep
      * works on: a consent row carries the locale it was given in. A release is the other unit. It
      * writes one version across every locale it covers, in one transaction, and the number an
-     * operator reads under it is about PEOPLE — so a subject who accepted the German text and a
+     * operator reads under it is about people — so a subject who accepted the German text and a
      * subject who accepted the French one are two, and somebody who accepted both is one.
      *
      * Summing `countForVersion()` over the released rows answers neither: it double-counts the
@@ -253,8 +253,8 @@ readonly class AffectedSubjectResolver
      * under a sentence saying the release reaches nobody.
      *
      * So the grouping drops `locale` and the locale filter becomes a set. The gating predicate stays
-     * per SUBJECT and is the load-bearing part: `MAX(document_major_version) < ?` over every locale
-     * of this document means somebody who has accepted the new major in ANY language is not behind
+     * per subject and is the load-bearing part: `MAX(document_major_version) < ?` over every locale
+     * of this document means somebody who has accepted the new major in any language is not behind
      * on it. That is the same claim the gate itself makes — the major is a property of the document,
      * not of its translations.
      *
@@ -295,17 +295,17 @@ readonly class AffectedSubjectResolver
     }
 
     /**
-     * RESUMABILITY (notice sweep): skip subjects who already have a durable-medium proof row for
-     * THIS version, and those whose notice is still on its way or has failed
+     * Resumability (notice sweep): skip subjects who already have a durable-medium proof row for
+     * this version, and those whose notice is still on its way or has failed
      * `notifications.max_attempts` times ({@see NoticeAttempts}). A run killed or overtaken
      * mid-sweep (the 55-minute lock can expire on a large population) resumes on the subjects still
      * owed a notice instead of re-sending from the top — and, crucially, it stops the
-     * concurrent/re-run case from writing a SECOND proof row for a subject already notified.
+     * concurrent/re-run case from writing a second proof row for a subject already notified.
      * Delivery stays at-least-once (a proof written by a genuinely simultaneous sweep in the same
      * window is still tolerated — see the command docblock); this removes the bulk of the
      * duplication, not a unique constraint.
      *
-     * ONE method, applied to both the streaming query and the counting one, because the whole point
+     * One method, applied to both the streaming query and the counting one, because the whole point
      * of counting is to predict what the stream will serve. Two copies of this predicate would be
      * two answers to that question, and the one nobody runs is the one that rots.
      */
@@ -357,7 +357,7 @@ readonly class AffectedSubjectResolver
 
     /**
      * Reverse a stored subject_type back to a model class, honoring a configured morph
-     * map (Relation::enforceMorphMap) — where subject_type is the ALIAS, not the FQCN.
+     * map (Relation::enforceMorphMap) — where subject_type is the alias, not the FQCN.
      *
      * @return class-string<Model>|null
      */

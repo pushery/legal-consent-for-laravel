@@ -130,7 +130,7 @@ final class TenantContext
     /**
      * Run $callback with the tenant pinned to $tenantId, then restore the previous resolver.
      *
-     * A cross-tenant SYSTEM sweep (scheduler/console) has no ambient tenant — there is no
+     * A cross-tenant system sweep (scheduler/console) has no ambient tenant — there is no
      * authenticated user, so the app's resolver yields nothing and current() falls back to the
      * shared '' bucket. A row written that way would land outside the tenant it belongs to,
      * making the proof invisible to that tenant's own queries. The sweeps therefore pin the

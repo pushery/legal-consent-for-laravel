@@ -8,7 +8,7 @@ use RuntimeException;
 
 /**
  * A registration required a mandatory document, the subject ticked it, and no published version
- * exists in ANY locale of the resolution chain — so there is nothing to freeze.
+ * exists in any locale of the resolution chain — so there is nothing to freeze.
  *
  * This is deliberately loud. Skipping silently is how a ticked checkbox produced an empty ledger:
  * the application believes it holds a consent it cannot prove (Art. 7(1) — the controller must be
@@ -19,7 +19,7 @@ use RuntimeException;
  * document behind it resolves: the tick answers for the documents the form showed under it, so the
  * registration records those, leaves this document open and logs it.
  *
- * Distinct from {@see LegalDocumentNotFound}, which means a content SOURCE could not render a text.
+ * Distinct from {@see LegalDocumentNotFound}, which means a content source could not render a text.
  * That one is caught by the drift checker on purpose; this must not be.
  */
 final class UnrecordableConsentException extends RuntimeException

@@ -13,14 +13,14 @@ use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
- * Caches WHICH versions are currently enforceable — a global, publish-driven fact — so the gate
+ * Caches which versions are currently enforceable — a global, publish-driven fact — so the gate
  * stops paying a `legal_documents` query on every authenticated request.
  *
  * `outstandingFor()` ran its enforceable-set query unconditionally and only then early-returned on
  * an empty result, so a fresh install spent its entire pre-launch life paying one SELECT per
  * request to be told nothing is published.
  *
- * Only the SET of active versions is cached, never a subject's satisfaction and never the clock.
+ * Only the set of active versions is cached, never a subject's satisfaction and never the clock.
  * Whether a given human still owes acceptance is always computed live from the ledger, and the
  * callers compare `announce_from` and `enforce_from` with the time on every read, so a scheduled
  * boundary takes effect on time. The proof, what gets recorded when someone accepts, is never
@@ -34,8 +34,8 @@ use Pushery\LegalConsent\Models\LegalDocument;
 final class EnforceableDocumentCache
 {
     /**
-     * THE `:v2` IS A PAYLOAD VERSION, NOT DECORATION — do not drop it, and bump it again the
-     * next time the cached SHAPE changes.
+     * The `:v2` is a payload version, not decoration — do not drop it, and bump it again the
+     * next time the cached shape changes.
      *
      * v0.5.0 changed what this key holds, from a serialized Eloquent collection to a list of
      * primitive attribute rows, and kept the key. On a shared cache store that is a live hazard in
@@ -78,7 +78,7 @@ final class EnforceableDocumentCache
     /**
      * The already-hydrated set per cache key, with the wall-clock second it stops being usable.
      *
-     * The documented layout asks for this set FOUR times in one request — once from the gate's
+     * The documented layout asks for this set four times in one request — once from the gate's
      * middleware, three times from the banner — and a store read alone is not what that costs: the
      * rows are re-hydrated into models, casts and all, on every hit. On the framework-default
      * `database` store it is also four identical cache-table SELECTs. The set is one global fact
@@ -92,7 +92,7 @@ final class EnforceableDocumentCache
      * in-process publish is never invisible.
      *
      * It also means callers share one instance of each document rather than getting a private copy.
-     * Every caller in the package reads; a caller that MUTATES a document handed out here would be
+     * Every caller in the package reads; a caller that mutates a document handed out here would be
      * writing to a partially selected model, which the freeze rules refuse anyway.
      *
      * @var array<string, array{Collection<int, LegalDocument>, int}>
@@ -109,7 +109,7 @@ final class EnforceableDocumentCache
     /**
      * Every active document a subject reading this locale is held to.
      *
-     * Per document key, the version published in the requested locale. A MANDATORY document that is
+     * Per document key, the version published in the requested locale. A mandatory document that is
      * not published in it resolves through the same chain registration walks, fallback_locale and then
      * default_locale ({@see RegistrationLocaleChain}), and the first version found stands in.
      *
@@ -167,8 +167,8 @@ final class EnforceableDocumentCache
      *
      * The cached shape is a list of primitive attribute rows, never an `Eloquent\Collection` of
      * models. A serializing store (redis) run under `cache.serializable_classes => false` reads any
-     * cached OBJECT back as `__PHP_Incomplete_Class`, which would then fail this method's
-     * `: Collection` return on every cache HIT — an app-wide 500 on the gate's per-request path.
+     * cached object back as `__PHP_Incomplete_Class`, which would then fail this method's
+     * `: Collection` return on every cache hit — an app-wide 500 on the gate's per-request path.
      *
      * Laravel 13's application skeleton ships `'serializable_classes' => false` in its
      * `config/cache.php`, so an application created from it runs under this setting unless someone
@@ -189,7 +189,7 @@ final class EnforceableDocumentCache
 
         // The `0` is unobservable, and any other number would be too: this default is only read
         // when there is no memo entry, and then `$memoized` is null, so the check below fails on
-        // its FIRST operand whatever the timestamp says. It is a shape, not a value.
+        // its first operand whatever the timestamp says. It is a shape, not a value.
         [$memoized, $expiresAt] = $this->memo[$key] ?? [null, 0];
 
         if ($memoized instanceof Collection && $expiresAt > $now) {
@@ -205,7 +205,7 @@ final class EnforceableDocumentCache
             $this->cache->put($key, $rows, $this->ttl);
         }
 
-        // A CACHE HIT STILL FIRES `retrieved`, ONCE PER DOCUMENT. `hydrate()` goes through
+        // A cache hit still fires `retrieved`, once per document. `hydrate()` goes through
         // `newFromBuilder()`, which fires the model event whether the row came from the database
         // or from this cache. Before v0.5.0 a hit returned a stored collection and fired none, so
         // an application with a `LegalDocument::retrieved` listener sees accesses that never
@@ -232,7 +232,7 @@ final class EnforceableDocumentCache
             ->select(self::COLUMNS)
             ->where('locale', $locale)
             ->where('is_active', true)
-            // ORDERED, BECAUSE EVERYTHING DOWNSTREAM RENDERS THIS SET IN THIS ORDER. Without it
+            // Ordered, because everything downstream renders this set in this order. Without it
             // the engine decides: the banner listed pending changes in whatever sequence the
             // storage layer happened to return, so the same two documents came out in one order on
             // PostgreSQL and another on SQLite — and changed order again the moment an index was
@@ -361,7 +361,7 @@ final class EnforceableDocumentCache
      * Every locale a cached set could exist under: the declared ones, plus the ones actually
      * published.
      *
-     * THE CONFIG ALONE IS NOT ENOUGH. A version stays published in a locale the list no longer
+     * The config alone is not enough. A version stays published in a locale the list no longer
      * declares, because removing a locale from `legal-consent.locales` unpublishes nothing, and a
      * flush that read the list alone would leave that locale's set cached while the command
      * reports success.

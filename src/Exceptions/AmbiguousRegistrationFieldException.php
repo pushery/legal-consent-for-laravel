@@ -11,11 +11,11 @@ use RuntimeException;
  *
  * A collective control is allowed and ordinary — "I accept the terms and have read the privacy
  * policy" covers two mandatory documents, both of which need `accepted`, and that resolves to one
- * rule with nothing lost. What cannot be expressed is a MANDATORY document sharing a control with
+ * rule with nothing lost. What cannot be expressed is a mandatory document sharing a control with
  * a real consent: the first needs `accepted`, and making the second `accepted` is exactly the
  * coupling Art. 7(4) DSGVO forbids. There is no honest single rule.
  *
- * Refused HERE rather than resolved to whichever document the loop reached last, because the
+ * Refused here rather than resolved to whichever document the loop reached last, because the
  * silent version of this is a consent that was never freely given sitting in a ledger whose whole
  * purpose is to demonstrate that it was. A registry is read at boot and fails the same way on
  * every request, so the operator meets this in development; the alternative is that their users

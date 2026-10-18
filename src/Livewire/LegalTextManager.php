@@ -76,7 +76,7 @@ final class LegalTextManager extends Component
         // app had to fork this final class to release one. The deemed mode is a per-change legal call
         // made from the editor controls or the CLI, not a button on an overview grid.
         //
-        // THAT SENTENCE NAMED TWO HOMES AND ONLY ONE OF THEM EXISTED, for as long as it has been
+        // That sentence named two homes and only one of them existed, for as long as it has been
         // here. Measured 2026-09-05: `LegalTextEditor` carried nothing — no notice mode, no
         // objection deadline, no ReleaseOptions — so the only route to a deemed release was
         // `legal-consent:publish --deemed --objection-at=`. An application with an admin UI had no
@@ -85,7 +85,7 @@ final class LegalTextManager extends Component
         //
         // The editor has it now ({@see LegalTextEditor::releaseDeemed()}), so the routing above is
         // true rather than aspirational. The placement stands on its own reasons: a deemed release
-        // binds people by their SILENCE, and the editor is per (key, locale) — the context of "this
+        // binds people by their silence, and the editor is per (key, locale) — the context of "this
         // one change" is already there, and somebody has read the text.
 
         // No version is set here. The release derives it inside its own transaction, for this
@@ -95,18 +95,18 @@ final class LegalTextManager extends Component
         try {
             $released = app(LegalDocumentReleaser::class)->release($key, $this->modeFor($key), $this->releaseLocalesFor($key));
         } catch (LegalReleaseNotReady $e) {
-            // A polite live-region message — never a fatal — so a screen reader hears WHY the
+            // A polite live-region message — never a fatal — so a screen reader hears why the
             // release did not happen (WCAG 4.1.3), and nothing was written.
             $names = app(NamesLegalTexts::class);
 
             $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
                 'key' => $names->document($key),
                 'reasons' => implode('; ', array_map(
-                    // The reason is translated HERE, where it reaches a person. The exception keeps
+                    // The reason is translated here, where it reaches a person. The exception keeps
                     // the English sentence for logs; a status line spoken by a screen reader has to
                     // be in the reader's language.
                     //
-                    // …and so is the SUBJECT of the sentence, since the reasons stopped being the
+                    // …and so is the subject of the sentence, since the reasons stopped being the
                     // only translated half: an administrator read `terms (fr)` for a document the
                     // public site calls "Nutzungsbedingungen" in a language its own switcher offers
                     // as "Französisch". The package names what it owns and hands the rest to
@@ -130,7 +130,7 @@ final class LegalTextManager extends Component
             return;
         }
 
-        // Over the WHOLE release, not over its first row. `affects()` answers per (key, locale) —
+        // Over the whole release, not over its first row. `affects()` answers per (key, locale) —
         // a consent row carries the language it was given in — so the first row named the people of
         // whichever language came back first. Measured in a seven-locale consumer: it said 0 where
         // one person was a major behind, under a sentence an operator reads to decide whether to
@@ -177,7 +177,7 @@ final class LegalTextManager extends Component
         foreach ($this->documentKeys() as $key) {
             $set = LegalDraftSet::for($key);
 
-            // Over the locales a release of THIS document would cover, not over every configured
+            // Over the locales a release of this document would cover, not over every configured
             // one. Asked the wide way, a document with an untranslated locale showed a blocked row
             // beside a button that would have released it — the screen argued with itself, and an
             // operator had no way to tell which half was right.
@@ -231,12 +231,12 @@ final class LegalTextManager extends Component
      * editor at all: you got to a text by typing its address. This is the seam for that, and it
      * stays opt-in.
      *
-     * The parameters are bound BY POSITION, document first and locale second, rather than by name.
+     * The parameters are bound by position, document first and locale second, rather than by name.
      * A name would be a contract this package cannot enforce: a route written as
      * `{document}/{locale}` and one written as `{key}/{lang}` are the same route to an operator,
      * and only positional binding accepts both.
      *
-     * Asked of the ROUTER, not of the configuration. A name that is configured and not registered
+     * Asked of the router, not of the configuration. A name that is configured and not registered
      * is the ordinary state of a half-finished installation, and `route()` answers it by throwing —
      * on an overview, that is an error page instead of a screen. A misconfiguration degrades to a
      * cell that is not a link, and `legal-consent:doctor` is what says so out loud.
@@ -261,7 +261,7 @@ final class LegalTextManager extends Component
     /**
      * The accessible name of a linked cell — document, locale, and the states the badges show.
      *
-     * The states are repeated here rather than left to the badges because an `aria-label` REPLACES
+     * The states are repeated here rather than left to the badges because an `aria-label` replaces
      * the content it sits on: a link wrapping "None" that announces only "Edit Terms (de)" hides
      * the one fact the cell exists to state. The words are the long ones, for the same reason the
      * badges carry them as a `title` — "Stale" is a column heading, "Needs update" is a sentence.
@@ -305,7 +305,7 @@ final class LegalTextManager extends Component
     /**
      * The locales this key is released in — the reasoning lives on the set, and so does the answer.
      *
-     * It used to live HERE, privately, which is why the grid a few lines up and this screen's own
+     * It used to live here, privately, which is why the grid a few lines up and this screen's own
      * release button could disagree about one document ({@see LegalDraftSet::releaseLocales()}).
      *
      * @return list<string>
@@ -330,7 +330,7 @@ final class LegalTextManager extends Component
     /** @return list<string> */
     private function documentKeys(): array
     {
-        // THROUGH THE MATRIX, not off the raw config. A registry with two readers has two answers,
+        // Through the matrix, not off the raw config. A registry with two readers has two answers,
         // and only one of them is tested: this line stood identically in the manager and the editor
         // and neither filtered the list-config case, so `['terms', 'privacy']` reached the screens
         // as documents named `0` and `1` while every command skipped them.

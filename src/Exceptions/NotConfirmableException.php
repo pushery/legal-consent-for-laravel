@@ -22,7 +22,7 @@ use RuntimeException;
  * confirmed twice, someone whose window expired, and someone looking at a document that has since
  * changed each need a different next step.
  *
- * A document that is not a voluntary consent at all is a fourth case and NOT this exception —
+ * A document that is not a voluntary consent at all is a fourth case and not this exception —
  * {@see NotGrantableException} already says it: a contract is agreed where its full text is
  * presented, never confirmed by following a link in an e-mail.
  */

@@ -8,19 +8,19 @@ namespace Pushery\LegalConsent\Enums;
  * Which span a refused lead time was measured over.
  *
  * The publisher measures two different things under one rule, and they end on two different dates.
- * For a deemed-consent change the statutory period is the OBJECTION window — the subject must have
+ * For a deemed-consent change the statutory period is the objection window — the subject must have
  * the full period to actually object (§ 308 Nr. 5 lit. a BGB; § 675g Abs. 1 for a payment
  * contract) — so the span ends at the objection deadline. For every other change that owes notice
  * it ends at enforcement.
  *
- * THE REFUSAL USED TO CALL BOTH OF THEM "ENFORCEMENT", AND THAT IS WHY THIS EXISTS. The
+ * The refusal used to call both of them "ENFORCEMENT", and that is why this exists. The
  * deemed-consent branch handed the objection deadline to a parameter named `enforceAt`, so the
  * sentence an operator read named the wrong date under the wrong word — in the English message and,
  * once the sentence was translated, in all seven languages. A reported example: announcement
  * 2026-08-01, objection deadline 2026-09-01, enforcement 2026-11-01, and the refusal said
  * enforcement was 2026-09-01.
  *
- * The cost of that is not cosmetic. Somebody following the advice moves the ENFORCEMENT date,
+ * The cost of that is not cosmetic. Somebody following the advice moves the enforcement date,
  * which was never too early, and the objection deadline — the one that was — stays where it was.
  * The publish is refused again, and the number they were given has not moved either.
  */

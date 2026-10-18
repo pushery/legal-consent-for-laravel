@@ -11,7 +11,7 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
  *
  * A function without one resolves its names through the search_path of whoever calls it, and
  * SQLens reports every such function (`PGLS.functionSearchPathMutable`, severity medium) in every
- * consumer's audit. All six run as SECURITY INVOKER, so the exposure is small; the finding in
+ * consumer's audit. All six run as security invoker, so the exposure is small; the finding in
  * each consumer's release report is not.
  *
  * `FROM CURRENT` rather than a literal path: it stores the search_path this migration runs under,

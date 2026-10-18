@@ -156,14 +156,14 @@ final readonly class ConsentController
      * an outage of this package in their monitoring.
      *
      * The message is written here rather than echoed from the exception on purpose: that one is a
-     * STORAGE sentence naming the table and the locale it looked in, which means nothing to an API
+     * storage sentence naming the table and the locale it looked in, which means nothing to an API
      * client and describes internals to one. Its siblings echo theirs because theirs are domain
      * sentences the client can act on.
      *
-     * RETHROWS anything that is not the active-version lookup. The catch has to sit around the
+     * Rethrows anything that is not the active-version lookup. The catch has to sit around the
      * whole manager call, and that call ends by dispatching a domain event synchronously, after the
      * transaction commits — so a consuming application's listener that renders a document can raise
-     * this very exception type once the ledger row already exists. Answering THAT with a 404 would
+     * this very exception type once the ledger row already exists. Answering that with a 404 would
      * tell the client a published key does not exist, invite a retry that appends a second row, and
      * bury the listener's real failure. The two cases are told apart at the source rather than
      * guessed at here.

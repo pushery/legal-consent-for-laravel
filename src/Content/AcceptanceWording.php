@@ -9,7 +9,7 @@ namespace Pushery\LegalConsent\Content;
  * language, or null when they hold none.
  *
  * This is the sentence a subject accepts, and it is frozen into the published version and copied
- * into every consent row that refers to it. So it is looked up WITHOUT the application's
+ * into every consent row that refers to it. So it is looked up without the application's
  * `app.fallback_locale`: a Polish document must not be published with the English sentence the
  * fallback would supply, recording that a Polish subject agreed to a sentence in English. A
  * regional locale such as `de_AT` or `pt-BR` is answered from its language, `de` or `pt`, when it

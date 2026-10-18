@@ -46,7 +46,7 @@ return new class extends Migration
             // unmodified product, which switches off the notice-and-terminate machinery.
             $table->boolean('keeps_unmodified_offered')->default(false);
 
-            // DeemedConsent only: the end of the objection window. MUST be < enforce_from
+            // DeemedConsent only: the end of the objection window. Must be < enforce_from
             // (enforced at publish). Silence past it is deemed acceptance.
             $table->timestampTz('objection_deadline')->nullable();
 

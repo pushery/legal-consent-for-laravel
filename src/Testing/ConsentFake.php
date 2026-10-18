@@ -21,7 +21,7 @@ use Pushery\LegalConsent\Support\RegistrationChecklistItem;
 use Pushery\LegalConsent\Support\SubjectErasure;
 
 /**
- * An in-memory {@see ConsentManager} for a CONSUMING application's tests. Install it with
+ * An in-memory {@see ConsentManager} for a consuming application's tests. Install it with
  * `Consent::fake()`; nothing it does touches a database.
  *
  * It exists because this package's own suite could never notice the gap it fills. Every test in
@@ -30,14 +30,14 @@ use Pushery\LegalConsent\Support\SubjectErasure;
  * either migrate this package's tables into its own test database or hand-roll a stub of every
  * method on it, and a hand-rolled stub silently rots on the next method added here.
  *
- * READ DEFAULTS DESCRIBE A FULLY-CONSENTED SUBJECT: nothing outstanding, `hasCurrent()` true,
+ * Read defaults describe a fully-consented subject: nothing outstanding, `hasCurrent()` true,
  * empty status and history, nothing published. That direction is deliberate. A consuming test about
  * something else entirely — a checkout, a profile update — must not start failing because a consent
  * gate it never mentioned decided the subject owes a document. A test that cares declares what it
  * cares about with `owes()`, `publishes()` or `checklistIs()`; a test that does not gets out of the
  * gate's way.
  *
- * WRITES ARE RECORDED, NEVER PERFORMED. `record()` and friends return an UNSAVED LegalConsent
+ * Writes are recorded, never performed. `record()` and friends return an unsaved LegalConsent
  * carrying the attributes they were called with, so calling code that reads the returned model
  * keeps working, while `$model->exists` stays false — the honest answer, since nothing was written.
  * No event fires either, `ConsentObjected` and `ConsentTerminated` included, which the contract
@@ -103,7 +103,7 @@ final class ConsentFake implements ConsentManager
     }
 
     /**
-     * The two version keys are OPTIONAL here and filled in when they are left out, which is the
+     * The two version keys are optional here and filled in when they are left out, which is the
      * only shape that keeps this fake honest.
      *
      * `statusFor()` gained `accepted_version` and `accepted_at`. A fake that handed back exactly
@@ -165,17 +165,17 @@ final class ConsentFake implements ConsentManager
 
     public function assertAccepted(Model $subject, string $documentKey): void
     {
-        // Acceptance is recorded as GRANTED for a real consent, ACKNOWLEDGED for a mandatory
+        // Acceptance is recorded as granted for a real consent, acknowledged for a mandatory
         // document, and RE_ACCEPTED when a new version is accepted — which one the real manager
         // picks depends on the document's type and on history, and a consuming test has no reason
         // to know either. Accepting all three is what makes this assertion mean "the subject
         // agreed" rather than "the subject agreed to a document of this class, the first time".
         //
-        // DEEMED_ACCEPTED is deliberately NOT one of them: silence counting as acceptance is the
+        // DEEMED_ACCEPTED is deliberately not one of them: silence counting as acceptance is the
         // legal fiction of § 308 Nr. 5, not an act of the subject, and a test asserting "the user
         // accepted" must not be satisfied by the user having said nothing.
         //
-        // CONFIRMED is one of them: the second half of a double opt-in is the act that makes the
+        // Confirmed is one of them: the second half of a double opt-in is the act that makes the
         // consent held, and it is the row an Art. 7(1) demand is answered with. OPT_IN_REQUESTED is
         // not, for the same reason DEEMED_ACCEPTED is not — it is a declaration awaiting proof that
         // the person who made it controls the address.
@@ -218,7 +218,7 @@ final class ConsentFake implements ConsentManager
         $consent = $this->capture($subject, $documentKey, ConsentAction::Granted, $context, $locale, $expectedContentHash);
 
         // Captured for the same reason acknowledge() captures its own, and it matters more here:
-        // a supplied sentence REPLACES the document's published one, so a fake that dropped it
+        // a supplied sentence replaces the document's published one, so a fake that dropped it
         // would let a test pass over a proof carrying a text nobody was shown. Left alone when
         // null, because the fake cannot resolve the published wording and inventing one would be
         // an assertion about a document it never read.
@@ -232,7 +232,7 @@ final class ConsentFake implements ConsentManager
     /**
      * The acknowledgment door, faked.
      *
-     * Records Acknowledged rather than Granted, which is the one place this fake CAN be specific:
+     * Records Acknowledged rather than Granted, which is the one place this fake can be specific:
      * accept() guesses because it does not know the document's type, but nothing reaches
      * acknowledge() except an informational page, so the action is not in doubt.
      *
@@ -271,7 +271,7 @@ final class ConsentFake implements ConsentManager
 
     public function confirm(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent
     {
-        // The real manager refuses a confirmation with no pending request. The fake does NOT, and
+        // The real manager refuses a confirmation with no pending request. The fake does not, and
         // that is deliberate: it captures calls so a consuming application can assert its own flow,
         // and re-implementing the refusal here would be a second copy of a rule that then drifts
         // from the one that matters. Assert the pair with recorded()/assertRecorded().
@@ -284,15 +284,15 @@ final class ConsentFake implements ConsentManager
      * The documents a test arranged with `owes()`, carrying the same attribute surface the real
      * manager hands out.
      *
-     * HYDRATED, not `new` + `forceFill`, and that is the whole point of the method. The real
+     * Hydrated, not `new` + `forceFill`, and that is the whole point of the method. The real
      * manager returns models the gate hydrated from a narrow SELECT: `exists` is true, the columns
-     * the contract names are loaded, and every other column is MISSING — which under
+     * the contract names are loaded, and every other column is missing — which under
      * `Model::shouldBeStrict()` throws on access. A fake built with `new` has `exists === false`,
      * and the framework's check reads `$this->exists` first, so such a model answers null to
      * everything and throws at nothing. That is the dangerous direction: the consuming test would
      * be green on exactly the read that 500s in production.
      *
-     * The values are stand-ins — the fake has no database to have read them from — but the SHAPE
+     * The values are stand-ins — the fake has no database to have read them from — but the shape
      * is the one {@see ConsentManager::outstanding()} names, and this package's suite holds the
      * two implementations against that list rather than against each other.
      *
@@ -304,7 +304,7 @@ final class ConsentFake implements ConsentManager
         $keys = $this->owed[$this->identify($subject)] ?? [];
 
         /** @var Collection<int, LegalDocument> $documents */
-        // array_map over TWO arrays reindexes on its own, so the arranged keys arrive as a list
+        // array_map over two arrays reindexes on its own, so the arranged keys arrive as a list
         // even when `owes()` was called with named arguments.
         $documents = LegalDocument::model()::hydrate(array_map(
             fn (int $index, string $key): array => [
@@ -346,7 +346,7 @@ final class ConsentFake implements ConsentManager
      * distinction it cannot compute.
      *
      * In production the two reads answer different questions and can differ: `outstanding()`
-     * filters on the notice mode of a version CHANGE, while this one asks whether the subject ever
+     * filters on the notice mode of a version change, while this one asks whether the subject ever
      * accepted anything at all. A double has no published rows and no notice modes, so it cannot
      * derive that split — arranging one set and answering both from it is the honest shape.
      * Arrange with `owes()` and assert on whichever read the screen under test uses.
@@ -416,7 +416,7 @@ final class ConsentFake implements ConsentManager
     /**
      * Records the call and answers with zeros rather than mutating anything.
      *
-     * A fake exists so a test can assert an app CALLED the erasure; making it also simulate a
+     * A fake exists so a test can assert an app called the erasure; making it also simulate a
      * ledger rewrite would mean reimplementing the chain walk in test code, and a second
      * implementation of the thing under test is worth less than no implementation. Assert against
      * the real manager when the rewrite itself is the subject.
@@ -439,7 +439,7 @@ final class ConsentFake implements ConsentManager
         Assert::assertNotEmpty($matched, 'Expected the subject to have been forgotten, but forget() was never called for them.');
     }
 
-    /** `forget()` was NOT called for this subject — the half that catches an over-eager erasure. */
+    /** `forget()` was not called for this subject — the half that catches an over-eager erasure. */
     public function assertNotForgotten(Model $subject): void
     {
         $matched = array_filter(
@@ -452,7 +452,7 @@ final class ConsentFake implements ConsentManager
 
     public function published(string $documentKey, ?string $locale = null): ?PublishedDocument
     {
-        // Mirrors the real read path, which has NO locale fallback on purpose: a page shows the
+        // Mirrors the real read path, which has no locale fallback on purpose: a page shows the
         // text of the locale it claims, or nothing. A fake that fell back would let a consumer
         // build a page that works in tests and renders the wrong language in production.
         return $this->published[$documentKey.'|'.($locale ?? $this->defaultLocale())] ?? null;

@@ -14,12 +14,12 @@ use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalDraft;
 
 /**
- * Publishes EVERY locale of a legal text as one change — all of them, or none.
+ * Publishes every locale of a legal text as one change — all of them, or none.
  *
  * The per-locale publisher cannot express that, and the gap is not theoretical: publish `de` v2 as
  * an active re-consent while `en` lags, and German subjects are gated and notified while English
  * subjects are neither gated nor selected by the notice sweep — two populations living under two
- * different major versions of the SAME contract, with nothing in the package detecting it.
+ * different major versions of the same contract, with nothing in the package detecting it.
  * `check-drift` stays quiet too, because the English source still matches the English published
  * row. The cross-locale gate fix does not help here: the gate looks up enforceable documents in
  * the subject's own locale, so an English session simply never sees the German v2.
@@ -52,7 +52,7 @@ final readonly class LegalDocumentReleaser
 
         // Serialize concurrent releases of the same text: two admins pressing "Release" at once
         // would otherwise race on the one-active-version guard and leave a half-applied set. The
-        // SAME lock name LegalDocument::activate() uses, so a direct `legal-consent:publish` cannot
+        // same lock name LegalDocument::activate() uses, so a direct `legal-consent:publish` cannot
         // interleave with a release — this lock is the one that spans the outer transaction, and an
         // inner writer skips its own rather than re-taking this name.
         //
@@ -62,14 +62,14 @@ final readonly class LegalDocumentReleaser
         // would wait out its timeout and throw. Whoever opens the transaction owns the lock, and
         // nobody below re-takes it.
         //
-        // The same name on a DIFFERENT store is no lock at all, and that is what this line used to
+        // The same name on a different store is no lock at all, and that is what this line used to
         // be: `Cache::lock(...)` resolves the app default, while the model resolves the package's
         // own `legal-consent.cache.store`. Both sides agree until an operator sets that option —
         // which the model's own docblock recommends — and then the two writers of a document's
         // active version queue on two separate locks and interleave freely. One resolver, called
         // from both sides, is the only shape that cannot drift again.
 
-        // A release is the OUTERMOST writer of a document's active version, so it always takes the
+        // A release is the outermost writer of a document's active version, so it always takes the
         // lock — it never asks ActivationLock::ownedByCaller(), because there is nobody above it to
         // own it. The publisher it then calls once per locale asks exactly that question, and this
         // is the lock it finds already held.
@@ -84,14 +84,14 @@ final readonly class LegalDocumentReleaser
     }
 
     /**
-     * The count of subjects a gating release actually reaches. Advisory ONLY — never a guard.
+     * The count of subjects a gating release actually reaches. Advisory only — never a guard.
      *
      * A gating release whose major the whole population already holds re-gates nobody and still
-     * reports success; that is worth SEEING. It is not worth throwing over: refusing a gating mode
+     * reports success; that is worth seeing. It is not worth throwing over: refusing a gating mode
      * on a non-major bump would force a typo fix on a live gating version down the editorial path,
      * which silently drops the gate for everyone still on the older major.
      *
-     * THE ANSWER IS PER (key, locale), because a consent row carries the locale it was given in.
+     * The answer is per (key, locale), because a consent row carries the locale it was given in.
      * A caller holding a whole release — one document across several locales — wants
      * {@see affectsRelease} instead: summing this over the released rows counts a subject who
      * accepted two languages twice, and reading one row answers about one language.
@@ -118,7 +118,7 @@ final readonly class LegalDocumentReleaser
      * comes from the draft row, and a release stamps this answer onto it when nobody wrote one
      * there ({@see stampVersion()}).
      *
-     * So this answers it, and it ENFORCES NOTHING: a caller that has its own numbering keeps it.
+     * So this answers it, and it enforces nothing: a caller that has its own numbering keeps it.
      * What it removes is every consumer writing the same four lines — one of them did, measured
      * against 0.32.0, and its whole wrapper existed for little else.
      *
@@ -131,7 +131,7 @@ final readonly class LegalDocumentReleaser
      * acceptance, and there is no earlier major to raise.
      *
      * The active row is read per key rather than per locale because a release writes one version
-     * across every locale; where an escape-hatch publish has left them disagreeing, the HIGHEST is
+     * across every locale; where an escape-hatch publish has left them disagreeing, the highest is
      * the honest floor — the next version has to clear every language, not the one that lags.
      */
     public function nextVersionFor(string $key, NoticeMode $mode): string
@@ -158,7 +158,7 @@ final readonly class LegalDocumentReleaser
      *
      * This is what the shipped manager reports after `release()`, and it is the only place the
      * number appears. It takes the rows the release returned rather than a key and a major, because
-     * those rows ARE the release — the version that gates and the locales it reached both come from
+     * those rows are the release — the version that gates and the locales it reached both come from
      * the same object, so the count cannot describe a set the release did not write.
      *
      * An empty collection answers 0: nothing was released, so nobody was reached. That is not the
@@ -233,10 +233,10 @@ final readonly class LegalDocumentReleaser
      */
     private function releaseNow(string $key, NoticeMode $mode, array $locales, ReleaseOptions $options): Collection
     {
-        // FIRST, whether this screen may release this document at all — before any question about
+        // First, whether this screen may release this document at all — before any question about
         // the drafts, and the order is the whole point.
         //
-        // The two halves of a release read different texts. Readiness is judged over the DRAFTS,
+        // The two halves of a release read different texts. Readiness is judged over the drafts,
         // three lines down; the publisher reads whatever source the document is configured for.
         // On `drafts` those are the same bytes and nothing is wrong. On any other source they are
         // not: a reviewed draft passes this pre-flight, and the publisher then freezes the file —
@@ -252,7 +252,7 @@ final readonly class LegalDocumentReleaser
         // The console path is untouched: `legal-consent:publish` goes through the publisher
         // directly, which is the route a markdown document has always taken.
         //
-        // THE PREDICATE MOVED to {@see DocumentSourceKind}, because the admin overview has to ask
+        // The predicate moved to {@see DocumentSourceKind}, because the admin overview has to ask
         // the same thing to arm its button and used not to ask at all — so it armed one over a
         // release this line then refused. The paragraph above is the argument for saying the
         // source rather than the draft, and it was already written here; it simply never reached
@@ -262,18 +262,18 @@ final readonly class LegalDocumentReleaser
             throw LegalReleaseNotReady::for($key, array_fill_keys($locales, BlockingReason::NotDraftBacked));
         }
 
-        // Pre-flight BEFORE the transaction: a release that cannot complete must not write a row
+        // Pre-flight before the transaction: a release that cannot complete must not write a row
         // and roll it back, it must simply not start — and it must say which locales blocked it.
         $blocking = LegalDraftSet::for($key)->blockingLocales($locales);
 
-        // The change DESCRIPTION is checked in the same pre-flight as the text, and for the same
+        // The change description is checked in the same pre-flight as the text, and for the same
         // reason: a release is one change across every locale, so a description present in German
         // and missing in Italian would send an Italian subject a notice that names no change. §
         // 327r Abs. 1 Nr. 3 BGB, Art. 12(1) GDPR and DSA Art. 14(1) all require the reader's own
         // language, and it is cheaper to refuse before the transaction than to freeze a half-set.
         //
         // Two conditions, and the second is the one that keeps this honest. The mode must owe a
-        // notice at all — a silent editorial fix owes none. And the OPERATOR must have asked for
+        // notice at all — a silent editorial fix owes none. And the operator must have asked for
         // the requirement (`change_items.required`), because a package that started refusing every
         // existing release the day it shipped a new field would be forcing a feature, not offering
         // one. Off by default; the notice simply carries no delta until someone turns it on.
@@ -334,7 +334,7 @@ final readonly class LegalDocumentReleaser
      * A number nobody has released yet is kept, whoever wrote it. The publisher refuses one that
      * this mode cannot carry, and it still does.
      *
-     * The stamp is written INSIDE the release's transaction, and that is the other half of the fix.
+     * The stamp is written inside the release's transaction, and that is the other half of the fix.
      * The overview used to stamp before it called the release, so a release that was then refused
      * left a number behind that nobody had chosen, and the next attempt read it as deliberate,
      * possibly in another mode from the other screen. Written here, a refusal rolls it back.

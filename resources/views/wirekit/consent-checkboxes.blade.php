@@ -10,9 +10,9 @@
       `legal-consent.document_url` and every item carries its `url`; without it there is no link
       to render, and the description reference is dropped with it rather than left dangling.
 
-    The validation error is deliberately NOT wired here. `x-wirekit::checkbox` resolves it from
+    The validation error is deliberately not wired here. `x-wirekit::checkbox` resolves it from
     Laravel's error bag by `name`, renders the message, sets `aria-invalid` and merges its own error
-    target into the `aria-describedby` passed below — into ONE attribute, because a second one would
+    target into the `aria-describedby` passed below — into one attribute, because a second one would
     make the browser drop the caller's association. Passing an `:error` prop would set exactly what
     the component already resolves and change nothing. The plain stub renders the block itself; it
     has no component to do this for it.
@@ -20,7 +20,7 @@
     $documents: list{key, title, wording, url, required} — `url` may be null.
     A checklist item's ->toArray() adds 'field', 'contentHash' and 'hashField' on top of that.
 
-    $bind (optional): the name of a Livewire property holding one entry per FIELD. Given, each
+    $bind (optional): the name of a Livewire property holding one entry per field. Given, each
     control binds to `{$bind}.{$field}` and the `old()` restore is dropped. Keyed by field rather
     than by key, the Planet49 invariant moves to the host's initial value, and the accept-time
     hash goes inert — the plain stub carries the full reasoning for all three.
@@ -46,7 +46,7 @@
     $deferredDialogs = [];
 @endphp
 {{-- A root element that is not a flex container, and it is the whole repair rather than
-     packaging. The dialogs have to be emitted somewhere with NO `gap`, and inside a published
+     packaging. The dialogs have to be emitted somewhere with no `gap`, and inside a published
      stub there is no page root to reach for — so the view brings one. Block layout has no gap, so
      a zero-height dialog wrapper costs nothing here.
 
@@ -56,7 +56,7 @@
 <x-wirekit::stack gap="md" class="legal-consent-fields">
     @foreach ($documents as $document)
         @php($field = $document['field'] ?? 'legal_'.$document['key'])
-        {{-- Resolved to a bag BEFORE the tag, because Blade's component-tag compiler parses the
+        {{-- Resolved to a bag before the tag, because Blade's component-tag compiler parses the
              attribute list itself and runs no directives inside it — a conditional written there
              would land in the markup as text.
 
@@ -71,22 +71,22 @@
         ))
         {{-- Same resolution as the plain stub, and it has to happen here for the same reason: the
              shape this field takes decides whether `aria-describedby` may point at the link. Where
-             the title appears INSIDE the wording the link sits in the label and is already part of
+             the title appears inside the wording the link sits in the label and is already part of
              the accessible name, so describing the field by it reads the title twice. --}}
         @php($members = is_array($document['documents'] ?? null) ? array_values($document['documents']) : [])
         @php($cut = $members !== [] ? \Pushery\LegalConsent\Support\ConsentWordingSegments::for($document['wording'], $members) : null)
         @php($wordingLink = $cut === null && ($document['url'] ?? null) !== null
             ? \Pushery\LegalConsent\Support\ConsentWordingLink::locate($document['wording'], $document['title'] ?? '')
             : null)
-        {{-- `lang` on the FIELD rather than on the label, because the wording reaches the checkbox
+        {{-- `lang` on the field rather than on the label, because the wording reaches the checkbox
              as a component prop and there is nowhere else to hang it — and everything inside this
              wrapper is the document's text anyway: the snapshotted wording and the title link.
              `hreflang` below is a different statement (the language at the far end of the link)
              and does not replace it; assistive technology does not switch its voice on `hreflang`.
              Set only when it differs from the page. See the plain stub, and ContentLanguage. --}}
         @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document['locale'] ?? null))
-        {{-- THE DIALOG, AND IT IS RESOLVED HERE BECAUSE IT DECIDES WHAT THE ANCHOR DOES.
-             It holds the FRAGMENT ROUTE's address and fetches on first open — it does not inline the
+        {{-- The dialog, and it is resolved here because it decides what the anchor does.
+             It holds the fragment route's address and fetches on first open — it does not inline the
              text. That is this package's own decision rather than a new one: the fragment route was
              built for exactly this dialog, and the guide says why in the same breath. A registration
              form can name four documents, a privacy notice is tens of kilobytes, and in the normal
@@ -96,29 +96,31 @@
              No fragment route means no dialog, and the anchor stays exactly what it was: a link to
              the page, which says the same thing honestly. --}}
         @php($dialog = config('legal-consent.ui.wording_dialog', false)
-            {{-- ASKED OF THE ROUTER, not of the switch that is supposed to have registered it. The
+            {{-- Asked of the router, not of the switch that is supposed to have registered it. The
                  flag says what the configuration wants; only the router knows what is actually
                  registered, and `route()` on a name that is not throws — out of a view, that takes
                  the whole registration form down over a dialog nobody needed. --}}
             && \Illuminate\Support\Facades\Route::has('legal-consent.document.fragment')
             && ($document['url'] ?? null) !== null
             && ($document['locale'] ?? '') !== ''
-            {{-- `heading=0`: this dialog's header names the document already. --}}
-            ? route('legal-consent.document.fragment', ['key' => $document['key'], 'locale' => $document['locale'], 'heading' => 0])
+            {{-- `heading=0`: this dialog's header names the document already. `measure=none`: its
+                 panel caps the line length already, and a clamp inside it left a strip beside the
+                 text. --}}
+            ? route('legal-consent.document.fragment', ['key' => $document['key'], 'locale' => $document['locale'], 'heading' => 0, 'measure' => 'none'])
             : null)
         @php($dialogName = 'legal-consent-'.$field)
-        {{-- ASSEMBLED rather than written as a Blade `@if` INSIDE the component tag. That form does
+        {{-- Assembled rather than written as a Blade `@if` inside the component tag. That form does
              not compile at all here — the directive lands between attributes and the view dies on
              an unexpected `@endif` — and where it does compile it leaves its own literal spaces
              behind. An empty bag renders nothing, which is the off state.
 
-             `x-bind:aria-haspopup` is BOUND rather than written, and the distinction is the point: a
+             `x-bind:aria-haspopup` is bound rather than written, and the distinction is the point: a
              screen reader announcing "link" sets up an expectation of navigation, and with scripting
              this opens a dialog instead. Without scripting it really does navigate, so a hard-coded
              `aria-haspopup` would be a promise the page does not keep. Alpine binds it only once it
              is running, which is exactly when it is true.
 
-             A WINDOW EVENT rather than the modal's own trigger slot: that slot renders a div, and
+             A window event rather than the modal's own trigger slot: that slot renders a div, and
              flow content inside a label is invalid markup.
 
              The name goes into the expression as a JavaScript string, encoded the way `@js()`
@@ -129,10 +131,10 @@
             'x-bind:aria-haspopup' => "'dialog'",
             'x-on:click.prevent' => '$dispatch(\'wirekit-modal-show\', { name: '.\Illuminate\Support\Js::from($dialogName).' })',
         ] : []))
-        {{-- The label is assembled and echoed ONCE, rather than written as a chain of
+        {{-- The label is assembled and echoed once, rather than written as a chain of
              directives. Blade leaves a closing directive that sits flush against the token before
              it in the output as literal text, and this slot may carry no stray whitespace: it is
-             the accessible NAME of the control, and a space landing between a title and the comma
+             the accessible name of the control, and a space landing between a title and the comma
              after it is visible in the sentence a consent rests on.
 
              And it is built with the one-line form, not a block. This file already uses the
@@ -141,34 +143,34 @@
              with a syntax error in a compiled file. Measured: adding a block broke the view at its
              twentieth compiled line, four hundred lines before the block itself.
 
-             The link is RENDERED by its component through a view of its own, never rebuilt here.
+             The link is rendered by its component through a view of its own, never rebuilt here.
              That view says why it cannot be a string literal in this file. --}}
         @php($memberLinkId = static fn (array $member): string => $field.'_link_'.(string) ($member['key'] ?? ''))
-        {{-- A DIALOG PER MEMBER of a grouped control, asked the same questions a single document is.
+        {{-- A dialog per member of a grouped control, asked the same questions a single document is.
              The grouped sentence used to render its links with an empty bag, so the one control
              that names several documents was the one that sent the reader out of a half-filled form
              to read them, while a document standing alone opened in a dialog. The name is per
-             MEMBER: the control's own name would have given every text in the sentence one dialog. --}}
-        @php($memberDialog = static fn (array $member): ?string => config('legal-consent.ui.wording_dialog', false) && \Illuminate\Support\Facades\Route::has('legal-consent.document.fragment') && ($member['url'] ?? null) !== null && ($member['locale'] ?? '') !== '' && ($member['key'] ?? '') !== '' ? route('legal-consent.document.fragment', ['key' => $member['key'], 'locale' => $member['locale'], 'heading' => 0]) : null)
+             member: the control's own name would have given every text in the sentence one dialog. --}}
+        @php($memberDialog = static fn (array $member): ?string => config('legal-consent.ui.wording_dialog', false) && \Illuminate\Support\Facades\Route::has('legal-consent.document.fragment') && ($member['url'] ?? null) !== null && ($member['locale'] ?? '') !== '' && ($member['key'] ?? '') !== '' ? route('legal-consent.document.fragment', ['key' => $member['key'], 'locale' => $member['locale'], 'heading' => 0, 'measure' => 'none']) : null)
         @php($memberDialogName = static fn (array $member): string => $dialogName.'-'.(string) ($member['key'] ?? ''))
         @php($memberTrigger = static fn (array $member): \Illuminate\View\ComponentAttributeBag => new \Illuminate\View\ComponentAttributeBag($memberDialog($member) !== null ? ['x-bind:aria-haspopup' => "'dialog'", 'x-on:click.prevent' => '$dispatch(\'wirekit-modal-show\', { name: '.\Illuminate\Support\Js::from($memberDialogName($member)).' })'] : []))
         @php($renderLink = static fn (array $target, string $text, ?string $id, \Illuminate\View\ComponentAttributeBag $extra): string => trim(view('legal-consent::wirekit.consent-link', ['id' => $id, 'href' => (string) ($target['url'] ?? ''), 'hreflang' => ($target['locale'] ?? '') !== '' ? $target['locale'] : null, 'extra' => $extra, 'text' => $text])->render()))
         @php($singleLabel = $wordingLink !== null ? e($wordingLink->before).$renderLink($document, $wordingLink->match, $field.'_link', $dialogTrigger).e($wordingLink->after) : e($document['wording']))
         @php($label = $cut === null ? $singleLabel : implode('', array_map(static fn (array $segment): string => $segment['document'] !== null && ($segment['document']['url'] ?? null) !== null ? $renderLink($segment['document'], $segment['text'], null, $memberTrigger($segment['document'])) : e($segment['text']), $cut->segments)))
-        {{-- ONE attribute carrying every id: the field's own link where it is a sibling, every
+        {{-- One attribute carrying every id: the field's own link where it is a sibling, every
              grouped member the sentence does not name, and the host's. Collapsed rather than only
              trimmed — the parts are joined with a separator whether or not they are there, so an
              absent one leaves a double space inside the value. --}}
         @php($describedByIds = (string) preg_replace('/\\s+/', ' ', trim(($cut === null && ($document['url'] ?? null) !== null && $wordingLink === null ? $field.'_link' : '').' '.($cut === null ? '' : implode(' ', array_map(static fn (array $member): string => $memberLinkId($member), array_filter($cut->unlinked, static fn (array $member): bool => ($member['url'] ?? null) !== null)))).' '.trim((string) ($describedBy ?? '')))))
         <x-wirekit::stack gap="xs" class="legal-consent-field" :lang="$lang">
-            {{-- The wording is the SNAPSHOTTED consent text — it is what gets recorded in the
+            {{-- The wording is the snapshotted consent text — it is what gets recorded in the
                  ledger as what the subject agreed to, so it renders verbatim as the label. --}}
             <x-wirekit::checkbox
                 :name="$field"
                 :id="$field"
                 value="1"
-                {{-- The SLOT below always carries the text: the linked sentence, or the wording itself.
-                     The component falls back to this prop only for an EMPTY slot, and inside a
+                {{-- The slot below always carries the text: the linked sentence, or the wording itself.
+                     The component falls back to this prop only for an empty slot, and inside a
                      Livewire render the slot is never empty: Livewire wraps the `@if` in morph markers,
                      so a branch that rendered nothing left the checkbox with no text and no accessible
                      name. The prop stays as the same wording for a render outside Livewire. --}}
@@ -176,13 +178,13 @@
                 :required="$document['required']"
                 {{-- The host's own id is appended rather than rendered as a second attribute, and
                      the component merges its error target into whatever it is handed. A screen
-                     whose validation message belongs to the FORM -- a re-consent screen locks the
+                     whose validation message belongs to the form -- a re-consent screen locks the
                      account, so the reason nothing happened has to be heard on submit -- points
                      every control at one shared line, and a second attribute would be dropped by
                      the browser along with the document link. Last, because a message about all of
                      them is read after this field's own. --}}
                 :aria-describedby="$describedByIds ?: null"
-                {{-- RESTORED from the visitor's own previous submit, never preset by us — see the
+                {{-- Restored from the visitor's own previous submit, never preset by us — see the
                      plain stub for why that distinction is the whole of Planet49 (C-673/17).
                      Passed as null rather than false when there is nothing to restore, so the
                      attribute is dropped instead of rendering as a value. Null under a binding
@@ -211,7 +213,7 @@
             @endif
 
             @if (($document['hashField'] ?? '') !== '' && ($document['contentHash'] ?? '') !== '')
-                {{-- OPT-IN accept-time guard, identical to the plain stub: the render-time
+                {{-- Opt-in accept-time guard, identical to the plain stub: the render-time
                      fingerprint travels with the form, so a version published between page load
                      and submit is caught (a 409) instead of being frozen unseen. It was missing
                      here while the plain stub had it, which made the themed variant quietly the
@@ -275,7 +277,7 @@
                      older kit, this cap is what keeps the header and the footer of a long text on a
                      phone's screen. --}}
                 <x-wirekit::modal.body class="max-h-[70vh] overflow-y-auto" tabindex="0" role="region" :aria-label="$deferred['title']">
-                    {{-- FETCHED ON FIRST OPEN, and kept afterwards. The text is the published,
+                    {{-- Fetched on first open, and kept afterwards. The text is the published,
                          already-sanitized HTML the legal page itself renders — one allowlist, applied
                          when it was stored, and the same bytes the ledger records as accepted. The
                          component puts it in as markup through the `body` ref: the CSP build refuses
@@ -286,7 +288,7 @@
                          onto nothing reads as a document with no content, and the reader is then
                          asked to tick that they read it. The way out is the page link in the footer
                          below, which is there in every state. --}}
-                    {{-- TWO CALLS AND NOTHING ELSE, because Alpine's CSP build parses these
+                    {{-- Two calls and nothing else, because Alpine's CSP build parses these
                          attributes with its own grammar rather than handing them to `eval`. That
                          grammar takes calls, member access, literals and operators — and refuses
                          arrow functions, optional chaining and more than one statement. This
@@ -306,14 +308,19 @@
                 </x-wirekit::modal.body>
 
                 <x-wirekit::modal.footer>
-                    {{-- THE PAGE, FROM INSIDE THE DIALOG, IN EVERY STATE. The anchor that opened this
+                    {{-- The page, from inside the dialog, in every state. The anchor that opened this
                          dialog swallows its click to do so, so it can never be the way out of it —
                          and a body can stay empty for reasons the component never sees: a published
                          script older than this view, a script that is missing, a policy that refuses
                          what it does. Rendered by the server and depending on no script, this link is
                          what keeps the full text reachable before agreeing (§ 305 Abs. 2 BGB) whatever
-                         happened above it. A new tab, so the form behind it keeps what was typed. --}}
-                    <x-wirekit::link :href="$deferred['url']" :hreflang="$deferred['locale']" size="sm" external>{{ __('legal-consent::ui.dialog_open_page') }}</x-wirekit::link>
+                         happened above it. A new tab, so the form behind it keeps what was typed.
+
+                         A button beside Close, because it is the dialog's other way out, not a word of
+                         its text. It is still an anchor: the kit renders a button with an `href` as
+                         one, and with `target="_blank"` it adds `rel="noopener noreferrer"` and the
+                         announcement of the new tab. --}}
+                    <x-wirekit::button :href="$deferred['url']" :hreflang="$deferred['locale']" target="_blank" size="sm" surface="outline">{{ __('legal-consent::ui.dialog_open_page') }}</x-wirekit::button>
                     <x-wirekit::modal.close>
                         <x-wirekit::button size="sm" surface="soft">{{ __('legal-consent::ui.dialog_close') }}</x-wirekit::button>
                     </x-wirekit::modal.close>

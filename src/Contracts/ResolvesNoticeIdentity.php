@@ -9,7 +9,7 @@ use Pushery\LegalConsent\Support\ConfigNoticeIdentity;
 use Pushery\LegalConsent\Support\NoticeIdentity;
 
 /**
- * Resolves WHO is declaring a change, per document.
+ * Resolves who is declaring a change, per document.
  *
  * A contract rather than a config block, because in a multi-tenant application a single global
  * declarant names the wrong legal person in every tenant but one — which is worse than naming

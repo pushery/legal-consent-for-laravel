@@ -29,7 +29,7 @@ use RuntimeException;
  * evidence the ledger is built to carry. The subordinate `legal_change_sets` tables have had a
  * BEFORE DELETE guard since they were introduced; the load-bearing table had none.
  *
- * The guard is CONDITIONAL, and the condition is the point: a version no subject ever consented to
+ * The guard is conditional, and the condition is the point: a version no subject ever consented to
  * is still deletable. Refusing every delete would make the guard something operators route around
  * rather than something they keep — retirement runs through `is_active = false`, which is what that
  * column is for, and a version nobody is bound by is ordinary data.
@@ -40,10 +40,10 @@ use RuntimeException;
  * The full mechanism and the measurement are documented on that method.
  *
  * This lives in `src/` rather than inside the migration that first created it because it has
- * to be RE-INSTALLABLE, and that is not a refactoring preference — it is a portability fact
+ * to be re-installable, and that is not a refactoring preference — it is a portability fact
  * measured here on 2026-08-03. SQLite cannot alter a column in place: Laravel's `->change()`
  * performs the twelve-step rebuild (create a new table, copy, drop, rename), and while indexes
- * survive that, TRIGGERS DO NOT. So any later migration that touches a column on this table
+ * survive that, triggers do not. So any later migration that touches a column on this table
  * silently disarms the proof guard on SQLite — no error, no failing migration, just a table
  * that stops being frozen.
  *
@@ -51,11 +51,11 @@ use RuntimeException;
  * outside rather than trusting that a migration ran. Keep it that way: the guard here is the
  * mechanism, that test is the proof.
  *
- * On PostgreSQL the guard is a true allowlist (`to_jsonb(NEW) - <allowed>` compared to OLD), so
- * a proof column added by a future migration is protected automatically — it fails CLOSED.
- * MySQL and SQLite cannot diff a row minus columns inside a trigger, so they ENUMERATE every
+ * On PostgreSQL the guard is a true allowlist (`to_jsonb(NEW) - <allowed>` compared to old), so
+ * a proof column added by a future migration is protected automatically — it fails closed.
+ * MySQL and SQLite cannot diff a row minus columns inside a trigger, so they enumerate every
  * protected column present at install time; a column added later would slip past them (fails
- * OPEN), which is the second reason re-installation matters and the reason that test iterates
+ * open), which is the second reason re-installation matters and the reason that test iterates
  * the live column list rather than a written-down one.
  */
 final class ProofColumnGuard
@@ -101,7 +101,7 @@ final class ProofColumnGuard
     }
 
     /**
-     * The engine check, callable BEFORE anything is altered — which is the whole reason it is its
+     * The engine check, callable before anything is altered — which is the whole reason it is its
      * own method rather than the first lines of install().
      *
      * Fail loud on an engine this package does not know how to protect. The tempting arm is
@@ -145,20 +145,20 @@ final class ProofColumnGuard
      * Take the guards off, run a schema change, put them back.
      *
      * This is not convenience, it is the safe form of a hazard SQLite makes real. The DELETE guard
-     * names a SECOND table, and SQLite has no way to alter a column in place: Laravel changes one
-     * by creating a replacement table, copying, dropping the original and RENAMING the replacement
+     * names a second table, and SQLite has no way to alter a column in place: Laravel changes one
+     * by creating a replacement table, copying, dropping the original and renaming the replacement
      * into its place. That final rename re-parses every trigger in the schema — and a trigger
      * whose referenced table is missing at that instant is a hard error. Measured on 2026-08-27
      * against SQLite 3.45.2: rebuilding `legal_consents` with this guard installed fails with
      * "error in trigger legal_documents_no_referenced_delete: no such table: main.legal_consents",
-     * AFTER the original has already been dropped. The ledger table is gone and the migration is
+     * after the original has already been dropped. The ledger table is gone and the migration is
      * halfway through — the worst outcome in the package, produced by the guard meant to protect
      * it.
      *
-     * So ANY migration that rebuilds `legal_consents` or `legal_documents` runs its schema work
-     * inside this call. The seven that already do (000014, 000018, 000022, 000028, 000030, 000033,
-     * 000038) are the working examples — and 000030 shows the second reason to use it: it only ADDS two columns,
-     * which rebuilds nothing, but the MySQL and SQLite triggers ENUMERATE the columns they freeze,
+     * So any migration that rebuilds `legal_consents` or `legal_documents` runs its schema work
+     * inside this call. The eight that already do (000014, 000018, 000022, 000028, 000030, 000033,
+     * 000038, 000041) are the working examples — and 000030 shows the second reason to use it: it only adds two columns,
+     * which rebuilds nothing, but the MySQL and SQLite triggers enumerate the columns they freeze,
      * so a column added without the re-install would stay writable on a frozen row. That list is derived from the migration directory by a guard rather than trusted
      * here: it said "two" while three did it, and it is the sentence the author of the next one
      * reads before deciding whether they need the wrapper.
@@ -206,7 +206,7 @@ final class ProofColumnGuard
     }
 
     /**
-     * Remove the triggers AND, on PostgreSQL, the functions behind them.
+     * Remove the triggers and, on PostgreSQL, the functions behind them.
      *
      * Separate from drop() on purpose: re-installing must not drop the function while another
      * statement could still reference it, and a rollback must not leave the function orphaned.
@@ -215,17 +215,17 @@ final class ProofColumnGuard
     {
         self::drop();
 
-        // A RUN THAT ONLY SEES SQLITE CANNOT REACH THESE TWO, AND THE REASON IS THE DRIVER
-        // CHECK RATHER THAN A MISSING TEST. This branch is entered only on a `pgsql` connection,
-        // so nothing inside it executes anywhere else. They ARE exercised — the PostgreSQL
+        // A run that only sees SQLite cannot reach these two, and the reason is the driver
+        // check rather than a missing test. This branch is entered only on a `pgsql` connection,
+        // so nothing inside it executes anywhere else. They are exercised — the PostgreSQL
         // reversibility arm rolls this migration and asserts each guard function by name.
         //
-        // Until that arm was written they were executed by NOTHING, anywhere: no reversibility
+        // Until that arm was written they were executed by nothing, anywhere: no reversibility
         // test named this migration, and `uninstall()` has exactly one caller. So the gap was real
         // while looking like ordinary engine-scope noise — which is the argument for reading such
         // cases rather than dismissing them wholesale.
         //
-        // Worth recognizing as a CLASS rather than as three lines: every engine-specific branch in
+        // Worth recognizing as a class rather than as three lines: every engine-specific branch in
         // this package has the same property. A branch behind a driver check is not a coverage gap,
         // and nothing written against SQLite can close it; the question to ask is whether the
         // engine suites cover the behavior.
@@ -276,7 +276,7 @@ final class ProofColumnGuard
     }
 
     /**
-     * The ONE place hand-built DDL from this class reaches the connection.
+     * The one place hand-built DDL from this class reaches the connection.
      *
      * Nothing here can be a literal string: the MySQL and SQLite arms enumerate the live column
      * list because neither engine can diff a row minus a set of keys inside a trigger, and every
@@ -296,7 +296,7 @@ final class ProofColumnGuard
 
     /**
      * The proof columns present now — every column except the operational allowlist and the
-     * columns the database DERIVES for itself.
+     * columns the database derives for itself.
      *
      * These names are interpolated into the MySQL and SQLite trigger bodies below, so this is
      * the one place where the safety of that interpolation is decided. The source is the
@@ -349,7 +349,7 @@ final class ProofColumnGuard
      */
     private static function generatedColumns(): array
     {
-        // The schema BUILDER rather than the Schema facade. The facade's `@method` annotation
+        // The schema builder rather than the Schema facade. The facade's `@method` annotation
         // erases the return to a bare `array`, so every name read out of it is `mixed` and the
         // filter below would be an assumption dressed as a check. The builder declares
         // `list<array{name: string, …, generation: array{…}|null}>`, which is the shape this
@@ -422,11 +422,11 @@ final class ProofColumnGuard
 
     private static function installMysql(): void
     {
-        // Enumerated distinctness over every protected column, compared as BYTES.
+        // Enumerated distinctness over every protected column, compared as bytes.
         //
-        // `<=>` alone was the defect: it is null-safe EQUALITY, and equality on a string column
-        // follows that column's collation. Laravel's default, utf8mb4_unicode_ci, is case- AND
-        // accent-insensitive and PAD SPACE; MySQL's own server default, utf8mb4_0900_ai_ci, is NO
+        // `<=>` alone was the defect: it is null-safe equality, and equality on a string column
+        // follows that column's collation. Laravel's default, utf8mb4_unicode_ci, is case- and
+        // accent-insensitive and PAD SPACE; MySQL's own server default, utf8mb4_0900_ai_ci, is no
         // PAD but just as case- and accent-insensitive. So under either a raw
         // `UPDATE … SET ui_wording = UPPER(ui_wording)` read as "unchanged" and walked
         // through a trigger whose whole claim is that the row is frozen. PostgreSQL compares
@@ -475,7 +475,7 @@ final class ProofColumnGuard
 
     private static function installSqlite(): void
     {
-        // `IS NOT` is SQLite's null-safe distinctness; RAISE(ABORT) rolls back only the statement.
+        // `IS NOT` is SQLite's null-safe distinctness; RAISE(abort) rolls back only the statement.
         $changedCondition = implode(' OR ', array_map(
             static fn (string $column): string => "NEW.\"{$column}\" IS NOT OLD.\"{$column}\"",
             self::protectedColumns(),

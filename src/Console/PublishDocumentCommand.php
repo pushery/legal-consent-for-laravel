@@ -26,30 +26,30 @@ use ValueError;
 
 /**
  * Freeze the current source text of a legal document into a new active, versioned row.
- * The publisher MUST classify the change's notice mode — exactly one of --editorial,
+ * The publisher must classify the change's notice mode — exactly one of --editorial,
  * --info, --deemed, or --active (--material is the legacy alias of --active).
  *
  * `--all` runs the whole configured matrix — every registered document in every configured
- * locale. It exists because a fresh installation has an EMPTY `legal_documents` table, and the
+ * locale. It exists because a fresh installation has an empty `legal_documents` table, and the
  * read path deliberately does not fall back to the source: every page built on
  * `Consent::published()` renders empty, with no error, no log and no warning. The configuration is
  * correct, the sources are there, and the legal pages are shells — the one silent state this
- * package otherwise refuses to have. It matters most where the installation is CLONED (a starter
+ * package otherwise refuses to have. It matters most where the installation is cloned (a starter
  * kit, a CI database, a fresh staging box), because then every copy begins there.
  *
  * It is safe in a deploy path, which is the point of running it there: publishing text that is
  * already the active version returns that version untouched, so a second run changes nothing.
  *
- * That safety holds for UNCHANGED sources, and only for those. Once a source has drifted, a second
+ * That safety holds for unchanged sources, and only for those. Once a source has drifted, a second
  * `--all` run is not a no-op — it is a publication, and it carries whatever mode stands on the
  * deploy line. In practice that line reads `--editorial`, because the first run legitimately is
- * editorial; so a drifted text would be filed as the one classification that notifies NOBODY,
+ * editorial; so a drifted text would be filed as the one classification that notifies nobody,
  * chosen by a deploy script rather than by a person. `--only-missing` is the modifier for that
  * position: it fills gaps and touches nothing that already exists, so it cannot classify a change
  * at all. Use it wherever the caller is a script; keep the bare `--all` for a human who has looked
  * at the diff.
  *
- * `--locales=de,en` publishes those languages of ONE key together: one transaction, one notice
+ * `--locales=de,en` publishes those languages of one key together: one transaction, one notice
  * mode, all or none. Every language of a version carries the same mode, so a change of mode
  * between two versions, `--editorial` to `--info` for example, is refused one language at a time
  * and is lawful only as a whole. The admin screens release a text on the drafts store this way;
@@ -190,7 +190,7 @@ final class PublishDocumentCommand extends Command
 
         $enforceFrom = $document->enforce_from?->toDateTimeString() ?? 'immediately';
 
-        // Report the mode of the ROW that now exists, never the flag that was asked for — they can
+        // Report the mode of the row that now exists, never the flag that was asked for — they can
         // differ (an unchanged re-publish returns the existing version), and a success line naming
         // a notice mode the row does not carry is how a missing legal notice goes unnoticed.
         $this->info("Published {$key} ({$locale}) v{$document->version} — major {$document->major_version}, {$document->noticeMode()->value}, enforced from {$enforceFrom}.");
@@ -207,23 +207,23 @@ final class PublishDocumentCommand extends Command
      *
      * A failure does not stop the run: a registry of ten documents with one missing translation
      * should publish the other nine and then say which one is missing, rather than leaving the
-     * operator to run it repeatedly and discover the gaps one at a time. It is still a FAILURE
+     * operator to run it repeatedly and discover the gaps one at a time. It is still a failure
      * exit, because a registered document with no text is a configuration error — silently
      * skipping it recreates the empty page this command exists to prevent.
      *
-     * Under --only-missing that last sentence flips FOR AN EDITORIAL SOURCE, and deliberately so.
+     * Under --only-missing that last sentence flips for an editorial source, and deliberately so.
      * A gap-filler runs from a deploy line, where a draft-backed document with no reviewed text
      * yet is not a configuration error but the normal state of an installation whose editors have
      * not written it. Failing there would make every deploy red for a reason nobody can fix from
-     * the deploy. So such a source is NAMED and skipped.
+     * the deploy. So such a source is named and skipped.
      *
-     * IT MUST NOT FLIP FOR EVERY SOURCE, and the reason is that the failure cannot tell two very
+     * It must not flip for every source, and the reason is that the failure cannot tell two very
      * different situations apart. A markdown file missing from the repository raises the same
      * `LegalDocumentNotFound` as an unwritten draft — but nobody is going to write that one. It is
      * a deployment missing a file, and skipping it produces exactly the empty legal page this
      * command exists to prevent, behind a green deploy.
      *
-     * The two are told apart by the SOURCE rather than by the failure, because the failure cannot
+     * The two are told apart by the source rather than by the failure, because the failure cannot
      * tell them apart: {@see AwaitsAuthoring} is what a source declares when its empty state is a
      * person who has not written yet. Anything else counts as provisioned and still fails.
      */
@@ -245,7 +245,7 @@ final class PublishDocumentCommand extends Command
 
         foreach (DocumentMatrix::keys() as $key) {
             foreach (DocumentMatrix::locales() as $locale) {
-                // The whole point of the modifier: an EXISTING active row is never looked at, so
+                // The whole point of the modifier: an existing active row is never looked at, so
                 // a drifted source cannot be re-frozen under the mode that happens to stand on
                 // the deploy line. Reporting drift is check-drift's job, and it stays sharp
                 // precisely because this command does not also try to do it.
@@ -310,11 +310,11 @@ final class PublishDocumentCommand extends Command
         // Name the unchanged count rather than printing a line per combination. On the second run
         // — the normal case in a deploy — every combination is unchanged, and a wall of "nothing
         // happened" lines trains people to stop reading the ones that matter.
-        // THE "WITHOUT TEXT" SEGMENT IS UNCONDITIONAL, AND IT USED TO DEPEND ON THE FLAG.
+        // The "WITHOUT TEXT" segment is unconditional, and it used to depend on the flag.
         // The reasoning for that was sound while a textless source was a failure under the bare
         // --all: a permanently-zero count is noise, and it would move a line deploy logs are
         // grepped for. Both halves of the premise are gone — the count can be non-zero here now,
-        // and a summary whose SHAPE depends on a modifier is the harder thing to grep anyway.
+        // and a summary whose shape depends on a modifier is the harder thing to grep anyway.
         $this->line("{$published} published, {$unchanged} already current, ".count($textless).' without text, '.count($failures).' failed.');
 
         // Skipped is not silent. A count alone would let a document sit unpublished for months
@@ -339,13 +339,13 @@ final class PublishDocumentCommand extends Command
     }
 
     /**
-     * Resolve every combination and report what a run WOULD do. Writes nothing.
+     * Resolve every combination and report what a run would do. Writes nothing.
      *
      * It resolves rather than counts, which is the only version worth having: a document whose
      * markdown file is missing is reported here, in a command an operator runs on purpose, instead
      * of during the deploy that needed it.
      *
-     * It answers a textless source EXACTLY as the real run does, which it did not before: every
+     * It answers a textless source exactly as the real run does, which it did not before: every
      * one of them counted as a warning and the dry run exited 0 — including under the bare --all,
      * where the run it previews fails. A preview that reports green for a run that cannot be green
      * is worse than no preview, because it is consulted precisely to avoid that red.
@@ -415,7 +415,7 @@ final class PublishDocumentCommand extends Command
             }
         }
 
-        // The same decision the real run makes at its end, against what this run WOULD make active.
+        // The same decision the real run makes at its end, against what this run would make active.
         foreach ($missing as [$key, $locale, $message]) {
             $kept = $this->activeVersion($key, $locale);
 
@@ -471,10 +471,10 @@ final class PublishDocumentCommand extends Command
     /**
      * Is the source behind this document one whose empty state means nobody has written it yet?
      *
-     * IT RESOLVES WITHOUT A GUARD, and a try/catch around it would be a branch no run can enter.
+     * It resolves without a guard, and a try/catch around it would be a branch no run can enter.
      * Both call sites sit inside `catch (LegalDocumentNotFound)`, the publisher never raises that
      * itself, and the only thing that does is `sources->for($key)->resolve(...)`. Arriving here
-     * therefore PROVES the same key already resolved a source a moment ago, so resolving it again
+     * therefore proves the same key already resolved a source a moment ago, so resolving it again
      * cannot fail for a configuration reason. A misconfigured registry raises
      * `InvalidArgumentException` on the publish attempt instead and is already a failure there.
      *
@@ -594,7 +594,7 @@ final class PublishDocumentCommand extends Command
      * One combination, resolved and reported. Writes nothing.
      *
      * Through the same guarded path as {@see previewAll}, and for the same reason: the exit code
-     * has to match the run being previewed. A refusal here is reported and exits FAILURE exactly
+     * has to match the run being previewed. A refusal here is reported and exits failure exactly
      * as `publishOne` does, so an operator scripting `--dry-run &&` gets the answer they asked for.
      */
     private function previewOne(LegalDocumentPublisher $publisher, NoticeMode $mode, string $key, string $locale): int
@@ -692,7 +692,7 @@ final class PublishDocumentCommand extends Command
     }
 
     /**
-     * The dry run's counterpart to {@see publish}, and deliberately its MIRROR — same options, same
+     * The dry run's counterpart to {@see publish}, and deliberately its mirror — same options, same
      * order, same names.
      *
      * That is what makes the preview answerable for the run: `--regime` and `--enforce-at` decide

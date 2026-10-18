@@ -8,7 +8,7 @@ use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 
 /**
  * A content source: it resolves the raw text for a (document key, locale) and exposes a
- * CHEAP fingerprint of the current state. That is the whole contract — sources are
+ * cheap fingerprint of the current state. That is the whole contract — sources are
  * interchangeable, and the package "renders and proves, it does not own the content".
  *
  * The fingerprint is the cache-invalidation seam: it flows into the cache key, so a

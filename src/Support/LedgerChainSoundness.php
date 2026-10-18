@@ -47,7 +47,7 @@ final class LedgerChainSoundness
     ) {}
 
     /**
-     * @param  list<stdClass>  $rows  every row of ONE subject_token, in id order, as the driver returns them
+     * @param  list<stdClass>  $rows  every row of one subject_token, in id order, as the driver returns them
      */
     public function sound(array $rows): bool
     {

@@ -44,16 +44,16 @@ interface ConsentManager
     public function accept(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null, ?string $expectedContentHash = null, ?string $shownWording = null): LegalConsent;
 
     /**
-     * Record that a subject was SHOWN an informational page the operator flagged for acknowledgment
+     * Record that a subject was shown an informational page the operator flagged for acknowledgment
      * at registration — not a consent, and never a gate.
      *
-     * `$acknowledgmentWording` is the sentence YOUR form put next to the page. It is required
+     * `$acknowledgmentWording` is the sentence your form put next to the page. It is required
      * because an informational document carries none of its own: the package never asks the reader
      * for anything on such a page, so the only truthful sentence is the one you showed. The ledger
      * stores it verbatim.
      *
      * Refuses a consent-bearing document (use `accept()`) and an informational page the operator has
-     * not flagged. `$expectedContentHash` guards a mid-session release against the document BODY,
+     * not flagged. `$expectedContentHash` guards a mid-session release against the document body,
      * which is the only part this package rendered.
      */
     public function acknowledge(Model $subject, string $documentKey, ConsentContext $context, string $acknowledgmentWording, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent;
@@ -81,10 +81,10 @@ interface ConsentManager
     public function terminate(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
 
     /**
-     * Record the FIRST half of a double opt-in: the subject entered themselves, and nobody has yet
+     * Record the first half of a double opt-in: the subject entered themselves, and nobody has yet
      * shown that whoever did so controls the address.
      *
-     * The row does NOT make the consent held — that is the point of it. For advertising e-mail the
+     * The row does not make the consent held — that is the point of it. For advertising e-mail the
      * confirmed double opt-in is the German benchmark (§ 7 Abs. 2 UWG with Art. 7 DSGVO) and the
      * burden of proof lies with the controller (Art. 7(1)), so an unconfirmed entry must not read
      * as a consent anywhere: not in `statusFor()`, not in the gate, not in an Art. 15 export.
@@ -95,12 +95,12 @@ interface ConsentManager
     public function requestConfirmation(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
 
     /**
-     * Record the SECOND half: the subject followed the confirmation link, so the declaration and
-     * the address belong to the same person. THIS is the row that makes the consent held.
+     * Record the second half: the subject followed the confirmation link, so the declaration and
+     * the address belong to the same person. This is the row that makes the consent held.
      *
      * Requires a pending request as the subject's latest row for the document. Throws
      * NotConfirmableException when there is none, when the configured confirmation window has
-     * closed, or when a new MAJOR version was published in between — confirming that one would
+     * closed, or when a new major version was published in between — confirming that one would
      * freeze a text the subject never read.
      */
     public function confirm(Model $subject, string $documentKey, ConsentContext $context, ?string $locale = null): LegalConsent;
@@ -108,7 +108,7 @@ interface ConsentManager
     /**
      * The mandatory documents this subject still owes acceptance for.
      *
-     * The models are PARTIALLY HYDRATED — they carry the columns the gate reads and nothing else,
+     * The models are partially hydrated — they carry the columns the gate reads and nothing else,
      * and they carry them with `exists = true`. Reading any other column off them returns null, or
      * throws a `MissingAttributeException` under `Model::shouldBeStrict()`. Call `refresh()` for a
      * full row, and `published()` for the agreed text itself: that is the read path, and it returns
@@ -127,14 +127,14 @@ interface ConsentManager
      * The mandatory documents this subject does not hold — the first-acceptance question.
      *
      * "Does not hold" is the exact predicate, and it is wider than "never accepted": a subject
-     * whose holding an ENDING action dropped to zero — withdrawn, declined, a terminated contract —
+     * whose holding an ending action dropped to zero — withdrawn, declined, a terminated contract —
      * is in this set too. That is deliberate. Somebody who terminated their contract terms holds no
      * contract, `hasCurrent()` says so, and a gate that skipped them would let an ending action buy
      * permanent access. The honest label for what they are asked next is a first-use gate, not a
      * re-consent: nothing changed, they simply hold nothing.
      *
      * {@see outstanding()} answers a different one and cannot answer this: it filters on the
-     * notice mode, which states how a version CHANGE is communicated, and a first acceptance is
+     * notice mode, which states how a version change is communicated, and a first acceptance is
      * not a change. A document first published as a silent editorial version is therefore never
      * in `outstanding()`, while `statusFor()` has always reported it as owed — the two disagreed
      * about the same subject, and an application that trusted the first treated people as having
@@ -177,7 +177,7 @@ interface ConsentManager
      *
      * A key with no active document is `false`. So is one whose document is an informational page,
      * unless the operator flagged that page for acknowledgment: then the answer says whether the
-     * subject saw its CURRENT version, which never means they are bound by it.
+     * subject saw its current version, which never means they are bound by it.
      *
      * @param  list<string>  $documentKeys
      * @return array<string, bool>
@@ -189,7 +189,7 @@ interface ConsentManager
      *
      * ## Which language it answers about, which is not always the one you asked for
      *
-     * `$locale` is the language the subject is READING, not a filter on what they owe. A mandatory
+     * `$locale` is the language the subject is reading, not a filter on what they owe. A mandatory
      * document that has no version in that language is still legally required, so this resolves it
      * the same way registration does — the requested locale, then `fallback_locale`, then
      * `default_locale` — and reports on whatever the first hit is. The keys are the same ones
@@ -199,7 +199,7 @@ interface ConsentManager
      * They did not always. The checklist walked the chain and this read the strict per-locale set,
      * so a reader in an untranslated language was shown two mandatory documents and then told
      * nothing about them — and an application combining the two to ask what an account still owes
-     * read that silence as "nothing owed". A voluntary consent is deliberately NOT resolved that
+     * read that silence as "nothing owed". A voluntary consent is deliberately not resolved that
      * way: it may never be required, so not published here means not offered here.
      *
      * @return array<string, array{key: string, accepted_major: int, current_major: int, requires_explicit_optin: bool, outstanding: bool, pending_confirmation: bool, retired: bool, accepted_version: string|null, accepted_at: string|null}>
@@ -225,7 +225,7 @@ interface ConsentManager
      * nobody. A notification class of the application's own that writes the recipient into a line
      * leaves them in the body, and the delivery proof logs a warning the first time it sees one.
      *
-     * It is NOT an update. Both ledgers refuse every UPDATE, so each row is deleted and written
+     * It is not an update. Both ledgers refuse every UPDATE, so each row is deleted and written
      * again without those columns, at its original id and inside one transaction. Where tamper
      * evidence is on, the subject's chain is re-linked as part of the same operation: the erased
      * columns are inputs to the row hash, so a rewrite that did not re-link would leave the
@@ -234,12 +234,12 @@ interface ConsentManager
     public function forget(Model $subject): SubjectErasure;
 
     /**
-     * The PUBLISHED document a public page must render: the frozen row's verbatim bytes and
+     * The published document a public page must render: the frozen row's verbatim bytes and
      * stored hash — the same text the ledger proves the subject accepted. Null when nothing is
      * published for that (key, locale); it never throws, so a public page can render an "in
      * preparation" shell instead of failing.
      *
-     * This is the read path. Rendering the configured SOURCE instead (see LegalSourceRenderer)
+     * This is the read path. Rendering the configured source instead (see LegalSourceRenderer)
      * shows text that may have drifted from the published row, which silently breaks the one
      * promise the ledger makes.
      */
@@ -258,7 +258,7 @@ interface ConsentManager
 
     /**
      * The consent controls a registration form must render, derived from what is actually
-     * PUBLISHED rather than from a list the form hardcodes — so renaming, unpublishing, or
+     * published rather than from a list the form hardcodes — so renaming, unpublishing, or
      * publishing a document in another language cannot leave the form silently wrong.
      *
      * Without a locale it answers for the application locale, the one the registration rules and

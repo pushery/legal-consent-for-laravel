@@ -15,7 +15,7 @@ use Pushery\LegalConsent\Models\Scopes\TenantScope;
 /**
  * Turns the working draft of a change description into the frozen record attached to a version.
  *
- * A TRANSITION, not a copy: the same row gains the version, the document, the content hash and the
+ * A transition, not a copy: the same row gains the version, the document, the content hash and the
  * frozen state. Copying would leave two rows that can disagree, and the whole value of the record
  * is that it says what the notice said.
  *
@@ -30,7 +30,7 @@ final class ChangeItemsFreezer
      *
      * Absence is not an error here. Not every change owes a description — a silent editorial fix
      * does not, and a package that refused to publish without one would make the feature mandatory
-     * for everyone the moment it shipped. Where a description IS required, the release pre-flight
+     * for everyone the moment it shipped. Where a description is required, the release pre-flight
      * says so before the transaction opens, which is the place that can still be helpful about it.
      */
     public function freeze(LegalDocument $document, ?string $sourceFingerprint = null): ?LegalChangeSet

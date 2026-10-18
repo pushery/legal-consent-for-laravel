@@ -8,28 +8,28 @@ use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Console\VerifyLedgerCommand;
 
 /**
- * The witness for the row that has none: a per-row mac, held OUTSIDE the append-only ledger.
+ * The witness for the row that has none: a per-row mac, held outside the append-only ledger.
  *
  * {@see LedgerHashChain} states the gap this closes and why keying could not close it — only the
- * backward LINK is stored, so a chain's newest row can be REPLACED with nothing to mismatch
+ * backward link is stored, so a chain's newest row can be replaced with nothing to mismatch
  * against, and the newest row is the one that says what somebody currently holds.
  *
- * WHAT IS STORED IS THE LINK A SUCCESSOR WOULD CARRY. Nothing else, and that is the whole idea:
- * `hashRow()` over the stored row is precisely the value the NEXT row of that chain writes into
+ * What is stored is the link a successor would carry. Nothing else, and that is the whole idea:
+ * `hashRow()` over the stored row is precisely the value the next row of that chain writes into
  * its `prev_record_hash`. So every row except the last one is already witnessed by a copy of this
  * exact string sitting one row further on; this class gives the last one the same thing. It
  * publishes no value the ledger does not already publish, and a mac can be read against the
  * successor's link whenever both exist.
  *
- * THE MAC IS TAKEN OVER THE ROW AS THE DRIVER RETURNS IT, NEVER OVER WHAT WAS ABOUT TO BE
- * WRITTEN. That is the invariant the class docblock of {@see LedgerHashChain} states for the chain
+ * The MAC is taken over the row as the driver returns it, never over what was about to be
+ * written. That is the invariant the class docblock of {@see LedgerHashChain} states for the chain
  * itself — "both the writer and the verifier hash the SAME database-read representation" — and it
  * is the reason this lives in a second table rather than in a column. A value computed before the
  * INSERT cannot predict the rendering: `accepted_at` comes back from PostgreSQL carrying the
  * connection's offset and from MySQL and SQLite carrying none. A first attempt hashed the
  * pre-save shape, passed the whole SQLite suite, and broke every Postgres engine suite at once.
  *
- * APPEND-ONLY BY USE, not by trigger. A row is never corrected: the retention sweep, which
+ * Append-only by use, not by trigger. A row is never corrected: the retention sweep, which
  * re-links through {@see LedgerChainRepair::relink()}, changes a row's link and therefore its hash,
  * and records the new mac beside the old one. {@see newestFor()} reads the last one, so the history
  * of lawful rewrites is kept rather than overwritten, and an operator can see that a row was
@@ -40,11 +40,11 @@ use Pushery\LegalConsent\Console\VerifyLedgerCommand;
  * cleared, and unkeyed it can be reversed by trying subject ids against it, which would undo the
  * erasure. The trace the erasure leaves is `subject_erased_at` on the row.
  *
- * WHAT THIS IS WORTH, EXACTLY. Keyed, a table-write attacker cannot produce the mac for a row they
+ * What this is worth, exactly. Keyed, a table-write attacker cannot produce the mac for a row they
  * substituted, so the replacement is reported. Unkeyed they can compute one — exactly as they can
  * already re-chain the whole ledger, which {@see LedgerHashChain} says in its own words. The mac
  * therefore closes the replacement gap to the same degree the chain closes the edit gap, and to no
- * greater degree. It does NOT close a tail TRUNCATION: a deleted row's mac is indistinguishable
+ * greater degree. It does not close a tail truncation: a deleted row's mac is indistinguishable
  * from the mac of a row a lawful sweep removed, and `verify-ledger` still says so in its note.
  */
 final readonly class LedgerRecordMacs
@@ -70,7 +70,7 @@ final readonly class LedgerRecordMacs
     }
 
     /**
-     * Record the mac of each of these consent rows, READ BACK from the database.
+     * Record the mac of each of these consent rows, read back from the database.
      *
      * The read is the point of the method and is not an optimization detail: the caller holds the
      * attributes it just wrote, and hashing those is the mistake this whole design exists to avoid.
@@ -79,14 +79,14 @@ final readonly class LedgerRecordMacs
      * Callers run inside their own transaction (the append, the erasure, the sweep), so the rows
      * are visible to this read and the mac lands or rolls back with the row it describes.
      *
-     * `list<mixed>` RATHER THAN `list<int|string>`, AND THE NARROWING HAPPENS HERE. Every caller
+     * `list<mixed>` rather than `list<int|string>`, and the narrowing happens here. Every caller
      * pulls its ids straight out of database rows — `array_column($rewritten, 'id')` on raw
      * `stdClass` arrays — where the type system knows nothing. Pushing the narrowing out to three
      * call sites would write the same three lines three times, in the places that know least about
      * it; this is the method that talks to the table.
      *
      * A value that is neither an int nor a string cannot address a row, so it is dropped rather
-     * than passed to `whereIn`. That fails LOUDLY one step later — the row then has no mac, and
+     * than passed to `whereIn`. That fails loudly one step later — the row then has no mac, and
      * the verifier reports exactly that — which is the right direction for a value that cannot
      * occur: `legal_consents.id` is a NOT NULL bigint, so a driver returns an int or a numeric
      * string and nothing else.
@@ -158,16 +158,16 @@ final readonly class LedgerRecordMacs
     /**
      * Record where macs begin, the first time one is written.
      *
-     * NOT IN THE MIGRATION, AND THAT IS THE WHOLE POINT OF THE METHOD. Migration 000024 learned
+     * Not in the migration, and that is the whole point of the method. Migration 000024 learned
      * this about its own marker and wrote it down; the first version of 000031 stamped at
      * migrate-time anyway. A marker stamped then carries a proof computed with whatever key was
-     * configured THEN, and the documented order of operations lets an operator set the secret
+     * configured then, and the documented order of operations lets an operator set the secret
      * afterwards — the marker is born holding a hash it can never reproduce, and the verifier
      * reports a permanent break on an untouched ledger. Stamped by the call that writes the first
      * mac, it cannot drift from the key in use.
      *
-     * The boundary is `max(id)` as it stands NOW, which includes the row whose mac is about to be
-     * written. That row is exempt from the ABSENCE check and from nothing else — it carries a mac,
+     * The boundary is `max(id)` as it stands now, which includes the row whose mac is about to be
+     * written. That row is exempt from the absence check and from nothing else — it carries a mac,
      * so the mismatch check covers it, and ids only grow, so nothing an attacker writes later can
      * land below the line. The alternative, excluding the rows being recorded, would set the
      * boundary below every untouched row in a ledger whose first macs come from an erasure, and
@@ -210,7 +210,7 @@ final readonly class LedgerRecordMacs
     /**
      * The newest recorded mac per consent id, for the ids asked about.
      *
-     * NEWEST, because a lawful rewrite appends. Ordering by `id` rather than by `created_at`: two
+     * Newest, because a lawful rewrite appends. Ordering by `id` rather than by `created_at`: two
      * macs written in the same second by a sweep and an erasure carry the same timestamp, and the
      * sequence is what actually says which came last.
      *

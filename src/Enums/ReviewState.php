@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Enums;
 
 /**
- * Whether a human has signed off on a draft's EXACT current bytes.
+ * Whether a human has signed off on a draft's exact current bytes.
  *
  * Deliberately separate from staleness: "a human approved this text" and "this text still matches
  * the source it was translated from" are different questions, and conflating them is how a review
@@ -23,7 +23,7 @@ enum ReviewState: string
     /**
      * The translation key for this state, for a screen a person reads.
      *
-     * THE STORED VALUE IS NOT A WORD, and the two only look alike in English. `draft` and
+     * The stored value is not a word, and the two only look alike in English. `draft` and
      * `reviewed` are storage tokens; rendering them raw put untranslated English on a compliance
      * screen in every other locale, which is how this was found — by a consumer running a German
      * admin surface.

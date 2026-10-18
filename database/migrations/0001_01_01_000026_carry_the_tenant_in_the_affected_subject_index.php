@@ -18,7 +18,7 @@ use Pushery\LegalConsent\Support\IndexName;
  * multi-tenant deployment that filter was a residual scan and the promise held only for the
  * single-tenant case.
  *
- * `tenant_id` GOES LAST, AND THE POSITION IS THE DECISION. Leading with it would serve the
+ * `tenant_id` goes last, and the position is the decision. Leading with it would serve the
  * multi-tenant query and make the index unusable as a prefix for the single-tenant one, which is
  * every other installation — a strict downgrade for the majority to help the minority. Trailing,
  * the four always-present columns still form the usable prefix and the extra predicate is filtered

@@ -9,10 +9,10 @@ use Pushery\LegalConsent\Enums\ChangeSetState;
 use RuntimeException;
 
 /**
- * Makes a PUBLISHED change set — and its items — physically un-editable, while leaving the draft
+ * Makes a published change set — and its items — physically un-editable, while leaving the draft
  * fully mutable.
  *
- * This is a CONDITIONAL freeze, and that is the difference from `ProofColumnGuard`.
+ * This is a conditional freeze, and that is the difference from `ProofColumnGuard`.
  * `legal_documents` needs a column allowlist because four of its columns must stay writable
  * forever (the activation flag, `updated_at` and the two sweep watermarks). A change set has no
  * such split: it is entirely editable until it is published and entirely frozen afterwards. So
@@ -29,7 +29,7 @@ use RuntimeException;
  * statement for the whole table. Laravel's `truncate()` is a `DELETE` on SQLite, which the row
  * trigger answers, and MySQL runs no trigger on `TRUNCATE TABLE`.
  *
- * It ships on ALL THREE engines. SQLite used to be left to the model hook alone, on the reasoning
+ * It ships on all three engines. SQLite used to be left to the model hook alone, on the reasoning
  * that the app layer is the portable baseline — but the hook cannot see the paths this guard is
  * for, and the sibling migration says so in as many words: a `saveQuietly()`, a raw
  * `DB::table()->update()`, a mass `Model::query()->delete()` and a referential cascade all reach
@@ -39,7 +39,7 @@ use RuntimeException;
  * the shape of claim that is worse than no claim.
  *
  * Lives in `src/` rather than in the migration for the reason ProofColumnGuard documents: SQLite
- * rebuilds a table to alter a column, and a rebuild keeps indexes but DROPS TRIGGERS. Any later
+ * rebuilds a table to alter a column, and a rebuild keeps indexes but drops triggers. Any later
  * migration touching these tables must be able to re-install the guard, and silently not doing so
  * is exactly the failure that has no symptom.
  */
@@ -98,13 +98,13 @@ final class ChangeSetFreezeGuard
     }
 
     /**
-     * The engine check, run BEFORE anything is dropped — which is why it is its own method rather
+     * The engine check, run before anything is dropped — which is why it is its own method rather
      * than the first lines of install().
      *
      * Both matches above used to carry `default => null`, commented "an engine this package does
      * not claim to protect". {@see ProofColumnGuard::assertSupportedEngine()} spells out why that
      * is the wrong arm, and the argument transfers unchanged: a consumer on a fourth engine would
-     * get migrations that SUCCEED, a `legal_change_sets` table with no trigger on it, and no signal
+     * get migrations that succeed, a `legal_change_sets` table with no trigger on it, and no signal
      * anywhere — a published change description silently rewritable on the one table whose purpose
      * is to record what a subject was told. A migration that stops is recoverable; a frozen row
      * that only looks frozen is not.
@@ -208,7 +208,7 @@ final class ChangeSetFreezeGuard
     }
 
     /**
-     * The ONE place hand-built DDL from this class reaches the connection.
+     * The one place hand-built DDL from this class reaches the connection.
      *
      * Every statement below is assembled rather than literal, because a table prefix and the
      * trigger names derived from it are only known at runtime. Funneling them through a single
@@ -262,7 +262,7 @@ final class ChangeSetFreezeGuard
      * A TRUNCATE has no row to read, so it asks whether the table holds a published row at all and
      * refuses if it does. A statement trigger's return value is ignored.
      *
-     * OLD.state, never NEW.state: the question is whether the row WAS frozen, and reading the
+     * Old.state, never new.state: the question is whether the row was frozen, and reading the
      * incoming value would let an update that also rewrites `state` walk straight past the guard.
      *
      * A BEFORE row trigger that returns null skips the row, and `NEW` is null in a DELETE, so the
@@ -340,7 +340,7 @@ final class ChangeSetFreezeGuard
     }
 
     /**
-     * The SQLite arm — two triggers, no function, the same OLD.state predicate.
+     * The SQLite arm — two triggers, no function, the same old.state predicate.
      *
      * `RAISE(ABORT, …)` rolls back the statement rather than the transaction, which is what makes
      * the refusal observable as a QueryException in a consumer's request instead of poisoning
@@ -348,8 +348,8 @@ final class ChangeSetFreezeGuard
      *
      * The publish transition is unaffected and that is worth stating, because a guard that blocked
      * it would be caught nowhere: `ChangeItemsFreezer` lifts the row from `draft` to `published`,
-     * so the row it updates has OLD.state = 'draft' and passes both triggers on the way in. Only
-     * the second write to the same row meets a frozen OLD.
+     * so the row it updates has old.state = 'draft' and passes both triggers on the way in. Only
+     * the second write to the same row meets a frozen old.
      *
      * @param  literal-string  $table
      * @param  literal-string  $updateTrigger

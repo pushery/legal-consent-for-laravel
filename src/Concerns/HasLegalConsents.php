@@ -45,7 +45,7 @@ trait HasLegalConsents
         // StringKeyedMorphMany.
         //
         // Built here rather than by overriding `newMorphMany()`, because that hook is shared: it would
-        // silently change every OTHER morphMany on a consumer's model too. The column names are
+        // silently change every other morphMany on a consumer's model too. The column names are
         // written out, because this package ships the migration that creates them.
         $instance = $this->newRelatedInstance(LegalConsent::model());
 
@@ -99,9 +99,9 @@ trait HasLegalConsents
      * A key with no active document — a typo, a deactivated version, an informational page nobody
      * ever acknowledges — is `false`, the same answer the single-key method gives.
      *
-     * AN INFORMATIONAL PAGE THE OPERATOR FLAGGED FOR ACKNOWLEDGMENT IS THE EXCEPTION, and it
+     * An informational page the operator flagged for acknowledgment is the exception, and it
      * answers truthfully rather than falsely: a row exists for it, so this reports whether the
-     * subject saw the CURRENT version. `true` there means "they have seen this one", never "they
+     * subject saw the current version. `true` there means "they have seen this one", never "they
      * are bound by it" — such a page binds nobody and never gates anything.
      *
      * @param  list<string>  $documentKeys

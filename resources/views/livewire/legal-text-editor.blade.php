@@ -1,9 +1,9 @@
-{{-- POLLS ONLY WHILE A QUEUED TRANSLATION IS RUNNING, and only where one can run at all: the
+{{-- Polls only while a queued translation is running, and only where one can run at all: the
      component answers false when `translation.queue` is off, so an application without a queue never
      polls. A dispatched job is invisible to the page that dispatched it, and without this the
      operator would click Translate, read that it is running, and have to guess when to reload.
 
-     `?? false` because this view is ALSO rendered standalone, by the tests that check its markup
+     `?? false` because this view is also rendered standalone, by the tests that check its markup
      against real components. There is no Livewire component behind those, so the flag is absent —
      and absent means "do not poll", which is the only thing a render without a component could
      honestly mean. Calling `$this->translating()` here instead threw on every one of them.
@@ -12,7 +12,7 @@
      The tick after it ends renders, takes the result, and stops the poll. --}}
 <div @if ($translating ?? false) wire:poll.3s="pollTranslation" @endif>
     {{-- Left out where the embedding page titles itself (`:heading="false"`), the same switch the
-         consent panel carries. The landmark then takes its name DIRECTLY rather than pointing at a
+         consent panel carries. The landmark then takes its name directly rather than pointing at a
          heading that is no longer in the document: `aria-labelledby` at a missing id names nothing,
          and an unnamed region is not an improvement on a duplicated title.
          `?? true` for a render outside the component, which passes no such flag. --}}
@@ -35,7 +35,7 @@
         <p role="status" aria-live="polite" wire:key="legal-text-editor-status"><span wire:key="legal-text-editor-status-{{ $statusNonce }}">{{ $status }}</span></p>
 
         {{-- WCAG 4.1.3: the stale-source warning stays always-present and only its inner text is gated,
-             so a staleness that flips true as the RESULT of a Livewire action is still announced (an
+             so a staleness that flips true as the result of a Livewire action is still announced (an
              @if that inserts the whole role="alert" with its text would not be). --}}
         <p role="alert" aria-live="assertive" wire:key="legal-text-editor-stale">@if ($staleNotice ?? null){{ __($staleNotice) }}@endif</p>
 
@@ -81,9 +81,9 @@
              refuses every mode for it but the silent one. A caller that passes no such value
              keeps the form, as before. --}}
         @if ($offersDeemedRelease ?? true)
-        {{-- RELEASE WITH AN OBJECTION WINDOW — a deemed-consent change (§ 308 Nr. 5 BGB).
-             It lives HERE and not on the manager grid, and that is the manager's own stated
-             position: a release that binds people by their SILENCE is a per-change legal call, not
+        {{-- Release with an objection window — a deemed-consent change (§ 308 Nr. 5 BGB).
+             It lives here and not on the manager grid, and that is the manager's own stated
+             position: a release that binds people by their silence is a per-change legal call, not
              a one-click action on an overview. Until now that sentence named two homes for it, the
              editor and the CLI, and only the CLI had it — an application with an admin UI had no
              in-app path to a capability this package implements end to end.
@@ -107,16 +107,16 @@
             <label for="legal-deemed-enforce">{{ __('legal-consent::ui.admin_deemed_enforce') }}</label>
             <input id="legal-deemed-enforce" type="date" wire:model="enforceAt" aria-required="true">
 
-            {{-- THE CLASSIFICATION, and it sits with the dates rather than apart from them because
+            {{-- The classification, and it sits with the dates rather than apart from them because
                  one release carries both. The five controls around it schedule the change; these
-                 two say what KIND of change it is, which is what a deemed release is later argued
+                 two say what kind of change it is, which is what a deemed release is later argued
                  from. A `<select>` for the regime because the publisher refuses one it does not
                  know, and free text for the class because the publisher takes any and the command
                  line already calls it a tag. --}}
             <label for="legal-deemed-regime">{{ __('legal-consent::ui.admin_deemed_regime') }}</label>
             <select id="legal-deemed-regime" wire:model="regime" aria-required="true">
                 <option value="">{{ __('legal-consent::ui.admin_deemed_regime_none') }}</option>
-                {{-- THE PUBLISHER'S OWN LIST, read from it rather than written out here: it
+                {{-- The publisher's own list, read from it rather than written out here: it
                      refuses a regime it does not know, so a second vocabulary on this screen would
                      be free to drift -- and the drift shows up as a refusal on a release somebody
                      has already scheduled.
@@ -154,7 +154,7 @@
              so what you see here is what the subject will see and the ledger will prove. --}}
         {{-- `role="region"`, because a bare `<div>` cannot be named. A div with no role maps to
              `generic`, and ARIA forbids naming a generic element — so browsers and assistive
-             technology DISCARD the label, and `admin_preview_label` reached nobody in any of the
+             technology discard the label, and `admin_preview_label` reached nobody in any of the
              seven locales it is translated into. The preview is a block of rendered legal HTML
              with headings of its own; without a landmark there is nothing to say where it starts. --}}
         <div role="region" aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">{!! $preview !!}</div>

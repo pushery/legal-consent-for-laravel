@@ -31,20 +31,20 @@ final readonly class ConsentPresenter
     {
         $groups = ['contracts' => [], 'acknowledgements' => [], 'consents' => []];
 
-        // Fold the subject's held majors ONCE, not once per document: hasCurrent() inside the loop
+        // Fold the subject's held majors once, not once per document: hasCurrent() inside the loop
         // re-ran this full-ledger fold (and a per-document active-row query) for every document, so
         // the "My consents" screen cost 1 + 2N queries and N identical folds. This mirrors the
         // manager's statusFor(): one fold, one document query, the comparison in PHP. `held` keeps
         // its withdrawal/objection-aware semantics — it is the same fold hasCurrent() used.
         $standing = $this->gate->standingFor($subject);
 
-        // What the subject holds NOW, as the gate reads it. The fold keeps a 0 for a key whose
+        // What the subject holds now, as the gate reads it. The fold keeps a 0 for a key whose
         // latest action ended it (a withdrawal, a termination) and for one only ever declined, and
         // `isset()` is true for 0: read raw, the screen offered to withdraw a consent already
         // withdrawn, and at major 0 it called a withdrawn or terminated document held.
         $held = ConsentGate::holdingsOf($standing);
 
-        // Resolved ONCE, outside the loop: the bundled withdrawal route takes the document key as
+        // Resolved once, outside the loop: the bundled withdrawal route takes the document key as
         // a form field, so every entry that has one has the same URL. `Route::has()` rather than a
         // config read, because the route only exists if the package's route file registered it —
         // and a consumer may have loaded the config without the routes.
@@ -58,7 +58,7 @@ final readonly class ConsentPresenter
         // first — so the confirmation link already in their inbox would stop working.
         $pendingConfirmation = $standing['pending'];
 
-        // The SAME resolved set statusFor() reads, from the same cache: the request locale, plus every
+        // The same resolved set statusFor() reads, from the same cache: the request locale, plus every
         // mandatory document that is not translated into it, resolved through the locale chain
         // ({@see EnforceableDocumentCache::resolvedFor()}). A private strict-locale query here showed a
         // subject browsing in an untranslated language no contract at all, while the gate stopped
@@ -66,7 +66,7 @@ final readonly class ConsentPresenter
         // disagreeing, which this package refuses everywhere else.
         //
         // `locale` and `id` are among the cached columns, and both matter: the host's URL resolver
-        // receives the MODEL, and the most ordinary thing it does with one — `route('legal.show',
+        // receives the model, and the most ordinary thing it does with one — `route('legal.show',
         // $document)`, implicit route-model binding — reads the primary key, while a per-locale route
         // reads `locale`. A resolved row carries the locale it was published in, which is the language
         // the subject will actually read.
@@ -85,7 +85,7 @@ final readonly class ConsentPresenter
         // `is_active = false`, which leaves the ledger untouched: the acceptance stands, the fold
         // reports it as held, and the application keeps processing on it — while the row it is
         // exercised from disappears from this screen. Art. 7(3) wants withdrawal to stay as easy as
-        // granting was, and the manager already makes it WORK against a retired document; this is
+        // granting was, and the manager already makes it work against a retired document; this is
         // what makes it visible. Same resolution as statusFor(), from the same class, so the screen
         // and the map a screen is built from cannot disagree.
         $retired = new RetiredHoldings()->forSubject(
@@ -113,7 +113,7 @@ final readonly class ConsentPresenter
             //
             // The holding test is "> 0", not ">= the active major", and the difference is the whole
             // point: after the operator publishes a new major of a voluntary consent, the subject
-            // still holds the OLD one and the application still processes on it — `withdraw()`
+            // still holds the old one and the application still processes on it — `withdraw()`
             // executes against it without complaint. Comparing against the active major removed the
             // only control the package ships for Art. 7(3) at the moment the subject most plausibly
             // wants it, and a voluntary consent never reaches the re-consent screen either, because
@@ -130,12 +130,12 @@ final readonly class ConsentPresenter
                 // The column was already selected and then dropped here, so no settings view could
                 // declare the language of a row it renders. It is not a formality: RetiredHoldings
                 // orders by locale precisely so a retired row appears in the language the subject
-                // read it in, which puts a German title on an English page BY DESIGN. See
+                // read it in, which puts a German title on an English page by design. See
                 // {@see ContentLanguage} for what the views do with it.
                 'locale' => $document->locale,
                 'held' => ConsentGate::holds($held, $document->key, $document->major_version),
                 // `held === false` covers two different positions, and only one of them asks the
-                // subject for anything: never accepted at all, versus a NEW MAJOR waiting. The
+                // subject for anything: never accepted at all, versus a new major waiting. The
                 // second one ends at the gate — the screen where it could have been done
                 // voluntarily is the one that has to say so, or the package only ever compels
                 // where it could have invited.
@@ -143,7 +143,7 @@ final readonly class ConsentPresenter
                 // Computed exactly as statusFor() does, including the opt-in exclusion: a
                 // voluntary consent is never outstanding, because demanding one is Art. 7(4).
                 //
-                // A RETIRED holding is never outstanding either, and that is the deliberate half of
+                // A retired holding is never outstanding either, and that is the deliberate half of
                 // showing it at all. Nothing is being enforced — the gate reads the active set, so a
                 // retired document cannot block anyone — and `outstanding` is the flag a screen
                 // turns into "please accept this". Inviting an acceptance here would ask the subject
@@ -158,7 +158,7 @@ final readonly class ConsentPresenter
                 // document being withdrawn cannot be read is silent exactly where Art. 7(3) assumes
                 // the subject knows what they are deciding about.
                 'url' => $this->urls->for($document),
-                // Where a plain HTML form posts to withdraw THIS entry — the bundled session route
+                // Where a plain HTML form posts to withdraw this entry — the bundled session route
                 // when `routes.web` is on, and null otherwise. Null on every entry that is not a
                 // withdrawable consent the subject actually holds, because a control offering to
                 // withdraw something nobody holds is a button whose only outcome is an error.
@@ -170,7 +170,7 @@ final readonly class ConsentPresenter
                 'withdraw_url' => $offersWithdrawal ? $withdrawUrl : null,
             ];
 
-            // THE TYPE BOUNDARY IS THE QUERY ABOVE, NOT THIS MATCH. The catch-all reads like one
+            // The type boundary is the query above, not this match. The catch-all reads like one
             // — it is what filed an informational page under "consents", absorbing a basis it had
             // never been told about while nothing went red — but tightening it here cannot be the
             // fix: `legalBasis()` is typed `string`, so an exhaustive match is impossible, and an

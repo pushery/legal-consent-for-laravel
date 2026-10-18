@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * OPTIONAL, publish-only migration path from a "v1"-style schema (two nullable
+ * Optional, publish-only migration path from a "v1"-style schema (two nullable
  * `users.privacy_accepted_at` / `users.terms_accepted_at` timestamps) into the
- * ledger. Each existing timestamp becomes one `import` entry that PRESERVES the
+ * ledger. Each existing timestamp becomes one `import` entry that preserves the
  * original acceptance time; because v1 never archived the shown wording or a hash,
  * the entry carries a sentinel hash and a "(wording not archived)" snapshot — a
  * weak but honest proof, which is exactly what the method `import` signals.
@@ -86,10 +86,10 @@ return new class extends Migration
                     // instead — a backfill that silently mislabels a subject is worse than one
                     // that leaves a row behind for the operator to see.
                     //
-                    // A NON-NUMERIC KEY IS NOW LEGITIMATE, and this check used to reject it.
+                    // A non-numeric key is now legitimate, and this check used to reject it.
                     // While `subject_id` was an integer column, `ctype_digit()` was the only
                     // thing standing between a UUID and PHP quietly casting it to 0 — so the
-                    // digit test WAS the safety. Since 0.18 the column holds a 64-character
+                    // digit test was the safety. Since 0.18 the column holds a 64-character
                     // string, a UUID or ULID key is an ordinary subject, and keeping that test
                     // would silently drop exactly the installations the widening was for: the
                     // operator would see a green backfill and an empty ledger.

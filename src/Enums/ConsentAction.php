@@ -55,13 +55,13 @@ enum ConsentAction: string
     case DeemedAccepted = 'deemed_accepted';
 
     /**
-     * The FIRST half of a double opt-in: the subject entered themselves, and nobody has yet shown
-     * that the person who did so controls the address. NOT an accepting action.
+     * The first half of a double opt-in: the subject entered themselves, and nobody has yet shown
+     * that the person who did so controls the address. Not an accepting action.
      *
      * That is the whole reason this case exists rather than a second `Granted` row. For advertising
      * e-mail the confirmed double opt-in is the German benchmark (§ 7 Abs. 2 UWG together with
      * Art. 7 DSGVO), the burden of proof lies with the controller (Art. 7(1)) — and an unconfirmed
-     * entry is precisely NOT a valid consent. Two `Granted` rows with different timestamps cannot
+     * entry is precisely not a valid consent. Two `Granted` rows with different timestamps cannot
      * say which one was the confirmation; whoever had to prove it could only assert that the second
      * one was.
      *
@@ -76,8 +76,8 @@ enum ConsentAction: string
     case OptInRequested = 'optin_requested';
 
     /**
-     * The SECOND half of a double opt-in: the subject followed the confirmation link, so the
-     * declaration and the address are now tied to the same person. IS an accepting action — this
+     * The second half of a double opt-in: the subject followed the confirmation link, so the
+     * declaration and the address are now tied to the same person. Is an accepting action — this
      * is the row that makes the consent held, and the one an Art. 7(1) demand is answered with.
      */
     case Confirmed = 'confirmed';
@@ -94,7 +94,7 @@ enum ConsentAction: string
     }
 
     /**
-     * The actions that leave whatever standing existed before them UNCHANGED — neither accepting
+     * The actions that leave whatever standing existed before them unchanged — neither accepting
      * nor ending.
      *
      * Both members are here for the same reason, and it is not a resemblance between them: the fold

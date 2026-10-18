@@ -11,23 +11,23 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
 
 /**
  * Make `legal_documents` identity mean the same thing on all three engines: compare `key`,
- * `locale`, `tenant_id` and `version` as BYTES on MySQL, as SQLite and PostgreSQL already do.
+ * `locale`, `tenant_id` and `version` as bytes on MySQL, as SQLite and PostgreSQL already do.
  *
  * Nearly: `utf8mb4_bin` still pads trailing spaces, so `acme` and `acme ` stayed equal. Migration
  * 000033 moves these four columns, and the tenant and subject columns of the other tables, to the
  * no-pad `utf8mb4_0900_bin`.
  *
- * WHAT WAS MEASURED. On SQLite, a document published under `key = 'terms'` is not found by
+ * What was measured. On SQLite, a document published under `key = 'terms'` is not found by
  * `where('key', 'TERMS')` (`exact=1 upper=0`), and publishing a second document under `'TERMS'`
  * succeeds — two rows, two identities. PostgreSQL behaves the same way under the collations its
- * usual locales carry. MySQL is the outlier in BOTH directions at once, because Laravel's default
+ * usual locales carry. MySQL is the outlier in both directions at once, because Laravel's default
  * collation (`utf8mb4_unicode_ci`) and MySQL's own server default (`utf8mb4_0900_ai_ci`) are both
- * case- AND accent-insensitive: the mis-cased lookup silently resolves, and the second publish is
+ * case- and accent-insensitive: the mis-cased lookup silently resolves, and the second publish is
  * refused by `legal_documents_key_locale_version_tenant_id_unique`. The MySQL half is read from the
  * schema and the documented collation semantics, not executed — no MySQL server was contacted for
  * this change.
  *
- * WHY THIS IS FIXED RATHER THAN DOCUMENTED. A lookup that answers differently per engine is a
+ * Why this is fixed rather than documented. A lookup that answers differently per engine is a
  * caller error handled two ways, and prose could cover it. The unique index is not: it decides
  * whether two rows are the same legal document. An application developed on SQLite can publish
  * `terms` and `TERMS` as separate documents and then fail to migrate its own data onto MySQL,
@@ -35,7 +35,7 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
  * be the record. A constraint that means one thing in development and another in production is not
  * a constraint.
  *
- * WHY ONLY `legal_documents`. This is the table the package resolves identity against:
+ * Why only `legal_documents`. This is the table the package resolves identity against:
  * `activeDocumentIn()` reads it, the partial one-active index guards it, and every ledger row
  * copies its canonical `key` from the row it found (`'document_key' => $document->key`) rather
  * than from the caller's string — so no proof row can hold a differently-cased variant of a key
@@ -60,8 +60,8 @@ class extends Migration
         }
 
         // The 000011 note: a migration that changes a COLUMN on this table re-installs the guard
-        // afterwards. MySQL keeps its triggers across a MODIFY, so this is belt and braces here —
-        // but the rule is worth following without exception, because the engine where it is NOT
+        // afterwards. MySQL keeps its triggers across a modify, so this is belt and braces here —
+        // but the rule is worth following without exception, because the engine where it is not
         // belt and braces fails silently.
         ProofColumnGuard::whileDisarmed(function (): void {
             Schema::table('legal_documents', function (Blueprint $table): void {
@@ -74,7 +74,7 @@ class extends Migration
     }
 
     /**
-     * Hand the four columns back to the TABLE's default collation.
+     * Hand the four columns back to the table's default collation.
      *
      * Naming a collation here would be a guess: the original was whatever the consumer's
      * connection configured, `utf8mb4_unicode_ci` on one installation and `utf8mb4_0900_ai_ci` on

@@ -10,7 +10,7 @@ use InvalidArgumentException;
  * Thrown when a proof field handed to the tamper-evidence chain has no lossless string
  * form — an array, an object, or a bool.
  *
- * The chain hashes the STRING representation of each field on purpose, so that a driver
+ * The chain hashes the string representation of each field on purpose, so that a driver
  * returning `2` and one returning `'2'` for the same column agree. A value that string-casts
  * lossily has no place in that scheme: a bool casts to `''` or `'1'` and an array to `'Array'`,
  * each the string form of a legitimate value, so folding them in would let two different rows

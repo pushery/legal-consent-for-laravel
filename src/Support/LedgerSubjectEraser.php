@@ -12,12 +12,12 @@ use stdClass;
 /**
  * Strip a subject from both proof ledgers under Art. 17, and leave the tamper chain verifiable.
  *
- * WHY IT IS NOT AN UPDATE. Both ledgers refuse every UPDATE — the model blocks it and PostgreSQL
+ * Why it is not an update. Both ledgers refuse every UPDATE — the model blocks it and PostgreSQL
  * and MySQL each carry a BEFORE UPDATE trigger — so clearing the personal columns in place is not
  * available and nothing here relaxes that. `DELETE` and `INSERT` are both allowed (the create
  * migration says so outright), so a row is removed and written again without the columns.
  *
- * WHY IT RE-CHAINS, which is the part a consumer cannot get right on its own. The obvious version
+ * Why it re-chains, which is the part a consumer cannot get right on its own. The obvious version
  * — delete the row, insert it back carrying the same `prev_record_hash` — was measured and it
  * breaks the chain twice over:
  *
@@ -32,13 +32,13 @@ use stdClass;
  * as stored. Every rewritten row records `subject_erased_at`: a lawful change to append-only
  * evidence that leaves no trace is indistinguishable from the tampering the chain exists to catch.
  *
- * IDS ARE PRESERVED, AND THAT IS LOAD-BEARING RATHER THAN TIDY. The verifier flags any row with
- * a NULL link whose id is past the FIRST CHAINED ROW IN THE WHOLE TABLE — that watermark is global.
+ * IDs are preserved, and that is load-bearing rather than tidy. The verifier flags any row with
+ * a NULL link whose id is past the first chained row in the whole table — that watermark is global.
  * A subject with pre-tamper-evidence rows re-inserted at fresh ids would land every one of them
  * past it and be reported as a direct database write. Reusing the original ids keeps both that
  * watermark and the walk's ordering exactly as they were.
  *
- * WHAT SURVIVES: the document, its type, version, major version, content hash, locale, the frozen
+ * What survives: the document, its type, version, major version, content hash, locale, the frozen
  * wording, the action, the method, the instant — and `subject_token`, the pseudonym that still
  * ties the two ledgers together afterwards. What the proof needs, none of what identifies a person.
  */
@@ -56,18 +56,18 @@ final readonly class LedgerSubjectEraser
     ];
 
     /**
-     * Cleared on a notice row — a SHORTER list, and the difference is measured rather than assumed.
+     * Cleared on a notice row — a shorter list, and the difference is measured rather than assumed.
      *
      * That ledger has no `ip_address`, `user_agent` or `request_id` at all; clearing them would
      * write columns the table does not have.
      *
-     * `notice_body` STAYS, and it is the one that looks like it should go. It holds the exact
+     * `notice_body` stays, and it is the one that looks like it should go. It holds the exact
      * message served, which reads like per-person data. It is not — but the reason is narrower than
      * it used to say here, and the old wording pointed at a method that does not exist.
      *
-     * `WriteNoticeDeliveryProof::render()` IS handed the subject, and passes it to
+     * `WriteNoticeDeliveryProof::render()` is handed the subject, and passes it to
      * `toMail($notifiable)`. What makes the body the same for everyone is that the three shipped
-     * notifications build it from the DOCUMENT alone — title, dates, change items, the § 308 Nr. 5
+     * notifications build it from the document alone — title, dates, change items, the § 308 Nr. 5
      * lit. b warning — and never read the notifiable. So the guarantee lives in those classes, not
      * in a signature, and a consumer who subclasses `ChangeNotification` and renders per subject
      * breaks it. That seam is one a consumer is invited to use, so the case is reported where it
@@ -137,7 +137,7 @@ final readonly class LedgerSubjectEraser
     /**
      * The consent ledger, which is the one that carries a chain.
      *
-     * A chain that no longer verifies as this package wrote it is erased like any other and NOT
+     * A chain that no longer verifies as this package wrote it is erased like any other and not
      * re-linked: re-linking recomputes every link with the key and records fresh macs, which would
      * give rows written through SQL the key's approval. Its links stay as they are, so the verifier
      * goes on reporting what changed it, and the count goes back to the caller.
@@ -205,7 +205,7 @@ final readonly class LedgerSubjectEraser
         }
 
         // The link walk lives in one place for both callers — here and the retention sweep — and
-        // it runs AFTER the columns are cleared, because those columns are inputs to every hash
+        // it runs after the columns are cleared, because those columns are inputs to every hash
         // it computes. Doing it the other way round would link each row to a value that the very
         // next statement invalidates.
         $verified = array_values(array_filter(
@@ -230,7 +230,7 @@ final readonly class LedgerSubjectEraser
         $this->insertRows('legal_consents', $rewritten);
 
         // The erasure cleared personal columns and the re-link moved every chain link, so every
-        // one of these rows hashes to something new — including the chain TAIL, the row a mac is
+        // one of these rows hashes to something new — including the chain tail, the row a mac is
         // the only witness for. Recording the new macs is what keeps a lawful Art. 17 erasure from
         // reading as a replacement, the same reason the links are repaired at all.
         //
@@ -280,11 +280,11 @@ final readonly class LedgerSubjectEraser
     }
 
     /**
-     * Re-link each `subject_token`'s rows on its OWN chain.
+     * Re-link each `subject_token`'s rows on its own chain.
      *
      * {@see LedgerChainRepair::relink()} carries one link pointer across the whole array it is
      * handed, and its contract says what that array is: one subject_token's rows, in id order. A
-     * subject can hold MORE than one token — {@see SubjectToken} mints on (subject_type,
+     * subject can hold more than one token — {@see SubjectToken} mints on (subject_type,
      * subject_id) with no uniqueness, so two concurrent first writers (a notice sweep and a
      * consent write) mint two, which is the state `verify-ledger` has a dedicated check for.
      * Handing both sets over in one call chained the second token's first row onto the first
@@ -342,7 +342,7 @@ final readonly class LedgerSubjectEraser
      * the retention sweep rewrites the same rows into the same table and had a different answer
      * for them. A budget that only one of two rewriters reads is not a budget.
      *
-     * The rows are NON-EMPTY by contract rather than by a check here. Both callers return early on
+     * The rows are non-empty by contract rather than by a check here. Both callers return early on
      * an empty read of their own ledger long before they get this far, so an emptiness guard in
      * this method is a branch no run can enter — and one that quietly makes `$rows[0]` below look
      * like it needs proving. Stating the precondition in the type is what actually proves it.

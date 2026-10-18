@@ -16,7 +16,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  * The three engines answer a referential SET NULL against a BEFORE UPDATE trigger three different
  * ways, and none of them is the one a reader would expect. PostgreSQL executes the action through
  * SPI, so the trigger fires and the whole parent DELETE aborts — retiring a superseded document
- * becomes impossible. MySQL applies the action WITHOUT firing the row trigger, so it silently
+ * becomes impossible. MySQL applies the action without firing the row trigger, so it silently
  * rewrites a published change description. SQLite has no trigger on the table at all until this
  * release and rewrites it silently too. One schema, three behaviors, and the loudest of them is
  * still wrong.
@@ -28,7 +28,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  * Runs on every engine. 000008 could skip SQLite because the driver was thought unable to drop a
  * foreign key; 000014 showed that assumption was already outdated, and Laravel drops it here
  * through a table rebuild. The rebuild is why the freeze guard is re-installed afterwards: SQLite
- * keeps indexes across a rebuild and DROPS TRIGGERS, so leaving it out would take the guard off
+ * keeps indexes across a rebuild and drops triggers, so leaving it out would take the guard off
  * the table with nothing going red.
  *
  * Idempotent by inspection rather than by driver: 000016 no longer creates the constraint, so on a

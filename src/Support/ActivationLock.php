@@ -21,13 +21,13 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * carry its own copy of the same store predicate, its own `10`, its own `5` and its own warning:
  * four constants and one condition, written three times, for one question.
  *
- * THAT TRIPLICATION IS NOT A TIDINESS COMPLAINT — IT SHIPPED A DEADLOCK. A release took the
- * lock and then called the publisher, which took the SAME NAME again inside it.
+ * That triplication is not a tidiness complaint — it shipped a deadlock. A release took the
+ * lock and then called the publisher, which took the same name again inside it.
  * A Laravel lock is not reentrant: the second instance carries a different owner token, waits its
  * full five seconds and throws, so every release on a real store failed on its own serialization.
  * Both sites guarded the take with the same predicate spelled two ways — `! LockProvider ||
  * Array || Null` in one, `LockProvider && ! Array && ! Null` in the other — so they were never
- * out of step about WHETHER to lock, only about who already had. Two spellings of one rule is
+ * out of step about whether to lock, only about who already had. Two spellings of one rule is
  * how a reader checks one and believes both.
  *
  * @internal This class is an extraction of logic that already lived in its three callers, not a
@@ -50,9 +50,9 @@ final class ActivationLock
     /**
      * Whether an orchestrating caller already owns the lock, so an inner writer must not take it.
      *
-     * WHOEVER OPENS THE TRANSACTION OWNS THE LOCK. That rule is the package's, not Laravel's, and
+     * Whoever opens the transaction owns the lock. That rule is the package's, not Laravel's, and
      * it is load-bearing in both directions. A lock taken inside somebody else's transaction is
-     * released when the inner method returns — BEFORE that caller's commit — so it never spans the
+     * released when the inner method returns — before that caller's commit — so it never spans the
      * write it appears to protect: false comfort, not serialization. And re-taking a name this
      * call stack already holds cannot succeed at all, because the new instance is a different
      * owner; it can only wait out {@see WAIT_SECONDS} and throw.
@@ -67,7 +67,7 @@ final class ActivationLock
     }
 
     /**
-     * Run $work serialized, UNLESS an orchestrating caller already holds this lock.
+     * Run $work serialized, unless an orchestrating caller already holds this lock.
      *
      * The entry point for a nested writer — the publisher inside a release, an activation inside a
      * publish. Taking the lock there is not merely redundant, it is fatal: see
@@ -89,11 +89,11 @@ final class ActivationLock
     /**
      * Run $work serialized against every other writer of $key's active version.
      *
-     * Degrades LOUDLY rather than throwing when the configured store cannot serialize: a store
+     * Degrades loudly rather than throwing when the configured store cannot serialize: a store
      * with no LockProvider (session, storage, apc, a custom one) would otherwise make publishing
-     * FATAL, and `array` and `null` DO implement LockProvider while serializing nothing across
+     * fatal, and `array` and `null` do implement LockProvider while serializing nothing across
      * processes — array is process-local, a null lock always succeeds. Those two are the shapes
-     * worth naming, because they are the ones that LOOK protected. Either way the work still runs;
+     * worth naming, because they are the ones that look protected. Either way the work still runs;
      * every engine now carries a partial unique index on the active row, so the database remains
      * the real guarantee and this lock is defense in depth over it.
      *

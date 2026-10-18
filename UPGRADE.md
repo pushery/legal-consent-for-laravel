@@ -4,6 +4,18 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.46.0 → 0.47.0
+
+**Run `php artisan migrate`.** Migration 000041 adds `legal_documents.source_version` and `legal_consents.document_source_version`, the version a source counts itself. Both stay empty unless a custom source returns `sourceVersion`. A consent folds the value into its record hash only when it has one, so every chain written before keeps verifying as it is.
+
+Beyond that, nothing is required of you, unless you alert on the heartbeats that are sent only when a run failed, by name, or use the WireKit views.
+
+**There are seven such names, not six.** Since 0.45.0 a run whose notice a `NoticeDispatching` listener held back sends `legal-consent:dispatch-notices.canceled`, and the documentation went on saying to alert on six. If your monitor alerts on the failure-only names, add that one.
+
+**Raise `pushery/wirekit` to `^2.67.0` if you use the WireKit views.** `auto` serves them from 2.67.0, the oldest release this package's test suite installs, and with an older WireKit it serves the plain views instead.
+
+**Publish the WireKit views again if you published them.** In the legal-text dialog the page is a button now, and the text fills the dialog instead of ending beside an empty strip. Both live in the consent checkboxes and in the document fragment: `php artisan vendor:publish --tag=legal-consent-wirekit --force`. A copy published before keeps working as it did.
+
 ## 0.45.0 → 0.46.0
 
 **This release requires `league/commonmark` 2.10.2 or later.** Every release below it carries the table extension's denial-of-service advisory, and those below 2.9.1 the core parser's as well, both on the path every document renders through. If your lock holds an older release, update both together: `composer update pushery/legal-consent-for-laravel league/commonmark --with-dependencies`. If your own `composer.json` caps `league/commonmark` below 2.10.2, lift the cap first.

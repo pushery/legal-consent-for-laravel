@@ -1,7 +1,7 @@
 <div>
     {{-- A named landmark region so the whole admin surface is reachable by assistive tech. --}}
     {{-- Left out where the embedding page titles itself (`:heading="false"`), the same switch the
-         consent panel carries. The landmark then takes its name DIRECTLY rather than pointing at a
+         consent panel carries. The landmark then takes its name directly rather than pointing at a
          heading that is no longer in the document: `aria-labelledby` at a missing id names nothing,
          and an unnamed region is not an improvement on a duplicated title.
          `?? true` for a render outside the component, which passes no such flag. --}}
@@ -14,7 +14,7 @@
              not happen) right after the action — WCAG 4.1.3. It is always present in the DOM (an
              aria-live region added at the same time as its text is not announced).
 
-             tabindex="-1" + x-effect is the FOCUS half, and it is not decoration here. The release
+             tabindex="-1" + x-effect is the focus half, and it is not decoration here. The release
              button of this view takes effect on one click, without a confirmation (the WireKit twin
              asks in a dialog), and it stays where it is; the focus move takes a keyboard user from
              it to the outcome of an irreversible action. wire:key alone cannot do it: the element is
@@ -23,14 +23,14 @@
              Same pattern as consent-settings and reconsent-form; this screen was the one left out. --}}
         {{-- `status`/`polite`, not `alert`/`assertive`, and the focus move is why. `role="alert"`
              implies an assertive live region, and this same element also receives focus — so
-             assistive technology says the message TWICE: once as a live-region interruption, once
+             assistive technology says the message twice: once as a live-region interruption, once
              as the name of the newly focused element. Dropping the focus move instead would leave a
              keyboard user on the button, away from the outcome of an irreversible action, which is
              worse.
              The focus move is already immediate, so politeness costs no urgency.
              This also brings the screen in line with the other three status regions of the package,
              which have used `status` + focus all along. The WireKit twin was raised to `assertive`
-             to match THIS one; both are lowered together, because two twins of one screen must not
+             to match this one; both are lowered together, because two twins of one screen must not
              disagree about how loudly a release is announced. --}}
         <p role="status" aria-live="polite" tabindex="-1" wire:key="legal-text-manager-status"
             x-effect="$wire.statusNonce > 0 && $el.focus()"><span wire:key="legal-text-manager-status-{{ $statusNonce }}">{{ $status }}</span></p>
@@ -57,7 +57,7 @@
             ] as $state){{ __('legal-consent::ui.'.$state.'_short') }} = {{ __('legal-consent::ui.'.$state) }}@if (! $loop->last) · @endif @endforeach
         </p>
 
-        {{-- What the two review words MEAN, which the line above cannot say: it maps a short form
+        {{-- What the two review words mean, which the line above cannot say: it maps a short form
              onto a long one, so "Draft" explains itself with "Draft". The half that matters is the
              second sentence of the first -- reviewing publishes NOTHING. On the one screen whose
              product is that a person vouched for these exact bytes, "Reviewed" reading as "done,
@@ -130,7 +130,7 @@
                          390 px wide — reachable solely by scrolling the table sideways, with the
                          reasons a blocked release gives sitting out there beside it.
 
-                         The earlier report against a row here was about HEIGHT, measured at 1728 px
+                         The earlier report against a row here was about height, measured at 1728 px
                          with one full sentence per language. Grouping the locales under the reason
                          they share settled that, and the row is short now.
 
@@ -138,7 +138,7 @@
                          column header is gone with the cell — which is also what shrank the grid: at
                          seven locales it now overflows its scroller by 35 px instead of 530.
 
-                         A `position: sticky` hold was here and is GONE, because a red probe showed
+                         A `position: sticky` hold was here and is gone, because a red probe showed
                          it did nothing. Measured at fourteen locales, scrolled to the far end: the
                          control sat at -115 px with the hold in place, exactly as without it. Shipping
                          a declaration that cannot be shown to act is worse than shipping none. --}}
@@ -157,14 +157,14 @@
                                     <p id="left-out-{{ $key }}">{{ __('legal-consent::ui.admin_release_leaves_out', ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}</p>
                                 @endif
                             @else
-                                {{-- The blocking reasons stay OUTSIDE aria-describedby on a disabled
+                                {{-- The blocking reasons stay outside aria-describedby on a disabled
                                      button (a disabled control is skipped, so its description is never
                                      announced) — they are rendered as visible text below instead.
                                      The id below is therefore a styling hook only. It is deliberately
-                                     NOT an aria target: pointing a describedby at it would restore the
+                                     not an aria target: pointing a describedby at it would restore the
                                      association this comment exists to prevent. --}}
                                 <button type="button" disabled aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key) }}">{{ __('legal-consent::ui.admin_release_all') }}</button>
-                                {{-- Grouped by REASON, for the measurement recorded in the WireKit twin:
+                                {{-- Grouped by reason, for the measurement recorded in the WireKit twin:
                                      per-locale lines made a blocked row 210 px tall at seven locales, and
                                      nothing about the column was ever too narrow. Every locale still
                                      appears, beside the reason it shares. --}}

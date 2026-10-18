@@ -25,7 +25,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * `legal_documents` version — the artifact the gate enforces and the ledger snapshots.
  *
  * The change's notice mode (see NoticeMode) is a required human decision, never inferred.
- * Publish-time guards fail LOUD on a legally impossible combination — a deemed consent on
+ * Publish-time guards fail loud on a legally impossible combination — a deemed consent on
  * a privacy notice, a hard-blocking re-consent on a privacy notice, a material contract or
  * consent change smuggled in under a non-gating mode — because a silent mis-classification
  * is a legal error, not a cosmetic one. Re-publishing the same version with identical
@@ -37,7 +37,7 @@ final readonly class LegalDocumentPublisher
     public const int MATERIAL_MIN_LEAD_DAYS = 60;
 
     /**
-     * The STATUTORY floor for a payment framework contract: § 675g Abs. 1 BGB / Art. 54 PSD2 fix
+     * The statutory floor for a payment framework contract: § 675g Abs. 1 BGB / Art. 54 PSD2 fix
      * two months. Unlike the § 308 Nr. 5 / § 327r "angemessene Frist" (unquantified, so its
      * default is tunable), this one is law — neither config nor a per-document override may go
      * below it.
@@ -50,14 +50,14 @@ final readonly class LegalDocumentPublisher
     /** The width of `legal_documents.change_class`, the column a change class is frozen into. */
     public const int CHANGE_CLASS_MAX_LENGTH = 48;
 
-    /** The regimes a change may declare; an unknown one would fail OPEN onto a tunable default. */
+    /** The regimes a change may declare; an unknown one would fail open onto a tunable default. */
     public const array REGIMES = ['bgb_agb', 'psd2_675g', 'dcd_327r', 'gdpr', 'p2b', 'eecc'];
 
     /**
      * Which `notice_periods` key each regime resolves its advance-notice period from, or null when
      * the regime sets no separate period of its own.
      *
-     * TOTAL over {@see REGIMES} on purpose, and held that way by a test. The original defect was
+     * Total over {@see REGIMES} on purpose, and held that way by a test. The original defect was
      * that four period keys sat in a published config file with no reader at all: an operator who
      * raised `p2b_standstill_days` because their contract demanded it changed nothing, and nothing
      * said so. A partial map would let the next regime arrive the same way, so a regime with no
@@ -81,7 +81,7 @@ final readonly class LegalDocumentPublisher
     ];
 
     /**
-     * Regimes whose advance-notice period is fixed BY LAW. Config and a per-document override may
+     * Regimes whose advance-notice period is fixed by law. Config and a per-document override may
      * lengthen one, never shorten it — the same rule PSD2 already had, applied to the two other
      * regimes that quantify their own minimum.
      *
@@ -140,7 +140,7 @@ final readonly class LegalDocumentPublisher
     }
 
     /**
-     * Resolve and render what a publish WOULD freeze, writing nothing.
+     * Resolve and render what a publish would freeze, writing nothing.
      *
      * It lives here rather than in the command because the source factory does: a caller that
      * resolved its own factory would read a different source than the publish it is previewing,
@@ -156,7 +156,7 @@ final readonly class LegalDocumentPublisher
     /**
      * The resolved source behind a document key.
      *
-     * Exposed so a caller can ask what KIND of source it is without building a second factory.
+     * Exposed so a caller can ask what kind of source it is without building a second factory.
      * The bulk publish needs it to tell an unwritten draft from a missing file — both raise the
      * same exception, so the answer is on the source, not on the failure. Going through the
      * publisher rather than resolving a factory from the container is what keeps that answer
@@ -192,7 +192,7 @@ final readonly class LegalDocumentPublisher
         $this->assertRequestCoherent($key, $locale, $mode, $regime, $changeClass);
 
         // The presentation re-render is the one caller that hands a document in, and it has to:
-        // it publishes the ACTIVE version's text under the next PATCH, so the version it freezes is
+        // it publishes the active version's text under the next PATCH, so the version it freezes is
         // one the source does not declare. It renders through this publisher's own preview() and
         // changes nothing but the number, which is what keeps "the dry run reads the same source as
         // the real run" true. Every guard below runs over it unchanged.
@@ -254,6 +254,8 @@ final readonly class LegalDocumentPublisher
         bool $offersTermination,
         bool $keepsUnmodified,
     ): array {
+        $rendered = $this->withSourceCountedVersion($key, $locale, $rendered);
+
         $this->assertVersionPublishable($key, $locale, $mode, $type, $rendered, $releasedTogether);
 
         $existing = $this->existingVersion($key, $locale, $rendered->version);
@@ -300,7 +302,7 @@ final readonly class LegalDocumentPublisher
             'content_format' => 'html',
             'content' => $rendered->html,
             'content_hash' => $rendered->contentHash,
-            // What this HTML was made FROM, and what made it. A later run compares both
+            // What this HTML was made from, and what made it. A later run compares both
             // against the live source to say whether the TEXT moved or only its rendering;
             // see LegalDriftChecker. Both are proof columns and frozen from here on.
             'source_hash' => $rendered->sourceHash,
@@ -308,11 +310,14 @@ final readonly class LegalDocumentPublisher
             'ui_wording' => $rendered->uiWording,
             'source_driver' => $this->sourceNameFor($key),
             'source_reference' => $rendered->sourceRef,
+            // The version as the source counts it, beside the SemVer one. Frozen like the rest, and
+            // copied onto every consent given to this version.
+            'source_version' => $rendered->sourceVersion,
             'notice_mode' => $mode,
             'requires_reconsent' => $mode->gates(),
             'change_class' => $changeClass,
             'regime' => $regime,
-            // Floored at zero, because this is the period that was GRANTED and a granted period is
+            // Floored at zero, because this is the period that was granted and a granted period is
             // never negative. The guard above rules out an inverted timeline; what remains is the
             // immediate publish whose effective date is already past, where the honest answer is
             // "no grace at all" rather than a negative count of days. The column sits outside
@@ -333,7 +338,7 @@ final readonly class LegalDocumentPublisher
             'objection_deadline' => $objectionDeadline,
         ]);
 
-        // Freeze the operator's description of THIS change onto THIS version, before the row
+        // Freeze the operator's description of this change onto this version, before the row
         // goes active. No new parameter: the freezer finds the draft by (key, locale,
         // tenant), so the signature stays as it is and no caller has to learn
         // about the feature to keep working. Absence is not an error — see ChangeItemsFreezer.
@@ -347,7 +352,7 @@ final readonly class LegalDocumentPublisher
     }
 
     /**
-     * What {@see publishWithMode} WOULD freeze, with every one of its guards applied and nothing
+     * What {@see publishWithMode} would freeze, with every one of its guards applied and nothing
      * written.
      *
      * The signature is the real one deliberately, argument for argument, so a caller previews the
@@ -357,7 +362,7 @@ final readonly class LegalDocumentPublisher
      * decide nothing, so nothing here reads them; they are accepted so the call site stays a
      * mirror of the publish and a future guard over one of them needs no new signature.
      *
-     * THE GUARDS MAY NOT BE REBUILT IN A COMMAND. Every one of them is a legal rule — which
+     * The guards may not be rebuilt in a command. Every one of them is a legal rule — which
      * locales exist, which notice mode a document type can carry, what a statutory advance period
      * is — and a second copy of a legal rule is a second answer to it, diverging silently from the
      * moment one side is amended. That is why this lives beside the real path and calls the same
@@ -387,7 +392,7 @@ final readonly class LegalDocumentPublisher
     ): Document {
         $this->assertRequestCoherent($key, $locale, $mode, $regime, $changeClass);
 
-        $rendered = $this->preview($key, $locale);
+        $rendered = $this->withSourceCountedVersion($key, $locale, $this->preview($key, $locale));
         $type = $this->typeFor($key);
 
         $this->assertVersionPublishable($key, $locale, $mode, $type, $rendered, $releasedTogether);
@@ -444,7 +449,7 @@ final readonly class LegalDocumentPublisher
     }
 
     /**
-     * The guards over the rendered version, all of which run BEFORE the identical-content
+     * The guards over the rendered version, all of which run before the identical-content
      * short-circuit: an early return must never become a path around them (re-publishing unchanged
      * text under a deemed-consent mode would otherwise skip "deemed consent is contract-only"
      * entirely).
@@ -465,6 +470,51 @@ final readonly class LegalDocumentPublisher
         $this->assertNotDowngrade($key, $locale, $rendered);
     }
 
+    /**
+     * The rendered document under the SemVer version it publishes as, when its source counts its
+     * versions itself and gave no SemVer one.
+     *
+     * A source version already on file maps back onto the row it was published as, the newest
+     * patch of it, so publishing an unchanged text again is the identical-content case it is for
+     * every other source, and a changed text under a version the source counted already is refused
+     * by {@see assertRepublishable()}. A new source version takes the next minor of the active
+     * major, and the first one 1.0.0. A minor raises nobody's consent, which is what a version
+     * that only counts revisions means. A change that has to ask everybody again is still a major
+     * the source states, under the guards a major has.
+     *
+     * Version 0.0.0 is what the pipeline gives a document without a SemVer version, and the one
+     * `legal-consent:verify-documents` reports as a placeholder, so here it stands for none.
+     */
+    private function withSourceCountedVersion(string $key, string $locale, Document $rendered): Document
+    {
+        if ($rendered->sourceVersion === null || $rendered->version !== '0.0.0') {
+            return $rendered;
+        }
+
+        $published = LegalDocument::model()::query()
+            ->where('key', $key)
+            ->where('locale', $locale)
+            ->where('source_version', $rendered->sourceVersion)
+            ->orderByDesc('major_version')
+            ->orderByDesc('minor_version')
+            ->orderByDesc('patch_version')
+            ->first();
+
+        if ($published instanceof LegalDocument) {
+            return $rendered->withVersion($published->major_version, $published->minor_version, $published->patch_version);
+        }
+
+        $major = $this->activeMajor($key, $locale) ?? 1;
+
+        $highestMinor = LegalDocument::model()::query()
+            ->where('key', $key)
+            ->where('locale', $locale)
+            ->where('major_version', $major)
+            ->max('minor_version');
+
+        return $rendered->withVersion($major, is_numeric($highestMinor) ? (int) $highestMinor + 1 : 0, 0);
+    }
+
     /** The row this version would collide with, if one is already on file. */
     private function existingVersion(string $key, string $locale, string $version): ?LegalDocument
     {
@@ -478,7 +528,7 @@ final readonly class LegalDocumentPublisher
     /**
      * Whether an existing row of the same version may be re-published over.
      *
-     * Identical text is the only case that passes, and identical text under a DIFFERENT
+     * Identical text is the only case that passes, and identical text under a different
      * classification is not a no-op: the notice mode decides the notice duty, so silently keeping
      * the old one would let an operator "fix" a mis-published editorial change into a
      * deemed-consent one, get a success message, and have no notice ever go out. A
@@ -486,6 +536,12 @@ final readonly class LegalDocumentPublisher
      */
     private function assertRepublishable(LegalDocument $existing, NoticeMode $mode, Document $rendered, string $key, string $locale): void
     {
+        if ($existing->content_hash !== $rendered->contentHash && $rendered->sourceVersion !== null && $existing->source_version === $rendered->sourceVersion) {
+            throw new LegalPublishRefused(
+                "The source counts version '{$rendered->sourceVersion}' of '{$key}' ({$locale}) for a different text than the one published as {$existing->version}. A source version names one text, so a changed text needs a new one from the source."
+            );
+        }
+
         if ($existing->content_hash !== $rendered->contentHash) {
             throw new LegalPublishRefused(
                 "Version {$rendered->version} of '{$key}' ({$locale}) already exists with different content — bump the version before publishing."
@@ -523,7 +579,7 @@ final readonly class LegalDocumentPublisher
 
     /**
      * The announcement and effective dates a publish would freeze, with every schedule guard
-     * applied. Resolution and validation are one method because the guards run on the RESOLVED
+     * applied. Resolution and validation are one method because the guards run on the resolved
      * dates: a caller that resolved them itself and then asked for a check would be checking a
      * different schedule than the one that gets written.
      *
@@ -544,18 +600,18 @@ final readonly class LegalDocumentPublisher
         $announce = $chosenAnnounce ?? $now;
         $enforce = $enforceAt ?? $rendered->enforceAt ?? $now;
 
-        // The timeline invariant, checked BEFORE the mode branches and therefore independent of
+        // The timeline invariant, checked before the mode branches and therefore independent of
         // mode, regime and minimum lead time. Both branches below could be skipped entirely — the
         // deemed-consent one measures against the objection deadline rather than the effective
-        // date, and the other runs only for a mode that owes notice AND an effective date still in
+        // date, and the other runs only for a mode that owes notice and an effective date still in
         // the future — so an inverted timeline reached the insert with nothing having looked at it.
         //
-        // Only an announcement the operator CHOSE is refused, and the distinction is not
+        // Only an announcement the operator chose is refused, and the distinction is not
         // squeamishness: an effective date already in the past with no announcement date given is a
         // documented, supported publish ("an immediate gate with no grace" — an initial version, or
         // a change whose effective date was reached before it was published), and it is the
         // announcement that is defaulted there, not chosen. What has never been supported, and what
-        // nothing refused, is an operator naming an announcement date AFTER the effective date.
+        // nothing refused, is an operator naming an announcement date after the effective date.
         if ($chosenAnnounce instanceof CarbonImmutable && $announce->greaterThan($enforce)) {
             throw NoticeTimelineInvertedException::for($key, $locale, $announce, $enforce);
         }
@@ -571,16 +627,16 @@ final readonly class LegalDocumentPublisher
         if ($mode === NoticeMode::DeemedConsent) {
             $deadline = $this->assertObjectionWindow($objectionDeadline, $enforce, $key);
 
-            // For a deemed-consent change the statutory period is the OBJECTION window, not the
+            // For a deemed-consent change the statutory period is the objection window, not the
             // span to the effective date: the subject must have the full period to actually
             // object (§ 308 Nr. 5 lit. a BGB; § 675g Abs. 1 for a payment contract). Measuring
             // to enforce_from would let a 61-day announce→enforce span ship a one-day window to
-            // object. It is also NEVER waived for an "immediate" publish — silence cannot bind
+            // object. It is also never waived for an "immediate" publish — silence cannot bind
             // without a real chance to object, so there is no exemption here.
             $minDays = $this->minLeadDays($mode, $regime, $key);
 
             if ($earliestNotice->addDays($minDays)->greaterThan($deadline)) {
-                // The span ENDS at the objection deadline here, and saying so is the whole of
+                // The span ends at the objection deadline here, and saying so is the whole of
                 // this argument: the refusal used to name this date 'enforcement', so an
                 // operator moved the enforcement date — which was never the problem — and got
                 // refused again with the same number.
@@ -593,24 +649,24 @@ final readonly class LegalDocumentPublisher
                 throw LeadTimeTooShortException::for($key, $calendarDays, $earliestNotice, $deadline, LeadTimeSpan::ObjectionDeadline);
             }
         } elseif ($mode->requiresNotice() && $enforce->greaterThan($now)) {
-            // A change SCHEDULED for a future enforcement date must give the minimum advance
+            // A change scheduled for a future enforcement date must give the minimum advance
             // period for its mode and regime between its (effective) announcement and enforcement.
             // Defaulting the announce date to now before comparing closes the bypass where
             // enforceAt is set but announceAt is omitted, and measuring from the earliest notice
             // closes the one where it is set to a day already past. An immediate publish
             // (enforcement now-or-past — e.g. an initial version) has no grace window.
             //
-            // The condition used to be `$mode->gates()`, which is true for ACTIVE RE-CONSENT ONLY.
+            // The condition used to be `$mode->gates()`, which is true for active re-consent only.
             // An info-only change therefore hit neither branch and got no advance check at all —
             // while NoticeMode's own docblock assigns P2B, DSA and EECC to exactly that mode. A
             // P2B change with three days' notice went through without a word, and Art. 3(3) makes
-            // a change implemented that way VOID. `requiresNotice()` is the honest predicate: a
+            // a change implemented that way void. `requiresNotice()` is the honest predicate: a
             // silent editorial change owes no notice and therefore no period, and everything else
             // does. A mode with no benchmark and a regime with no floor still resolves to 0, so
             // nothing that passed before now fails for a reason nobody declared.
             $minDays = $this->minLeadDays($mode, $regime, $key);
 
-            // `> 0` VS `>= 0` IS UNOBSERVABLE HERE, so no test can tell the two apart. With
+            // `> 0` VS `>= 0` is unobservable here, so no test can tell the two apart. With
             // `$minDays === 0` the comparison reduces to `earliest notice > enforce`, and that is
             // false in every state this branch can be reached in:
             //
@@ -665,7 +721,7 @@ final readonly class LegalDocumentPublisher
         }
 
         // A binding document may never be reclassified as informational. Before that class
-        // existed a type switch changed WHICH duty applied; it could not remove the duty
+        // existed a type switch changed which duty applied; it could not remove the duty
         // altogether. Now it can: subjects have accepted v1 of the contract, the operator edits
         // `legal_basis` while tidying the registry, publishes v2 — and the gate silently stops
         // asking anyone, while the ledger still holds the old acceptances so nothing looks wrong.
@@ -700,14 +756,14 @@ final readonly class LegalDocumentPublisher
     }
 
     /**
-     * One (key, major) is ONE change, so every locale of it must carry the SAME notice mode.
+     * One (key, major) is one change, so every locale of it must carry the same notice mode.
      *
      * Acceptance is identity-keyed — accepting `terms` major 2 in any language satisfies the gate
      * for `terms` major 2 everywhere. If the same major were DeemedConsent in one locale and
      * ActiveReconsent in another, a subject bound by silence in the first would silently satisfy
      * the hard re-consent gate of the second: a weaker proof standing in for a stronger one.
      *
-     * THE ATOMIC RELEASER DID NOT MAKE THIS UNREACHABLE, and this paragraph used to say it did.
+     * The atomic releaser did not make this unreachable, and this paragraph used to say it did.
      * It publishes its locales one after another inside one transaction, so the first locale met
      * siblings still holding the version being replaced, under its old mode, and was refused.
      * Measured 2026-09-14: a major released as an active re-consent in `de` and `en`, then 1.1.0 as
@@ -721,8 +777,8 @@ final readonly class LegalDocumentPublisher
      */
     private function assertModeConsistentAcrossLocales(NoticeMode $mode, string $key, string $locale, Document $rendered, array $releasedTogether = []): void
     {
-        // A VERSION THAT CARRIES EXACTLY THE ACTIVE VERSION'S TEXT IS NOT A CHANGE, SO IT HAS
-        // NOTHING TO BE CONSISTENT WITH. The presentation re-render publishes the identical source
+        // A version that carries exactly the active version's text is not a change, so it has
+        // nothing to be consistent with. The presentation re-render publishes the identical source
         // — proven by the hash, not by a flag a caller could assert — under the next patch and the
         // silent mode: no gate, no notice, nothing announced. Without this the fix would be
         // unreachable exactly where it is needed most, because a `terms` major that went out as
@@ -776,14 +832,14 @@ final readonly class LegalDocumentPublisher
 
     /**
      * Whether this publish carries no change at all: the active version's text, re-frozen under a
-     * silent mode because its RENDERING moved.
+     * silent mode because its rendering moved.
      *
      * Both halves are load-bearing, and the proof is a hash rather than anything a caller asserts.
      * The mode alone would let an operator re-classify one locale of a major at a time; the hash
      * alone would let an identical text go out as DeemedConsent beside an ActiveReconsent sibling.
      * Together they describe a version nobody can be bound by differently than they already are.
      *
-     * The comparison is between SOURCE hashes, never HTML — the re-render exists precisely because
+     * The comparison is between source hashes, never HTML — the re-render exists precisely because
      * the HTML differs. A row published before the package recorded a source hash answers false: it
      * cannot prove anything about its own text, and an unprovable claim must not open a guard.
      */
@@ -882,7 +938,7 @@ final readonly class LegalDocumentPublisher
      * published as a minor or a patch reaches nobody who accepted the current major. The row would
      * say a re-consent was requested, and no earlier acceptor would ever be asked for one. The first
      * publication of a key has no major anyone holds yet, and gating it is how the first acceptance
-     * is collected, so it passes; a LOWER major is the monotonic check's refusal, not this one's.
+     * is collected, so it passes; a lower major is the monotonic check's refusal, not this one's.
      */
     private function assertGatingModeRaisesTheMajor(NoticeMode $mode, DocumentType $type, string $version, int $major, string $key, string $locale): void
     {
@@ -909,8 +965,8 @@ final readonly class LegalDocumentPublisher
      * The minimum advance period for a scheduled gating or deemed-consent change, resolved per
      * regime — never one global value.
      *
-     * A per-document `min_lead_days` in the `documents` registry may RAISE a period but never
-     * undercut a STATUTORY floor: § 675g Abs. 1 BGB / Art. 54 PSD2 fix two months for a payment
+     * A per-document `min_lead_days` in the `documents` registry may raise a period but never
+     * undercut a statutory floor: § 675g Abs. 1 BGB / Art. 54 PSD2 fix two months for a payment
      * framework contract, so that floor is a hard minimum, not a default a config can talk down.
      * The § 308 Nr. 5 / § 327r "angemessene Frist" is unquantified, so those defaults may be
      * tuned freely. Falls back to MATERIAL_MIN_LEAD_DAYS.
@@ -921,7 +977,7 @@ final readonly class LegalDocumentPublisher
         $periods = is_array($periods) ? $periods : [];
 
         // The two minima are combined with max(), not chosen between. A deemed-consent change
-        // under P2B owes BOTH the § 308 Nr. 5 benchmark and the Art. 3 standstill, and letting the
+        // under P2B owes both the § 308 Nr. 5 benchmark and the Art. 3 standstill, and letting the
         // regime replace the mode would have cut a 60-day deemed window to 15 — a regression
         // dressed as a feature. An info-only change has no mode benchmark at all, which is why it
         // had no check whatsoever until its regime supplied one.
@@ -934,7 +990,7 @@ final readonly class LegalDocumentPublisher
         $regimeKey = $regime === null ? null : (self::REGIME_PERIOD_KEYS[$regime] ?? null);
         $regimeMinimum = $regimeKey === null ? 0 : $this->period($periods, $regimeKey);
 
-        // Clamp the CONFIG too, not just the override: a statutory period sits in the same
+        // Clamp the config too, not just the override: a statutory period sits in the same
         // published array as the freely-tunable ones, so lowering it looks like an ordinary knob.
         // No input path may undercut a floor the law fixes.
         $floor = $regime === null ? 0 : (self::STATUTORY_FLOORS[$regime] ?? 0);
@@ -958,7 +1014,7 @@ final readonly class LegalDocumentPublisher
      * deemed-consent version.
      *
      * § 308 Nr. 5 BGB lets silence bind only after a reasonable period to object, with the warning
-     * given at the BEGINNING of that period. Publishing checks the period from the announcement; a
+     * given at the beginning of that period. Publishing checks the period from the announcement; a
      * recipient whose notice arrived later, behind a queue backlog or a retry, has less of it. So it
      * is measured again here from the day their notice was delivered, the way publishing measures it:
      * in days from the start of that day, and on the calendar as well for a regime the law counts in
@@ -1061,7 +1117,7 @@ final readonly class LegalDocumentPublisher
 
     /**
      * A regime must be one of the known set. An unrecognized value (a typo like 'psd2_675') would
-     * fail OPEN: it falls through to the freely-tunable mode default instead of its statutory
+     * fail open: it falls through to the freely-tunable mode default instead of its statutory
      * period, so a payment change could ship with a two-week window where § 675g demands two
      * months. Fail loud instead.
      */

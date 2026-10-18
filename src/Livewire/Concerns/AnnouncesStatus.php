@@ -7,7 +7,7 @@ namespace Pushery\LegalConsent\Livewire\Concerns;
 use Livewire\Attributes\Locked;
 
 /**
- * A status message plus a monotonic nonce, so an aria-live region re-announces even when the SAME
+ * A status message plus a monotonic nonce, so an aria-live region re-announces even when the same
  * message is set twice.
  *
  * Livewire's morph writes nothing to the DOM for an unchanged string, so a repeated identical status

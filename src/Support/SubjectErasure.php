@@ -13,7 +13,7 @@ namespace Pushery\LegalConsent\Support;
  *
  * `rechained` is separate from `consents` on purpose: it counts the rows whose chain link had to be
  * recomputed, which is what the operator correlates against the next `legal-consent:verify-ledger`.
- * It is normally the same number, and it is NOT when a subject also has rows that predate
+ * It is normally the same number, and it is not when a subject also has rows that predate
  * tamper-evidence — those carry no link and are erased without one.
  *
  * `unverifiedChains` counts the subject's chains that no longer verified as the package wrote

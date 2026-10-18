@@ -10,7 +10,7 @@ use Pushery\LegalConsent\Support\IndexName;
 
 /**
  * Append-only consent ledger. One row per acceptance / acknowledgment /
- * re-acceptance / withdrawal, carrying DENORMALIZED snapshots so each row proves
+ * re-acceptance / withdrawal, carrying denormalized snapshots so each row proves
  * itself even if the document or the subject is later gone (Art. 5(2), Art. 7(1),
  * EDPB 05/2020 Rz. 108). No updated_at, no UPDATE in the app layer; DELETE stays
  * allowed for retention/anonymization only.
@@ -29,7 +29,7 @@ return new class extends Migration
             // (Art. 17(3)(b)/(e)); subject_token is a stable pseudonym that also
             // survives anonymization.
             $table->string('subject_type')->nullable();
-            // A STRING key, not an integer one, and 64 rather than 36. The ledger has to hold
+            // A string key, not an integer one, and 64 rather than 36. The ledger has to hold
             // whatever the consuming app keys its subjects by: an auto-increment id survives as
             // its own decimal text, a UUID is 36 characters, a ULID 26. 64 matches the width this
             // table already gives `document_key`, `request_id` and `tenant_id`, and leaves room
@@ -175,7 +175,7 @@ return new class extends Migration
     }
 
     /**
-     * The ONE place this migration's hand-built DDL reaches the connection.
+     * The one place this migration's hand-built DDL reaches the connection.
      *
      * The statements carry a table prefix that is only known at runtime, so they cannot be literal
      * strings. Funneling them through a single method keeps the static exemption for

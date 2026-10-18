@@ -12,6 +12,7 @@ use League\CommonMark\Extension\Table\TableExtension;
 use League\CommonMark\MarkdownConverter;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Exceptions\InvalidDocumentVersion;
+use Pushery\LegalConsent\Exceptions\InvalidSourceVersion;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\MissingAcceptanceWording;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
@@ -24,7 +25,7 @@ use Pushery\LegalConsent\Support\LegalDriftChecker;
  * formatting-only edit never triggers a false re-consent, while any real wording change
  * does (EDPB 05/2020 Rz. 108/110).
  *
- * Two more values leave here with every document: a hash of the SOURCE text, taken before any
+ * Two more values leave here with every document: a hash of the source text, taken before any
  * rendering decision touches it, and a fingerprint of the renderer that produced the HTML. They
  * are what lets `legal-consent:check-drift` answer the question the content hash alone cannot —
  * did the TEXT move, or only the way it is presented.
@@ -97,7 +98,7 @@ final readonly class RenderPipeline
         private int $maxBytes = self::MAX_BYTES,
         private array $documents = [],
     ) {
-        // TABLES ARE REGISTERED, AND THE SANITIZER IS WHY THIS IS A FIX RATHER THAN A FEATURE.
+        // Tables are registered, and the sanitizer is why this is a fix rather than a feature.
         // Its allowlist has permitted `table`, `thead`, `tbody`, `tr`, `th` and `td` all along —
         // it was describing a capability the converter never had. A Markdown table in a legal text
         // came out as a paragraph full of pipe characters, and nothing went red: the sanitizer
@@ -145,6 +146,14 @@ final readonly class RenderPipeline
             throw InvalidDocumentVersion::for($raw->type, $raw->locale, $version);
         }
 
+        // Printable ASCII, one to 64 characters, no space at either end. It is frozen onto the row
+        // and folded into the hash of every consent given to it, so it has to read the same on every
+        // engine and in every collation, and it is refused rather than trimmed into a value the
+        // source never said.
+        if ($raw->sourceVersion !== null && preg_match('/^[\x21-\x7E](?:[\x20-\x7E]{0,62}[\x21-\x7E])?\z/', $raw->sourceVersion) !== 1) {
+            throw InvalidSourceVersion::for($raw->type, $raw->locale, $raw->sourceVersion);
+        }
+
         $parts = explode('.', $version);
 
         return new Document(
@@ -167,19 +176,20 @@ final readonly class RenderPipeline
             sourceRef: $raw->sourceRef,
             sourceHash: $this->sourceHashOf($raw->body),
             renderFingerprint: $this->fingerprint(),
+            sourceVersion: $raw->sourceVersion,
         );
     }
 
     /**
-     * The SHA-256 hash over the SOURCE text, taken before a single rendering decision touches it.
+     * The SHA-256 hash over the source text, taken before a single rendering decision touches it.
      *
      * Frozen onto the published row next to the content hash, it is the proof that answers "did
      * anybody edit this?" on its own. Without it a drift report can only say that the HTML differs,
      * and the operator is sent into a materiality decision about a text nobody changed — which is
      * what happened to every document holding a table when TableExtension was registered.
      *
-     * THE CANONICALIZATION IS DELIBERATELY NARROWER THAN {@see self::canonicalize()}, AND THE
-     * DIFFERENCE IS LOAD-BEARING. In HTML, whitespace between tags carries nothing; in Markdown it
+     * The canonicalization is deliberately narrower than {@see self::canonicalize()}, and the
+     * difference is load-bearing. In HTML, whitespace between tags carries nothing; in Markdown it
      * carries meaning — four leading spaces are a code block, two trailing ones are a hard line
      * break. Collapsing runs of whitespace here would hide a real rendering change behind an
      * unchanged source hash and have drift report "presentation only" over an edit that moved the
@@ -192,14 +202,14 @@ final readonly class RenderPipeline
     }
 
     /**
-     * A fingerprint over HOW this pipeline renders: the markdown options in effect, the extensions
+     * A fingerprint over how this pipeline renders: the markdown options in effect, the extensions
      * it registers, the sanitizer's allowlists, and the installed CommonMark version.
      *
      * Frozen onto every published row, it is the second half of the drift answer. When the HTML of
-     * an untouched text changes, this is the value that says the RENDERER moved — and when the
+     * an untouched text changes, this is the value that says the renderer moved — and when the
      * text changed as well, it is what lets the report name both without conflating them.
      *
-     * It states what the renderer WAS, and only over what is listed above. It cannot see a
+     * It states what the renderer was, and only over what is listed above. It cannot see a
      * change inside the sanitizer's own traversal, or inside CommonMark at a version it already
      * had. {@see LegalDriftChecker} reports that residue as the
      * open case it is instead of attributing it to the text.
@@ -221,7 +231,7 @@ final readonly class RenderPipeline
      * The SHA-256 content hash over the sanitized, canonicalized HTML — the exact value
      * frozen into `legal_documents.content_hash` and snapshotted by the ledger. Public so a
      * frozen-row reader can re-derive it from stored bytes and prove the row is intact, using
-     * the ONE canonicalizer (a second hasher anywhere would mean the ledger hashes one form
+     * the one canonicalizer (a second hasher anywhere would mean the ledger hashes one form
      * and the page renders another).
      */
     public function hashOf(string $html): string
@@ -246,7 +256,7 @@ final readonly class RenderPipeline
      * "Ich habe die Bedingungen gelesen und akzeptiere sie." — a statement nobody made, in the
      * one column this package builds its evidentiary weight on.
      *
-     * A wording SUPPLIED by the source is dropped here rather than carried, and that is
+     * A wording supplied by the source is dropped here rather than carried, and that is
      * deliberate: carrying it is exactly the defect. An operator who wrote `ui_wording` into
      * an informational page's frontmatter has misunderstood the class, and honoring it would
      * freeze the misunderstanding.
@@ -262,7 +272,7 @@ final readonly class RenderPipeline
      * The document class the registry declares for this key.
      *
      * Defaults to `contract` for an unregistered key, matching LegalDocumentPublisher: the
-     * conservative direction, since a contract IS consent-bearing and therefore still demands
+     * conservative direction, since a contract is consent-bearing and therefore still demands
      * a sentence. A default of `informational` would silently strip the acceptance sentence
      * off every document a caller forgot to register — the failure pointing the other way, and
      * the far more expensive one.
@@ -276,7 +286,7 @@ final readonly class RenderPipeline
     }
 
     /**
-     * The exact acceptance sentence, always resolved in the DOCUMENT's own locale. The
+     * The exact acceptance sentence, always resolved in the document's own locale. The
      * source's own wording wins; otherwise the type-keyed translation, then the `default`
      * key — both in `$raw->locale` or its language, never the ambient app/session locale and
      * never `app.fallback_locale` (publishing `de` from an English session, or `pl` in an
@@ -293,10 +303,10 @@ final readonly class RenderPipeline
 
         // The translations are read in the document's language only, never through
         // `app.fallback_locale`, and an empty line counts as none ({@see AcceptanceWording}).
-        // ui_wording is frozen proof: it is NOT in MUTABLE_AFTER_PUBLISH, the BEFORE UPDATE
+        // ui_wording is frozen proof: it is not in MUTABLE_AFTER_PUBLISH, the BEFORE UPDATE
         // trigger rejects changing it, and it is copied verbatim into every ledger row and folded
         // into the hash chain. A sentence in another language, or an empty one, would be
-        // permanent — in the document AND in every consent that points at it. Failing loud is the
+        // permanent — in the document and in every consent that points at it. Failing loud is the
         // whole point: never publish a sentence the subject could not read, or a nameless consent.
         return AcceptanceWording::for($raw->type, $raw->locale)
             ?? throw MissingAcceptanceWording::for($raw->type, $raw->locale);

@@ -14,10 +14,10 @@ use Pushery\LegalConsent\Models\LegalDraft;
 /**
  * Every locale's draft of one legal text, loaded once — the level staleness actually lives at.
  *
- * Staleness is a RELATION between a translation and the source-locale text, not a property of a
+ * Staleness is a relation between a translation and the source-locale text, not a property of a
  * row, so it is derived from two stored hashes rather than kept as a flag. A flag would need an
  * observer fanning out to every translation on each source edit: it can half-fail, and it fails
- * OPEN (reporting "fresh" for a text whose source moved) — the exact failure this exists to
+ * open (reporting "fresh" for a text whose source moved) — the exact failure this exists to
  * prevent. A timestamp would be worse still: editing the source and reverting it leaves every
  * translation permanently "stale" with identical text.
  *
@@ -30,7 +30,7 @@ use Pushery\LegalConsent\Models\LegalDraft;
  *
  * Precision comes free from the pipeline: `canonicalize()` runs inside the hash, so reformatting
  * the source stales nothing. Accepted caveat: that canonicalization's `\s` is not Unicode-aware,
- * so a non-breaking space (U+00A0) survives and DOES move the hash — pasting from a word processor
+ * so a non-breaking space (U+00A0) survives and does move the hash — pasting from a word processor
  * can stale every translation with no visible diff. Package semantics, documented, not papered
  * over with a second normalizer (that would be two canonical forms, and the ledger hashes one).
  */
@@ -45,7 +45,7 @@ final readonly class LegalDraftSet
         private string $sourceLocale,
     ) {}
 
-    /** All drafts for a key (tenant-scoped by the model), in ONE query. */
+    /** All drafts for a key (tenant-scoped by the model), in one query. */
     public static function for(string $key, ?string $sourceLocale = null): self
     {
         $configured = config('legal-consent.default_locale');
@@ -69,7 +69,7 @@ final readonly class LegalDraftSet
     }
 
     /**
-     * The version the next release carries, read from the SOURCE row for every locale — so the
+     * The version the next release carries, read from the source row for every locale — so the
      * locales of one release can never disagree about which version they are.
      */
     public function version(): ?string
@@ -91,14 +91,14 @@ final readonly class LegalDraftSet
     }
 
     /**
-     * Has this draft ever been confirmed against a source text AT ALL?
+     * Has this draft ever been confirmed against a source text at all?
      *
      * The other half of {@see isStale()}, and it exists because that method answers two different
      * situations with one boolean. `save()` does not stamp `source_hash` — only `markReviewed()`
      * and `applyTranslation()` do — so a translation somebody typed by hand and never reviewed has
      * no stamp and is stale, correctly: nobody has confirmed it against today's source.
      *
-     * What is NOT correct is telling that person the source changed *after this translation was
+     * What is not correct is telling that person the source changed *after this translation was
      * reviewed*. It never was. A screen that narrates a sequence of events which did not happen is
      * worse than one that says less, and this one is read by whoever decides to publish.
      */
@@ -114,7 +114,7 @@ final readonly class LegalDraftSet
     }
 
     /**
-     * The locales a release of THIS document covers, out of the ones an application configured.
+     * The locales a release of this document covers, out of the ones an application configured.
      *
      * A language comes along when its draft could go out, for every type of document. A language
      * whose draft is missing, unreviewed or stale keeps the version it already has live, or has
@@ -132,7 +132,7 @@ final readonly class LegalDraftSet
      * after discarding one translation, and binding a reader to another language's version would
      * break the rule above.
      *
-     * Whether a reader of a language without any version is SHOWN another language's version is a
+     * Whether a reader of a language without any version is shown another language's version is a
      * different question, answered by the type ({@see SourceLanguageFallback}): an informational
      * page and an acknowledgment that asks for it fall back, a contract and a consent never do.
      *
@@ -175,7 +175,7 @@ final readonly class LegalDraftSet
 
     /**
      * The locales that would block a release right now, each with its reason — so a release screen
-     * can say WHY instead of just refusing.
+     * can say why instead of just refusing.
      *
      * This is the readiness the admin overview arms its button from, and {@see
      * LegalDocumentReleaser} refuses over the same set. The two must not drift: a button armed
@@ -186,12 +186,12 @@ final readonly class LegalDraftSet
      */
     public function blockingLocales(array $locales): array
     {
-        // THE SOURCE FIRST, BEFORE ANY QUESTION ABOUT DRAFTS. A document whose text does not come
+        // The source first, before any question about drafts. A document whose text does not come
         // from the draft store cannot be released from here at all, so every other reason is
         // beside the point — and one of them is actively misleading. With no drafts this used to
         // answer "no draft yet", which is true and useless: an operator reads it, writes a draft,
         // has it reviewed, watches the button go live, and meets the refusal. The reason that is
-        // ACTIONABLE is the source, and it is also exactly what the releaser refuses over, so the
+        // actionable is the source, and it is also exactly what the releaser refuses over, so the
         // overview and the release now say the same sentence about the same state.
         if (DocumentSourceKind::isOutsideTheDraftStore($this->key)) {
             return array_fill_keys($locales, BlockingReason::NotDraftBacked);
@@ -226,7 +226,7 @@ final readonly class LegalDraftSet
     }
 
     /**
-     * The same question for a whole set of locales, in ONE query rather than one per locale.
+     * The same question for a whole set of locales, in one query rather than one per locale.
      *
      * The admin matrix is documents × locales and asked per cell: six documents in seven languages
      * cost 42 statements for something one statement answers, on a Livewire component that

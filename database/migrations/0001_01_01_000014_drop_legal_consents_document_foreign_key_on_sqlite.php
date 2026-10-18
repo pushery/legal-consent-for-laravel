@@ -13,7 +13,7 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
  * Drop the `legal_consents.document_id` foreign key on SQLite too.
  *
  * 000008 dropped this foreign key on PostgreSQL and MySQL because its `ON DELETE SET NULL` is an
- * UPDATE of an append-only ledger row, but it EXCLUDED SQLite on the now-outdated assumption that
+ * UPDATE of an append-only ledger row, but it excluded SQLite on the now-outdated assumption that
  * the driver cannot drop a foreign key. Laravel 13 drops it via a table rebuild, so the exclusion
  * left SQLite as the one supported engine where deleting a superseded legal_documents row still
  * cascades a silent `document_id = NULL` onto the immutable ledger row — a raw referential write
@@ -34,10 +34,10 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
  * SQLite re-parses every trigger in the schema at that rename, and a trigger whose referenced
  * table is missing at that instant is a hard error — raised after the original has already gone.
  *
- * ON SQLITE THIS REBUILDS THE TABLE, AND A REBUILD DOES NOT CARRY YOUR OWN TRIGGERS ACROSS.
+ * On SQLite this rebuilds the table, and a rebuild does not carry your own triggers across.
  * SQLite cannot drop a foreign key in place, so the grammar creates a temp table, copies the rows,
  * drops the original and renames — reconstructing columns, indexes, primary key and foreign keys
- * from BlueprintState, and nothing else. A trigger a CONSUMER added to `legal_consents` is silently
+ * from BlueprintState, and nothing else. A trigger a consumer added to `legal_consents` is silently
  * gone afterwards, and so is a CHECK constraint or a partial-index predicate.
  *
  * The package's own append-only triggers are unaffected, and not by luck: migration 000002 installs

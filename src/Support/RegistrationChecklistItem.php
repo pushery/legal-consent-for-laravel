@@ -7,7 +7,7 @@ namespace Pushery\LegalConsent\Support;
 use Pushery\LegalConsent\Enums\DocumentType;
 
 /**
- * One consent control a registration form must render, derived from what is actually PUBLISHED.
+ * One consent control a registration form must render, derived from what is actually published.
  *
  * The point is that a register form stops hardcoding its own list. A hardcoded checkbox survives
  * the document being renamed, unpublished, or published only in another language — and then either
@@ -18,14 +18,14 @@ use Pushery\LegalConsent\Enums\DocumentType;
  * `locale` is carried per item because a form may legitimately show one control in a language the
  * rest of the page is not in — the one control a visitor must understand before agreeing to it.
  *
- * LINK THE FULL TEXT WITH THIS ITEM'S `locale`, never the app locale. A mandatory document published
+ * Link the full text with this item's `locale`, never the app locale. A mandatory document published
  * only in the default locale appears here as its default-locale control, and
- * `Consent::published($key, $locale)` has NO fallback by design (a page shows the text of the locale
+ * `Consent::published($key, $locale)` has no fallback by design (a page shows the text of the locale
  * it claims, or nothing). Passing the app locale therefore yields `null` and the visitor gets a
  * required checkbox whose text they cannot open — a clickwrap that is not informed (Art. 7(1)).
  *
  * `$url` is that link, and the package now makes it: it comes from the host's `document_url`
- * resolver applied to THIS item's document, so the locale is right by construction rather than by
+ * resolver applied to this item's document, so the locale is right by construction rather than by
  * the consumer remembering the paragraph above.
  */
 final readonly class RegistrationChecklistItem
@@ -38,7 +38,7 @@ final readonly class RegistrationChecklistItem
         public string $version,
         public string $locale,
         public bool $required,
-        // The render-time acceptance fingerprint of this document, for the OPT-IN accept-time guard
+        // The render-time acceptance fingerprint of this document, for the opt-in accept-time guard
         // (see hashField()). Empty for an attestation, which has no version to freeze.
         public string $contentHash = '',
         // Where this document is readable, from the host's `document_url` resolver — null when none
@@ -55,10 +55,10 @@ final readonly class RegistrationChecklistItem
      *
      * A document control is `legal_{key}`, or the name the document declares as
      * `registration_field` when one control covers several pages ({@see RegistrationField}); an
-     * ATTESTATION (no document, hence no type — today the Art. 8 age gate) is named by its key
+     * attestation (no document, hence no type — today the Art. 8 age gate) is named by its key
      * directly.
      *
-     * Reading the SAME seam the rules read is the point: a form built from this checklist must
+     * Reading the same seam the rules read is the point: a form built from this checklist must
      * validate against the rules built beside it, and two independent derivations of one
      * convention is how they stop matching.
      */
@@ -68,18 +68,18 @@ final readonly class RegistrationChecklistItem
     }
 
     /**
-     * The hidden field a form renders to ACTIVATE the accept-time content-hash guard for this
+     * The hidden field a form renders to activate the accept-time content-hash guard for this
      * document: it carries {@see $contentHash} (the render-time fingerprint), and
      * RegistrationConsentRecorder passes it to `accept()`, so a version released mid-form raises a
      * `DocumentChangedException` instead of being silently frozen. On the registration path the
      * application decides how to answer it; the JSON API answers it with a 409. Named
      * `legal_{key}_hash`, after the document, whatever the control is called.
      *
-     * Rendering it is OPT-IN and adds no behavior by itself: a form that omits it keeps the prior
+     * Rendering it is opt-in and adds no behavior by itself: a form that omits it keeps the prior
      * no-guard registration path (the recorder simply receives no expected hash). Empty for an
      * attestation, which has no document to guard.
      *
-     * NAMED AFTER THE DOCUMENT, NOT AFTER THE CONTROL, and that is deliberate where a single
+     * Named after the document, not after the control, and that is deliberate where a single
      * control covers several pages: the fingerprint is one document's version, so four pages
      * behind one checkbox render one control and four hidden fields. Naming these after the
      * control would collapse four fingerprints into one name and guard whichever was written

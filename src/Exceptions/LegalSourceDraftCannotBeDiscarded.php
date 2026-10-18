@@ -7,7 +7,7 @@ namespace Pushery\LegalConsent\Exceptions;
 use RuntimeException;
 
 /**
- * Someone asked to discard the SOURCE draft of a text, and there is no coherent answer to that.
+ * Someone asked to discard the source draft of a text, and there is no coherent answer to that.
  *
  * Every translation measures its freshness against the source's hash, and the source is what a
  * translation falls back to when it has none of its own. Removing it would leave every other locale

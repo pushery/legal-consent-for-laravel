@@ -6,7 +6,7 @@
     `@wirekitScripts` in the layout (Release all locales confirms via an alert-dialog).
 --}}
 <div>
-    {{-- The label is assembled into an attribute bag, because a Blade `@if` INSIDE a component
+    {{-- The label is assembled into an attribute bag, because a Blade `@if` inside a component
          tag does not compile — it is emitted as literal text into the rendered attribute list.
          The landmark takes its name directly when the heading is gone: `aria-labelledby` pointing
          at a missing id names nothing, and an unnamed region is not an improvement on a duplicated
@@ -21,7 +21,7 @@
 
         {{-- WCAG 4.1.3: the release result (or the reason it did not happen) is announced here. The
              region is ALWAYS in the DOM so the update is spoken — a live region inserted together
-             with its text is not announced. The text is a plain x-wirekit::text, NOT an
+             with its text is not announced. The text is a plain x-wirekit::text, not an
              x-wirekit::alert: the alert is itself a role="status" region, and nesting a live region
              in this one would double-announce.
 
@@ -58,7 +58,7 @@
              re-theme the cell and still emit scope="col". --}}
         {{-- The legend, and it is what makes the short cells legible rather than cryptic.
 
-             This matrix carries one column PER LOCALE, so the widest state word decides the table's
+             This matrix carries one column per locale, so the widest state word decides the table's
              width -- and the words are sentences: "Unveröffentlichte Änderungen" is 28 characters,
              and seven of those columns do not fit any desktop. Measured in a consuming application
              at 1728px: the table wanted 1407px of content space and had 1400. Letting the cells
@@ -84,7 +84,7 @@
 
             {{-- The same two sentences as the plain twin, and for the same reason: the legend above
                  maps a short form onto a long one, so it explains "Draft" with "Draft". What a first
-                 reader of this screen needs to hear is that REVIEWING PUBLISHES NOTHING, and then why
+                 reader of this screen needs to hear is that reviewing publishes nothing, and then why
                  the release waits on languages other than their own. A capability in one tree and not
                  the other is exactly the drift a pair of shipped views invites. --}}
             @foreach (['review_state_reviewed', 'review_state_draft'] as $state)
@@ -114,7 +114,7 @@
                             <x-wirekit::table.td>
                                 {{-- The whole cell is the link when an editor route is configured, and
                                      `underline="none"` is the reason it is readable: an underline drawn
-                                     across a row of badges runs THROUGH each pill, which reads as struck
+                                     across a row of badges runs through each pill, which reads as struck
                                      out — the opposite of what every one of these states means. What is
                                      left is `cursor-pointer` and the hover fade the component already
                                      carries. A resting affordance is a border, and a border is CSS this
@@ -122,7 +122,7 @@
                                      calls for it.
 
                                      The accessible name repeats the states on purpose. An `aria-label`
-                                     REPLACES the content it sits on, so a link announcing only "Edit
+                                     replaces the content it sits on, so a link announcing only "Edit
                                      Terms (de)" would hide the one fact the cell exists to state.
 
                                      The badges are rendered once into `$badges` and then either wrapped
@@ -162,7 +162,7 @@
                             @if ($rows[$key]['_release']['ready'])
                                 {{-- The installed alert-dialog exposes a `trigger` slot
                                      plus a default-slot panel body built from alert-dialog.title /
-                                     .description / .actions sub-components — NOT named title/description/
+                                     .description / .actions sub-components — not named title/description/
                                      confirm slots, which it silently drops (leaving an empty dialog with no
                                      confirm button, so the release is unreachable through the UI). --}}
                                 <x-wirekit::alert-dialog :name="'lc-release-'.$key" close-on-confirm>
@@ -195,7 +195,7 @@
                                              slot as it is, so the release keeps its look rather than the
                                              confirm's destructive one. --}}
                                         {{-- `{{ Js::from() }}`, NOT `@js()`. A Blade directive inside
-                                             a COMPONENT TAG attribute is never compiled: the tag
+                                             a component tag attribute is never compiled: the tag
                                              compiler lifts the attribute out as a literal before the
                                              directive compiler sees it, so the text `@js($key)` is
                                              what reaches the browser — for every key, with no error
@@ -221,20 +221,20 @@
                                     <x-wirekit::text size="sm">{{ __('legal-consent::ui.admin_release_leaves_out', ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}</x-wirekit::text>
                                 @endif
                             @else
-                                {{-- The blocking reasons stay OUTSIDE aria-describedby, the same call
+                                {{-- The blocking reasons stay outside aria-describedby, the same call
                                      the plain stub writes out: the button renders a native `disabled`
                                      (not `aria-disabled`) plus `disabled:pointer-events-none`, so it
                                      is not focusable and a description hung on it is never announced.
                                      They are the visible text below instead, reachable in read mode.
                                      The id below is therefore a styling hook only. It is deliberately
-                                     NOT an aria target: pointing a describedby at it would restore the
+                                     not an aria target: pointing a describedby at it would restore the
                                      association this comment exists to prevent. --}}
                                 <x-wirekit::button size="sm" disabled :aria-label="__('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key)">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
-                                {{-- Grouped by REASON, one line each, because the per-locale form grew with
+                                {{-- Grouped by reason, one line each, because the per-locale form grew with
                                      the language count and the language count is what an application with
                                      seven of them cannot reduce. Measured in a browser at 1728 px with seven
                                      blocked locales: the cell was 486 px wide with nothing overflowing, and
-                                     210 px TALL — six documents then show two rows per screen. Every locale
+                                     210 px tall — six documents then show two rows per screen. Every locale
                                      still appears, beside the reason it shares, because an operator needs to
                                      know which language to go and fix. --}}
                                 <x-wirekit::stack gap="xs" id="blocking-{{ $key }}">

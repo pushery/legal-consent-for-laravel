@@ -7,7 +7,7 @@ namespace Pushery\LegalConsent\Support;
 /**
  * One document's entry in the configured registry, read once and narrowed properly.
  *
- * EXTRACTED RATHER THAN COPIED. {@see RegistrationAcknowledgment} carried this reader privately,
+ * Extracted rather than copied. {@see RegistrationAcknowledgment} carried this reader privately,
  * and {@see RegistrationField} needs the same one. A second copy of a config reader is the drift
  * this package argues against everywhere else — the two would agree today and answer differently
  * the first time either learns something about a malformed registry.
@@ -15,10 +15,10 @@ namespace Pushery\LegalConsent\Support;
 final readonly class DocumentRegistryEntry
 {
     /**
-     * REBUILT RATHER THAN RETURNED, for the reason {@see LedgerChainRepair::toRow()} gives about a
+     * Rebuilt rather than returned, for the reason {@see LedgerChainRepair::toRow()} gives about a
      * database row: `config()` hands back `mixed`, `is_array()` narrows it only to
      * `array<mixed, mixed>`, and a registry entry never has integer keys — but nothing in the type
-     * system says so. An inline `@var` would ASSERT that; the loop ESTABLISHES it, and costs one
+     * system says so. An inline `@var` would assert that; the loop establishes it, and costs one
      * pass over a handful of options.
      *
      * @return array<string, mixed>|null

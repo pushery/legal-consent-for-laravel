@@ -9,7 +9,11 @@
      `prose` carries the readable-measure clamp, and that is not decoration here. Long-form text
      without a line-length cap runs the full width of whatever dialog holds it, and a privacy notice
      read at 140 characters per line is a text somebody stops reading — on the one screen where the
-     package's whole argument is that they should read it. --}}
+     package's whole argument is that they should read it.
+
+     The dialog asks for the text with `measure=none`. Its panel caps the line length already, and
+     the clamp inside it ended the text well short of the panel, beside an empty strip. Any other
+     caller keeps the clamp. --}}
 <x-wirekit::stack gap="md" class="lc-document" lang="{{ $document->locale }}">
     <x-wirekit::stack gap="xs">
         {{-- Left out when the caller asks for `heading=0`: the dialog names the document in its own
@@ -18,7 +22,7 @@
             <x-wirekit::heading :level="1" size="lg">{{ $document->title }}</x-wirekit::heading>
         @endif
 
-        {{-- The VERSION, and it is not a detail. Somebody reading this in a dialog is about to agree
+        {{-- The version, and it is not a detail. Somebody reading this in a dialog is about to agree
              to it, and which version they read is the fact a ledger row will later claim. Muted
              rather than hidden: it is context, not the text. --}}
         <x-wirekit::text size="sm" intent="muted">
@@ -34,8 +38,8 @@
         @endif
     </x-wirekit::stack>
 
-    {{-- The sanitizer's output, and the ONLY place this fragment trusts anything.
+    {{-- The sanitizer's output, and the only place this fragment trusts anything.
          `LegalHtmlSanitizer` runs inside the publish pipeline, so what is stored is what survived
          it — this is the sink that class exists to protect, written unescaped on purpose. --}}
-    <x-wirekit::prose>{!! $document->html !!}</x-wirekit::prose>
+    <x-wirekit::prose :measure="($measure ?? 'default') === 'none' ? 'none' : 'default'">{!! $document->html !!}</x-wirekit::prose>
 </x-wirekit::stack>

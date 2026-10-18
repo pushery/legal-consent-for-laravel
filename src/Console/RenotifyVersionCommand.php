@@ -16,18 +16,18 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * Clear a version's dispatch watermark so the next sweep considers it again.
  *
  * This exists for one situation and says so: until the notice audience became mode-dependent, an
- * info-only or deemed-consent change published as a minor bump selected NO subjects, reported
+ * info-only or deemed-consent change published as a minor bump selected no subjects, reported
  * success, and stamped `notified_at` anyway. Repairing that forward leaves a cohort behind whose
  * version will never be swept again, and a paragraph in an upgrade note is not a remedy.
  *
  * `notified_at` is one of the four columns that stay writable after publish, so clearing it is a
  * legitimate operation rather than a hole in the freeze — the content, the version and the proof
- * rows are untouched. What it does NOT do is decide anything: an operator names the version, sees
+ * rows are untouched. What it does not do is decide anything: an operator names the version, sees
  * the audience with `dispatch-notices --dry-run`, and then runs the sweep. It also forgets the
  * notice attempts recorded for the version, so a subject the sweep had given up on, or one it
  * still took for queued, is tried again.
  *
- * The version is an ARGUMENT rather than a `--version` option on purpose: Symfony's console
+ * The version is an argument rather than a `--version` option on purpose: Symfony's console
  * application owns `--version` globally, so a command declaring it never sees the value. The
  * framework prints its own version instead and exits successfully, which makes the mistake look
  * like a command that ran and did nothing.

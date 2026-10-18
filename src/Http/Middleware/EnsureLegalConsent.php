@@ -38,8 +38,8 @@ final readonly class EnsureLegalConsent
             return $next($request);
         }
 
-        // A FIRST acceptance is a different question and is off by default. `outstanding()` asks
-        // whether a CHANGE is owed; a subject who never accepted anything has had no change, so
+        // A first acceptance is a different question and is off by default. `outstanding()` asks
+        // whether a change is owed; a subject who never accepted anything has had no change, so
         // that read is silent about them — and an application whose sign-up carries no consent
         // checkbox then treats people as having accepted a text they were never shown. The two
         // sets are merged rather than chosen between: a subject can owe a first acceptance of one
@@ -69,7 +69,7 @@ final readonly class EnsureLegalConsent
     }
 
     /**
-     * Does this installation also gate a FIRST acceptance?
+     * Does this installation also gate a first acceptance?
      *
      * Read strictly: anything but a literal `true` leaves it off. A gate that turns itself on
      * because a config value happened to be truthy would stop every subject of an application
@@ -83,7 +83,7 @@ final readonly class EnsureLegalConsent
     private function isAllowlisted(Request $request): bool
     {
         // `legal-consent.web.withdraw` is always allowed, for the same reason `logout` is: it is a
-        // way OUT, and the gate must never be the thing standing in it. Withdrawing a voluntary
+        // way out, and the gate must never be the thing standing in it. Withdrawing a voluntary
         // consent is a right the subject holds unconditionally (Art. 7(3)); making it reachable
         // only after accepting a new mandatory version would condition one on the other, which is
         // the coupling Art. 7(4) prohibits. The name is inert when `routes.web` is off — nothing
@@ -119,7 +119,7 @@ final readonly class EnsureLegalConsent
         }
 
         // Where a subject exercises a data-protection right: its own key rather than a line in the
-        // allowlist, because this is the one exemption the package has to ASK about. Access,
+        // allowlist, because this is the one exemption the package has to ask about. Access,
         // portability and erasure do not depend on accepting a new text, so a gate in front of the
         // export or the deletion would make the acceptance a condition of the right.
         $rightsRoutes = config('legal-consent.middleware.rights_routes');
@@ -148,13 +148,13 @@ final readonly class EnsureLegalConsent
      * ticking and submitting it POSTs to that channel and is refused. The subject could never
      * consent, and never leave.
      *
-     * The endpoints are RESOLVED, not written out. Livewire 3 mounted them under a fixed `livewire/`
+     * The endpoints are resolved, not written out. Livewire 3 mounted them under a fixed `livewire/`
      * prefix; Livewire 4 derives the prefix from APP_KEY (`/livewire-<8 hex>/`) so that a scanner
      * cannot find it by name. A hard-coded pattern therefore matches nothing on Livewire 4 — and
      * writing an installation's own hash into the allowlist is worse than the bug, because it is
      * green in development and dead in production, where APP_KEY differs.
      *
-     * Consequence to be honest about: a gated subject can still reach OTHER Livewire components.
+     * Consequence to be honest about: a gated subject can still reach other Livewire components.
      * Livewire re-applies a page's route middleware to the actions of its components only when that
      * middleware is on Livewire's persistent list (`Authenticate` and `Authorize` are there by
      * default, and `Livewire::addPersistentMiddleware()` adds more). Whatever is not on that list
@@ -257,7 +257,7 @@ final readonly class EnsureLegalConsent
      * authenticated subject (the default); a configured `fn (Model): bool` (or invokable
      * class-string) returning false lets a subject through, so an app can order the gate after its
      * own verification / onboarding gates instead of overtaking them. A misconfigured predicate
-     * fails SAFE — the subject stays gated rather than slipping past a legal gate.
+     * fails safe — the subject stays gated rather than slipping past a legal gate.
      */
     private function gatesSubject(Model $subject): bool
     {

@@ -44,7 +44,7 @@ use Pushery\LegalConsent\Testing\ConsentFake;
 final class Consent extends Facade
 {
     /**
-     * Swap the manager for an in-memory {@see ConsentFake} — for a CONSUMING application's tests.
+     * Swap the manager for an in-memory {@see ConsentFake} — for a consuming application's tests.
      *
      * Nothing it does touches a database, so an app can test its own consent screens, gates and
      * register form without migrating this package's tables into its test schema. Its read

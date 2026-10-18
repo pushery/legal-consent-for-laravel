@@ -52,7 +52,7 @@ final class LegalHtmlSanitizer
      *
      * It is one input of {@see RenderPipeline::fingerprint()}, the value every published row
      * freezes beside its content hash so `legal-consent:check-drift` can tell a changed TEXT from
-     * a changed RENDERING. Widening `ALLOWED` — as the table tags were — changes the HTML of texts
+     * a changed rendering. Widening `ALLOWED` — as the table tags were — changes the HTML of texts
      * nobody edited, and that difference is exactly what the fingerprint has to be able to show.
      *
      * The three constants are the whole of what the allowlist decides; the traversal that reads
@@ -99,7 +99,7 @@ final class LegalHtmlSanitizer
         // path answers `''` for empty and for whitespace-only input too, so removing this changes
         // no output — it only builds a DOMDocument to arrive at the same string. Nothing can hold
         // it from outside, and nothing should try; what must not happen is someone reading it as
-        // THE empty-input contract and moving the behavior here.
+        // the empty-input contract and moving the behavior here.
         if (trim($html) === '') {
             return '';
         }
@@ -120,18 +120,18 @@ final class LegalHtmlSanitizer
         libxml_clear_errors();
         libxml_use_internal_errors($previous);
 
-        // THE ERRORS USED TO BE THROWN AWAY UNREAD, AND ONE CLASS OF THEM MEANS LOST CONTENT.
+        // The errors used to be thrown away unread, and one class of them means lost content.
         //
-        // Measured: 260 nested elements hit libxml's hard depth limit of 256 and the parser STOPS.
+        // Measured: 260 nested elements hit libxml's hard depth limit of 256 and the parser stops.
         // 500 004 bytes of input came back as 6 375 — no error, no warning, no log — and
         // `content_hash` is taken over the sanitizer's output, so the append-only row then claims
         // that fragment is the text somebody agreed to. The operator published something else.
         //
-        // Clearing them is right for the rest, and that is why this keys on the LEVEL rather than
+        // Clearing them is right for the rest, and that is why this keys on the level rather than
         // on a message: unclosed tags, stray closing tags, unquoted attributes, entity smuggling,
-        // CDATA, processing instructions and NUL bytes each produce either nothing or a RECOVERABLE
+        // CDATA, processing instructions and NUL bytes each produce either nothing or a recoverable
         // error and still parse in full — measured, all of them. Recovering from messy HTML is what
-        // this parser is for. A FATAL error is the one that says it gave up.
+        // this parser is for. A fatal error is the one that says it gave up.
         $fatal = array_find($errors, static fn (LibXMLError $error): bool => $error->level === LIBXML_ERR_FATAL);
 
         if ($fatal instanceof LibXMLError) {
@@ -169,12 +169,12 @@ final class LegalHtmlSanitizer
         }
 
         // Strip comments, processing instructions, and CDATA sections; keep plain text.
-        // A CDATA section serializes its content VERBATIM (unescaped), so it must never
+        // A CDATA section serializes its content verbatim (unescaped), so it must never
         // reach the {!! !!} sink — defense in depth on top of removing raw-text elements.
         // Which node type a processing instruction or a CDATA section arrives as depends on the
         // libxml2 version PHP is built against, through the same loadHTML() call and flags. Under
         // libxml 2.9.14 a processing instruction (a PHP one or an xml-stylesheet one) is an
-        // XML_PI_NODE; under libxml 2.15.4 both, and a CDATA section, arrive as COMMENT nodes. So
+        // XML_PI_NODE; under libxml 2.15.4 both, and a CDATA section, arrive as comment nodes. So
         // every entry is reachable on some installation, and removing one is not dead-code
         // cleanup: on an older libxml the instruction then survives into shipped HTML, while a
         // newer one would keep every parser-driven test green.
@@ -191,7 +191,7 @@ final class LegalHtmlSanitizer
 
     private function cleanElement(DOMElement $element, DOMNode $parent): void
     {
-        // NO TEST CAN KILL THE `strtolower` HERE, and that is a fact about the PARSER, not a
+        // No test can kill the `strtolower` here, and that is a fact about the parser, not a
         // gap. Measured: libxml's HTML parser already lowercases `tagName`, so `<P>` arrives as
         // `p` and unwrapping this call cannot change any outcome reachable through
         // sanitize() -- the only caller.
@@ -203,7 +203,7 @@ final class LegalHtmlSanitizer
         //
         // Note what this means for the arm named "matches a dangerous tag regardless of how it is
         // capitalized": the guarantee it asserts is real and worth having, but it passes with this
-        // call removed, so it is evidence about the PARSER rather than about this line. Read as
+        // call removed, so it is evidence about the parser rather than about this line. Read as
         // coverage of this line it would be misleading, which is why it is said here.
         $tag = strtolower($element->tagName);
 
@@ -245,7 +245,7 @@ final class LegalHtmlSanitizer
             // Same as the tag above, same reason: measured, libxml lowercases attribute names on
             // the HTML path, so `HREF` arrives as `href` and unwrapping this call would change
             // nothing. Note the failure direction if it were ever reachable -- an unrecognized name
-            // is DROPPED a few lines down, so the case would fail safe rather than open, which is
+            // is dropped a few lines down, so the case would fail safe rather than open, which is
             // why this is a robustness guard and not a security control.
             $name = strtolower($attribute->nodeName);
 
@@ -286,7 +286,7 @@ final class LegalHtmlSanitizer
             return false;
         }
 
-        // A protocol-relative URL (`//host/path`) has no scheme yet is an ABSOLUTE cross-origin
+        // A protocol-relative URL (`//host/path`) has no scheme yet is an absolute cross-origin
         // navigation — it inherits the page's scheme and points off-site. Treating it as "no scheme
         // → relative → safe" would let an untrusted source slip `<a href="//phishing.example">` into
         // a binding legal text. Reject it (require an explicit http/https to leave the origin).
@@ -301,7 +301,7 @@ final class LegalHtmlSanitizer
 
         if (preg_match('/^([a-z][a-z0-9+.-]*):/i', $probe, $matches) === 1) {
             // The `rtrim` makes the group index unobservable: capture group 1 excludes the colon
-            // and group 0 includes it, so after trimming a trailing colon the two are IDENTICAL for
+            // and group 0 includes it, so after trimming a trailing colon the two are identical for
             // every input this pattern can match -- verified across `https://a`, `MAILTO:x@y`,
             // `javascript:alert(1)` and `h+t.t-p1:x`. Which index is read is therefore not
             // observable from outside this function, and will not become observable.

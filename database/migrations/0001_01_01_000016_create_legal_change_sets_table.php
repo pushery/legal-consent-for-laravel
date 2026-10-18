@@ -9,7 +9,7 @@ use Pushery\LegalConsent\Support\ChangeSetFreezeGuard;
 use Pushery\LegalConsent\Support\IndexName;
 
 /**
- * What a version CHANGED, in the operator's own words, per locale — the content every real-world
+ * What a version changed, in the operator's own words, per locale — the content every real-world
  * change notice leads with and this package could not carry.
  *
  * It is a child table rather than a column on `legal_documents` for two reasons that are both
@@ -18,7 +18,7 @@ use Pushery\LegalConsent\Support\IndexName;
  * a structured delta (a list of added and removed sub-processors is the common case, not a
  * sentence). `legal_documents.change_summary` is exactly that dead column, and it stays untouched.
  *
- * ONE row is mutable: the working draft, marked by `version = ''`. Publishing TRANSITIONS it — the
+ * One row is mutable: the working draft, marked by `version = ''`. Publishing transitions it — the
  * same row gains the version and flips to `published` — rather than copying it, so the frozen text
  * and the authored text cannot drift apart.
  *
@@ -48,7 +48,7 @@ return new class extends Migration
             // ledger tables: an `ON DELETE SET NULL` is an UPDATE of this row, and this table
             // carries a BEFORE UPDATE trigger keyed on `state = 'published'`. PostgreSQL runs a
             // referential action through SPI, so the trigger fires and the parent DELETE aborts;
-            // MySQL applies it WITHOUT firing the row trigger and silently mutates a row this
+            // MySQL applies it without firing the row trigger and silently mutates a row this
             // package calls frozen; SQLite has no trigger to fire and mutates it too. The plain
             // column keeps the relation readable and simply dangles once the document is gone —
             // which is what the SET NULL was reaching for, without the illegal write.

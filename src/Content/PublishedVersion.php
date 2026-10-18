@@ -45,6 +45,11 @@ final readonly class PublishedVersion
          * which tenant's sentence it holds, as {@see PublishedDocument::$tenantId} does for the text.
          */
         public string $tenantId = '',
+        /**
+         * The version as the source counts it, recorded beside {@see $version}, or null when the
+         * source counts none. It decides nothing: the gate reads the SemVer version alone.
+         */
+        public ?string $sourceVersion = null,
     ) {}
 
     public static function fromRow(LegalDocument $row): self
@@ -66,6 +71,7 @@ final readonly class PublishedVersion
             noticeMode: $row->noticeMode(),
             enforceFrom: $row->enforce_from,
             tenantId: is_string($tenant) || is_int($tenant) ? (string) $tenant : '',
+            sourceVersion: $row->source_version,
         );
     }
 
@@ -85,6 +91,7 @@ final readonly class PublishedVersion
             noticeMode: $document->noticeMode,
             enforceFrom: $document->enforceFrom,
             tenantId: $document->tenantId,
+            sourceVersion: $document->sourceVersion,
         );
     }
 

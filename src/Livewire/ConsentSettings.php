@@ -24,7 +24,7 @@ use Pushery\LegalConsent\Support\ConsentPresenter;
  * Only ships/registers when livewire/livewire is installed; the plain Blade stub covers the
  * headless case. Requires an authenticated Eloquent subject (auth()->user()).
  *
- * EVERY PUBLIC METHOD HERE IS A REACHABLE ENDPOINT ONCE THE COMPONENT IS EMBEDDED —
+ * Every public method here is a reachable endpoint once the component is embedded —
  * Livewire dispatches to it whether or not your template renders a control for it. Removing a
  * button from a published view therefore switches nothing off. Three transitions are exposed:
  * `withdraw()`, `object()`, `terminate()` and — only when you switch it on — `grant()`.
@@ -45,7 +45,7 @@ use Pushery\LegalConsent\Support\ConsentPresenter;
  * ```
  *
  * `$allowGrant` is the odd one out and it defaults to FALSE, unlike the other two. Granting is
- * the only direction here that WRITES an assertion that the subject agreed; the rest remove or
+ * the only direction here that writes an assertion that the subject agreed; the rest remove or
  * contest one. A proof row saying "they agreed", created from an endpoint the consumer never
  * rendered a control for, is the wrong default for a package whose entire product is proof — so
  * this one is asked for rather than assumed. Turn it on and the screen becomes symmetric: a
@@ -62,7 +62,7 @@ final class ConsentSettings extends Component
     /**
      * The language version every transition on this screen resolves against.
      *
-     * #[Locked] because it decides WHICH version is resolved and frozen: the manager reads it to
+     * #[Locked] because it decides which version is resolved and frozen: the manager reads it to
      * find the active document, and the ledger row keeps that document's locale, version,
      * content_hash and acceptance sentence as proof. Left writable, a subject could switch it at
      * click time and have an append-only row assert agreement to — or withdrawal of — a text they
@@ -208,7 +208,7 @@ final class ConsentSettings extends Component
                 $this->locale,
             ));
 
-            // The status is not decoration on this action. It writes an APPEND-ONLY ledger row, and
+            // The status is not decoration on this action. It writes an append-only ledger row, and
             // the control that triggered it is usually gone from the next render — so with nothing
             // announced, the honest reading of the screen is that nothing happened. The natural
             // response is a second click, and a second click writes a second row that cannot be

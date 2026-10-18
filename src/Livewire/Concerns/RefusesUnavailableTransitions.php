@@ -50,17 +50,17 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * already does with `HttpException`. `abort()` is a Foundation-only global, and the contract test
  * that ratchets those caught it as a new one — correctly, even though the file next door already
  * calls `abort_unless()`. Throwing is not a workaround for that guard: it needs no global at all,
- * and it can carry the refusal as the PREVIOUS exception, which `abort()` has no way to pass.
+ * and it can carry the refusal as the previous exception, which `abort()` has no way to pass.
  */
 trait RefusesUnavailableTransitions
 {
     /**
-     * NOT named `transition()`, and PRIVATE on purpose — both for the same reason.
+     * Not named `transition()`, and private on purpose — both for the same reason.
      *
      * `Livewire\Component` already carries a public `transition()` (via HandlesTransitions), so the
      * obvious name is taken. Private, PHP refuses to reduce the visibility and the collision is a
      * load-time fatal — loud, and caught by the first test that boots the component. Public, it
-     * would have silently OVERRIDDEN Livewire's own transition API instead, and what broke would
+     * would have silently overridden Livewire's own transition API instead, and what broke would
      * have been the JS transitions, somewhere else, with nothing pointing back here.
      *
      * The closure's return type is `mixed` because the manager's transitions return the ledger row
@@ -81,7 +81,7 @@ trait RefusesUnavailableTransitions
             $transition();
         } catch (LegalDocumentNotFound $e) {
             // Only the active-version lookup is a client error. The same type is raised while
-            // RENDERING a document, and a consuming app's listener on the recorded event can raise
+            // rendering a document, and a consuming app's listener on the recorded event can raise
             // it after the ledger row is already committed — answering that with a 404 would hide
             // their bug behind a status code that says the document does not exist.
             if (! $e->isMissingPublishedVersion()) {

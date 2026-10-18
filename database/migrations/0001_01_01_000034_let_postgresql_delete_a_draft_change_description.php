@@ -11,7 +11,7 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
  *
  * The trigger function that freezes a published change set, and the one for its items, ended with
  * `RETURN NEW` for UPDATE and DELETE alike. In a BEFORE DELETE row trigger `NEW` is null, and a
- * BEFORE row trigger that returns null skips the row, so on PostgreSQL no delete of a draft did
+ * before row trigger that returns null skips the row, so on PostgreSQL no delete of a draft did
  * anything: `ChangeItems::discard()` reported success and left the draft in place, and saving a
  * draft a second time failed on the unique position of its items, because the old ones were never
  * removed. MySQL and SQLite were not affected.

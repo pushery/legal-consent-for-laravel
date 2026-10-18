@@ -1,6 +1,6 @@
 {{--
     Publishable, framework-agnostic settings stub. The three legally distinct blocks are
-    kept SEPARATE on purpose (the whole point of the package):
+    kept separate on purpose (the whole point of the package):
 
       1. Verträge (contracts)          — read-only; you end them by canceling the account,
                                          not by "withdrawing" (Art. 6(1)(b)).
@@ -12,14 +12,14 @@
     ['key','title','version','held','outstanding','withdrawable','url','withdraw_url',
     'pending_confirmation'].
 
-    `outstanding` is true when a NEW MAJOR is waiting — the one state that asks the reader to act.
+    `outstanding` is true when a new major is waiting — the one state that asks the reader to act.
     It is always false for a consent: demanding a voluntary one would be Art. 7(4).
 
     `url` is null unless the host configured `legal-consent.document_url`. Where it is set the
     title becomes a link, because a screen on which the document being withdrawn cannot be read is
     silent exactly where Art. 7(3) assumes the subject knows what they are deciding about.
 
-    `withdraw_url` is where the form posts, and the PACKAGE fills it now — from the bundled
+    `withdraw_url` is where the form posts, and the package fills it now — from the bundled
     session route, which you switch on with `legal-consent.routes.web`. It is null on every entry
     that is not a withdrawable consent the subject currently holds, and null everywhere while that
     route is off; the form is then not rendered at all. Until 0.16.1 this key had no producer
@@ -34,7 +34,7 @@
     {{-- The result of the redirect the bundled withdrawal route answers with.
 
          On this path the live region announces nothing, and the comment here used to claim the
-         opposite. Withdrawal is POST -> Redirect -> GET, so the message arrives in a FRESH
+         opposite. Withdrawal is POST -> Redirect -> GET, so the message arrives in a fresh
          document together with the region that carries it — and a live region present at page
          load never announces, because there is no mutation for it to report. The "always in the
          DOM" reasoning is true of the Livewire twins, where the component morphs the region in
@@ -49,7 +49,7 @@
     <p role="status" aria-live="polite">{{ session('legal-consent.status') }}</p>
     <p role="alert">{{ session('legal-consent.error') }}</p>
 
-    {{-- The all-empty case gets ONE sentence instead of three headings over nothing. It is not the
+    {{-- The all-empty case gets one sentence instead of three headings over nothing. It is not the
          edge case it looks like: the groups come from the `legal_documents` table, which is empty
          until `legal-consent:publish` runs — so this is what every consumer sees between
          `composer require` and their first publish, and three bare headings read as broken. --}}
@@ -62,7 +62,7 @@
         <ul>
             @forelse ($contracts as $contract)
                 {{-- The title can be in a language this page is not in: a mandatory document
-                     published only in the default locale still binds, and a RETIRED row is shown in
+                     published only in the default locale still binds, and a retired row is shown in
                      the language the subject read it in — deliberately, see RetiredHoldings. Without
                      `lang` a screen reader speaks it with the page's phonetics (WCAG 3.1.2).
                      `hreflang` says the same thing about the far end of the link and does not
@@ -87,7 +87,7 @@
         <ul>
             @forelse ($acknowledgements as $acknowledgement)
                 {{-- The title can be in a language this page is not in: a mandatory document
-                     published only in the default locale still binds, and a RETIRED row is shown in
+                     published only in the default locale still binds, and a retired row is shown in
                      the language the subject read it in — deliberately, see RetiredHoldings. Without
                      `lang` a screen reader speaks it with the page's phonetics (WCAG 3.1.2).
                      `hreflang` says the same thing about the far end of the link and does not
@@ -112,7 +112,7 @@
         <ul>
             @forelse ($consents as $consent)
                 {{-- The title can be in a language this page is not in: a mandatory document
-                     published only in the default locale still binds, and a RETIRED row is shown in
+                     published only in the default locale still binds, and a retired row is shown in
                      the language the subject read it in — deliberately, see RetiredHoldings. Without
                      `lang` a screen reader speaks it with the page's phonetics (WCAG 3.1.2).
                      `hreflang` says the same thing about the far end of the link and does not

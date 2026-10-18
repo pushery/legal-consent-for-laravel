@@ -13,7 +13,7 @@ namespace Pushery\LegalConsent\Support;
  * publishes one set while the report checks another would tell an operator their installation is
  * incomplete right after the command said it was done.
  *
- * `locales` here is the operator's DOCUMENT locales — which contracts exist — and not the seven
+ * `locales` here is the operator's document locales — which contracts exist — and not the seven
  * locales the package ships its own UI strings in. The two move independently on purpose.
  */
 final readonly class DocumentMatrix

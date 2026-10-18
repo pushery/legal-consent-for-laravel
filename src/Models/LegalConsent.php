@@ -30,6 +30,7 @@ use Pushery\LegalConsent\Support\DefaultConsentManager;
  * @property string $document_key
  * @property DocumentType $document_type
  * @property string $document_version
+ * @property string|null $document_source_version the version as the document's source counts it, copied from the document and hashed only when set
  * @property int $document_major_version
  * @property string $content_hash
  * @property string $locale
@@ -66,7 +67,7 @@ class LegalConsent extends Model
      * forceFill). The retention prune, which removes expired rows and re-links the chains it
      * shortens, and the erasure of a subject write through the query builder. Blocking mass
      * assignment makes "the manager is the only door into this model" structural: a stray
-     * LegalConsent::create($request->all()) can never forge or backdate a FRESH proof row —
+     * LegalConsent::create($request->all()) can never forge or backdate a fresh proof row —
      * subject_id, subject_token, prev_record_hash, accepted_at, content_hash. Mutation AFTER insert
      * is already refused by the append-only guard; this closes the insert side.
      *

@@ -10,20 +10,20 @@ use Pushery\LegalConsent\Support\LedgerRecordMacs;
 use Pushery\LegalConsent\Support\TableLookup;
 
 /**
- * Give the NEWEST row of every chain the witness it never had.
+ * Give the newest row of every chain the witness it never had.
  *
  * The hole this closes is the second structural gap {@see LedgerHashChain} lists: a row is
- * vouched for by the link its SUCCESSOR stores, and the newest row of a chain has no successor.
- * So it could be REPLACED — not merely truncated — with nothing to mismatch against, and the
+ * vouched for by the link its successor stores, and the newest row of a chain has no successor.
+ * So it could be replaced — not merely truncated — with nothing to mismatch against, and the
  * newest row is the one that says what somebody currently holds. `verify-ledger` exited 0 over a
  * rewritten acceptance.
  *
- * What is recorded is not a new kind of value: it is EXACTLY the link a successor would carry,
+ * What is recorded is not a new kind of value: it is exactly the link a successor would carry,
  * `LedgerHashChain::hashRow()` over that row. Nothing new is published either — for every row that
  * does have a successor, that same string already sits in the next row's `prev_record_hash`. The
- * feature is only that the LAST row now has one too.
+ * feature is only that the last row now has one too.
  *
- * WHY A SEPARATE TABLE, WHICH IS THE PART A READER WILL WANT TO ARGUE WITH. A column on
+ * Why a separate table, which is the part a reader will want to argue with. A column on
  * `legal_consents` is the obvious shape and it cannot work, for two independent reasons:
  *
  *  1. The mac has to be taken over the row AS THE DATABASE RETURNS IT, because that is what the
@@ -35,12 +35,12 @@ use Pushery\LegalConsent\Support\TableLookup;
  *     trigger from migration 000002 refuses an UPDATE unconditionally on MySQL. There is no second
  *     statement to be had on that table.
  *
- * A row in a table of its own is written AFTER the read, which is the only order in which the two
+ * A row in a table of its own is written after the read, which is the only order in which the two
  * facts above are both satisfiable. It carries the history of lawful rewrites for free: the eraser
- * and the retention sweep re-link rows, which changes their hash, and each simply APPENDS the new
+ * and the retention sweep re-link rows, which changes their hash, and each simply appends the new
  * mac rather than correcting anything.
  *
- * NO APPEND-ONLY TRIGGER, AND THAT IS THE SAME CALL MIGRATION 000024 MADE FOR THE MARKER.
+ * No append-only trigger, and that is the same call migration 000024 made for the marker.
  * A trigger stops the write; the MAC makes the write useless — and the MAC is the half that still
  * holds when the attacker reaches the database by a path no trigger sits on (a restored backup, a
  * replica, a migration run as the owner role). Keyed, they cannot produce a mac for the row they
@@ -54,11 +54,11 @@ use Pushery\LegalConsent\Support\TableLookup;
  * it is stamped by the first mac rather than by this migration, for the reason spelled out in
  * `up()`.
  *
- * IT BLESSES EVERY ROW ALREADY IN THE LEDGER, including a replacement made yesterday. It has
+ * It blesses every row already in the ledger, including a replacement made yesterday. It has
  * to: those rows were never witnessed, so no evidence remains to tell an original from a
  * substitute, and inventing one would be worse than saying so. What it closes is every replacement
  * from here on. A row that carries a mac is checked whatever its id — the boundary gates only the
- * question of whether a MISSING mac is a finding.
+ * question of whether a missing mac is a finding.
  *
  * Nothing in `legal_consents` is touched, no stored hash moves, and no chain needs re-linking.
  */
@@ -70,7 +70,7 @@ return new class extends Migration
             Schema::create(LedgerRecordMacs::TABLE, function (Blueprint $blueprint): void {
                 $blueprint->id();
 
-                // NOT a foreign key, and that is deliberate. The retention sweep and an Art. 17
+                // Not a foreign key, and that is deliberate. The retention sweep and an Art. 17
                 // erasure both DELETE from legal_consents, and a cascade would take the evidence
                 // with the row — while a restrict would refuse the lawful deletion outright. A mac
                 // left pointing at a pruned row proves nothing and costs one row; either FK
@@ -82,17 +82,17 @@ return new class extends Migration
             });
         }
 
-        // THE BOUNDARY IS NOT STAMPED HERE, AND THE FIRST VERSION OF THIS FILE STAMPED IT HERE.
+        // The boundary is not stamped here, and the first version of this file stamped it here.
         // Migration 000024 already wrote down why that is wrong, about its own marker, and the
         // mistake survived being read: a marker stamped at migrate-time carries a proof computed
-        // with whatever key was configured THEN, and the documented order of operations lets an
+        // with whatever key was configured then, and the documented order of operations lets an
         // operator set `tamper_evidence_key` afterwards. The marker is then born holding an unkeyed
         // hash it can never reproduce again, and `verify-ledger` reports a break for ever on a
         // ledger nobody touched.
         //
         // The tempting counter-argument is the one that made it past review the first time: this
-        // boundary means "where macs begin", which does not depend on a key. True of the BOUNDARY,
-        // false of its PROOF — and the proof is what the verifier recomputes. Measured: four arms
+        // boundary means "where macs begin", which does not depend on a key. True of the boundary,
+        // false of its proof — and the proof is what the verifier recomputes. Measured: four arms
         // went red at once, all of them installations that set the key after migrating, which is
         // the documented order.
         //

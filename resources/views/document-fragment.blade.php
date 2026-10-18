@@ -9,7 +9,7 @@
      here are BEM hooks with nothing behind them, so how a legal text reads on a phone stays the
      host's decision rather than this package's guess.
 
-     The VERSION is rendered, and it is not decoration. Somebody reading this in a dialog is about
+     The version is rendered, and it is not decoration. Somebody reading this in a dialog is about
      to agree to it, and which version they read is the fact a ledger row will later claim. A
      fragment that showed the text and hid the version would make that row unverifiable from the
      reader's side. --}}
@@ -34,7 +34,7 @@
         @endif
     </header>
 
-    {{-- The sanitizer's output, and the ONLY place this fragment trusts anything. `LegalHtmlSanitizer`
+    {{-- The sanitizer's output, and the only place this fragment trusts anything. `LegalHtmlSanitizer`
          runs inside the publish pipeline, so what is stored is what survived it — this is the sink
          that class exists to protect, and it is written unescaped on purpose. --}}
     <div class="lc-document__body">{!! $document->html !!}</div>

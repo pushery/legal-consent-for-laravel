@@ -7,7 +7,7 @@ namespace Pushery\LegalConsent\Support;
 use Carbon\CarbonImmutable;
 
 /**
- * The release-time inputs of a publish — the operator's legal classification of ONE change.
+ * The release-time inputs of a publish — the operator's legal classification of one change.
  *
  * Deliberately not columns on `legal_drafts`: these describe the change being released, not the
  * text being edited, and persisting them on a draft would leave seven fields nobody clears

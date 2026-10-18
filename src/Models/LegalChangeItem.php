@@ -72,7 +72,7 @@ class LegalChangeItem extends Model
     /**
      * The stored row as the freeze needs to see it: its state, and the columns the refusal names.
      *
-     * NOT LOADED IS NOT "NOT PUBLISHED" — the same defect as on the parent set, for the same
+     * Not loaded is not "NOT PUBLISHED" — the same defect as on the parent set, for the same
      * reason. `getOriginal()` reads out of `$this->original`, so a row loaded as `select(['id', …])`
      * has no `state` there and answers null. Null is not `Published`, so the write went through on
      * a frozen item. Partial selects are house style here. The database triggers refuse the write
@@ -81,7 +81,7 @@ class LegalChangeItem extends Model
      * It asks the database rather than guessing, fetching what the message needs in the same read,
      * and a row it cannot find is refused rather than waved through.
      *
-     * Returns the MODEL whose original attributes are the stored row — this one when it loaded
+     * Returns the model whose original attributes are the stored row — this one when it loaded
      * them, a fresh read otherwise. On a freshly fetched model nothing is dirty, so `getOriginal()`
      * and the attribute agree and the caller needs only one accessor.
      *

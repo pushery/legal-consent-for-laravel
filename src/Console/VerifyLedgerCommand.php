@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console;
 
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
@@ -73,13 +72,13 @@ final class VerifyLedgerCommand extends Command
         $this->breakCount = 0;
         $this->namedBreaks = [];
 
-        // THE BOUNDARY IS CHECKED BEFORE A SINGLE LEDGER ROW IS READ, and it is checked at all
+        // The boundary is checked before a single ledger row is read, and it is checked at all
         // because a boundary an attacker can raise exempts whatever they put below it. Recomputing
         // its MAC needs the secret, so a moved boundary is a break rather than a loophole.
         //
         // It doubles as the key's identity: if this fails on an untouched database, the secret this
         // environment holds is not the one the ledger was written with. That is worth knowing
-        // FIRST, because the alternative is reading it off a break list that looks like tampering.
+        // first, because the alternative is reading it off a break list that looks like tampering.
         $boundary = $this->rootBoundary();
 
         if ($boundary instanceof LedgerRootBoundary && ! hash_equals($boundary->proof, $chain->boundaryProof($boundary->id))) {
@@ -126,23 +125,23 @@ final class VerifyLedgerCommand extends Command
             $this->recordBreak($break);
         }
 
-        // The TAIL of each chain — the only row a mac has anything to say about, and the reason is
-        // arithmetic rather than economy. For every row that HAS a successor, the successor's
+        // The tail of each chain — the only row a mac has anything to say about, and the reason is
+        // arithmetic rather than economy. For every row that has a successor, the successor's
         // stored `prev_record_hash` is already a copy of that row's hash, so the walk below
         // compares it on every single row. The last row of a chain is the one with no successor,
         // and it is exactly the row this whole feature exists for.
         //
-        // Collected as (id => the hash the row must still produce) and looked up ONCE at the end,
+        // Collected as (id => the hash the row must still produce) and looked up once at the end,
         // so the mac lookup costs a handful of chunked queries rather than one per row.
         //
-        // ONE BUFFER FOR THE WHOLE WALK, WHICH LOOKS LIKE THE WRONG CALL IN A COMMAND THAT
-        // OTHERWISE PAGES EVERYTHING. It holds one small entry per subject_token, and
+        // One buffer for the whole walk, which looks like the wrong call in a command that
+        // otherwise pages everything. It holds one small entry per subject_token, and
         // {@see tokenBindingBreaks()} below already reads every distinct (subject, token) tuple in
         // the ledger into two PHP arrays — so this is strictly inside a bound the command already
         // accepts, and halving that bound would not change what the command can survive.
         //
         // The version before this flushed every thousand tails. That branch needed a thousand
-        // CHAINS to be entered, so nothing could reach it: a fixture built to hit it would be tied
+        // chains to be entered, so nothing could reach it: a fixture built to hit it would be tied
         // to a constant one edit away from moving, which is the same trade this file already
         // refuses for the keyset page boundary. An unreachable branch in a verifier is not a
         // safety margin, it is a piece of code nobody has ever run.
@@ -164,7 +163,7 @@ final class VerifyLedgerCommand extends Command
                 $tailId = null;
                 $subjects++;
 
-                // The row that OPENS a chain is the one the constant root cannot vouch for: it has
+                // The row that opens a chain is the one the constant root cannot vouch for: it has
                 // no predecessor whose hash it must reproduce, and being potentially the only row
                 // of its chain, nothing later compares against it either. That is the whole of the
                 // forgery — one INSERT for a fresh token pointing at 64 public zeros.
@@ -200,7 +199,7 @@ final class VerifyLedgerCommand extends Command
             $tailId = is_int($row->id) || is_string($row->id) ? (int) $row->id : 0;
         }
 
-        // The LAST chain has no following token to close it, so its tail is closed here. Leaving
+        // The last chain has no following token to close it, so its tail is closed here. Leaving
         // this out would exempt exactly one chain — whichever sorts last — from the check, which is
         // the shape of gap an attacker reads off the source of a public package.
         if ($tailId !== null) {
@@ -213,7 +212,7 @@ final class VerifyLedgerCommand extends Command
 
         // A forged row inserted with prev_record_hash = NULL is skipped by the walk above (it
         // filters on whereNotNull) — so on its own it would read as "intact" while the gate counts
-        // it as a valid consent. Once chaining has begun, though, EVERY row the writer appends
+        // it as a valid consent. Once chaining has begun, though, every row the writer appends
         // carries a link, so a NULL-prev row with an id past the first chained row was never
         // written through the manager: it is a direct insert. Pre-feature rows have lower ids and
         // are legitimately unchained, so they are not flagged.
@@ -243,26 +242,26 @@ final class VerifyLedgerCommand extends Command
         }
 
         // The forged-chain check. The walk above groups by `subject_token` and restarts at genesis on
-        // every new one — but the GATE reads a subject by `subject_type` + `subject_id` and never
+        // every new one — but the gate reads a subject by `subject_type` + `subject_id` and never
         // looks at the token at all. Those two different keys for one question are the hole: an
         // attacker who can INSERT invents a fresh token, links it to the public genesis constant, and
         // gets a self-consistent chain the walk happily verifies, while the gate counts the row as a
         // real holding. No re-chaining, so no secret needed — keying the hash cannot close this.
         //
-        // What closes it is the invariant SubjectToken already intends but never enforced: ONE
-        // subject has exactly ONE token (its docblock: "two tokens for one subject silently defeats
+        // What closes it is the invariant SubjectToken already intends but never enforced: one
+        // subject has exactly one token (its docblock: "two tokens for one subject silently defeats
         // the whole point"). This check is structural, so it holds with or without a key, and it sees
         // rows that predate any of it.
         foreach ($this->tokenBindingBreaks() as $break) {
             $this->recordBreak($break);
         }
 
-        // Hoisted above the branch because BOTH outcomes need it. It used to be computed inside
-        // the success arm only, which is why a FAILED run said nothing about the keying mode —
+        // Hoisted above the branch because both outcomes need it. It used to be computed inside
+        // the success arm only, which is why a failed run said nothing about the keying mode —
         // see below for why that silence is the expensive half.
         $keyed = is_string(config('legal-consent.tamper_evidence_key')) && config('legal-consent.tamper_evidence_key') !== '';
 
-        // A CHECK THAT DID NOT RUN MUST NOT PASS SILENTLY, and this is the one that can.
+        // A check that did not run must not pass silently, and this is the one that can.
         //
         // rootBoundary() returns null when the marker is absent — an installation that never ran
         // migration 000024. Treating that as "boundary zero" would be worse (see rootBoundary():
@@ -274,10 +273,10 @@ final class VerifyLedgerCommand extends Command
         // and exited 0, under a note promising that editing history requires the secret. The
         // identical INSERT with the table present is caught. The only difference was the table.
         //
-        // Said on BOTH outcomes, because a break list is exactly where an operator would otherwise
+        // Said on both outcomes, because a break list is exactly where an operator would otherwise
         // read the absence of this class as its absence in the data. Only when keyed: unkeyed the
         // check would not run anyway, and the note below already says that guarantee is weaker.
-        // The same rule, for the other marker, and NOT limited to keyed installations — unlike the
+        // The same rule, for the other marker, and not limited to keyed installations — unlike the
         // root proof, a mac is recorded whether or not a secret exists, so its absence is a real
         // state to report either way. Said on both outcomes for the reason given above: a break
         // list is exactly where the absence of a check gets read as the absence of its findings.
@@ -296,15 +295,15 @@ final class VerifyLedgerCommand extends Command
                 $this->warn("{$unprotected} row(s) predate tamper-evidence and carry no chain link — unprotected, not a break.");
             }
 
-            // Honesty: with no signed head, deleting a subject's NEWEST row leaves nothing to
+            // Honesty: with no signed head, deleting a subject's newest row leaves nothing to
             // mismatch, so a tail truncation is not detectable here. Say so rather than let the
             // "intact" line imply a guarantee the chain does not give.
-            // Honesty, and it has to be CONDITIONAL: the old note claimed "the hash is unkeyed"
+            // Honesty, and it has to be conditional: the old note claimed "the hash is unkeyed"
             // unconditionally, which is simply false output whenever a key is configured.
 
             // if/else rather than a multi-line ternary, and the reason is measurable: under
             // php-code-coverage 14 the first arm of a ternary whose arms sit on their own lines is
-            // reported UNCOVERED even when a test asserts the string it produces. Verified here —
+            // reported uncovered even when a test asserts the string it produces. Verified here —
             // the keyed note is exercised by an artisan test that matches on its wording, and the
             // line still counted as missed, which is what kept this file off 100%.
             //
@@ -329,14 +328,14 @@ final class VerifyLedgerCommand extends Command
             $this->line(sprintf('  … and %d more.', $this->breakCount - self::NAMED_BREAKS));
         }
 
-        // A KEYED RUN HAS TWO CAUSES FOR THIS OUTPUT AND THEY DEMAND OPPOSITE RESPONSES, so
+        // A keyed run has two causes for this output and they demand opposite responses, so
         // saying "FAILED" without naming the mode sends the operator down one of them at random.
         // Real tampering is an incident; the wrong secret is a deployment mistake that has touched
         // no row. They are indistinguishable from the break list alone, because a key that does not
         // match reproduces none of the stored links — every chained row mismatches, which is also
         // what a rewritten history looks like.
         //
-        // The shape separates them and costs nothing to state: a wrong key breaks EVERY chained
+        // The shape separates them and costs nothing to state: a wrong key breaks every chained
         // row, tampering breaks the ones that were touched. That is the first thing to look at, so
         // it is the first thing this says.
         if ($keyed) {
@@ -372,22 +371,22 @@ final class VerifyLedgerCommand extends Command
      * large.
      *
      * The other is a correctness bug, and it is not exotic. The ledger is append-only and takes
-     * rows WHILE this runs; a row whose subject_token sorts before the current window shifts the
+     * rows while this runs; a row whose subject_token sorts before the current window shifts the
      * offset by one, and the next page re-delivers a row the walk has already seen. Tokens are
      * UUIDs, so a concurrent append lands before the window about half the time. On the second
      * sighting the walk is still inside that token, so it compares the row's stored link against
-     * the hash of the row ITSELF and reports "link does not match the previous row (edit,
+     * the hash of the row itself and reports "link does not match the previous row (edit,
      * deletion, insertion, or reorder)" — a tamper alarm on an untouched ledger, from the one
      * command whose entire value is that an alarm means something.
      *
-     * So: a strict `> (lastToken, lastId)` seek — the sort key IS the group key, which is what
+     * So: a strict `> (lastToken, lastId)` seek — the sort key is the group key, which is what
      * makes that resumable — plus a snapshot bound at the highest id present when the walk begins,
      * so a concurrent append is out of scope rather than merely out of order. The engine branch is
      * the one {@see AffectedSubjectResolver} already argues for:
      * PostgreSQL and SQLite range-scan the sargable row-value tuple, every other engine keeps the
      * portable OR/tie-break form.
      *
-     * `select *` STAYS. The 18 columns {@see LedgerHashChain}
+     * `select *` stays. The 18 columns {@see LedgerHashChain}
      * folds into a row hash include `user_agent` and `ui_wording_snapshot`; narrowing the list
      * would drop the verifier's own inputs to save three columns.
      *
@@ -497,7 +496,7 @@ final class VerifyLedgerCommand extends Command
         // Unkeyed, un-migrated, or a row from before the boundary: nothing is claimed and nothing
         // is checked. Each of the three is a state an honest installation is legitimately in.
         //
-        // An EMPTY token is not a fourth, and it used to be exempt here. That exemption was a way
+        // An empty token is not a fourth, and it used to be exempt here. That exemption was a way
         // around this whole check: one INSERT with subject_token = '' and a genesis link, for a
         // subject who never consented, verified as intact while the gate counted the row. Nothing
         // honest needs it, because the package never writes an empty token. PostgreSQL's uuid
@@ -580,7 +579,7 @@ final class VerifyLedgerCommand extends Command
      * must belong to exactly one subject.
      *
      * Deliberately raw and structural — no hashes, no key. Two aggregate queries, so it also covers
-     * the two shapes the chain walk cannot see: a fabricated chain under a FRESH token (the walk
+     * the two shapes the chain walk cannot see: a fabricated chain under a fresh token (the walk
      * verifies it happily; here the victim suddenly owns two tokens) and a row written with
      * `subject_token = NULL`, which the walk filters out entirely (`whereNotNull`) — counted here
      * only from the point chaining began, since pre-feature rows legitimately have none.
@@ -597,17 +596,17 @@ final class VerifyLedgerCommand extends Command
         // The distinct (identity, token) pairs, folded in PHP rather than counted in SQL.
         //
         // `COUNT(DISTINCT a, b)` has no portable spelling — MySQL takes a column list, PostgreSQL
-        // wants a row constructor, and SQLite takes neither — and BOTH counts below need more than
+        // wants a row constructor, and SQLite takes neither — and both counts below need more than
         // one column to be right. Reading the pairs and folding them here is the one shape that
         // says the same thing on all three engines.
         //
-        // AND THE GROUPING IS COMPARED AS BYTES, because on MySQL it otherwise is not.
+        // And the grouping is compared as bytes, because on MySQL it otherwise is not.
         //
         // GROUP BY follows the column's collation. Laravel's default, utf8mb4_unicode_ci, is case-
         // and accent-insensitive and PAD SPACE; MySQL's own server default, utf8mb4_0900_ai_ci, is
         // NO PAD but just as case- and accent-insensitive. Measured against a real MySQL 8.4 under
         // Laravel's default: two tokens differing only in case, and `subject_id` '5' against '5 ',
-        // each collapse into ONE group, the case half under either collation — so the fabricated
+        // each collapse into one group, the case half under either collation — so the fabricated
         // second chain and the stolen token, the two shapes this whole method exists to find,
         // arrive in PHP already merged and are never reported. PHP compares bytes; the two layers
         // disagreed, and the database's answer was the one that reached the fold.
@@ -621,17 +620,20 @@ final class VerifyLedgerCommand extends Command
         // is byte-wise already, and SQLite compares BINARY unless a column declares otherwise.
         $binaryGrouping = DB::connection()->getDriverName() === 'mysql';
         $columns = ['subject_type', 'subject_id', 'tenant_id', 'subject_token'];
+        $selected = $columns;
+        $grouped = $columns;
 
-        $selected = $binaryGrouping
-            ? array_map(
-                static fn (string $column): Expression => DB::raw("CAST(`{$column}` AS BINARY) as `{$column}`"),
-                $columns,
-            )
-            : $columns;
+        if ($binaryGrouping) {
+            $selected = [];
+            $grouped = [];
 
-        $grouped = $binaryGrouping
-            ? array_map(static fn (string $column): Expression => DB::raw("CAST(`{$column}` AS BINARY)"), $columns)
-            : $columns;
+            // A loop over the literal list above, so each expression names one of those four
+            // columns and nothing else, and static analysis reads the text as written here.
+            foreach ($columns as $column) {
+                $selected[] = DB::raw("CAST(`{$column}` AS BINARY) as `{$column}`");
+                $grouped[] = DB::raw("CAST(`{$column}` AS BINARY)");
+            }
+        }
 
         $pairs = DB::table('legal_consents')
             ->select($selected)
@@ -655,7 +657,7 @@ final class VerifyLedgerCommand extends Command
             $tenant = is_scalar($pair->tenant_id) ? (string) $pair->tenant_id : '';
             $token = is_string($pair->subject_token) ? $pair->subject_token : '?';
 
-            // The TENANT belongs in the identity, and leaving it out was the defect. SubjectToken
+            // The tenant belongs in the identity, and leaving it out was the defect. SubjectToken
             // mints per tenant, so the same person legitimately carries a different token in each
             // one — while this query reads through DB::table(), which the tenant scope never
             // touches. A perfectly clean two-tenant ledger therefore reported a fabricated chain,
@@ -671,7 +673,7 @@ final class VerifyLedgerCommand extends Command
             $tokensPerSubject[$identity] ??= ['type' => $type, 'id' => $id, 'tokens' => []];
             $tokensPerSubject[$identity]['tokens'][] = $token;
 
-            // The TYPE belongs in the subject, and leaving it out was the other half. A token on
+            // The type belongs in the subject, and leaving it out was the other half. A token on
             // App\Models\User#5 and on App\Models\Admin#5 counted as one subject, which is
             // precisely the theft this check names in its own message.
             $subjectsPerToken[$token][] = $type."\0".$id;
@@ -711,7 +713,7 @@ final class VerifyLedgerCommand extends Command
             );
         }
 
-        // A row with NO token, written after chaining began. The walk filters those out, so without
+        // A row with no token, written after chaining began. The walk filters those out, so without
         // this they are invisible — while the gate, which reads by subject id, still counts them.
         $firstChainedId = DB::table('legal_consents')->whereNotNull('prev_record_hash')->min('id');
 

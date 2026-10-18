@@ -13,12 +13,12 @@ use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
- * Data for the non-blocking countdown banner shown DURING the grace period — after a
+ * Data for the non-blocking countdown banner shown during the grace period — after a
  * material change has been announced (announce_from) but before it is enforced
  * (enforce_from). This satisfies § 308 Nr. 5 BGB (reasonable period + notice of the
  * consequence) and lets the subject cancel/delete before the change takes effect.
  *
- * It returns only DATA — the optional Blade stub renders it (no framework UI here).
+ * It returns only data — the optional Blade stub renders it (no framework UI here).
  */
 final readonly class ConsentBanner
 {
@@ -31,7 +31,7 @@ final readonly class ConsentBanner
      * Pending material changes the subject has not yet accepted, currently within their
      * grace window.
      *
-     * @param  array<string, int>|null  $accepted  the subject's CURRENT holdings — a presence map, see
+     * @param  array<string, int>|null  $accepted  the subject's current holdings — a presence map, see
      *                                             ConsentGate::currentHoldings() — for at least the keys
      *                                             this banner asks about; read here, for those keys only,
      *                                             when null
@@ -52,7 +52,7 @@ final readonly class ConsentBanner
         $pending = [];
 
         foreach ($upcoming as $document) {
-            // A PRESENCE check — see ConsentGate::currentHoldings(). At major 0 the old
+            // A presence check — see ConsentGate::currentHoldings(). At major 0 the old
             // `($accepted[$key] ?? 0) >= $major` was true for everyone, so this banner stayed
             // silent for a document nobody had accepted.
             if (ConsentGate::holds($accepted, $document->key, $document->major_version)) {
@@ -61,15 +61,15 @@ final readonly class ConsentBanner
 
             $enforce = $document->enforce_from;
 
-            // THE `?->` IN THIS PAYLOAD CANNOT FIRE, and the filter above is the reason: it
+            // The `?->` in this payload cannot fire, and the filter above is the reason: it
             // requires `announced()` (which demands a real `announce_from`) and
             // `enforce_from instanceof CarbonImmutable`. Both fields are therefore non-null by the
             // time they get here, so dropping the null-safe operator would change no outcome and
             // no test could tell. The same holds in informationalFor(), whose filter makes the
             // same two demands.
             //
-            // deemedFor() is the exception and its `?->` IS load-bearing: that filter asks about
-            // the OBJECTION DEADLINE -- the right question there, since silence binds at the
+            // deemedFor() is the exception and its `?->` is load-bearing: that filter asks about
+            // the objection deadline -- the right question there, since silence binds at the
             // deadline rather than at the effective date -- and never looks at `enforce_from`, so
             // a row carrying a deadline and no effective date reaches its payload. That case has
             // a test; these two cannot have one.
@@ -104,11 +104,11 @@ final readonly class ConsentBanner
             // until its date: the banner reads the announced version the text belongs to.
             ->map(fn (LegalDocument $document): LegalDocument => $this->cache()->governingVersionOf($document))
             ->filter(
-                // The stored column, not noticeMode(): a null notice_mode is NOT an info push (the
+                // The stored column, not noticeMode(): a null notice_mode is not an info push (the
                 // accessor would derive one from requires_reconsent), matching the previous SQL filter.
                 //
                 // The type is checked too, for the same reason the gate checks it: an informational
-                // page can only be published silently, but this must not DEPEND on the publisher
+                // page can only be published silently, but this must not depend on the publisher
                 // having been the only way into the row. A hand-edited or restored row marked
                 // info_push would otherwise put "please take notice" on the banner for an Impressum,
                 // which asks the reader for nothing.
@@ -142,7 +142,7 @@ final readonly class ConsentBanner
      * binds the parties and nobody else, so nobody else is offered an objection. `days_left`
      * counts down to the objection deadline, not the effective date.
      *
-     * @param  array<string, int>|null  $accepted  the subject's CURRENT holdings — a presence map, see
+     * @param  array<string, int>|null  $accepted  the subject's current holdings — a presence map, see
      *                                             ConsentGate::currentHoldings() — for at least the keys
      *                                             this banner asks about; read here, for those keys only,
      *                                             when null. A key present in it is a contract the
@@ -162,7 +162,7 @@ final readonly class ConsentBanner
         $accepted ??= $this->gate->currentHoldings($subject, $keys);
         $deemed = [];
 
-        // Resolved for the WHOLE set at once, and only once the first document actually needs it.
+        // Resolved for the whole set at once, and only once the first document actually needs it.
         // This runs on every authenticated page render, and asking per document put one ledger
         // query inside the loop — 1 + N per render, where N is the number of objection windows open
         // at the same time. Those windows stay open for weeks and several contracts run in
@@ -175,12 +175,12 @@ final readonly class ConsentBanner
                 continue; // not a party to this contract, so its silence binds nothing
             }
 
-            // The version held and the latest action per key, from ONE read of the subject's
+            // The version held and the latest action per key, from one read of the subject's
             // ledger for every key with an open window.
             $standing ??= $this->gate->standingFor($subject, $keys);
             $held = $standing['version'][$document->key] ?? null;
 
-            // The VERSION, not the major. The publisher refuses a deemed change on a major bump of a
+            // The version, not the major. The publisher refuses a deemed change on a major bump of a
             // contract, so every party already holds the change's major, and comparing majors hid
             // the banner from exactly the subjects whose silence the window turns into agreement.
             // Compared by order rather than for equality: a later version accepted in another
@@ -228,7 +228,7 @@ final readonly class ConsentBanner
         $now ??= CarbonImmutable::now();
         $locale ??= $this->defaultLocale;
 
-        // The two per-subject banners share ONE read of the subject's holdings, for the keys either
+        // The two per-subject banners share one read of the subject's holdings, for the keys either
         // of them asks about and no others: this runs on every authenticated render, for as long as
         // a window is open. Still lazy — with both windows closed nothing is read, so the common
         // "nothing pending" render stays query-free.

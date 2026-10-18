@@ -16,7 +16,7 @@ use Pushery\LegalConsent\Models\LegalNotice;
 /**
  * The subject's stable pseudonym, shared by every ledger they appear in.
  *
- * A consent row and a notice-delivery row about the SAME subject must carry the SAME token, or the
+ * A consent row and a notice-delivery row about the same subject must carry the same token, or the
  * two ledgers cannot be tied together once the account itself is gone — which is the only reason
  * the token exists: it is what keeps the proof meaningful once the subject reference is gone
  * (Art. 17(3)(b)/(e) — the proof survives the person).
@@ -242,9 +242,9 @@ final class SubjectToken
     public function forSubject(Model $subject): string
     {
         // Both ledgers are searched, because either can be the first to token a subject. A change
-        // is NOTICED before it is accepted, and a subject carried over by the v1 backfill has
+        // is noticed before it is accepted, and a subject carried over by the v1 backfill has
         // consent rows with a null token — so the notice ledger mints first, and a consents-only
-        // lookup would mint a SECOND token for the acceptance that follows. Two tokens for one
+        // lookup would mint a second token for the acceptance that follows. Two tokens for one
         // subject silently defeats the whole point: once an erasure has removed subject_id, the
         // delivery proof could no longer be tied to the consent it proves.
         $existing = $this->tokenIn(LegalConsent::model()::query(), $subject)
@@ -254,7 +254,7 @@ final class SubjectToken
     }
 
     /**
-     * The tokens for a WHOLE batch of subjects, resolved in one query per ledger per subject type
+     * The tokens for a whole batch of subjects, resolved in one query per ledger per subject type
      * instead of two queries per subject, for a caller that resolves a page of subjects at once.
      * Same precedence as {@see forSubject}: an existing consent token wins, then a notice token,
      * else a freshly minted UUID. Keyed by "{morphClass}\0{key}" (see {@see mapKey}). Both ledgers
@@ -277,7 +277,7 @@ final class SubjectToken
         // Consent tokens first (forSubject's precedence), then notice tokens for whoever is still
         // unresolved. `??=` keeps the first (consent) hit, so a later notice row never overrides it.
         foreach ([LegalConsent::model(), LegalNotice::model()] as $model) {
-            // The cast is on the closure's own result, not decoration: a morph ALIAS may be
+            // The cast is on the closure's own result, not decoration: a morph alias may be
             // written as a number, and `getMorphClass()` then returns the int PHP made of that
             // array key. Without it the closure violates its own return type and the batch resolve
             // is fatal — before the line below, which exists for the same reason, is ever reached.

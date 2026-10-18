@@ -27,7 +27,7 @@ use Pushery\LegalConsent\Support\DocumentUrlResolver;
  * installed; the plain checkbox stub covers the headless case. Requires an authenticated
  * Eloquent subject (auth()->user()).
  *
- * EVERY PUBLIC METHOD HERE IS A REACHABLE ENDPOINT ONCE THE COMPONENT IS EMBEDDED —
+ * Every public method here is a reachable endpoint once the component is embedded —
  * Livewire dispatches to it whether or not your template renders a control for it, so deleting a
  * button from a published view switches nothing off. Besides `submit()` this exposes `object()`
  * and `terminate()`, exactly like the settings screen, and `$allowObjection` /
@@ -56,10 +56,10 @@ final class ReConsentForm extends Component
      * request. Passed at submit so acceptance is guarded against a version released mid-session
      * (accept-time TOCTOU).
      *
-     * #[Locked] because an unlocked public property is CLIENT-WRITABLE: a subject could rewrite the
+     * #[Locked] because an unlocked public property is client-writable: a subject could rewrite the
      * hash to match the new version and defeat the very guard that exists to stop them accepting a
      * text they never saw. The value is not a secret (a content_hash is derivable from the public
-     * text) — the point is that only the SERVER may set it.
+     * text) — the point is that only the server may set it.
      *
      * @var array<string, string>
      */
@@ -67,7 +67,7 @@ final class ReConsentForm extends Component
     public array $hashes = [];
 
     /**
-     * Locked too: the locale decides WHICH version is resolved and frozen. Left writable, a client
+     * Locked too: the locale decides which version is resolved and frozen. Left writable, a client
      * could switch it at submit and record acceptance of a different language's document than the
      * one rendered — the mirror image of the hash guard.
      */
@@ -75,12 +75,12 @@ final class ReConsentForm extends Component
     public string $locale = '';
 
     /**
-     * How the acceptance was obtained. This lands in the ledger as proof of HOW a subject agreed,
+     * How the acceptance was obtained. This lands in the ledger as proof of how a subject agreed,
      * so it must describe the surface it actually happened on: this component is a re-consent gate
      * by default, and only a settings-page embed is a settings toggle. Recording every acceptance
      * as a settings toggle would put a provenance in the ledger that never happened.
      *
-     * #[Locked] for exactly that reason: this is PROOF, and proof the client can rewrite is not
+     * #[Locked] for exactly that reason: this is proof, and proof the client can rewrite is not
      * proof. It is set once at mount by the embedding screen.
      *
      * Mounting with `answersGateQuestion` asks for the third behavior — the gate's own question
@@ -91,7 +91,7 @@ final class ReConsentForm extends Component
     public ConsentMethod $method = ConsentMethod::ReConsentGate;
 
     /**
-     * Whether this mount answers the question the GATE asks, rather than one of the two halves.
+     * Whether this mount answers the question the gate asks, rather than one of the two halves.
      *
      * `EnsureLegalConsent` holds on the UNION of `outstanding()` and `firstAcceptance()` once
      * `gate.first_use` is on, while a mount that names a method answers one of the two. A host
@@ -100,9 +100,9 @@ final class ReConsentForm extends Component
      * the gate kept holding the next request. The doctor already named the outcome: a dead end,
      * not a loop.
      *
-     * THIS IS A BOOLEAN, AND A NULLABLE `$method` WAS TRIED FIRST AND IS BROKEN TWICE OVER.
+     * This is a boolean, and a nullable `$method` was tried first and is broken twice over.
      * Measured on this component: a `#[Locked]` typed property mounted as null reads back as null
-     * on the mount request and as the property's own PHP default on EVERY request after it — so
+     * on the mount request and as the property's own PHP default on every request after it — so
      * the form rendered the union, the subject ticked both boxes, and `submit()`, a later
      * request, was back at `ReConsentGate` and iterated only the changed half. One acceptance
      * dropped, success message on screen. And it cannot even be mounted: Livewire assigns a mount
@@ -117,7 +117,7 @@ final class ReConsentForm extends Component
     public bool $answersGateQuestion = false;
 
     /**
-     * Which question each pending key came from, for THIS request only.
+     * Which question each pending key came from, for this request only.
      *
      * Private, so Livewire never serializes it and no client can send one back — the value it
      * decides is the ledger's `method` column. Rebuilt by {@see pendingFor()} on every request,
@@ -199,7 +199,7 @@ final class ReConsentForm extends Component
                 }
 
                 try {
-                    // Pass the hash captured at RENDER, not the live one: a version released between
+                    // Pass the hash captured at render, not the live one: a version released between
                     // render and this submit must be caught, not silently frozen (Art. 7(1)).
                     $manager->accept($subject, $document->key, ConsentContext::fromRequest(request(), $this->questionFor($document->key)), $this->locale, $this->hashes[$document->key]);
                     $recorded++;
@@ -208,7 +208,7 @@ final class ReConsentForm extends Component
                     // to review — the re-render re-shows the current version and re-captures its hash,
                     // so a conscious re-acceptance records the version actually read.
                     //
-                    // LegalDocumentNotFound takes the SAME path, and not for symmetry: it means the
+                    // LegalDocumentNotFound takes the same path, and not for symmetry: it means the
                     // document stopped being published between the render and this click, which is
                     // the same event as "it changed" from the subject's side. The window is not a
                     // race measured in microseconds — `outstanding()` is served from the
@@ -230,7 +230,7 @@ final class ReConsentForm extends Component
         }
 
         if ($recorded > 0) {
-            // A tick is good for the ROUND it was made in, never beyond it — the same line both
+            // A tick is good for the round it was made in, never beyond it — the same line both
             // failure paths above already run. Kept, it survives into a round where a new major
             // version is outstanding under the same key, and accepts that one silently: the subject
             // ticked v1 and the ledger records v2. The accept-time hash guard cannot see it, because
@@ -241,7 +241,7 @@ final class ReConsentForm extends Component
 
             $this->setStatus(__('legal-consent::ui.reconsent_recorded'));
 
-            // A re-consent GATE that is now fully cleared returns the subject to where the
+            // A re-consent gate that is now fully cleared returns the subject to where the
             // enforcement middleware intercepted them (redirect()->guest stashed it), falling back
             // to the configured home. Opt-in, and never for a settings-page embed, so the in-place
             // "all current" confirmation existing consumers rely on is unchanged by default.
@@ -269,7 +269,7 @@ final class ReConsentForm extends Component
 
     private function shouldReturnToIntended(): bool
     {
-        // BOTH gate surfaces, not just the re-consent one. A first-use interstitial interrupts a
+        // Both gate surfaces, not just the re-consent one. A first-use interstitial interrupts a
         // navigation exactly the way the re-consent gate does — the subject was going somewhere and
         // was stopped on the way. Leaving it out would silently drop the intended destination for
         // every OAuth application, which is the defect this seam was built to fix in the first
@@ -289,10 +289,10 @@ final class ReConsentForm extends Component
      */
     private function isSameOrigin(string $target): bool
     {
-        // Read the target the way the BROWSER will read it, not the way parse_url does — the check
+        // Read the target the way the browser will read it, not the way parse_url does — the check
         // is worthless anywhere the two disagree, and they disagree on control characters.
         //
-        // The URL parser removes U+0009, U+000A and U+000D from ANY position before it parses
+        // The URL parser removes U+0009, U+000A and U+000D from any position before it parses
         // (WHATWG URL, "URL parsing"), so `/<TAB>/evil.example` is fetched as `//evil.example` — the
         // protocol-relative shape the next line exists to reject. Stripping them only at the front
         // judged a string no browser ever navigates to. The other two the old list named — NUL and
@@ -333,7 +333,7 @@ final class ReConsentForm extends Component
         if ($subject instanceof Model) {
             $this->guardedTransition(fn () => app(ConsentManager::class)->object($subject, $key, ConsentContext::fromRequest(request(), $this->questionFor($key)), $this->locale));
 
-            // The status is not decoration on this action. It writes an APPEND-ONLY ledger row, and
+            // The status is not decoration on this action. It writes an append-only ledger row, and
             // the control that triggered it is usually gone from the next render — so with nothing
             // announced, the honest reading of the screen is that nothing happened. The natural
             // response is a second click, and a second click writes a second row that cannot be
@@ -358,13 +358,13 @@ final class ReConsentForm extends Component
     }
 
     /**
-     * The documents THIS MOUNT is asking about.
+     * The documents this mount is asking about.
      *
      * A first-use interstitial and a re-consent gate ask different questions, and the method the
      * mount declares is where they separate — the same value that will end up in the ledger row,
      * so a screen cannot show one question and record the other.
      *
-     * `outstanding()` filters on the notice mode of a version CHANGE, which is meaningless for a
+     * `outstanding()` filters on the notice mode of a version change, which is meaningless for a
      * subject who never accepted anything: a document first published as a silent editorial
      * version was never in that set, so a form mounted with `FirstUseGate` rendered zero
      * documents while `statusFor()` reported the same keys as owed. Measured on 0.19.0, and the
@@ -376,7 +376,7 @@ final class ReConsentForm extends Component
      * A gate-question mount asks both and returns the union — the same set `EnsureLegalConsent`
      * counts when `gate.first_use` is on. It is not a convenience: the branch a host would
      * otherwise write inverts what the middleware computed two lines earlier, so every one with
-     * OAuth, magic links or invitations wrote the identical one, and a subject who owed BOTH a
+     * OAuth, magic links or invitations wrote the identical one, and a subject who owed both a
      * first acceptance and a re-consent still saw two screens in sequence with nothing explaining
      * why the second looked like the first.
      *
@@ -387,7 +387,7 @@ final class ReConsentForm extends Component
      * that names a method keeps writing that method for every key, unchanged.
      *
      * Ordering puts `outstanding()` first and appends only the first-acceptance keys it does not
-     * already hold. A key can legitimately be in both — never accepted AND materially changed
+     * already hold. A key can legitimately be in both — never accepted and materially changed
      * since publication — and the change question is the stricter of the two, so it wins.
      *
      * @return Collection<int, LegalDocument>
@@ -452,7 +452,7 @@ final class ReConsentForm extends Component
         $pending = $subject instanceof Model ? $this->pendingFor($subject) : new Collection;
 
         // Capture the content hash of each shown document into component state (persisted across the
-        // Livewire request), so submit() can pass what the subject ACTUALLY saw — not a value
+        // Livewire request), so submit() can pass what the subject actually saw — not a value
         // re-fetched live, which would make the accept-time TOCTOU guard vacuous.
         $this->hashes = [];
 

@@ -15,7 +15,7 @@ use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
  * a German one, next to lines that name the same document through `NamesLegalTexts`. A reason and the
  * values it was built from let a screen word the refusal itself ({@see LegalPublishRefused}).
  *
- * ONLY THE REFUSALS A SCREEN CAN REACH HAVE A CASE HERE, and the others are left out on purpose. The
+ * Only the refusals a screen can reach have a case here, and the others are left out on purpose. The
  * overview releases in the mode the document type takes, the editor offers a deemed release only where
  * the type allows one and names every empty field before the publisher is asked, and both release the
  * configured languages. So a refusal of the mode for the type, of a missing objection deadline, of a

@@ -11,10 +11,10 @@ use Pushery\LegalConsent\Testing\RecordedConsent;
  * The string form of a subject's primary key — the form `subject_id` stores.
  *
  * `subject_id` became a `varchar(64)` in 0.18.0 so that a UUID- or ULID-keyed subject fits
- * alongside an auto-increment id. What did not move with it was the BINDING. A model with an
+ * alongside an auto-increment id. What did not move with it was the binding. A model with an
  * integer key hands `getKey()` back as a PHP int; Laravel binds an int as `PDO::PARAM_INT`
  * (native prepares — the connector disables emulation), and MySQL compares a `varchar` column
- * against a numeric operand by casting BOTH sides to floating point. Such a comparison cannot
+ * against a numeric operand by casting both sides to floating point. Such a comparison cannot
  * use an index on the string column, so the gate's per-request query degrades to a full scan of
  * the ledger. It also matches too much: `2`, `'02'`, `' 2'` and `'2.0'` are one value to a
  * numeric comparison and four different subjects to this table.
@@ -45,7 +45,7 @@ final class SubjectKey
     }
 
     /**
-     * The map key for a (subject type, subject key) pair — the form a reader over MANY subjects
+     * The map key for a (subject type, subject key) pair — the form a reader over many subjects
      * has to index by, because the key alone does not name a subject: a `User` and a `Team` can
      * both be number 1, and a map keyed by the id would hand one of them the other's answer.
      *

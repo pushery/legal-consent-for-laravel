@@ -11,21 +11,21 @@ use Pushery\LegalConsent\Exceptions\AmbiguousRegistrationFieldException;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
- * Builds registration validation rules + messages for the documents that are ACTUALLY PUBLISHED.
+ * Builds registration validation rules + messages for the documents that are actually published.
  * Each becomes a `legal_{key}` field, or the one the document declares as `registration_field`
  * when a single control covers several pages ({@see RegistrationField}). Mandatory documents (contract/notice) must be `accepted`; a
- * real consent is NEVER required (Kopplungsverbot Art. 7(4)) — it is `nullable` plus {@see CheckboxAnswer},
+ * real consent is never required (Kopplungsverbot Art. 7(4)) — it is `nullable` plus {@see CheckboxAnswer},
  * which takes any value a checkbox submits, ticked or not.
  * Acknowledgment messages say "zur Kenntnis genommen", never "eingewilligt" (EDPB 05/2020 Rz. 122).
  *
- * The resolution deliberately MIRRORS {@see RegistrationConsentRecorder}: the configured keys
- * intersected with the active rows, falling back to the default-locale version for a MANDATORY
+ * The resolution deliberately mirrors {@see RegistrationConsentRecorder}: the configured keys
+ * intersected with the active rows, falling back to the default-locale version for a mandatory
  * document that is not published in the current locale. That is what keeps the three sides of a
  * registration honest — the rule side, the displayed checklist and the ledger row all resolve the
  * same document, so the form can never require a checkbox whose version is not the one recorded, nor
  * record a version it never showed.
  *
- * It is therefore DORMANT BY DEFAULT: a fresh project whose legal texts are still placeholders and
+ * It is therefore dormant by default: a fresh project whose legal texts are still placeholders and
  * unpublished demands nothing. The consent section appears the moment `legal-consent:publish` runs,
  * and not a second earlier.
  *
@@ -73,8 +73,8 @@ final class RegistrationRules
                 ? $voluntary
                 : ['accepted'];
 
-            // Several documents behind ONE control collapse into one rule, which is the whole
-            // point of a collective line. They collapse only while they AGREE: a mandatory
+            // Several documents behind one control collapse into one rule, which is the whole
+            // point of a collective line. They collapse only while they agree: a mandatory
             // document and a real consent sharing a control have no truthful single rule, and
             // silently keeping whichever came last would either drop a required acceptance or
             // couple a consent to registration. Both are the kind of wrong this package refuses
@@ -123,17 +123,17 @@ final class RegistrationRules
     }
 
     /**
-     * The document type behind each configured key that is actually published — the SAME resolution
+     * The document type behind each configured key that is actually published — the same resolution
      * RegistrationConsentRecorder performs when it writes the proof. The type comes from the
-     * resolved ROW, never from the config's `legal_basis`, so a document's legal nature is read from
+     * resolved row, never from the config's `legal_basis`, so a document's legal nature is read from
      * the version that will be recorded.
      *
      * @return array<string, DocumentType>
      */
     private function resolvedTypes(): array
     {
-        // THE SHORT-CIRCUIT COMES BEFORE THE CHAIN, and that ordering is the whole point.
-        // The loop below resolves the locale chain and issues one SELECT per candidate BEFORE it
+        // The short-circuit comes before the chain, and that ordering is the whole point.
+        // The loop below resolves the locale chain and issues one SELECT per candidate before it
         // ever looks at the registry, so an installation that registers no documents — an age-gate
         // only setup is the real one — paid one to two queries on every `POST /register` to build a
         // map it then walked zero keys of.
@@ -159,7 +159,7 @@ final class RegistrationRules
             $document = $byLocale[$locale]->get($key);
 
             if (! $document instanceof LegalDocument) {
-                // Not published in the locale the subject saw. A MANDATORY document is required
+                // Not published in the locale the subject saw. A mandatory document is required
                 // regardless of language, so walk the rest of the chain (fallback_locale, then
                 // default_locale) for the first mandatory version — exactly what the recorder freezes.
                 // An optional consent has nothing to fall back to.
@@ -175,7 +175,7 @@ final class RegistrationRules
             }
 
             // An informational page (Impressum, cookie policy) is published but binds nobody, so
-            // it never becomes a rule, a message or a control. Filtered HERE, at the single
+            // it never becomes a rule, a message or a control. Filtered here, at the single
             // resolution both required() and messages() read, so the two cannot disagree about
             // which documents the registration covers.
             if ($document instanceof LegalDocument && $document->type->isConsentBearing()) {

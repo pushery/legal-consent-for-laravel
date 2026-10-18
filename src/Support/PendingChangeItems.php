@@ -16,7 +16,7 @@ use Pushery\LegalConsent\Models\LegalChangeSet;
 /**
  * Writes the description of a pending change, one locale at a time.
  *
- * Everything here is PLAIN TEXT, and that is a decision rather than an omission. A draft body is
+ * Everything here is plain text, and that is a decision rather than an omission. A draft body is
  * deliberately sanitized HTML because it is a legal text rendered as a document; a change item is
  * rendered into a mail line and into `{{ }}`-escaped Blade, so an angle bracket in it reaches the
  * reader as the character it is. It is therefore kept as written. Stripping tags took the `<` of
@@ -115,7 +115,7 @@ final class PendingChangeItems
     }
 
     /**
-     * Persist as THE draft for this key + locale + tenant, replacing whatever was there.
+     * Persist as the draft for this key + locale + tenant, replacing whatever was there.
      *
      * Replace rather than append: an operator who runs the authoring twice means the second version,
      * and an authoring API that silently accumulated would produce a notice listing every draft the
@@ -234,13 +234,13 @@ final class PendingChangeItems
      */
     private function plain(string $value): string
     {
-        // `Str::squish`, NOT a hand-rolled `\s+` collapse — the difference is a class of
+        // `Str::squish`, not a hand-rolled `\s+` collapse — the difference is a class of
         // character `\s` does not cover. Measured: a zero-width space survives the hand-rolled
-        // form and leaves a line that is non-empty and INVISIBLE; `Str::squish` also strips it,
+        // form and leaves a line that is non-empty and invisible; `Str::squish` also strips it,
         // along with the soft hyphen and the byte-order mark (`Str::INVISIBLE_CHARACTERS`).
         //
         // It matters here more than in ordinary prose: this text goes into a change notice whose
-        // body is HASHED into an append-only proof row. A line nobody can see, certified as what
+        // body is hashed into an append-only proof row. A line nobody can see, certified as what
         // was communicated, is the failure this package exists to prevent.
         return Str::squish($value);
     }

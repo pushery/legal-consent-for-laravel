@@ -20,7 +20,7 @@ interface SendsNoticeMail
 
     /**
      * Whether this notice actually carries the mandatory content its regime demands — the
-     * durable-medium proof row records this verbatim, so it must VERIFY the mode-specific
+     * durable-medium proof row records this verbatim, so it must verify the mode-specific
      * mandatory line (for a deemed-consent notice, the § 308 Nr. 5 lit. b "silence = consent"
      * warning is a validity condition), never merely that some text was rendered. A false
      * value makes a deficient notice detectable instead of silently certified as complete.

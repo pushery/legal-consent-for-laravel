@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 /**
- * The ONE locale-resolution order every registration path uses: what the subject SAW, then the
+ * The one locale-resolution order every registration path uses: what the subject saw, then the
  * configured `fallback_locale`, then the `default_locale`. Deduplicated and order-preserving, so the
  * first hit is always the closest match to what was displayed.
  *
  * It lives here, shared by {@see RegistrationRules}, {@see DefaultConsentManager::registrationChecklist()}
- * and {@see RegistrationConsentRecorder}, because those three MUST resolve the same document — the
+ * and {@see RegistrationConsentRecorder}, because those three must resolve the same document — the
  * rule side, the displayed checklist and the ledger row. `fallback_locale` is a separate config key
  * from `default_locale`; a document published only in the fallback was recorded by the recorder but
  * neither validated nor shown until all three walked this same chain.

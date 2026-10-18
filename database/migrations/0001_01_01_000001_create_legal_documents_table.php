@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\IndexName;
 
 /**
- * Immutable, versioned legal texts. Each published version is a FROZEN row: the
+ * Immutable, versioned legal texts. Each published version is a frozen row: the
  * exact sanitized text a user was shown, its content hash, and the dates that
  * drive change detection and enforcement. Never update a published row — publish a
  * new version instead (that is what makes the ledger legally provable, EDPB

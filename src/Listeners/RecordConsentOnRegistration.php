@@ -30,7 +30,7 @@ final readonly class RecordConsentOnRegistration
 
         $request = request();
 
-        // De-duplicate Way-A/Way-B per SUBJECT, not per request. The 'request' singleton is
+        // De-duplicate Way-A/Way-B per subject, not per request. The 'request' singleton is
         // process-shared, so a long-lived process (queue/console) that fires Registered for
         // many users on it would let a global boolean record only the first. Keying by the
         // subject's identity still blocks a same-request double-write while letting every

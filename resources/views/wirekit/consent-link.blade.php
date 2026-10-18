@@ -1,8 +1,8 @@
-{{-- ONE LINK, ON ITS OWN, so a caller can ask for its markup as a string.
+{{-- One link, on its own, so a caller can ask for its markup as a string.
 
      The consent label is assembled in PHP rather than written as directives: Blade leaves a
      closing directive that sits flush against the token before it in the output as literal text,
-     and this label may carry no stray whitespace because it is the accessible NAME of the control.
+     and this label may carry no stray whitespace because it is the accessible name of the control.
 
      That leaves the question of how a Blade component reaches an assembled string, and the answer
      is not to keep its markup in a string literal of the calling view. That view writes its

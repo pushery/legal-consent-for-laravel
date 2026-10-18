@@ -11,7 +11,7 @@ use Pushery\LegalConsent\Support\TenantContext;
 
 /**
  * Global scope that confines every read of a tenant-aware model to the current tenant when
- * multi-tenancy is enabled (config `tenancy`). A NO-OP when tenancy is off, so the default
+ * multi-tenancy is enabled (config `tenancy`). A no-op when tenancy is off, so the default
  * (single-tenant) behavior and its queries are byte-for-byte unchanged. Admin sweeps that
  * must cross tenants (prune, the notice dispatch) opt out with `withoutGlobalScope(...)`.
  *

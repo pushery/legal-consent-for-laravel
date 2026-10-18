@@ -25,11 +25,11 @@
         {{-- WCAG 4.1.3 + 2.4.3: the withdrawal result is announced here — the region is ALWAYS in the
              DOM (a live region inserted together with its text is not announced) and role="status"
              carries the announcement, so focus lands on the live region itself, exactly as in the
-             plain view. The text is a plain x-wirekit::text, NOT an x-wirekit::alert (the alert is
+             plain view. The text is a plain x-wirekit::text, not an x-wirekit::alert (the alert is
              itself a role="status" region — nesting would double-announce). Focus is driven by
              x-effect, not x-init: x-init runs once and does not re-run on a Livewire morph.
 
-             `sr-only` while it is EMPTY, and only then. An empty region has no height but is still a
+             `sr-only` while it is empty, and only then. An empty region has no height but is still a
              child of the stack, so it added a second `lg` gap under the heading. Visually hidden it
              stays in the DOM and in the accessibility tree, which is what the announcement needs, but
              it is positioned out of the stack's flow and takes no gap; with a status in it, it is an
@@ -62,7 +62,7 @@
             <x-wirekit::stack gap="xs">
                 @forelse ($contracts as $item)
                     {{-- The title's own language, declared only where it differs from the page. A
-                         document published only in the default locale still binds, and a RETIRED
+                         document published only in the default locale still binds, and a retired
                          row is deliberately shown in the language the subject read it in
                          (WCAG 3.1.2). See ContentLanguage. --}}
                     @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
@@ -87,7 +87,7 @@
             <x-wirekit::stack gap="xs">
                 @forelse ($acknowledgements as $item)
                     {{-- The title's own language, declared only where it differs from the page. A
-                         document published only in the default locale still binds, and a RETIRED
+                         document published only in the default locale still binds, and a retired
                          row is deliberately shown in the language the subject read it in
                          (WCAG 3.1.2). See ContentLanguage. --}}
                     @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
@@ -159,12 +159,12 @@
                                     </x-wirekit::alert-dialog.cancel>
 
                                     {{-- `{{ Js::from() }}`, NOT `@js()`. A Blade directive inside a
-                                         COMPONENT TAG attribute is never compiled — the tag compiler
+                                         component tag attribute is never compiled — the tag compiler
                                          lifts the attribute out as a literal before the directive
                                          compiler reaches it, so the text `@js($item['key'])` is what
                                          the browser gets and the withdrawal never fires, for every
                                          key and with nothing logged. On Art. 7(3) that is the one
-                                         control that must not be decorative. An echo IS compiled in
+                                         control that must not be decorative. An echo is compiled in
                                          that position and emits what `@js()` emits on a plain
                                          element, which is the form the plain stub uses.
 

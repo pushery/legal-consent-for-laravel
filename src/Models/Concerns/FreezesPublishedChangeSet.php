@@ -23,10 +23,10 @@ trait FreezesPublishedChangeSet
         // refuse both on every engine, with a raw SQLSTATE; this answers first, on every path that
         // goes through a model, with a typed refusal that names the document.
         //
-        // It reads the stored row, never the attribute: the question is whether the row WAS frozen.
+        // It reads the stored row, never the attribute: the question is whether the row was frozen.
         // The attribute carries whatever the caller assigned, so a write that also rewrites `state`
         // would walk past the guard, and on a row loaded with a partial select it carries nothing at
-        // all. The database triggers ask OLD.state for the same reason.
+        // all. The database triggers ask old.state for the same reason.
         $refuseWhileFrozen = static function (self $set): void {
             $stored = self::storedRow($set);
             $state = $stored?->getOriginal('state');

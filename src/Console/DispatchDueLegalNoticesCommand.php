@@ -53,7 +53,7 @@ use Throwable;
  * subjects it did not reach need a new version with a new deadline, and the run says so until one
  * replaces it.
  *
- * THIS RUN QUEUES; IT DOES NOT DELIVER, and it no longer says otherwise. The notifications are
+ * This run queues; it does not deliver, and it no longer says otherwise. The notifications are
  * `ShouldQueue`, so `Notification::send()` returns once the jobs are on the queue. The
  * append-only durable-medium proof is therefore written by {@see WriteNoticeDeliveryProof} from
  * the `NotificationSent` event — a row states that a notice went out, and this command is in no
@@ -62,16 +62,16 @@ use Throwable;
  * mail, and an uncorrectable row that `legal-consent:close-objection-windows` then reads to bind
  * a subject by silence.
  *
- * Delivery is deliberately AT-LEAST-ONCE: the `notified_at` watermark is stamped only after a
+ * Delivery is deliberately at-least-once: the `notified_at` watermark is stamped only after a
  * version's full subject sweep completes, so a clean re-run never re-queues, and a missed § 308 /
  * § 675g notice is never risked. A process killed mid-sweep — or a run overtaken when its 55-minute
- * `withoutOverlapping` lock expires on a large population — RESUMES: with durable-medium proof on,
+ * `withoutOverlapping` lock expires on a large population — resumes: with durable-medium proof on,
  * {@see AffectedSubjectResolver::forVersion()} skips subjects that already carry a proof row for the
  * version, and those whose notice is still on its way ({@see NoticeAttempts}), so the retry serves
  * only those still owed a notice and does not write a second proof for one already notified. This
  * removes the bulk of duplication without a unique constraint; a proof written by a genuinely
  * simultaneous sweep in the same window is still tolerated (a duplicate email is acceptable, a
- * missed notice is not). A notice that FAILS is counted against its subject and brings the version
+ * missed notice is not). A notice that fails is counted against its subject and brings the version
  * back while the subject has attempts left — see {@see ReopenVersionOnNoticeFailure}. On a
  * synchronous queue that failure surfaces inside this run, and it ends the subject's notice on
  * that channel, not the run ({@see self::sendTo()}). A subject that has no attempts left is
@@ -146,7 +146,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             $deadline = $this->passedDeadline($version);
 
             if ($deadline instanceof CarbonImmutable && $audience > 0) {
-                // Skipped WITHOUT stamping, like the two hold-backs below, so every run names the
+                // Skipped without stamping, like the two hold-backs below, so every run names the
                 // version until a new one replaces it.
                 $expired++;
                 $this->error(sprintf(
@@ -158,7 +158,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             }
 
             if ($this->exceedsLimit($audience)) {
-                // Skip WITHOUT stamping. The version stays due, so nothing is lost and the next run
+                // Skip without stamping. The version stays due, so nothing is lost and the next run
                 // — or the same run with --force — still owes exactly this notice. Stamping here
                 // would repeat the defect this brake exists because of.
                 $held++;
@@ -167,13 +167,13 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
                 continue;
             }
 
-            // event($object), not the Dispatchable static: the static builds a NEW instance from
+            // event($object), not the Dispatchable static: the static builds a new instance from
             // its arguments, so the $cancel a listener sets would land on an object nobody reads.
             $dispatching = new NoticeDispatching($version, $audience);
             event($dispatching);
 
             if ($dispatching->cancel) {
-                // Held back WITHOUT stamping, exactly like the size brake: the notice stays owed
+                // Held back without stamping, exactly like the size brake: the notice stays owed
                 // and the next sweep picks it up. A cancel that stamped would waive a legally
                 // required communication rather than defer it. Counted apart from the brake,
                 // because the two are lifted in different places.
@@ -185,9 +185,9 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
 
             $notification = $this->notificationFor($version);
 
-            // Pin the locale on the NOTIFICATION, never through Notification::locale(). The facade
+            // Pin the locale on the notification, never through Notification::locale(). The facade
             // stores its locale on the ChannelManager, which memoizes a NotificationSender with
-            // `??=` — the sender therefore keeps whatever locale the FIRST send of the process set,
+            // `??=` — the sender therefore keeps whatever locale the first send of the process set,
             // and queueNotification() then overwrites every notification's own locale with that
             // frozen value. This sweep notifies several versions, each in its own language, in one
             // process: through the facade, every version after the first would render in the first
@@ -196,10 +196,10 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // an uncorrectable record of a text the subject never received.
             $notification->locale($version->locale);
 
-            // Whether this notice carries the mandatory content its regime demands, asked ONCE per
+            // Whether this notice carries the mandatory content its regime demands, asked once per
             // version because the answer depends on the version and its locale, not on who
             // receives it. The proof row records the same fact per delivery; what was missing was
-            // anyone READING it: a notice with an emptied § 308 Nr. 5 lit. b warning went out, was
+            // anyone reading it: a notice with an emptied § 308 Nr. 5 lit. b warning went out, was
             // logged as deficient, stamped the watermark and ended the run at exit 0.
             if (! $this->mandatoryContentPresent($notification, $version)) {
                 $deficient++;
@@ -213,10 +213,10 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
 
             $before = $notified;
 
-            // RESUMABLE: skip subjects already proved for this version, so a killed or
+            // Resumable: skip subjects already proved for this version, so a killed or
             // lock-expired run resumes on those still owed a notice. `skipNotified` only bites when
             // proof is on; with proof off there is nothing to resume from and no proof to
-            // duplicate — a killed run then re-notifies the WHOLE population (tolerated duplicate
+            // duplicate — a killed run then re-notifies the whole population (tolerated duplicate
             // emails under at-least-once), it simply writes no duplicate proof row.
             $resolver->forVersion($version, skipNotified: $proofEnabled)
                 ->chunk(self::CHUNK)
@@ -237,7 +237,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
                     // a synchronous queue those jobs run inside send(), so one subject's refused
                     // notice has to stay that subject's (see sendTo()). The locale is already
                     // pinned on the notification itself, which matters because the notice is
-                    // QUEUED: without a pin the worker would render it in whatever locale it
+                    // queued: without a pin the worker would render it in whatever locale it
                     // happens to run under.
                     foreach ($subjects as $position => $subject) {
                         try {
@@ -349,7 +349,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
     /**
      * Does this version's notice carry the mandatory content its regime demands?
      *
-     * Evaluated INSIDE the version's locale — the same locale the notice is rendered and proved
+     * Evaluated inside the version's locale — the same locale the notice is rendered and proved
      * in — or it would pass on a translation the subject never receives.
      */
     private function mandatoryContentPresent(BaseNotification&SendsNoticeMail $notification, LegalDocument $version): bool
@@ -434,7 +434,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
      * leave the queue — for a large installation that is a fan-out they have never seen. This is
      * where they get to look at the number first.
      *
-     * It runs the SAME brake the real sweep runs, and ends on the same exit code. A preview that
+     * It runs the same brake the real sweep runs, and ends on the same exit code. A preview that
      * promises a fan-out the real run refuses is worse than no preview — and three different texts
      * (the sweep's own error, `legal-consent:renotify`, the config comment) send an operator here
      * for exactly the case the brake decides.
@@ -450,7 +450,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // The resume predicate skips subjects already proofed for this version, so reporting
             // the raw total would overstate a resumed run.
             //
-            // COUNTED, NOT STREAMED, and the reason is correctness before cost. `forVersion()` is
+            // Counted, not streamed, and the reason is correctness before cost. `forVersion()` is
             // the sweep's hydrate path: it loads real subject models a page at a time, and calling
             // `count()` on it built the entire remaining population as objects purely to arrive at
             // an integer, in a command whose whole promise is that it writes and sends nothing.
@@ -465,7 +465,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // in the database. On the line an operator reads before sending a legally required
             // communication, a fabricated "already served" is the worst of the available errors.
             //
-            // WHAT THE SWAP COSTS, said rather than left to be discovered: `would be sent` now
+            // What the swap costs, said rather than left to be discovered: `would be sent` now
             // counts an orphaned group too, and the real run cannot deliver to one. It is an
             // audience size, not a delivery forecast — it errs toward more notice rather than less,
             // which is the safe direction here, but it is not the same number.
@@ -603,7 +603,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
     private function notificationFor(LegalDocument $version): ChangeNotification
     {
         // Routed through the config seam rather than matched here, so a consumer's subclass is used
-        // by the sweep and by the PROOF rendering alike. Two different resolutions would be the
+        // by the sweep and by the proof rendering alike. Two different resolutions would be the
         // worst possible split: the subject would receive one text and the append-only row would
         // certify another.
         return NoticeMailConfig::notificationFor($version->noticeMode(), $version);

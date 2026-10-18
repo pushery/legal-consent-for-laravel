@@ -10,11 +10,11 @@ use Pushery\LegalConsent\Models\LegalDocument;
 /**
  * The default naming: a document is what its published row calls it, a language is its code.
  *
- * ## Why the title comes from the PUBLISHED row
+ * ## Why the title comes from the published row
  *
  * A draft's title is being worked on; the active row's title is what a reader of that document
  * actually sees, which is the thing an administrator is trying to recognize in a status line. It is
- * read in the READER's locale — a row published only in German names nothing an English screen
+ * read in the reader's locale — a row published only in German names nothing an English screen
  * should print, and the catalog below has a better answer for that case than another language's
  * heading does.
  *

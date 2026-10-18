@@ -13,7 +13,7 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
  *
  * A TRUNCATE removes every row of a table without firing a row trigger, so the BEFORE DELETE
  * guards on `legal_documents`, `legal_change_sets` and `legal_change_items` do not see it, and
- * Laravel's `truncate()` issues one there, with CASCADE. Each of the three tables gets a BEFORE
+ * Laravel's `truncate()` issues one there, with CASCADE. Each of the three tables gets a before
  * TRUNCATE trigger that runs its delete guard's function for the whole table: `legal_documents`
  * refuses while a consent points at one of its versions, and the change tables refuse while they
  * hold a published description.

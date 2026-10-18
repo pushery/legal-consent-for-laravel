@@ -18,8 +18,8 @@ use Pushery\LegalConsent\Support\TableLookup;
  * type bigint` and MySQL with `Data truncated for column 'subject_id'` — on the very first read of
  * the token lookup, so registration, re-consent, withdrawal and notice delivery all fail together.
  *
- * WHY THIS DOES NOT RE-CHAIN A SINGLE EXISTING ROW, which is the question that decides whether the
- * change is safe at all. `LedgerHashChain::canonical()` length-prefixes the STRING cast of every
+ * Why this does not re-chain a single existing row, which is the question that decides whether the
+ * change is safe at all. `LedgerHashChain::canonical()` length-prefixes the string cast of every
  * proof field precisely so a column returned as `2` by one PDO driver and `'2'` by another hashes
  * the same. An integer key and its decimal text therefore produce an identical canonical form, so
  * the tamper-evidence chain reads exactly as it did before the type moved. Asserted rather than
@@ -30,18 +30,18 @@ use Pushery\LegalConsent\Support\TableLookup;
  * cannot be cast automatically"). Both directions are written out with `USING`, so the pair reads
  * as one. MySQL and SQLite take the portable path.
  *
- * SQLite REBUILDS THE TABLE to change a column, and a rebuild keeps the indexes but DROPS the
+ * SQLite rebuilds the table to change a column, and a rebuild keeps the indexes but drops the
  * triggers (see 000011). Neither `legal_consents` nor `legal_notices` carries a trigger of its own
  * on that engine — their append-only guards have a pgsql arm and a mysql arm and nothing else,
  * because SQLite gets the same guarantee from the model layer. The unique chain-link index from
  * 000012 survives the rebuild and still refuses a duplicate link afterwards.
  *
- * What is NOT safe, and is why the rebuild runs inside `ProofColumnGuard::whileDisarmed()`: the
+ * What is not safe, and is why the rebuild runs inside `ProofColumnGuard::whileDisarmed()`: the
  * guard on `legal_documents` names `legal_consents` in its DELETE arm, and the rebuild's last step
  * renames the replacement table into place while the original is already gone. SQLite re-parses
  * every trigger in the schema at that rename, so a trigger pointing at the missing table is a hard
  * error — measured: "error in trigger legal_documents_no_referenced_delete: no such table:
- * main.legal_consents", raised AFTER `legal_consents` has been dropped. Disarming first turns a
+ * main.legal_consents", raised after `legal_consents` has been dropped. Disarming first turns a
  * destroyed ledger table into an ordinary schema change.
  */
 return new class extends Migration
@@ -65,7 +65,7 @@ return new class extends Migration
     /**
      * Narrow back to an integer key.
      *
-     * This can legitimately FAIL, and that is the honest behavior rather than a defect: once a
+     * This can legitimately fail, and that is the honest behavior rather than a defect: once a
      * subject with a UUID key has consented, no integer column can hold that proof, and silently
      * dropping or zeroing it would destroy evidence the ledger exists to keep (Art. 5(2)). A
      * consumer who has only ever used integer keys rolls back cleanly; one who has not must not.
@@ -84,7 +84,7 @@ return new class extends Migration
     }
 
     /**
-     * Is the column ALREADY a string type? A fresh install runs the create migration, which now
+     * Is the column already a string type? A fresh install runs the create migration, which now
      * declares the wide column, and then reaches this one — so without the check every new
      * installation would rewrite two tables to change nothing.
      */

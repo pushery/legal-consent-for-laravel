@@ -21,7 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
  * Measured: three `grant` calls wrote three `granted` rows, three `withdraw` calls after them wrote
  * three `withdrawn` rows. No transition asks whether the subject's standing changes.
  *
- * ONE budget for the whole surface, however it is reached, so a subject cannot spend a fresh
+ * One budget for the whole surface, however it is reached, so a subject cannot spend a fresh
  * allowance on each way in. Keyed on the subject, and kept apart from any `throttle:` the host
  * applies to the same subject elsewhere: the framework keys on the authenticated user alone, so
  * without a prefix this limit and the host's own would count each other's requests.
@@ -76,7 +76,7 @@ final class SessionWriteThrottle
     }
 
     /**
-     * Apply the limit to the current request from inside a Livewire action, through the SAME
+     * Apply the limit to the current request from inside a Livewire action, through the same
      * middleware the route runs, so both ways in land in the same buckets and answer the same 429.
      *
      * The middleware is resolved through the host's `throttle` alias rather than named directly: an

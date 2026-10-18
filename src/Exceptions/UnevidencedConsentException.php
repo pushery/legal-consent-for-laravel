@@ -8,7 +8,7 @@ use Pushery\LegalConsent\Support\RegistrationField;
 use RuntimeException;
 
 /**
- * A mandatory document was about to be recorded from a request that carries NO `legal_<key>`
+ * A mandatory document was about to be recorded from a request that carries no `legal_<key>`
  * field — so nothing on this request evidences that a human ticked anything.
  *
  * Raised only under `legal-consent.registration.without_form_fields => 'refuse'`. The default is
@@ -18,12 +18,12 @@ use RuntimeException;
  * default would turn a correct application's registrations into failures on the very path every
  * current consumer uses.
  *
- * Where it IS right is the case the flag was written for: a sign-in through an external provider —
+ * Where it is right is the case the flag was written for: a sign-in through an external provider —
  * OAuth, SSO, an invitation link — raises `Registered` with no form behind it at all. Then the row
  * whose whole purpose is to prove a human acted gets written without one having, in an append-only
  * table nobody can correct afterwards.
  *
- * NOTHING is written when this is raised: the recorder resolves every document first and refuses
+ * Nothing is written when this is raised: the recorder resolves every document first and refuses
  * before its first `accept()`, so a registration either records all of its consents or none.
  */
 final class UnevidencedConsentException extends RuntimeException

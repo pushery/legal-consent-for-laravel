@@ -14,7 +14,7 @@ use Pushery\LegalConsent\Support\ChangeItemsAuthor;
  * Renders the operator's description of a change into a notice — what every real change notice
  * leads with and what a fixed per-type sentence can never say.
  *
- * As LINES on the MailMessage, never as a replacement view. That is the load-bearing choice: the
+ * As lines on the MailMessage, never as a replacement view. That is the load-bearing choice: the
  * durable-medium proof row is built from `subject + introLines + actionText + outroLines`, so a
  * delta rendered into lines lands in `notice_body` and its sha256 automatically, while a delta
  * rendered by swapping the view would be visible to the subject and absent from the record of what

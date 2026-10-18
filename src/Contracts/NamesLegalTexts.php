@@ -9,13 +9,13 @@ namespace Pushery\LegalConsent\Contracts;
  *
  * The shipped manager used to put the configuration key and the locale code straight into its
  * messages: an administrator read `terms (fr)` for a document the public site calls
- * "Nutzungsbedingungen" in a language its own switcher offers as "Französisch". The REASONS in
+ * "Nutzungsbedingungen" in a language its own switcher offers as "Französisch". The reasons in
  * those messages have been translated since 0.22.0, which makes the mismatch louder rather than
  * quieter — the reason arrives in the reader's language and the subject of the sentence does not.
  *
  * The package answers what it actually knows and no more. A published row carries a title, so a
  * document that has been published has a name; one that has not is still honestly its key. A
- * LANGUAGE has no name anywhere in this package, and the obvious source for one —
+ * language has no name anywhere in this package, and the obvious source for one —
  * `Locale::getDisplayLanguage()` — lives in `ext-intl`, which this package does not require. Adding
  * it would make every consumer install an extension to read a status line, so the default answers
  * the code and this seam is where an application puts the names its own language switcher already

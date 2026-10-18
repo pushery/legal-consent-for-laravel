@@ -8,24 +8,24 @@ use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\TableLookup;
 
 /**
- * One active version per (key, locale, tenant) — enforced by the DATABASE on every engine, not
+ * One active version per (key, locale, tenant) — enforced by the database on every engine, not
  * only on PostgreSQL.
  *
- * THIS CLOSES A GAP THAT WAS NAMED IN THE CODE AND THEN LIVED WITH FOR TWENTY-FOUR MIGRATIONS.
+ * This closes a gap that was named in the code and then lived with for twenty-four migrations.
  * Migration 000001 creates the partial unique index on PostgreSQL and says in its own comment:
  * *"MySQL/SQLite rely on the app-layer guard in LegalDocument::activate()"*. That guard is a lock
- * taken on the configured CACHE store — and `array` is process-local, `null` grants every lock,
+ * taken on the configured cache store — and `array` is process-local, `null` grants every lock,
  * and a store that is no LockProvider cannot be asked at all. On those two engines the invariant
  * therefore rested on a component that is optional, swappable and not durable, and when it could
  * not serialize, the package logged a warning and wrote anyway.
  *
- * The invariant is not a convenience. It is the question the whole ledger answers: WHICH text was
+ * The invariant is not a convenience. It is the question the whole ledger answers: which text was
  * in force when somebody agreed. Two rows with `is_active = true` do not degrade that answer, they
  * remove it — and no later repair can say which of the two a given acceptance was made against.
  *
  * **The obvious fix was to make the lock mandatory, and it was the worse one.** Refusing to publish
  * whenever the store cannot serialize breaks every test suite and every single-process deployment
- * — measured: 28 arms in this package's own suite — and it answers a missing CONSTRAINT with a
+ * — measured: 28 arms in this package's own suite — and it answers a missing constraint with a
  * distributed lock. A constraint is what this is.
  *
  *  - **SQLite** takes the identical partial unique index PostgreSQL already has. It has supported
@@ -49,16 +49,16 @@ return new class extends Migration
 
         if ($driver === 'sqlite') {
             // `IF NOT EXISTS` alone would be a check that passes while guarding nothing, because
-            // the index EXISTING is not the same as the constraint existing. SQLite has no ALTER,
+            // the index existing is not the same as the constraint existing. SQLite has no ALTER,
             // so Laravel implements one by rebuilding the table, and the rebuild reconstructs
             // indexes from a schema state that carries no WHERE clause: the partial index comes
-            // back FULL, under the same name. Left in place it constrains every version of a key
+            // back full, under the same name. Left in place it constrains every version of a key
             // rather than only the active one — stricter than intended, and wrong on a table whose
             // purpose is holding several versions.
             //
             // So the predicate is read back, not assumed. This repairs an installation that rolls
-            // through a rebuild and re-runs this migration; it does NOT cover the case where a
-            // LATER migration rebuilds the table and this one never runs again. A migration that
+            // through a rebuild and re-runs this migration; it does not cover the case where a
+            // later migration rebuilds the table and this one never runs again. A migration that
             // alters a column on this table has to re-create the index itself, exactly as
             // migration 000015 already re-installs the triggers a rebuild drops.
             $existingSql = DB::scalar(
@@ -90,7 +90,7 @@ return new class extends Migration
             //
             // COLLATE utf8mb4_bin, and it is not decoration. Migration 000022 put `key`, `locale`
             // and `tenant_id` on utf8mb4_bin precisely so the three engines agree on what "the
-            // same document" means. A derived column takes the TABLE's collation instead, which
+            // same document" means. A derived column takes the table's collation instead, which
             // Laravel leaves at utf8mb4_unicode_ci — case- and accent-insensitive, PAD SPACE. The
             // index would then be stricter than the one PostgreSQL and SQLite carry: measured,
             // ('terms','de','') and ('TERMS','de',''), and a tenant told apart only by 'cafe' vs

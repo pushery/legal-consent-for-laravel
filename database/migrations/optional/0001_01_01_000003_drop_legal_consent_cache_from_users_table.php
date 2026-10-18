@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Schema;
  * did not address the cost they were justified by: the gate's per-request expense is a global
  * "which versions are enforceable" query, not a per-user lookup, and that is now cached properly.
  *
- * Published under the SAME tag as the old add-migration, so a consumer who ran it can reverse it:
+ * Published under the same tag as the old add-migration, so a consumer who ran it can reverse it:
  *
  *     php artisan vendor:publish --tag=legal-consent-users-cache
  *

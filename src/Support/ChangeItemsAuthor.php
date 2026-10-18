@@ -46,7 +46,7 @@ final readonly class ChangeItemsAuthor
     /**
      * The frozen description that belongs to a published version — what a notice renders.
      *
-     * Matched on the DOCUMENT, not on (key, locale, version): a multi-tenant install can hold the
+     * Matched on the document, not on (key, locale, version): a multi-tenant install can hold the
      * same key and version per tenant, and the document id is the only value that is unique across
      * all of them.
      */

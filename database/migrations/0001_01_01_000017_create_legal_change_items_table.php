@@ -16,7 +16,7 @@ use Pushery\LegalConsent\Support\ChangeSetFreezeGuard;
  *
  * The four party columns are the facet set EDPB Opinion 22/2024 Rz. 22 expects a controller to
  * disclose when a new processor is engaged: identity, where the data goes, whom to ask, and what
- * they do with it. They are named by their LEGAL FUNCTION rather than "sub-processor", because the
+ * they do with it. They are named by their legal function rather than "sub-processor", because the
  * same four facts describe a new payment service provider or a new joint controller, and a column
  * called `subprocessor_name` would have to be duplicated for each of them.
  *
