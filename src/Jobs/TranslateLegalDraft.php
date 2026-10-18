@@ -34,7 +34,7 @@ use Throwable;
  * an ordinary length for one and a long time for a language model, and a translation that outlasts
  * the request's timeout ends it in a 500.
  *
- * ## The translator is a SEAM, so its duration is not this package's to know
+ * ## The translator is a seam, so its duration is not this package's to know
  *
  * `LegalTextTranslator` is bound by the application. It might be a local dictionary answering in
  * microseconds or a model answering in minutes, and nothing here can tell which. That is exactly why
@@ -50,7 +50,7 @@ use Throwable;
  *
  * A dispatched job is invisible to the page that dispatched it. The editor writes a cache marker
  * before dispatching and this job moves it on, so the screen can say something rather than guess.
- * It carries THREE states, and the third is the one that was missing:
+ * It carries three states, and the third is the one that was missing:
  *
  *  - `true` — running. The editor keeps polling.
  *  - a failure record — it ended, and it did not end well. The editor reads it once, says so, and
@@ -58,7 +58,7 @@ use Throwable;
  *    sentence is what this package promises instead of an error page.
  *  - absent — nothing to report. A finished translation is evidenced by the draft itself.
  *
- * A `finally` DOES NOT COVER THE CASE THIS JOB EXISTS FOR. A worker killed at its timeout ends
+ * A `finally` does not cover the case this job exists for. A worker killed at its timeout ends
  * inside a `SIGALRM` handler that calls `exit()`, so no `finally` in this file runs — and the marker
  * would stand for its full hour while the editor told the operator a translation was running that
  * died in the first minute. What still fires there is Laravel's own failure route, so the answer is
@@ -69,7 +69,7 @@ use Throwable;
  * its job comes back when the reservation expires, and the attempt that finds it out of tries calls
  * `failed()`. `queue:restart` is not one of these cases: the worker reads the signal after the job.
  *
- * IT IS A HINT, NOT A LOCK. Two operators translating the same draft at once is not a case this
+ * It is a hint, not a lock. Two operators translating the same draft at once is not a case this
  * prevents, and it never pretended to: `applyTranslation()` owns that question, and the one that
  * lands second wins there as it always did. A marker that claimed to be a lock would be the more
  * dangerous thing, because a cache that evicts it would then silently unlock.
@@ -96,7 +96,7 @@ final class TranslateLegalDraft implements ShouldQueue
         private readonly ?string $guard = null,
         private readonly ?string $tenant = null,
     ) {
-        // THE LANE IS SET HERE, on the properties the dispatcher reads.
+        // The lane is set here, on the properties the dispatcher reads.
         //
         // NOT `viaConnection()` / `viaQueue()`, which is the shape a queued notification or
         // listener uses and which nothing in `Illuminate\Bus` or `Illuminate\Queue` consults for a
@@ -266,7 +266,7 @@ final class TranslateLegalDraft implements ShouldQueue
             return;
         }
 
-        // Only now, and NOT in a `finally`: a failure recorded above is the thing the screen has
+        // Only now, and not in a `finally`: a failure recorded above is the thing the screen has
         // left to read, and a forget here would wipe it. Anything else that throws leaves the marker
         // alone on purpose — the job is retried or it fails, and `failed()` is what answers then.
         Cache::forget(self::markerFor($this->key, $this->locale, $tenant));

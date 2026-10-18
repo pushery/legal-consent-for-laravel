@@ -36,7 +36,7 @@ use Throwable;
 use ValueError;
 
 /**
- * Report how a PUBLISHED config file differs from the package's own — without touching it.
+ * Report how a published config file differs from the package's own — without touching it.
  *
  * Publishing `config/legal-consent.php` freezes a copy. The provider merges the shipped file under
  * it recursively ({@see LegalConsentServiceProvider::mergeConfigRecursivelyFrom()}), so a key added
@@ -52,14 +52,14 @@ use ValueError;
  * This command names both, and deliberately changes nothing. Rewriting the file would discard
  * the operator's own values; `--force`-republishing does the same. Reporting is what a consumer
  * can act on — which is the whole gap, since nothing else in the package looks at config drift
- * (the other commands all check CONTENT drift).
+ * (the other commands all check content drift).
  *
  * It also reports the other state nothing else names: a registered document with no published
  * version. That one is not config drift at all — it is what a correct installation looks like
  * before its first publish, and every page built on it renders empty in silence.
  *
- * EXIT CODES, because a gate step needs them to be a contract rather than a habit:
- * non-zero for a LOST key (the runtime is not what the file says) and for a config that is
+ * Exit codes, because a gate step needs them to be a contract rather than a habit:
+ * non-zero for a lost key (the runtime is not what the file says) and for a config that is
  * internally contradictory. Zero for a stale key, an unpublished document, and a list the host
  * deliberately keeps shorter — all real findings worth reading, none of which means the
  * configuration is wrong. A step that goes red on a state the operator chose gets switched off,
@@ -75,7 +75,7 @@ final class DoctorCommand extends Command
     protected $description = 'Report config keys a published file loses or keeps stale, and documents with no published version, without changing anything.';
 
     /**
-     * Blocks that belong to the APP, not the package, so a difference is a choice rather than
+     * Blocks that belong to the app, not the package, so a difference is a choice rather than
      * drift. `documents` is the registry a consumer curates: removing the bundled `newsletter`
      * entry is the documented way to not have that document, and reporting it as "missing" would
      * train the reader to ignore this command.
@@ -95,7 +95,7 @@ final class DoctorCommand extends Command
      * off? The two settings are individually valid and jointly contradictory, which is exactly the
      * class of problem a doctor exists to name.
      *
-     * Reads the DATABASE, not only the config, so it reports a real contradiction rather than a
+     * Reads the database, not only the config, so it reports a real contradiction rather than a
      * hypothetical one — an installation that never uses deemed consent is not misconfigured. A
      * database that is not migrated yet cannot contradict anything, hence the swallowed failure.
      */
@@ -120,7 +120,7 @@ final class DoctorCommand extends Command
      * Config keys holding a Closure, which `php artisan config:cache` cannot serialize.
      *
      * Two keys accept one — `gate.subject_filter` and `document_url` — and both document the
-     * closure form FIRST and the caching consequence a couple of lines later. A reader copies the
+     * closure form first and the caching consequence a couple of lines later. A reader copies the
      * example, not the footnote, so the shape that breaks is the shape that gets used.
      *
      * The failure is distributed in the worst possible way. Locally nothing caches, so it runs. The
@@ -150,7 +150,7 @@ final class DoctorCommand extends Command
     /**
      * Configured (document, locale) combinations with no active published row.
      *
-     * A fresh installation has an EMPTY `legal_documents` table, and the read path deliberately
+     * A fresh installation has an empty `legal_documents` table, and the read path deliberately
      * does not fall back to the source — so every page built on `Consent::published()` renders
      * empty, with no error and no log. The configuration is correct, the sources are there, and
      * the legal pages are shells. Nothing in the package said so until this arm existed, and the
@@ -287,7 +287,7 @@ final class DoctorCommand extends Command
     /**
      * `middleware.rights_routes` entries that name no registered route.
      *
-     * The gate exempts a route by its NAME, so a typo exempts nothing, and the export or the
+     * The gate exempts a route by its name, so a typo exempts nothing, and the export or the
      * deletion it was meant to keep open sits behind the gate with a configuration that says
      * otherwise. That is a contradiction rather than a drift, so it fails the run. A value that is
      * not a string cannot name a route either, and is returned as it is so the report can say what
@@ -315,7 +315,7 @@ final class DoctorCommand extends Command
      *
      * A note rather than a failure. Whether the export and the deletion live behind the gate at all
      * is the application's to know: one that answers such requests by mail, or on a route outside
-     * the guarded group, is right to name none. What the package owns is the QUESTION, because the
+     * the guarded group, is right to name none. What the package owns is the question, because the
      * gate is its own and nothing else would ask it.
      */
     private function gateWithoutRightsRoutes(): bool
@@ -389,10 +389,10 @@ final class DoctorCommand extends Command
      * Pure on purpose, like {@see describeVariant()}: no config read and no query, so both answers
      * are reachable from a test rather than one of them shipping as prose nobody ever ran.
      *
-     * Only ONE state is reported, and the omission matters. Gating that is switched ON is a
-     * decision and is left alone. Gating that is OFF while mandatory documents are published is
+     * Only one state is reported, and the omission matters. Gating that is switched on is a
+     * decision and is left alone. Gating that is off while mandatory documents are published is
      * the state a consumer cannot see: `outstanding()` filters on the notice mode of a version
-     * CHANGE, so a subject who never accepted anything is not in it, is not counted anywhere, and
+     * change, so a subject who never accepted anything is not in it, is not counted anywhere, and
      * is served the application as if they had accepted. Nothing goes red, no row is written, and
      * the screen that would have asked them renders "everything current".
      *
@@ -449,11 +449,11 @@ final class DoctorCommand extends Command
      * config, so every combination is reachable.
      *
      * Only the two states a consumer cannot see for themselves are reported. An unstyled view
-     * RENDERS — no exception, no log line, no red test — so "WireKit is installed and you are
+     * renders — no exception, no log line, no red test — so "WireKit is installed and you are
      * getting the plain views anyway" is exactly the kind of fact that otherwise has to be noticed
      * by eye, on a screen nobody looks at twice.
      *
-     * A deliberate `plain` with WireKit installed is NOT reported: that is a decision, and a doctor
+     * A deliberate `plain` with WireKit installed is not reported: that is a decision, and a doctor
      * that argues with decisions gets ignored on the finding that matters.
      *
      * @param  bool  $servesWireKit  what the variant resolved to, which for `auto` also carries the
@@ -505,7 +505,7 @@ final class DoctorCommand extends Command
      */
     private function tamperEvidenceFindings(): array
     {
-        // Gated on the FEATURE being on, not on the key being absent. Tamper evidence is opt-in
+        // Gated on the feature being on, not on the key being absent. Tamper evidence is opt-in
         // and off by default, so an unkeyed default installation is a choice rather than a gap —
         // warning there would fire on every consumer who never asked for the feature, and a
         // warning that always fires is one nobody reads.
@@ -634,7 +634,7 @@ final class DoctorCommand extends Command
     private function unknownRegistrationMode(): ?string
     {
         // The literal, for the same reason the provider uses one: the config-drift test reads
-        // inline defaults out of the SOURCE and cannot evaluate a class constant, so a constant
+        // inline defaults out of the source and cannot evaluate a class constant, so a constant
         // here would drop out of that comparison without a word. The constants below are the
         // vocabulary, which is a different job.
         $value = config('legal-consent.registration.without_form_fields', 'warn');
@@ -733,7 +733,7 @@ final class DoctorCommand extends Command
         $key = DocumentMatrix::keys()[0] ?? null;
         $locale = DocumentMatrix::locales()[0] ?? null;
 
-        // Nothing registered to link TO yet. The route is fine as far as anything here can tell,
+        // Nothing registered to link to yet. The route is fine as far as anything here can tell,
         // and inventing a key to probe with would report on a document that does not exist.
         if (! is_string($key) || ! is_string($locale)) {
             return null;
@@ -782,7 +782,7 @@ final class DoctorCommand extends Command
             return null;
         }
 
-        // The DRIVER, not the store name. A store called `database` may be backed by anything, and
+        // The driver, not the store name. A store called `database` may be backed by anything, and
         // a store called `documents` may be backed by the database — reading the name would be a
         // guess in both directions.
         $driver = config("cache.stores.{$store}.driver");
@@ -794,7 +794,7 @@ final class DoctorCommand extends Command
      * A configured notification channel that cannot deliver, so a notice about a changed legal text
      * fails at the one moment somebody needed it.
      *
-     * ONLY `database` IS ANSWERABLE FROM HERE, and the limit is stated rather than implied.
+     * Only `database` is answerable from here, and the limit is stated rather than implied.
      * Whether a mailer reaches its host is a question no doctor can answer without sending
      * something, and a check that pretended otherwise would print a green line over a question it
      * never asked — the failure mode this whole command exists against. What IS answerable is the
@@ -837,14 +837,14 @@ final class DoctorCommand extends Command
     /**
      * Everything this report can only learn by asking the database, or null when it could not ask.
      *
-     * ## WHY THE WHOLE HALF IS WRAPPED AND NOT EACH READER
+     * ## why the whole half is wrapped and not each reader
      *
      * A connection that is refused is refused for all of them, so a guard per reader would answer
      * the same question five times and produce five identical sentences. It is also the honest
      * grouping: what is unknown here is not "the tamper chain" or "the channel" but whether the
      * report could look at the database at all.
      *
-     * ## AND IT IS A REPORT, NOT A FAILURE
+     * ## and it is a report, not a failure
      *
      * A deploy pipeline often runs this report in a stage that boots the application and
      * deliberately reaches no external service. Ending on the exception there would turn a
@@ -885,7 +885,7 @@ final class DoctorCommand extends Command
                 'undeliverable' => $this->undeliverableNotificationChannels(),
             ];
         } catch (QueryException) {
-            // The connection, not the schema. A database that is THERE but not migrated is a state
+            // The connection, not the schema. A database that is there but not migrated is a state
             // every reader above already handles on its own — that is the half-finished
             // installation a doctor earns its name on, and swallowing it here would take those
             // findings away from the one installation that needs them most.
@@ -1147,7 +1147,7 @@ final class DoctorCommand extends Command
             $this->newLine();
         }
 
-        // Every finding folds into ONE variable, and every return below reads it. Three separate
+        // Every finding folds into one variable, and every return below reads it. Three separate
         // returns each restating the rule is how the legal contradiction fell out of the exit code
         // on the third one: the same deemed-consent-without-proof installation ended 1 or 0
         // depending on whether the published config happened to carry an unrelated stale key.
@@ -1228,8 +1228,8 @@ final class DoctorCommand extends Command
         $this->line('package default copied into your file stops following the package, which is what the');
         $this->line('merge exists to avoid. Review the stale ones and delete what no longer applies.');
 
-        // Only LOST keys are a defect, and that word is earned now: the key is absent from the
-        // RUNTIME, not merely from the file. A key the merge still delivers no longer reaches this
+        // Only lost keys are a defect, and that word is earned now: the key is absent from the
+        // runtime, not merely from the file. A key the merge still delivers no longer reaches this
         // line at all, which is what takes a permanently red step off a correct configuration.
         // A stale key is hygiene and exits 0 — failing on it would make this command
         // useless in a CI check. The legal contradiction is folded in rather than restated, so
@@ -1240,7 +1240,7 @@ final class DoctorCommand extends Command
     /**
      * Keys the package defines that do not reach the runtime.
      *
-     * ## ASKED OF THE RUNTIME, NOT OF TWO FILES, AND THAT IS THE WHOLE CORRECTION
+     * ## asked of the runtime, not of two files, and that is the whole correction
      *
      * This used to diff the shipped config against the published one and report every key the file
      * did not name, with a sentence that argued from Laravel's `mergeConfigFrom()`: *"the merge is
@@ -1251,18 +1251,18 @@ final class DoctorCommand extends Command
      * So the report named keys that were reaching the runtime perfectly well — and `$lost` drives
      * the exit code, which made it a red step over a configuration with nothing wrong in it.
      *
-     * AND THE ADVICE WAS WORSE THAN THE RED RUN. "Copy the missing keys into the matching block"
+     * And the advice was worse than the red run. "Copy the missing keys into the matching block"
      * writes package defaults into a published file and freezes them on the day the package
      * improves them — the exact state the recursive merge exists to prevent.
      *
      * Asking the runtime needs no knowledge of how the merge works, and it stays right if that ever
      * changes. It also reports the one case that is genuinely still lost, and which no comparison
-     * of two files can see: a STALE configuration cache. `config:cache` builds from a full
-     * bootstrap, so the merge IS in the cached file — but the provider skips merging while a cache
-     * exists, so a key the package adds AFTERWARDS never arrives until the cache is rebuilt. That
+     * of two files can see: a stale configuration cache. `config:cache` builds from a full
+     * bootstrap, so the merge is in the cached file — but the provider skips merging while a cache
+     * exists, so a key the package adds afterwards never arrives until the cache is rebuilt. That
      * is a deployment state, not a file state, and it is the one this report now names.
      *
-     * A whole top-level block missing from the published file is NOT reported — the merge
+     * A whole top-level block missing from the published file is not reported — the merge
      * supplies it, so it arrives intact.
      *
      * @param  array<array-key, mixed>  $package
@@ -1274,8 +1274,8 @@ final class DoctorCommand extends Command
         $lost = [];
 
         foreach ($this->comparableBlocks($package, $published) as $block => [$value]) {
-            // A LIST is one value, and the index is order, not identity. Walking into it reported
-            // `locales.1` as a lost key whenever the host carried FEWER locales than the package —
+            // A list is one value, and the index is order, not identity. Walking into it reported
+            // `locales.1` as a lost key whenever the host carried fewer locales than the package —
             // naming a value ("en") that was reaching the runtime perfectly well, at index 0.
             // Sets are compared in narrowedLists() instead, and not as a defect.
             if (array_is_list($value)) {
@@ -1302,7 +1302,7 @@ final class DoctorCommand extends Command
     }
 
     /**
-     * Top-level LISTS whose published copy is missing a member of the package default.
+     * Top-level lists whose published copy is missing a member of the package default.
      *
      * Reported separately, and never as a failure. For an associative block a missing key is a
      * defect — the runtime is not what the file says. For a list it is usually the decision
@@ -1310,7 +1310,7 @@ final class DoctorCommand extends Command
      * in one language carries one. Adopting the package's list to satisfy a check would mean
      * publishing a second binding legal text, which is a worse outcome than the finding.
      *
-     * The naming matters too. The old report said the package value "NEVER reaches your runtime
+     * The naming matters too. The old report said the package value "never reaches your runtime
      * config" about a value that did reach it; this one says which member of the default the host
      * does not carry, and asks whether that is intended.
      *
@@ -1436,7 +1436,7 @@ final class DoctorCommand extends Command
     }
 
     /**
-     * Flatten to dotted keys, stopping at a LIST (a sequential array is one value the operator
+     * Flatten to dotted keys, stopping at a list (a sequential array is one value the operator
      * chose — reporting `locales.3` as a missing key would be noise, not a finding).
      *
      * @param  array<array-key, mixed>  $values
@@ -1463,7 +1463,7 @@ final class DoctorCommand extends Command
 
     /**
      * Does a dotted key exist in the array? Uses array_key_exists all the way down, never
-     * isset(): a key explicitly set to null IS declared, and treating it as absent would report
+     * isset(): a key explicitly set to null is declared, and treating it as absent would report
      * a deliberate null as drift.
      *
      * @param  array<array-key, mixed>  $values

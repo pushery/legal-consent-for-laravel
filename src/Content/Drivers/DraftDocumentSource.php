@@ -19,7 +19,7 @@ use Pushery\LegalConsent\Support\LegalDraftSet;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
 
 /**
- * Reads the admin-maintained draft store — and IS the publish gate.
+ * Reads the admin-maintained draft store — and is the publish gate.
  *
  * The gate lives here, in `resolve()`, rather than in a publish wrapper, and that placement is the
  * whole architecture: `LegalDocumentPublisher` resolves its text through the configured source, so
@@ -30,7 +30,7 @@ use Pushery\LegalConsent\Support\LegalDriftChecker;
  *
  * Throwing {@see LegalDocumentNotFound} is deliberate and load-bearing, not a convenience:
  * {@see LegalDriftChecker} catches exactly this class and returns
- * null, so a text that is merely mid-edit stays SILENT in the daily drift check, while
+ * null, so a text that is merely mid-edit stays silent in the daily drift check, while
  * {@see LegalDocumentPublisher} surfaces it as a hard failure. That
  * keeps `check-drift` sharp — it reports only the one actionable state, "approved legal text is
  * not live" — instead of crying every day about work in progress until someone removes it from
@@ -51,10 +51,10 @@ final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocume
         $set = LegalDraftSet::for($type);
         $draft = $set->draft($locale);
 
-        // Unreviewed, stale, or machine-origin-unreviewed text is NOT a source. A machine
+        // Unreviewed, stale, or machine-origin-unreviewed text is not a source. A machine
         // translation lands as ReviewState::Draft and only an explicit human act sets Reviewed,
         // so this single check is what makes "a machine draft can never be published" true on
-        // EVERY path — the admin button and the CLI alike.
+        // every path — the admin button and the CLI alike.
         if (! $draft instanceof LegalDraft || ! $set->isPublishable($draft)) {
             throw LegalDocumentNotFound::forSource($type, $locale, 'legal_drafts');
         }
@@ -64,11 +64,11 @@ final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocume
             locale: $locale,
             title: $this->titleFor($type, $locale),
             // Already RenderPipeline output: the writer sanitized it before storage, so the
-            // pipeline re-runs the SAME sanitizer over already-clean bytes (idempotent) rather
+            // pipeline re-runs the same sanitizer over already-clean bytes (idempotent) rather
             // than a second allowlist disagreeing with the one the ledger hashes.
             body: $draft->body,
             format: ContentFormat::Html,
-            // ONE version for every locale of a release, read from the source-locale row.
+            // One version for every locale of a release, read from the source-locale row.
             version: $set->version(),
             uiWording: $this->wordingFor($type, $locale),
             sourceRef: 'legal_drafts#'.$draft->id.'@'.$draft->revision,
@@ -76,7 +76,7 @@ final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocume
     }
 
     /**
-     * The cache fingerprint. Deliberately UNGATED — it must see mid-edit state, or a preview would
+     * The cache fingerprint. Deliberately ungated — it must see mid-edit state, or a preview would
      * serve a stale render. `revision` is monotonic and collision-free, unlike an `updated_at`
      * stamp, which has second granularity and would let two edits within one second share a
      * fingerprint and serve the older text for the cache's whole TTL.
@@ -93,7 +93,7 @@ final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocume
     }
 
     /**
-     * The document's heading, in its OWN locale. Vendor lang, never draft content — so it cannot
+     * The document's heading, in its own locale. Vendor lang, never draft content — so it cannot
      * be machine-translated into the frozen row by accident.
      */
     private function titleFor(string $type, string $locale): string
@@ -102,7 +102,7 @@ final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocume
     }
 
     /**
-     * The acceptance sentence, resolved in the DOCUMENT's locale and passed explicitly rather than
+     * The acceptance sentence, resolved in the document's locale and passed explicitly rather than
      * left to the pipeline's ambient-locale lookup. It is vendor lang, not draft content, which
      * makes the one sentence a subject clicks "I accept" on structurally un-machine-translatable.
      *

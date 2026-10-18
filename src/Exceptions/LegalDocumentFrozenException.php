@@ -10,7 +10,7 @@ use RuntimeException;
  * Thrown when something tries to change a proof column of a published `legal_documents`
  * row. A published version is frozen evidence — the exact sanitized text a subject was
  * shown, and the hash the ledger snapshots (EDPB 05/2020 Rz. 108). Correcting a legal text
- * is a NEW published version, never an in-place edit. Only the operational columns
+ * is a new published version, never an in-place edit. Only the operational columns
  * `is_active`, `updated_at`, `notified_at` and `objection_closed_at` may change after
  * publish; everything else is frozen.
  */
@@ -31,7 +31,7 @@ final class LegalDocumentFrozenException extends RuntimeException
 
     /**
      * A published change description is frozen for the same reason the document is: it is the
-     * record of what the subject was TOLD about the change, and a notice that has gone out cannot
+     * record of what the subject was told about the change, and a notice that has gone out cannot
      * be given a different account of itself afterwards.
      */
     public static function forChangeSet(string $key, string $locale, string $version): self

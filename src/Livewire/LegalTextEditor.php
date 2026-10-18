@@ -40,7 +40,7 @@ use Pushery\LegalConsent\Support\ReleaseOptions;
 use Pushery\LegalConsent\Support\TenantContext;
 
 /**
- * Edits ONE draft — one document key, one locale.
+ * Edits one draft — one document key, one locale.
  *
  * The editor never writes bytes itself: every Save/Translate goes through {@see LegalDraftWriter},
  * which owns the invariant that a draft body is always sanitized pipeline output. That is what
@@ -61,7 +61,7 @@ final class LegalTextEditor extends Component
      *
      * Both are `#[Locked]`. They are set once at mount and never derived again, and together they
      * address the row that save(), translate() and markReviewed() write to. Left writable, the
-     * browser picks that address at click time: markReviewed() is the human sign-off on THESE
+     * browser picks that address at click time: markReviewed() is the human sign-off on these
      * bytes and the only route to a publishable draft, so a sign-off that can be redirected to a
      * draft the screen never rendered is not a sign-off. No view binds either of them — only
      * $body is bound.
@@ -76,10 +76,10 @@ final class LegalTextEditor extends Component
     /**
      * The objection window a deemed-consent release binds on — announce, deadline, enforce.
      *
-     * THIS SURFACE IS HERE RATHER THAN ON THE MANAGER GRID, and that placement is the finding
+     * This surface is here rather than on the manager grid, and that placement is the finding
      * rather than a preference. `LegalTextManager` says in its own words that the deemed and
      * info-only modes belong to "the editor controls or the CLI, not a button on an overview
-     * grid" — a deemed release binds people by their SILENCE (§ 308 Nr. 5 BGB), and a one-click
+     * grid" — a deemed release binds people by their silence (§ 308 Nr. 5 BGB), and a one-click
      * grid action is the wrong amount of friction for that.
      *
      * Measured 2026-09-05: of the two routes that sentence names, only the CLI existed. The
@@ -107,9 +107,9 @@ final class LegalTextEditor extends Component
     /**
      * Which legal regime the change is being made under — one of the publisher's own.
      *
-     * The five fields above are SCHEDULING; these two are the classification, and that is why they
+     * The five fields above are scheduling; these two are the classification, and that is why they
      * are here rather than left out as two more inputs. `ReleaseOptions` calls itself "the
-     * operator's legal classification of ONE change", and this screen built five of its seven
+     * operator's legal classification of one change", and this screen built five of its seven
      * fields: a release from here therefore froze a contract change with no regime and no class,
      * and nothing said so — the publish succeeded and the columns were simply null.
      *
@@ -125,7 +125,7 @@ final class LegalTextEditor extends Component
     /**
      * The operator's own classification tag for this change — free text, as the CLI's is.
      *
-     * NOT a list, and deliberately: the publisher takes any string here and freezes it onto the
+     * Not a list, and deliberately: the publisher takes any string here and freezes it onto the
      * row, and its own option calls it a "legal-review classification tag (e.g.
      * agb_minor_peripheral, privacy_material)". A vocabulary invented on this screen would be a
      * second answer to a question the package has already left to the operator, and the two would
@@ -137,7 +137,7 @@ final class LegalTextEditor extends Component
     public string $body = '';
 
     /**
-     * Bumped whenever the SERVER replaces the body, so the view can key the rich editor off it.
+     * Bumped whenever the server replaces the body, so the view can key the rich editor off it.
      *
      * The WireKit editor lives behind `wire:ignore`, which is WireKit's documented integration and
      * keeps Livewire from morphing a mounted ProseMirror node. It also keeps a server-side
@@ -152,7 +152,7 @@ final class LegalTextEditor extends Component
      * rebuild the editor from scratch — on a privacy notice of some fifteen kilobytes that throws
      * away the cursor and the scroll position of the text somebody is proofreading, every time they
      * save. The question the key has to answer is not "did the text change" but "did it change
-     * WITHOUT the client doing it", and only the server can know that.
+     * without the client doing it", and only the server can know that.
      *
      * The same shape as `$statusNonce`, and LOCKED where that one is not. The sibling is unlocked
      * because a client bumping it only re-announces a sentence the server already wrote; this one
@@ -175,7 +175,7 @@ final class LegalTextEditor extends Component
     /**
      * The row and revision of the draft whose text this page holds, or '' when it holds none.
      *
-     * This is how a page tells that a finished translation WROTE something, and it needs evidence
+     * This is how a page tells that a finished translation wrote something, and it needs evidence
      * of its own for that. A failure is read once, by whichever page polls first, and a marker that
      * ran out its hour leaves nothing behind at all, so a page that found neither announced a
      * machine translation over the text it already had. Every write moves the revision, a
@@ -215,7 +215,7 @@ final class LegalTextEditor extends Component
         // it and raises: a 500 on an admin screen for a request that is simply not a thing.
         abort_unless(in_array($documentKey, $this->documentKeys(), true), 404);
 
-        // AND THE LOCALE, WHICH IS THE ONE THAT FAILS QUIETLY. releaseDeemed() releases the
+        // And the locale, which is the one that fails quietly. releaseDeemed() releases the
         // locales from the configuration, never the one this screen is editing. Measured: an
         // editor mounted on `fr` with `locales => ['de']` accepts the text, reports it reviewed,
         // and then publishes `de` — while telling the operator that »terms« was released. The
@@ -231,7 +231,7 @@ final class LegalTextEditor extends Component
         // second admin, or the same one after a reload, kept the text from before, and a save
         // wrote it back over the translation.
         //
-        // The marker is read BEFORE the draft. A translation that lands between the two reads then
+        // The marker is read before the draft. A translation that lands between the two reads then
         // shows its text here and at worst is reported as not finished; read the other way round,
         // the old text would be on screen with nothing waiting for the new one.
         $this->awaitingTranslation = $this->translating();
@@ -286,11 +286,11 @@ final class LegalTextEditor extends Component
         // outlasts the request ends it in a 500. Dispatching answers that without this package
         // guessing a timeout on somebody else's service.
         //
-        // The marker is written HERE rather than in the job, and that ordering is the point: between
+        // The marker is written here rather than in the job, and that ordering is the point: between
         // dispatch and the worker picking the job up there is a window, and a screen that polled
         // through it would see no marker and conclude the translation had already finished.
         if ($this->queuesTranslation()) {
-            // A SECOND PRESS WHILE THIS DRAFT IS BEING TRANSLATED STARTS NOTHING. The views disable the
+            // A second press while this draft is being translated starts nothing. The views disable the
             // button while a translation runs, but a press inside the round trip never sees that, and
             // a translator that bills per call would be paid again for the same text. Still not a
             // lock (see the job): the page waits on the run that is already going, which is also how
@@ -376,7 +376,7 @@ final class LegalTextEditor extends Component
     }
 
     /**
-     * Whether a translation of THIS draft is running right now.
+     * Whether a translation of this draft is running right now.
      *
      * Private, and the views read it as view data rather than calling it: a public method on a
      * Livewire component is an action a client can call, and this is a reader. The poll asks
@@ -396,7 +396,7 @@ final class LegalTextEditor extends Component
      *
      * A dispatched job is invisible to the page that dispatched it: it writes the draft and clears
      * the marker, and nothing tells this component. `$body` is a persisted property, so it kept the
-     * pre-translation text — on the SERVER, not only in the DOM — and the page went on showing it
+     * pre-translation text — on the server, not only in the DOM — and the page went on showing it
      * after polling stopped. A save then wrote that text over the translation, which is the same
      * silent loss the inline path had, on the route this package recommends for a real translator.
      *
@@ -404,7 +404,7 @@ final class LegalTextEditor extends Component
      * inline path has always overwritten `$body` with the translation, and the status says which
      * text is now on screen.
      *
-     * ANNOUNCED ONLY WHEN THE DRAFT WAS WRITTEN. A job that gave up, a translator that threw or a
+     * Announced only when the draft was written. A job that gave up, a translator that threw or a
      * source that vanished, leaves a failure record rather than a translation, and claiming a
      * machine translation there would be a report about something that did not happen. The record
      * is read once, though, and a page that finds none still needs to know whether the run wrote:
@@ -436,7 +436,7 @@ final class LegalTextEditor extends Component
             return;
         }
 
-        // NOTHING WRITTEN AND NO RECORDED FAILURE means the run is over and left nothing: the marker
+        // Nothing written and no recorded failure means the run is over and left nothing: the marker
         // reached its time-to-live, a worker was replaced before it wrote, or another page open on
         // the same draft read the failure first. No draft at all, or the one this page already
         // holds. It is the last path that could end in silence, and silence here reads as the run
@@ -450,7 +450,7 @@ final class LegalTextEditor extends Component
         $this->heldRevision = $this->revisionOf($draft);
 
         // The bytes move only when they differ, because replacing them tears the editor down and
-        // rebuilds it. The SENTENCE is not conditional on that: a translator that answered with the
+        // rebuilds it. The sentence is not conditional on that: a translator that answered with the
         // text already on screen still finished, and a screen left reading "queued" over a finished
         // run is the same defect one case over.
         if ($draft->body !== $this->body) {
@@ -482,18 +482,18 @@ final class LegalTextEditor extends Component
     /**
      * Take a draft away, through the one writer that is allowed to.
      *
-     * ## WHY THIS BELONGS ON THE SCREEN AND NOT IN A CONSUMER'S FRAME
+     * ## why this belongs on the screen and not in a consumer's frame
      *
      * `LegalDraftWriter::discard()` exists precisely so an application does not delete the row
      * itself — it refuses the source locale, fires `LegalDraftDiscarded` for a listener to record,
      * and is the only writer of that table. A screen that does not offer it sends every consumer
      * who wants the door to build the action beside it, which is how a second writer appears.
      *
-     * A MACHINE TRANSLATION NOBODY WANTS is the case that needs it: it holds a language in a state
+     * A machine translation nobody wants is the case that needs it: it holds a language in a state
      * that is neither published nor gone, and for an informational page it holds that language out
      * of release entirely, because only locales with a publishable draft are released.
      *
-     * ## THE REFUSALS ANSWER IN OUR WORDS, NOT THE WRITER'S
+     * ## the refusals answer in our words, not the writer's
      *
      * Both messages are written for whoever reads a stack trace — *"Discard a translation, or
      * rewrite the source with save()"* is advice to a developer. Neither can be reached from this
@@ -553,7 +553,7 @@ final class LegalTextEditor extends Component
     }
 
     /**
-     * Release this document across its locales as a DEEMED-CONSENT change, on a stated objection
+     * Release this document across its locales as a deemed-consent change, on a stated objection
      * window.
      *
      * Every failure here is a status message, never a fatal. Five kinds can happen and they mean
@@ -602,7 +602,7 @@ final class LegalTextEditor extends Component
                 NoticeMode::DeemedConsent,
                 // The locales a release of this document covers, which is not always every
                 // configured one. This screen used to narrow nothing at all, so an
-                // informational page released from HERE was refused over a language that binds
+                // informational page released from here was refused over a language that binds
                 // nobody — while the same page released from the grid went through.
                 LegalDraftSet::for($this->key)->releaseLocales($this->locales()),
                 new ReleaseOptions(
@@ -663,7 +663,7 @@ final class LegalTextEditor extends Component
             return;
         }
 
-        // Over the WHOLE release, like the manager: this screen releases every locale too, and
+        // Over the whole release, like the manager: this screen releases every locale too, and
         // `affects()` answers per (key, locale), so the first row named the people of one language.
         $affects = app(LegalDocumentReleaser::class)->affectsRelease($released);
         $this->setStatus(__('legal-consent::ui.admin_status_released', [
@@ -682,7 +682,7 @@ final class LegalTextEditor extends Component
 
         $this->takeQueuedTranslation($draft, $translating);
 
-        // WHICH sentence, decided here rather than in each view. The judgment has two reasons —
+        // Which sentence, decided here rather than in each view. The judgment has two reasons —
         // the source moved under a reviewed translation, or nobody ever confirmed this one — and
         // the old copy narrated the first for both. Two views branching on their own is how they
         // come to say different things about the same draft.
@@ -801,7 +801,7 @@ final class LegalTextEditor extends Component
      * The date fields carrying something this screen cannot read, by their labels.
      *
      * Returned rather than thrown: the caller turns them into a status line, so an operator who
-     * mistyped a date sees WHICH field, not a 500, and not a silently dropped value that releases
+     * mistyped a date sees which field, not a 500, and not a silently dropped value that releases
      * with no deadline at all. The line used to carry the field names in English inside a
      * translated sentence; it names them as the form labels them now.
      *
@@ -827,7 +827,7 @@ final class LegalTextEditor extends Component
      */
     private function documentKeys(): array
     {
-        // THROUGH THE MATRIX, not off the raw config. A registry with two readers has two answers,
+        // Through the matrix, not off the raw config. A registry with two readers has two answers,
         // and only one of them is tested: this line stood identically in the manager and the editor
         // and neither filtered the list-config case, so `['terms', 'privacy']` reached the screens
         // as documents named `0` and `1` while every command skipped them.

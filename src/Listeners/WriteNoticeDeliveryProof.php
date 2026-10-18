@@ -20,11 +20,11 @@ use Pushery\LegalConsent\Support\TenantContext;
 use Throwable;
 
 /**
- * Writes the append-only durable-medium proof row — and does it from the DELIVERY side.
+ * Writes the append-only durable-medium proof row — and does it from the delivery side.
  *
  * A change notice is queued ({@see ChangeNotification} is a `ShouldQueue`), so the sweep's
  * `Notification::send()` only hands a job to the queue. Writing the proof there certifies an
- * ENQUEUE, and the two facts come apart exactly where it matters: a dead worker, a poisoned job
+ * enqueue, and the two facts come apart exactly where it matters: a dead worker, a poisoned job
  * or a refusing mail transport leaves the subject with no notice and the ledger with a row saying
  * one was served. `legal_notices` refuses every UPDATE (the model blocks it, PostgreSQL and MySQL
  * carry a BEFORE UPDATE trigger), so that row can never be corrected — and
@@ -50,7 +50,7 @@ use Throwable;
  *    the merely queued, which is what makes `legal-consent:renotify` plus a re-dispatch a working
  *    repair path instead of a run that reports "Dispatched 0".
  *
- * WHAT THIS DOES NOT CLAIM: `delivered_at` stays null. The mailer accepting a message is not the
+ * What this does not claim: `delivered_at` stays null. The mailer accepting a message is not the
  * recipient receiving it, and a column that said otherwise would overstate the evidence.
  *
  * The cost is stated rather than hidden: the pseudonym lookup is per delivery here, where the
@@ -102,7 +102,7 @@ final readonly class WriteNoticeDeliveryProof
         $tenantId = $version->getAttribute(TenantContext::COLUMN);
         $tenantId = is_string($tenantId) ? $tenantId : '';
 
-        // Pin that tenant around the pseudonym lookup AND the write. A worker runs
+        // Pin that tenant around the pseudonym lookup and the write. A worker runs
         // unauthenticated, so the ambient tenant resolves to the shared '' bucket: an unpinned
         // lookup would miss the subject's pseudonym and mint a fresh one — severing this proof
         // from their consent ledger — and an unpinned write would strand the row outside the
@@ -155,7 +155,7 @@ final readonly class WriteNoticeDeliveryProof
         try {
             $body = implode("\n", $this->lines($notification, $subject));
 
-            // Must be evaluated INSIDE the version's locale — the same locale the notice was
+            // Must be evaluated inside the version's locale — the same locale the notice was
             // rendered in — or it would certify a translation the subject never received. Ask the
             // notice itself: a non-empty body proves nothing (subject + intro alone keep it
             // non-empty while the § 308 Nr. 5 lit. b warning silently drops out).

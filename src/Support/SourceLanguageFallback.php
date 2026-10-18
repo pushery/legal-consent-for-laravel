@@ -10,7 +10,7 @@ use Pushery\LegalConsent\Enums\DocumentType;
  * Whether a missing translation of a document may be answered with another language's version.
  *
  * Two questions this package used to answer with one field. `legal_basis` says whether a document
- * BINDS. Whether a reader of an untranslated locale may be shown another language's version was a
+ * binds. Whether a reader of an untranslated locale may be shown another language's version was a
  * silent consequence of it: yes for an informational page, no for everything else. That made an
  * acknowledgment unusable the moment an application had more languages than translations. The
  * page it asks a reader to acknowledge was not reachable in the reader's language, and a release

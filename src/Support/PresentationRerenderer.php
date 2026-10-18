@@ -13,7 +13,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
 use RuntimeException;
 
 /**
- * Re-freezes a published version whose TEXT is unchanged and whose RENDERING has moved.
+ * Re-freezes a published version whose TEXT is unchanged and whose rendering has moved.
  *
  * The case it exists for: registering CommonMark's TableExtension turned a paragraph of pipe
  * characters into a real table, so every published document holding a table went on showing the
@@ -23,13 +23,13 @@ use RuntimeException;
  *
  * What happens instead: the identical text is frozen again under the next PATCH version, silently.
  *
- * IT IS A NEW ROW, NOT A CORRECTION OF THE OLD ONE, AND THAT IS THE POINT. Every consent in the
+ * It is a new row, not a correction of the old one, and that is the point. Every consent in the
  * ledger names the `content_hash` it was given against, and the chain hashes it; rewriting the HTML
  * of a published version in place would leave every one of those rows pointing at a hash nothing
  * can reproduce. So the old version keeps its bytes and its proof value, and the new one carries
  * the same text in the shape it should have had.
  *
- * The proof that it IS the same text is {@see Document::$sourceHash},
+ * The proof that it is the same text is {@see Document::$sourceHash},
  * recorded at publish since migration 000030 — never a claim by the caller, and never a comparison
  * of HTML, which differs by definition here.
  */
@@ -122,7 +122,7 @@ final readonly class PresentationRerenderer
     /**
      * The next free patch number in the active version's own major.minor line.
      *
-     * Taken from the HIGHEST row rather than the active one, because they can differ: a version may
+     * Taken from the highest row rather than the active one, because they can differ: a version may
      * be published and superseded before it is ever activated, and re-using its number would meet
      * "already exists with different content" — a refusal about version numbers, raised by the one
      * command whose whole job is to pick one.

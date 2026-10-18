@@ -12,7 +12,7 @@ use Pushery\LegalConsent\Support\DefaultConsentManager;
 use Pushery\LegalConsent\Support\TenantContext;
 
 /**
- * A PUBLISHED legal document, read verbatim from its frozen `legal_documents` row.
+ * A published legal document, read verbatim from its frozen `legal_documents` row.
  *
  * This is the text a subject is shown and the text the ledger proves: `html` carries the exact
  * stored bytes and `contentHash` the exact stored hash, neither re-rendered nor re-sanitized on
@@ -22,7 +22,7 @@ use Pushery\LegalConsent\Support\TenantContext;
  * between an author's edit and the next publish, and a subject would then accept text A while
  * the ledger snapshots hash(text B).
  *
- * Distinct from {@see Document}, which is the SOURCE rendered through the pipeline. Wiring the
+ * Distinct from {@see Document}, which is the source rendered through the pipeline. Wiring the
  * wrong one into a public page is therefore a type mismatch, not a silent proof defect.
  */
 final readonly class PublishedDocument
@@ -53,11 +53,16 @@ final readonly class PublishedDocument
          *
          * Reads are already confined to the current tenant by the global scope on
          * LegalDocument, so this is not what makes the read safe — it is what lets a caller
-         * CONFIRM what it received. Without it, a multi-tenant consumer inspecting a returned
+         * confirm what it received. Without it, a multi-tenant consumer inspecting a returned
          * document has no way to tell which tenant's text it is holding, and a returned
          * document looks equally valid either way.
          */
         public string $tenantId = '',
+        /**
+         * The version as the source counts it, recorded beside {@see $version}, or null when the
+         * source counts none. It decides nothing: the gate reads the SemVer version alone.
+         */
+        public ?string $sourceVersion = null,
     ) {}
 
     public static function fromRow(LegalDocument $row): self
@@ -82,11 +87,12 @@ final readonly class PublishedDocument
             publishedAt: $row->published_at,
             enforceFrom: $row->enforce_from,
             tenantId: is_string($tenant) || is_int($tenant) ? (string) $tenant : '',
+            sourceVersion: $row->source_version,
         );
     }
 
     /**
-     * What a subject reading THIS page was shown, as the one value the accept-time guard
+     * What a subject reading this page was shown, as the one value the accept-time guard
      * compares against — the body hash folded with the acceptance sentence beside it.
      *
      * Delegates rather than recomputing. The rule it serves is that both sides of the guard run
@@ -95,7 +101,7 @@ final readonly class PublishedDocument
      * fingerprint exists to prevent (change the separator once and the two quietly disagree).
      *
      * Recording `contentHash` instead is the mistake this method exists to make unnecessary:
-     * that hash covers the sanitized BODY only, not the `uiWording` the subject actually read.
+     * that hash covers the sanitized body only, not the `uiWording` the subject actually read.
      */
     public function acceptanceFingerprint(): string
     {
@@ -105,10 +111,10 @@ final readonly class PublishedDocument
     /**
      * Re-derive the hash from these exact bytes and compare it to the stored one — the row
      * proving itself. A mismatch means the stored content and its hash disagree, which the
-     * immutability trigger is there to prevent; this is how a CALLER holding a read-path document
+     * immutability trigger is there to prevent; this is how a caller holding a read-path document
      * can confirm that for itself.
      *
-     * `legal-consent:verify-documents` does NOT come through here, and this line used to say it
+     * `legal-consent:verify-documents` does not come through here, and this line used to say it
      * did. The command sweeps `LegalDocument` rows and makes the identical comparison inline
      * against `content`/`content_hash` — the same two values, since `fromRow()` maps `html` from
      * `content`. So the rule is written twice, and changing it here does not move the command.

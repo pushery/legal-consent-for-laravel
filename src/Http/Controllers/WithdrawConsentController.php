@@ -24,7 +24,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * middleware) does not. It answers with a redirect back to the page the form was on, because a
  * form post that lands on an empty 204 leaves the subject staring at a blank document.
  *
- * It exists for ONE control: the withdraw button in the framework-agnostic settings stub, which
+ * It exists for one control: the withdraw button in the framework-agnostic settings stub, which
  * had no route to point at and therefore posted to `#`. The stub cannot call a Livewire action —
  * being framework-agnostic is the point of it — so without this the package promised Art. 7(3)
  * in a comment and shipped a button that did nothing.
@@ -60,7 +60,7 @@ final readonly class WithdrawConsentController
             // legally exist. Answered as a message on the page, not a 500: the subject did
             // nothing wrong, and a form post has nowhere else to put an explanation.
             //
-            // The TRANSLATED sentence, never $e->getMessage(). The exception carries a hardcoded
+            // The translated sentence, never $e->getMessage(). The exception carries a hardcoded
             // English string naming the document key and the internal enum value, and the settings
             // stub renders whatever lands under this key verbatim inside `<p role="alert">` — so
             // the developer sentence would be announced by a screen reader, in English, on a
@@ -77,7 +77,7 @@ final readonly class WithdrawConsentController
                 ->with(self::ERROR_KEY, __('legal-consent::ui.not_withdrawable'));
         } catch (LegalDocumentNotFound $e) {
             // Only the active-version lookup means "no such document being served here". Anything
-            // else — a consuming application's listener raising this same type AFTER the ledger
+            // else — a consuming application's listener raising this same type after the ledger
             // row was written — is rethrown, exactly as the JSON API does: answering that with a
             // 404 would invite a retry that appends a second row and bury the real failure.
             if (! $e->isMissingPublishedVersion()) {
@@ -94,7 +94,7 @@ final readonly class WithdrawConsentController
     /**
      * Back to the page the form was posted from — but only while that page is this application's.
      *
-     * A bare `back()` resolves `url()->previous()`, which reads the `Referer` header FIRST and
+     * A bare `back()` resolves `url()->previous()`, which reads the `Referer` header first and
      * only falls back to the session when there is none. The package already refuses to trust
      * that value in its other post-legal-flow redirect (ReConsentForm::submit): returning a
      * subject to a foreign origin in the same response that confirms a legal act is an ideal
@@ -108,13 +108,13 @@ final readonly class WithdrawConsentController
     private function backToOwnOrigin(Request $request): RedirectResponse
     {
         $home = config('legal-consent.routes.home', '/');
-        // THE `!== ''` HALF IS DEFENSIVE AND CANNOT BE OBSERVED FROM OUTSIDE — measured, so that
+        // The `!== ''` half is defensive and cannot be observed from outside — measured, so that
         // nobody writes the test it invites. The URL generator normalizes an empty target and a
         // bare slash to the same place: `url()->previous('')` and `url()->previous('/')` both
         // answer the application root, and so do both `redirect()->to()` calls, with a foreign
         // Referer as well as without one. Removing this half therefore changes no response
         // anywhere, and an arm asserting "an empty home redirects to /" passes with the half
-        // deleted. The `is_string()` half is different and IS held — a non-string home is a
+        // deleted. The `is_string()` half is different and is held — a non-string home is a
         // configuration a consumer really writes, and it has an arm.
         //
         // It stays because it costs nothing and states the intent at the point of use, not
@@ -148,7 +148,7 @@ final readonly class WithdrawConsentController
         // A backslash: browsers treat `\` as `/`, so `/\evil` is fetched as `//evil`, and
         // parse_url genuinely reads no authority there. That half is load-bearing.
         //
-        // THE `//` HALF IS REDUNDANT, AND THIS COMMENT USED TO GIVE IT A REASON THAT IS FALSE.
+        // The `//` half is redundant, and this comment used to give it a reason that is false.
         // It said a protocol-relative `//host` "has no scheme for parse_url to hang a host on".
         // Measured: `parse_url('//host', PHP_URL_HOST)` returns `'host'`, and every degenerate
         // shape (`//`, `///`, `//?x`, `///host`) returns `false` — never `null`. The final line

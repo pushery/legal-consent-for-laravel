@@ -10,13 +10,13 @@ use Pushery\LegalConsent\Models\LegalDocument;
 /**
  * Which documents may be acknowledged, and which of them the registration flow writes.
  *
- * TWO QUESTIONS, AND THE CLASS NAME DESCRIBES THE OLDER ONE. It began as the registration
+ * Two questions, and the class name describes the older one. It began as the registration
  * answer alone; {@see covers()} now answers the wider one — may this page be acknowledged at all,
  * from anywhere — because that is the question {@see DefaultConsentManager::acknowledge()} actually
  * asks. The name stays: it is a published class, and renaming it would break every consumer that
  * references it for a word. Which question a method answers is on the method.
  *
- * ONE place, because the answer is needed in four and a rule spread over four call sites is a rule
+ * One place, because the answer is needed in four and a rule spread over four call sites is a rule
  * that drifts. Before this, every one of them asked `$document->type->isConsentBearing()` directly,
  * and the informational answer was the same everywhere by accident rather than by construction.
  *
@@ -24,7 +24,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  *
  * An informational page binds nobody — that is the whole meaning of the basis, and it is why
  * {@see DocumentType::isConsentBearing()} excludes it. But an
- * application may still SHOW one at sign-up: a single checkbox naming a privacy policy, an imprint,
+ * application may still show one at sign-up: a single checkbox naming a privacy policy, an imprint,
  * a cookie notice and an accessibility statement together is an ordinary registration form, and the
  * operator who built it wants to know, per page, which version each person was shown. Skipping the
  * informational ones leaves a ticked box with a ledger that mentions one of the four.
@@ -38,7 +38,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  *         'registration_wording' => 'I have read the imprint.',
  *     ],
  *
- * BOTH keys, and a document carrying only the flag is simply NOT covered rather than an error at
+ * Both keys, and a document carrying only the flag is simply not covered rather than an error at
  * registration time. The wording is the sentence the operator's own form puts next to the page, and
  * the ledger stores it verbatim — an informational document has none of its own, because this
  * package never asks the reader for anything on such a page. Without it there is nothing truthful
@@ -52,7 +52,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  *
  * ## …and the page that is never on that form
  *
- * A confirmation shown inside a CHECKOUT is the same kind of record and belongs nowhere near
+ * A confirmation shown inside a checkout is the same kind of record and belongs nowhere near
  * sign-up. It says so with the general pair, and the registration flow leaves it alone:
  *
  *     'creator-supplies-the-service' => [
@@ -65,23 +65,23 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * word for word. `registration_wording` wins where both wordings are set — it is the more specific,
  * and a registry carrying both is an operator whose sign-up form words the page its own way.
  *
- * Refusing HERE rather than where the row is written is the difference between a configuration that
+ * Refusing here rather than where the row is written is the difference between a configuration that
  * does nothing and a registration that throws. A half-configured document lands in the first
  * category, where an operator can find it, instead of the second, where their users do.
  *
- * ## What it deliberately does NOT change
+ * ## What it deliberately does not change
  *
- * THE DOCUMENT TYPE STAYS `informational`, AND THAT IS THE POINT RATHER THAN A SHORTCUT. Moving
+ * The document type stays `informational`, and that is the point rather than a shortcut. Moving
  * such a page to `acknowledgement` is a different decision, not a stronger version of this one: an
- * acknowledgment GATES, so a new version stops every reader until they take notice. Where that is
+ * acknowledgment gates, so a new version stops every reader until they take notice. Where that is
  * what an operator wants, `'locale_fallback' => true` on the entry keeps an imprint published only
  * in the source language reachable under every other locale's URL ({@see SourceLanguageFallback});
  * without it, a release has to cover every configured locale.
  *
- * AND IT NEVER BLOCKS. {@see ConsentGate} keeps asking `isConsentBearing()` and is not routed
+ * And it never blocks. {@see ConsentGate} keeps asking `isConsentBearing()` and is not routed
  * through here, so a flagged page can go stale without locking anybody out of anything. A page that
  * binds nobody must not become a gate by being written down, and pressure would be wrong there.
- * What the operator gets is the STATE — which version was acknowledged, and whether it is current —
+ * What the operator gets is the state — which version was acknowledged, and whether it is current —
  * and a way to write a fresh row. How they ask for a second look (a banner, a notice, not at all)
  * is theirs to decide.
  */
@@ -100,17 +100,17 @@ final readonly class RegistrationAcknowledgment
     }
 
     /**
-     * May this key be acknowledged AT ALL — anywhere, not only at registration?
+     * May this key be acknowledged at all — anywhere, not only at registration?
      *
-     * ONE FLAG USED TO ASSERT TWO DIFFERENT FACTS, AND THAT IS WHAT THIS SPLIT REPAIRS.
+     * One flag used to assert two different facts, and that is what this split repairs.
      * `acknowledge_at_registration` said both "this page may be written to the ledger" and "the
      * registration flow writes it", and {@see DefaultConsentManager::acknowledge()} — which is
      * callable from anywhere — asked the combined question. So a consumer who shows a page inside a
-     * CHECKOUT, and must not touch the registration flow at all, had one way through: set a flag
+     * checkout, and must not touch the registration flow at all, had one way through: set a flag
      * whose name says registration. A configuration that states something untrue to unlock a
      * correct behavior is the same failure this package refuses one layer up, in the ledger itself.
      *
-     * They really are two facts. A page shown before every purchase is acknowledgeable and must NOT
+     * They really are two facts. A page shown before every purchase is acknowledgeable and must not
      * be written at sign-up; a page on the registration form is both. So `acknowledgeable` carries
      * the general permission, `acknowledge_at_registration` keeps meaning what it says — and it
      * still implies the first, which is what leaves every existing registry untouched.
@@ -158,7 +158,7 @@ final readonly class RegistrationAcknowledgment
     }
 
     /**
-     * Does the REGISTRATION flow write this key, specifically?
+     * Does the registration flow write this key, specifically?
      *
      * The narrower of the two questions, and the one the flag was named for. A page flagged only
      * `acknowledgeable` is reachable through {@see DefaultConsentManager::acknowledge()} and is
@@ -179,7 +179,7 @@ final readonly class RegistrationAcknowledgment
     /**
      * One document's registry entry, or null when the key names none.
      *
-     * MOVED to {@see DocumentRegistryEntry}, which {@see RegistrationField} reads as well. This
+     * Moved to {@see DocumentRegistryEntry}, which {@see RegistrationField} reads as well. This
      * method stays as the thin call its four callers here already make, so nothing about them
      * changes; the reasoning about narrowing a `mixed` config value lives with the reader now.
      *
@@ -218,7 +218,7 @@ final readonly class RegistrationAcknowledgment
 
         $wording = trim($wording);
 
-        // THROUGH THE TRANSLATOR, because a configuration cannot be translated per reader and this
+        // Through the translator, because a configuration cannot be translated per reader and this
         // sentence is read by one. `config:cache` freezes the language the cache was built in, so a
         // registry shipping seven of them had a German registrant tick a German sentence while the
         // ledger stored the English one — a proof of the wrong text, on the record that exists to

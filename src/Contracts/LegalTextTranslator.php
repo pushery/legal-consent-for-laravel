@@ -7,7 +7,7 @@ namespace Pushery\LegalConsent\Contracts;
 use Pushery\LegalConsent\Support\LegalDraftWriter;
 
 /**
- * The seam a consumer binds to translate a legal text — and the package's ENTIRE AI surface.
+ * The seam a consumer binds to translate a legal text — and the package's entire AI surface.
  *
  * Deliberately provider-agnostic: no SDK types, no model names, no keys. Every app already has its
  * own LLM wiring (its own client, prompt cache, spend controls, test fake), and a package that

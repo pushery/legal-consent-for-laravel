@@ -8,14 +8,14 @@ use Carbon\CarbonImmutable;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * The ACTIVE re-consent notification: a material CONTRACT change requires the subject to
+ * The active re-consent notification: a material contract change requires the subject to
  * actively agree before it applies (NoticeMode::ActiveReconsent). Reserved for contracts —
  * a privacy notice is info-only and never re-consented (it goes out as
  * LegalChangeInformational). Queued; channels come from config (mail + database by default).
- * The mail states the deadline AND its consequence explicitly (§ 308 Nr. 5 lit. b BGB) and
+ * The mail states the deadline and its consequence explicitly (§ 308 Nr. 5 lit. b BGB) and
  * links to the consent route.
  *
- * The locale is PINNED by the dispatch sweep onto the notification itself, and that pin wins: it
+ * The locale is pinned by the dispatch sweep onto the notification itself, and that pin wins: it
  * is the version's locale, which is also the locale the durable-medium proof row is rendered in.
  * A notifiable preference would break that congruence — the subject would receive one language
  * while an append-only row certified another.
@@ -73,9 +73,9 @@ class ReconsentRequired extends ChangeNotification
     }
 
     /**
-     * A re-consent notice must state the deadline AND its consequence (§ 308 Nr. 5 lit. b BGB).
+     * A re-consent notice must state the deadline and its consequence (§ 308 Nr. 5 lit. b BGB).
      *
-     * This asks the TRANSLATOR, never {@see line}. line() falls back to hardcoded German for
+     * This asks the translator, never {@see line}. line() falls back to hardcoded German for
      * exactly these keys, so a check routed through it could not return false under any input —
      * and its answer is written immutably into a proof row. A certification that cannot fail
      * certifies nothing, and it is worse than none: someone producing that row in a proceeding

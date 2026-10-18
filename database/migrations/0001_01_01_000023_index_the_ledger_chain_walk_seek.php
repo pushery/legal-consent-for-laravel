@@ -16,7 +16,7 @@ use Pushery\LegalConsent\Support\IndexName;
  * are the same pair, which is what makes the walk resumable. An index on `subject_token` alone
  * orders rows by only the first half of it.
  *
- * THE DROP IS NOT TIDINESS, AND IT IS THE HALF THAT MAKES THIS MIGRATION DO ANYTHING. Adding the
+ * The drop is not tidiness, and it is the half that makes this migration do anything. Adding the
  * pair while the single-column index stays changes nothing on any engine: the planner prefers the
  * narrower index and patches up the second half of the sort key itself. Measured on PostgreSQL
  * 18.4 over 100 subjects with 200 chained rows each, seeking from the middle of one subject's
@@ -31,12 +31,12 @@ use Pushery\LegalConsent\Support\IndexName;
  *                              no Sort node, Rows Removed by Filter: 0
  *
  * The `Rows Removed by Filter: 101` is the cost this closes, and it is quadratic in the wrong
- * dimension. The single-column index can only position at the START of the boundary subject's
+ * dimension. The single-column index can only position at the start of the boundary subject's
  * token, so every page re-reads that subject's chain from the beginning and discards the prefix
  * it has already walked. It scales with how many rows one subject has accumulated, not with the
  * page size, so it grows exactly for the long-lived subjects whose proof matters most.
  *
- * WHY DROPPING IT IS SAFE. Every other read of `subject_token` in the package is leading-column
+ * Why dropping it is safe. Every other read of `subject_token` in the package is leading-column
  * work the pair serves unchanged: equality (`DefaultConsentManager`), `whereIn` (the Art. 17
  * erasure), `whereNotNull`, and `GROUP BY subject_token`. Two of them get strictly better —
  * `PruneExpiredConsentRecordsCommand` reads a subject's rows as `where(subject_token)
@@ -45,7 +45,7 @@ use Pushery\LegalConsent\Support\IndexName;
  * also leads with the same column, so the single-column index had in fact been redundant for
  * lookups since 000012 added it.
  *
- * WHAT IT COSTS ON THE OTHER ENGINES: nothing, because there it was already this index under
+ * What it costs on the other engines: nothing, because there it was already this index under
  * another name. InnoDB appends the primary key to every secondary index, so MySQL's
  * `legal_consents_subject_token_index` is physically (subject_token, id) — measured on MySQL
  * 8.4.10, the seek already ran as one index range scan with `10101 < id <= 9999999` inside the

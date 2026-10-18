@@ -25,26 +25,26 @@ use Symfony\Component\Console\Attribute\AsCommand;
  *
  * Five checks:
  *
- * 1. INTEGRITY (hard error) — every active row's stored `content` is re-hashed and compared to its
+ * 1. Integrity (hard error) — every active row's stored `content` is re-hashed and compared to its
  *    stored `content_hash`. A mismatch means the two disagree: the row cannot prove what it claims.
- * 2. NOTICE-MODE DIVERGENCE (hard error) — a (key, major) whose active rows carry DIFFERENT notice
+ * 2. Notice-mode divergence (hard error) — a (key, major) whose active rows carry different notice
  *    modes across locales. Acceptance is identity-keyed (key + major), so a bound-by-silence
  *    DeemedAccepted holding of one locale would satisfy another locale's hard ActiveReconsent gate.
  *    Legacy data can carry this because the publisher classified per (key, locale). It is reported
  *    rather than repaired: the fix is publishing a new, consistent version — never editing frozen
  *    proof.
- * 3. WORDING LOCALE (advisory) — a row whose `ui_wording` is verbatim another locale's canned
+ * 3. Wording locale (advisory) — a row whose `ui_wording` is verbatim another locale's canned
  *    acceptance sentence. Before v0.4.0 the pipeline resolved the wording against the ambient app
  *    locale, so a `de` document could freeze the English sentence, which then flowed into every
  *    consent row's `ui_wording_snapshot`. Those rows are append-only and unfixable — surfaced so an
  *    operator knows, never touched.
- * 4. PLACEHOLDER (advisory, or a hard error with `--placeholders-fail`) — an active row on version
+ * 4. Placeholder (advisory, or a hard error with `--placeholders-fail`) — an active row on version
  *    0.0.0, or whose content, title or acceptance sentence carries a marker from
  *    `legal-consent.placeholder_markers`, was released before its real text was written, and
  *    subjects are asked to agree to it. A warning by default, because a version frozen on 0.0.0 by
  *    an earlier release path stays in the table either way; a release check that must not ship a
  *    placeholder asks for the failure. Fixed, like the others, by publishing a new version.
- * 5. UNRELEASED DRAFT (advisory, or a hard error with `--placeholders-fail`) — a document on the
+ * 5. Unreleased draft (advisory, or a hard error with `--placeholders-fail`) — a document on the
  *    draft store with no active version in a configured locale. Its page shows the file the
  *    package ships under `resources/legal` until the first release, which a reader cannot tell
  *    from a released text, so it counts like a placeholder. A document whose source is a file
@@ -197,7 +197,7 @@ final class VerifyDocumentsCommand extends Command
 
     /**
      * The locale whose canned acceptance sentence this row's ui_wording matches verbatim, when
-     * that is NOT the row's own locale. Null when the wording is this locale's sentence or a
+     * that is not the row's own locale. Null when the wording is this locale's sentence or a
      * custom one the source supplied (which is legitimate and must not be flagged).
      */
     private function foreignWordingLocale(LegalDocument $document): ?string
@@ -259,7 +259,7 @@ final class VerifyDocumentsCommand extends Command
     }
 
     /**
-     * A (key, major) is ONE change: every locale's active row for it must carry the same notice
+     * A (key, major) is one change: every locale's active row for it must carry the same notice
      * mode, or a weaker-proof acceptance in one language satisfies a stronger requirement in
      * another.
      *

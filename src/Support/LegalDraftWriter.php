@@ -20,15 +20,15 @@ use Pushery\LegalConsent\Exceptions\LegalSourceDraftCannotBeDiscarded;
 use Pushery\LegalConsent\Models\LegalDraft;
 
 /**
- * The ONLY thing that writes a draft's bytes — so one class owns the invariant that
+ * The only thing that writes a draft's bytes — so one class owns the invariant that
  * `legal_drafts.body` is always RenderPipeline output.
  *
  * That invariant is the security boundary for the first `{!! !!}` sink a consumer will build on
- * this: text is sanitized on the way IN, by the same pipeline whose output the ledger hashes.
+ * this: text is sanitized on the way in, by the same pipeline whose output the ledger hashes.
  * A second sanitizer anywhere would mean two allowlists — the ledger hashing one form while the
  * page renders another.
  *
- * Exactly two writers of `source_hash`, and the third method's ABSTENTION is the deliberate part:
+ * Exactly two writers of `source_hash`, and the third method's abstention is the deliberate part:
  *
  *  - save()             a human typed → review resets to Draft. `source_hash` is NOT touched, so
  *                       editing the SOURCE locale stales every translation by derivation, with
@@ -39,7 +39,7 @@ use Pushery\LegalConsent\Models\LegalDraft;
  *  - applyTranslation() the machine → records the source hash it translated FROM and stays Draft.
  *                       Fresh but unreviewed: proof that the two predicates are independent.
  *
- * There is NO path from applyTranslation() to Reviewed. That is what makes "a machine draft can
+ * There is no path from applyTranslation() to Reviewed. That is what makes "a machine draft can
  * never be published" structural rather than a matter of discipline.
  *
  * Not `final`: `find()` is a `protected` seam so a test can force the stale read a concurrent writer
@@ -79,7 +79,7 @@ readonly class LegalDraftWriter
     }
 
     /**
-     * The explicit human sign-off on these EXACT bytes — the only writer of Reviewed, and the only
+     * The explicit human sign-off on these exact bytes — the only writer of Reviewed, and the only
      * path to a publishable draft. Stamps the source hash: reviewing a translation is asserting it
      * says what the source says right now.
      *
@@ -118,7 +118,7 @@ readonly class LegalDraftWriter
     }
 
     /**
-     * A machine produced this translation. Records WHICH source text it was made from, and leaves
+     * A machine produced this translation. Records which source text it was made from, and leaves
      * the draft unreviewed — fresh but unpublishable until a human signs it off.
      */
     public function applyTranslation(string $key, string $locale, string $body, string $translatedFromHash, ?string $actor = null): LegalDraft
@@ -147,7 +147,7 @@ readonly class LegalDraftWriter
      * door here a consuming application deletes the row itself, which puts a second writer on a
      * table this class exists to be the only writer of.
      *
-     * THE SOURCE LOCALE IS REFUSED, AND THE CHECK RUNS BEFORE THE LOOKUP. Every translation
+     * The source locale is refused, and the check runs before the lookup. Every translation
      * measures its freshness against the source's hash and falls back to the source when it has
      * none of its own, so removing it would leave every other locale of that key measured against
      * a text that does not exist. Asking first means the answer is the structural one even when
@@ -219,7 +219,7 @@ readonly class LegalDraftWriter
     }
 
     /**
-     * Insert or update, bumping `revision` with a SINGLE atomic statement rather than a
+     * Insert or update, bumping `revision` with a single atomic statement rather than a
      * read-modify-write: `lockForUpdate()` compiles away on SQLite, so a read-then-increment
      * would silently race there while looking safe.
      *
@@ -233,7 +233,7 @@ readonly class LegalDraftWriter
         if (! $existing instanceof LegalDraft) {
             try {
                 // The INSERT runs inside its own transaction, and on PostgreSQL that is the whole
-                // point rather than tidiness. A failed statement there aborts the ENTIRE open
+                // point rather than tidiness. A failed statement there aborts the entire open
                 // transaction — every following query answers SQLSTATE 25P02, "current transaction
                 // is aborted, commands ignored until end of transaction block" — so the recovery
                 // read below is impossible unless the violation is confined to a savepoint. MySQL

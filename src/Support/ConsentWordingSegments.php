@@ -5,20 +5,20 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 /**
- * One acceptance sentence carrying SEVERAL document titles, cut into the runs that are links and
+ * One acceptance sentence carrying several document titles, cut into the runs that are links and
  * the runs that are not.
  *
  * ## Why this is not {@see ConsentWordingLink} called in a loop
  *
- * That class answers where ONE title sits and hands back the sentence in three pieces. Applied
+ * That class answers where one title sits and hands back the sentence in three pieces. Applied
  * again to one of its own pieces it starts cutting its own output, and the second title's `before`
  * is then a fragment rather than the sentence — the reassembly invariant holds per call and not
  * across calls. So a grouped sentence needs the positions of all titles found at once, against the
- * ORIGINAL wording, and cut in one pass.
+ * original wording, and cut in one pass.
  *
  * ## The same constraint, for the same reason
  *
- * THE SENTENCE IS NEVER REWRITTEN. `wording` is the snapshotted text the ledger records as the
+ * The sentence is never rewritten. `wording` is the snapshotted text the ledger records as the
  * thing that was agreed to, so every run comes out of it by offset and the concatenation of all
  * segments is the original byte for byte. An arm holds exactly that, because it is the property a
  * reader of the ledger depends on and the one a refactor would lose silently.
@@ -68,7 +68,7 @@ final readonly class ConsentWordingSegments
         foreach ($documents as $document) {
             $title = is_string($document['title'] ?? null) ? $document['title'] : '';
 
-            // Offsets are collected against the ORIGINAL sentence, never against a remainder: a
+            // Offsets are collected against the original sentence, never against a remainder: a
             // remainder shifts every position after it and the second title lands in the wrong run.
             $at = $title === '' || $wording === '' ? false : mb_stripos($wording, $title);
 
@@ -81,7 +81,7 @@ final readonly class ConsentWordingSegments
             $found[] = ['at' => $at, 'length' => mb_strlen($title), 'document' => $document];
         }
 
-        // Earliest first, and at one position the LONGER match first, so the rule below closes the
+        // Earliest first, and at one position the longer match first, so the rule below closes the
         // run to the shorter one rather than to whichever the caller listed first.
         usort($found, static fn (array $a, array $b): int => [$a['at'], $b['length']] <=> [$b['at'], $a['length']]);
 
@@ -102,7 +102,7 @@ final readonly class ConsentWordingSegments
             }
 
             $segments[] = [
-                // From the WORDING, not from the title: this is what keeps the sentence unaltered
+                // From the wording, not from the title: this is what keeps the sentence unaltered
                 // where the two differ in case, which is most of the shipped rows.
                 'text' => mb_substr($wording, $match['at'], $match['length']),
                 'document' => $match['document'],

@@ -7,7 +7,7 @@ namespace Pushery\LegalConsent\Support;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
- * Resolves where a document is READABLE, for the surfaces that display one.
+ * Resolves where a document is readable, for the surfaces that display one.
  *
  * The package freezes legal texts; it does not own the pages that render them, and it must not
  * guess at a host's route names. So the host supplies `fn (LegalDocument): ?string` through
@@ -20,7 +20,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * of the three, because the subject cannot continue until they agree. The failure is quiet: no test
  * goes red, the schema is intact, the row is simply no longer clickable.
  *
- * Unset stays the old behavior — a title rendered as text. A misconfigured value yields NO link
+ * Unset stays the old behavior — a title rendered as text. A misconfigured value yields no link
  * rather than a broken one: an empty `href` navigates to the current page, which reads as "the
  * document is here" and is worse than an absent link.
  */

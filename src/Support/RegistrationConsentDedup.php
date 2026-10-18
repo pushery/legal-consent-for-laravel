@@ -15,7 +15,7 @@ use WeakMap;
  * so a global boolean would let a long-lived process (queue/console) firing Registered for
  * many users record only the first.
  *
- * The mark is held for the model INSTANCE, in a WeakMap on the request. The two paths of one
+ * The mark is held for the model instance, in a WeakMap on the request. The two paths of one
  * registration are handed the same instance, so they never both record it, and every other
  * subject records once. A registration whose transaction rolled back after the mark was set
  * removed the account and its consent rows, not the mark: a mark kept by the subject's key

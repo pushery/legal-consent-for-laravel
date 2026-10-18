@@ -10,7 +10,7 @@ use Pushery\LegalConsent\Support\DocumentTitle;
 use RuntimeException;
 
 /**
- * A version was published with an announcement date AFTER the date it takes effect.
+ * A version was published with an announcement date after the date it takes effect.
  *
  * The create migration states the timeline as an invariant — `published_at < announce_from <
  * enforce_from` — and nothing enforced it. Inverted, the change binds before anybody is told:
@@ -19,7 +19,7 @@ use RuntimeException;
  * package is willing to tell them why, which is the exact sequence § 308 Nr. 5 BGB and Art. 3(3)
  * Reg. (EU) 2019/1150 make ineffective.
  *
- * It also freezes a NEGATIVE `notice_period_days` into a row that cannot be corrected — the column
+ * It also freezes a negative `notice_period_days` into a row that cannot be corrected — the column
  * is outside {@see LegalDocument::MUTABLE_AFTER_PUBLISH} — and that
  * number is what a consumer's compliance report reads as "the notice period we granted".
  *

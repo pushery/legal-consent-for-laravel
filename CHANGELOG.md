@@ -4,6 +4,31 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.47.0] - 2026-10-18
+
+### Added
+
+- **A source can count its own versions.** A custom source may return `sourceVersion` on its `RawDocument`, such as the whole number another system gives each revision of a text. It is recorded word for word beside the SemVer version, on the published version (`source_version`) and on every consent given to it (`document_source_version`, also in `history()`), and it decides nothing. A source that gives a source version and no SemVer version publishes each new one as the next minor of the active version, the first as 1.0.0, and refuses a changed text under a source version it published already.
+
+  **Upgrade:** run `php artisan migrate`, or publish the new migration `0001_01_01_000041_record_the_version_its_source_counts` first where the migrations are published. A consent folds its source version into its record hash only when it has one, so every row written before keeps its hash and no chain needs re-chaining.
+
+### Changed
+
+- **The WireKit views are served from `pushery/wirekit` 2.67.0.** Below it `auto` serves the plain views, as it did below 2.56.0 until now, and `legal-consent:doctor` names the floor. 2.67.0 is the oldest release the package's own test suite installs, and so the oldest one the WireKit views are proven against.
+- **`composer.json` suggests `pushery/sqlens-for-laravel`.** Seven migrations carry its `#[NoSqlOnDriver]` attributes, which tell sqlens why a migration runs no SQL on an engine. Without sqlens the attributes are never read.
+
+### Documentation
+
+- **The heartbeat documentation names seven failure-only names to alert on, not six.** Since 0.45.0 a run whose notice a listener held back sends its own heartbeat, `legal-consent:dispatch-notices.canceled`, which makes seven names that are sent only when a run failed. The retention page and the Boost skill both listed it, while the sentence under each list still said to alert on six. Both now say seven.
+- **The Boost skill names the four commands it left out.** `legal-consent:rerender`, `legal-consent:changes`, `legal-consent:cache-flush` and `legal-consent:verify-ledger` were missing from the skill that Laravel Boost loads into an application, so its agent never suggested them. Each now has a line, with a sentence on when it applies and how it treats tenants.
+
+### Fixed
+
+- **The migrations the package publishes call no internal class any more.** `Pushery\LegalConsent\Support\TableLookup`, which those migrations call, is part of the public API now. Once published, a migration runs in the application's own namespace, and an application that analyzes its migrations with PHPStan reported every one of those calls as a call into an internal class, which it could not fix without editing a published file.
+- **The legal-text dialog offers its page as a button, and its text fills the dialog.** “Open as a page” stood in the footer as an underlined link beside the Close button. It is a button now and still opens the page in a new tab. The text kept the readable measure of a page and ended well short of the dialog, beside an empty strip. The dialog now asks for it without that measure, because the dialog itself already caps the line length.
+
+  **Upgrade:** a copy of the WireKit views published before keeps the link and the narrower text. `php artisan vendor:publish --tag=legal-consent-wirekit --force` brings both changes.
+
 ## [0.46.0] - 2026-10-15
 
 ### Added
@@ -3167,7 +3192,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.46.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.47.0...HEAD
+[0.47.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.43.1...v0.44.0

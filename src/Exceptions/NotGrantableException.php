@@ -10,7 +10,7 @@ use RuntimeException;
 /**
  * Thrown when the settings screen is asked to GRANT a document that is not a voluntary consent.
  *
- * Granting is the one direction on that screen which WRITES an assertion that the subject agreed,
+ * Granting is the one direction on that screen which writes an assertion that the subject agreed,
  * and the surface it belongs on follows from the legal class, not from convenience:
  *
  *  - a CONTRACT and an ACKNOWLEDGMENT are mandatory. They are accepted where they are presented

@@ -18,17 +18,17 @@ enum ConsentMethod: string
     case ReConsentGate = 're_consent_gate';
 
     /**
-     * An interstitial shown AFTER authentication and BEFORE first use — the only place a first
+     * An interstitial shown after authentication and before first use — the only place a first
      * acceptance can happen when there is no registration form to put a checkbox on.
      *
-     * It names the MOMENT, not the mechanism, and that is the whole design: OAuth, SSO, an
+     * It names the moment, not the mechanism, and that is the whole design: OAuth, SSO, an
      * invitation link and a magic link all land here, so the enum does not need a new case per
      * sign-in route. A case called `oauth_consent` would have needed a sibling on the next one.
      *
-     * It exists because the alternatives were not gaps but FALSE STATEMENTS, in the one artifact
+     * It exists because the alternatives were not gaps but false statements, in the one artifact
      * whose entire purpose is to be true. An OAuth application had two choices: RegistrationCheckbox,
      * which asserts a form that does not exist, or — worse — ReConsentGate, which asserts an
-     * acceptance AFTER A DOCUMENT CHANGED that never happened. Under an Art. 15 request the second
+     * acceptance after a document changed that never happened. Under an Art. 15 request the second
      * one reads as a history of a re-consent nobody was ever asked for, and the ledger is
      * append-only on purpose, so it cannot be corrected afterwards.
      */
@@ -38,10 +38,10 @@ enum ConsentMethod: string
      * A confirmation inside a transaction — shown in a checkout, before the purchase completes.
      *
      * It exists for the reason {@see self::FirstUseGate} spells out above, applied one case
-     * further: the alternatives are not gaps but FALSE STATEMENTS. `RegistrationCheckbox` asserts a
+     * further: the alternatives are not gaps but false statements. `RegistrationCheckbox` asserts a
      * sign-up form that was not involved; `ReConsentGate` asserts an acceptance after a document
      * changed, which never happened; `FirstUseGate` names the moment "after signing up, before
-     * first use" and this is not that — it is shown before EVERY purchase, to people who have used
+     * first use" and this is not that — it is shown before every purchase, to people who have used
      * the application for months. `Api` is the headless channel, a statement about how the row
      * arrived rather than about what the reader was doing.
      *

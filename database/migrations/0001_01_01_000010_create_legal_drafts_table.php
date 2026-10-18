@@ -7,9 +7,9 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * The editable INPUT to publishing — the admin-maintained working copy of a legal text.
+ * The editable input to publishing — the admin-maintained working copy of a legal text.
  *
- * Kept strictly apart from `legal_documents`, which stays 100% package-owned, append-only OUTPUT
+ * Kept strictly apart from `legal_documents`, which stays 100% package-owned, append-only output
  * and is never edited in an admin screen. That split is the whole design: a draft is mutable
  * working state, a published row is frozen proof. `LegalDocumentPublisher` freezes a draft into a
  * new `legal_documents` version, and the public page renders that frozen row — so the page and
@@ -44,14 +44,14 @@ return new class extends Migration
             // stale against itself.
             $table->char('source_hash', 64)->nullable();
 
-            // The version the NEXT release will carry, read from the source-locale row for every
+            // The version the next release will carry, read from the source-locale row for every
             // locale so locales can never disagree on a version.
             $table->string('version', 20)->nullable();
 
             $table->string('review_state', 16)->default('draft');   // ReviewState
             $table->string('origin', 16)->default('authored');      // DraftOrigin
 
-            // Monotonic; backs fingerprint(). NOT updated_at: a second-granularity stamp collides
+            // Monotonic; backs fingerprint(). Not updated_at: a second-granularity stamp collides
             // on two edits within one second and would serve a stale cached render.
             $table->unsignedBigInteger('revision')->default(1);
 

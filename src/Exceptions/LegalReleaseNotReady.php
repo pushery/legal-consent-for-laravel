@@ -10,7 +10,7 @@ use RuntimeException;
 /**
  * A multi-locale release was attempted while at least one locale could not be published.
  *
- * Carries the blocking locales with their reasons, so a release screen can say WHY rather than
+ * Carries the blocking locales with their reasons, so a release screen can say why rather than
  * just refusing. Nothing is written when this is thrown: a release is all locales or none.
  */
 final class LegalReleaseNotReady extends RuntimeException
@@ -22,7 +22,7 @@ final class LegalReleaseNotReady extends RuntimeException
         public readonly string $key,
         public readonly array $blocking,
     ) {
-        // No array_values() on the second argument: with MORE THAN ONE array, array_map ignores
+        // No array_values() on the second argument: with more than one array, array_map ignores
         // every key and walks the arrays positionally, so wrapping it changes nothing. The call
         // was therefore dead — removing it is indistinguishable from leaving it, so no test could
         // ever have told the difference — and it was deleted rather than kept as decoration.

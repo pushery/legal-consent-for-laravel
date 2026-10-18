@@ -14,12 +14,12 @@
     {{-- WCAG 4.1.3 + 2.4.3: after a withdrawal the row's button is gone, so the result is announced
          here (a polite live region, always present so the update is spoken) and focus moves to it so
          it does not drop to <body>. Focus is driven by x-effect, not x-init: x-init runs once on an
-         always-present element and does NOT re-run when Livewire morphs it, so the focus never moved.
+         always-present element and does not re-run when Livewire morphs it, so the focus never moved.
          x-effect re-runs whenever $wire.status changes, i.e. exactly when a withdrawal sets it. --}}
     <p role="status" aria-live="polite" tabindex="-1" wire:key="lc-settings-status"
         x-effect="$wire.statusNonce > 0 && $el.focus()"><span wire:key="lc-settings-status-{{ $statusNonce }}">{{ $status ?? '' }}</span></p>
 
-    {{-- The all-empty case gets ONE sentence instead of three headings over nothing. It is not the
+    {{-- The all-empty case gets one sentence instead of three headings over nothing. It is not the
          edge case it looks like: the groups are built from the `legal_documents` table, which is
          empty until `legal-consent:publish` runs — so this is what every consumer sees between
          `composer require` and their first publish, and three bare headings read as broken. --}}
@@ -40,7 +40,7 @@
         <ul>
             @forelse ($contracts as $item)
                 {{-- The title's own language, declared only where it differs from the page: a
-                     document published only in the default locale still binds, and a RETIRED row is
+                     document published only in the default locale still binds, and a retired row is
                      deliberately shown in the language the subject read it in. Without `lang` a
                      screen reader speaks it with the page's phonetics (WCAG 3.1.2). `hreflang` is a
                      statement about the far end of the link and does not replace it. --}}
@@ -66,7 +66,7 @@
         <ul>
             @forelse ($acknowledgements as $item)
                 {{-- The title's own language, declared only where it differs from the page: a
-                     document published only in the default locale still binds, and a RETIRED row is
+                     document published only in the default locale still binds, and a retired row is
                      deliberately shown in the language the subject read it in. Without `lang` a
                      screen reader speaks it with the page's phonetics (WCAG 3.1.2). `hreflang` is a
                      statement about the far end of the link and does not replace it. --}}
@@ -92,7 +92,7 @@
         <ul>
             @forelse ($consents as $item)
                 {{-- The title's own language, declared only where it differs from the page: a
-                     document published only in the default locale still binds, and a RETIRED row is
+                     document published only in the default locale still binds, and a retired row is
                      deliberately shown in the language the subject read it in. Without `lang` a
                      screen reader speaks it with the page's phonetics (WCAG 3.1.2). `hreflang` is a
                      statement about the far end of the link and does not replace it. --}}

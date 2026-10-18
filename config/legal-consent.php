@@ -10,7 +10,7 @@ use Pushery\LegalConsent\Content\Drivers\MarkdownFilesDriver;
 | How a published copy of this file is merged
 |--------------------------------------------------------------------------
 |
-| This package merges the file it ships UNDER the one you published, and it descends
+| This package merges the file it ships under the one you published, and it descends
 | into maps. A key a later release adds inside a block you already published therefore
 | arrives with its default, instead of reading as null. Four things are worth knowing
 | before you shorten your copy:
@@ -63,11 +63,11 @@ return [
     |                                    notice, and falls back to your default_locale when
     |                                    a translation is missing.
     |
-    | Whether a document needs an explicit opt-in FOLLOWS from its legal basis — it is
+    | Whether a document needs an explicit opt-in follows from its legal basis — it is
     | derived at publish time, never configured: only a real consent may be opt-in, and it
     | always must be. Set the basis correctly and the rest follows.
     |
-    | EVERY registered document except an `informational` one appears on the registration
+    | Every registered document except an `informational` one appears on the registration
     | form. That is the default because a document that asks something has to be asked
     | before an account exists. Two ways out, and they are not interchangeable:
     |
@@ -91,9 +91,9 @@ return [
             'source' => 'markdown',
             'legal_basis' => 'acknowledgement',
 
-            // Does ONE control on your form cover this page together with others? "I accept the
+            // Does one control on your form cover this page together with others? "I accept the
             // terms and have read the privacy policy" is an ordinary sign-up line, and then there
-            // is one checkbox, so there is one FIELD. Name it here, on every document behind it,
+            // is one checkbox, so there is one field. Name it here, on every document behind it,
             // and the validation rules, the checklist your form is built from and the evidence
             // check all ask for the control you actually rendered.
             //
@@ -101,17 +101,17 @@ return [
             // two bad options: render a field nobody sees, or take a warning on every single
             // registration whose own hint names a completely different cause.
             //
-            // Documents behind one control collapse into ONE rule while they agree. A mandatory
+            // Documents behind one control collapse into one rule while they agree. A mandatory
             // document and a real consent cannot share one: the first needs `accepted`, and
             // requiring the second is the coupling Art. 7(4) forbids, so that registry is refused
             // at boot rather than resolved to whichever document was read last. Give the consent
             // its own control.
             //
-            // The validation MESSAGE of a shared control is the first configured document's. All
+            // The validation message of a shared control is the first configured document's. All
             // of them are mandatory by then, so none is wrong — only less complete than a line
             // naming four pages deserves. Word it yourself if that matters to you.
             //
-            // The hidden content-hash field stays named after the DOCUMENT (`legal_{key}_hash`),
+            // The hidden content-hash field stays named after the document (`legal_{key}_hash`),
             // because it carries one version's fingerprint: four pages behind one checkbox render
             // one control and, if you want the accept-time guard, four hidden fields.
             // 'registration_field' => 'legal_terms',
@@ -135,12 +135,12 @@ return [
         // A published page that binds nobody. Registering it costs you nothing at
         // sign-up — that is the whole point of the `informational` basis. The key is
         // `imprint` because the rest of this catalog is English and `lang/*/titles.php`
-        // already headed it that way; every key here is an EXAMPLE you rename freely.
+        // already headed it that way; every key here is an example you rename freely.
         'imprint' => [
             'source' => 'markdown',
             'legal_basis' => 'informational',
 
-            // Does YOUR registration form show this page? A single checkbox naming a privacy
+            // Does your registration form show this page? A single checkbox naming a privacy
             // policy, an imprint, a cookie notice and an accessibility statement together is an
             // ordinary form, and then you want to know per page which version somebody saw.
             // Off by default: an informational page binds nobody, so nothing is written down
@@ -150,7 +150,7 @@ return [
             // a new version of it never blocks a sign-in — you get the state and a way to write
             // it, and whether you ask for a second look is yours to decide.
             //
-            // BOTH keys or neither. `registration_wording` is the sentence YOUR form puts next to the page,
+            // Both keys or neither. `registration_wording` is the sentence your form puts next to the page,
             // stored verbatim, because this page carries none of its own: nothing here asks the
             // reader for anything, so the only truthful sentence is the one you showed. Set the
             // flag without it and this document is simply not covered — a configuration that does
@@ -166,7 +166,7 @@ return [
             // 'acknowledge_at_registration' => true,
             // 'registration_wording' => 'I have read the imprint.',
             //
-            // For a page that is NEVER on your sign-up form — a confirmation inside a checkout,
+            // For a page that is never on your sign-up form — a confirmation inside a checkout,
             // shown before every purchase — use the general pair instead. It says the same thing
             // about the ledger and nothing at all about registration, so the sign-up flow leaves
             // it alone. `acknowledge_at_registration` above implies this one. The wording is optional
@@ -199,7 +199,7 @@ return [
             'driver' => MarkdownFilesDriver::class,
 
             // null = the app's `resources/legal`, resolved from the container when the driver is
-            // built. Writing `resource_path('legal')` here instead would put an ABSOLUTE path into
+            // built. Writing `resource_path('legal')` here instead would put an absolute path into
             // a file that gets cached: `config:cache` stores the evaluated value, so a cache built
             // in one directory (a deploy release folder, a container image, a colleague's machine)
             // would keep pointing at that one afterwards.
@@ -247,7 +247,7 @@ return [
         ) ?? 86400,
         'prefix' => 'legal:doc',
 
-        // How long the gate may keep its cached set of active versions. Only the SET is cached,
+        // How long the gate may keep its cached set of active versions. Only the set is cached,
         // never a subject's satisfaction and never the clock: announce_from and enforce_from are
         // compared with the time on every read, so a scheduled boundary takes effect on time. What
         // this bounds is how long an is_active change made outside a publish (a manual UPDATE, a
@@ -270,7 +270,7 @@ return [
         'channels' => ['mail', 'database'],
 
         /*
-        | A brake on the size of ONE version's send. When set, the dispatch sweep skips any version
+        | A brake on the size of one version's send. When set, the dispatch sweep skips any version
         | whose audience exceeds it — without stamping the watermark, so nothing is lost — and tells
         | you to look before you send:
         |
@@ -280,7 +280,7 @@ return [
         | NULL by default, and that default is deliberate. A limit that ships on would withhold a
         | legally required notice from every installation that never asked for one — which is the
         | exact failure this package spent a release removing, and the expensive direction: under
-        | P2B Art. 3(3) a change implemented without notice is VOID, while an oversized send is
+        | P2B Art. 3(3) a change implemented without notice is void, while an oversized send is
         | merely expensive. Set it while you find your footing, then decide.
         */
         'max_recipients_per_run' => filter_var(env('LEGAL_CONSENT_MAX_RECIPIENTS_PER_RUN'), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE),
@@ -319,7 +319,7 @@ return [
     | Change descriptions
     |--------------------------------------------------------------------------
     |
-    | What a version CHANGED, in your own words, per locale — the content every real change notice
+    | What a version changed, in your own words, per locale — the content every real change notice
     | leads with. Author it before publishing and the notice carries it; author nothing and the
     | notice is exactly what it was before.
     |
@@ -336,7 +336,7 @@ return [
     | edited afterwards — it is the record of what subjects were told.
     |
     | `required` turns the description into a release precondition: a change that owes a notice
-    | cannot be released until every locale has one. OFF by default, because a package that started
+    | cannot be released until every locale has one. Off by default, because a package that started
     | refusing existing releases the day it shipped a new field would be forcing a feature rather
     | than offering one. Turn it on once your process is ready for it.
     |
@@ -354,10 +354,10 @@ return [
     | framework-agnostic one built from bare `<h2>`, `<ul>` and `<li>`, and a WireKit-native one
     | built from real `<x-wirekit::*>` components.
     |
-    | `auto` (the default) serves the WireKit set when `pushery/wirekit` is installed AND at least
+    | `auto` (the default) serves the WireKit set when `pushery/wirekit` is installed and at least
     | the version this package's views are tested against; otherwise the plain set. Before this
-    | key existed the WireKit set was reachable ONLY by publishing `--tag=legal-consent-wirekit`,
-    | and nothing said so: an unstyled view RENDERS, so no test goes red, no exception is raised
+    | key existed the WireKit set was reachable only by publishing `--tag=legal-consent-wirekit`,
+    | and nothing said so: an unstyled view renders, so no test goes red, no exception is raised
     | and nothing is logged. A WireKit application therefore served raw HTML on its consent
     | screens — including the re-consent gate, the one screen a subject cannot get past — and the
     | only way to notice was to look.
@@ -387,19 +387,19 @@ return [
             'grant' => null,
         ],
 
-        // Open a document's text in a DIALOG over the consent form, instead of leaving the page
+        // Open a document's text in a dialog over the consent form, instead of leaving the page
         // for it. WireKit views only — the plain stub deliberately needs no JavaScript.
         //
-        // NEEDS `routes.fragment`, and does nothing without it. The dialog fetches the text from
+        // Needs `routes.fragment`, and does nothing without it. The dialog fetches the text from
         // that address on first open rather than inlining it — the fragment route was built for
         // exactly this, and for the reason the guide gives: a form can name four documents, a
         // privacy notice is tens of kilobytes, and in the normal case the reader opens none of
         // them, so inlining all four is a large certain cost for an uncommon benefit on the page
         // whose load time decides whether somebody registers at all.
         //
-        // THE LINK STAYS A LINK EITHER WAY, and that is not a detail. A consent binds only where
-        // the full text was reachable BEFORE agreeing (§ 305 Abs. 2 BGB), and a dialog opened by
-        // script is not reachable without script. The dialog is therefore an improvement ON TOP of
+        // The link stays a link either way, and that is not a detail. A consent binds only where
+        // the full text was reachable before agreeing (§ 305 Abs. 2 BGB), and a dialog opened by
+        // script is not reachable without script. The dialog is therefore an improvement on top of
         // an anchor that works without it — never a replacement for one, and never a `#`.
         'wording_dialog' => false,
     ],
@@ -412,7 +412,7 @@ return [
     | Binding `Pushery\LegalConsent\Contracts\LegalTextTranslator` enables the editor's
     | "Translate" action. Turn `queue` on and the action returns immediately and a job does the work.
     |
-    | OFF by default, because off is the behavior that needs no infrastructure — an application
+    | Off by default, because off is the behavior that needs no infrastructure — an application
     | without a queue worker keeps working exactly as before.
     |
     | Turn it on if your translator is a language model. A privacy notice is ~15 kB of text, which is
@@ -425,7 +425,7 @@ return [
     'translation' => [
         'queue' => false,
 
-        // WHICH LANE THE JOB TAKES, and it is a separate question from whether it queues at all.
+        // Which lane the job takes, and it is a separate question from whether it queues at all.
         // Both null keep today's behavior exactly: the default connection and its default queue.
         //
         // A minutes-long call does not belong beside an application's short jobs, and the numbers
@@ -447,12 +447,12 @@ return [
     | `consent_name` is the named route the enforcement middleware redirects to
     | (your app defines it). The headless JSON API is opt-in via `api`.
     |
-    | `return_to_intended` (opt-in): when a re-consent GATE is fully cleared, send the
+    | `return_to_intended` (opt-in): when a re-consent gate is fully cleared, send the
     | subject back to the URL the middleware intercepted (stashed via redirect()->guest),
     | falling back to `home`. Off by default so an existing embed keeps its in-place
     | "all current" confirmation; a settings-page embed never redirects regardless.
     |
-    | `web` registers ONE session-backed route, `POST {web_prefix}/consent/withdraw`, which is
+    | `web` registers one session-backed route, `POST {web_prefix}/consent/withdraw`, which is
     | what the framework-agnostic settings stub's withdraw button posts to. Turn it on and the
     | presenter starts filling each withdrawable entry's `withdraw_url`; leave it off and the
     | stub renders no withdraw form at all rather than one that goes nowhere.
@@ -498,16 +498,16 @@ return [
         'web_middleware' => ['web', 'auth'],
         'web_throttle' => env('LEGAL_CONSENT_WEB_THROTTLE', '60,1'),
 
-        // Way D — the published text of one document as a FRAGMENT, so a dialog on your registration
+        // Way D — the published text of one document as a fragment, so a dialog on your registration
         // form can hold it instead of navigating the reader away from a half-filled form.
         //
         // Off like every other route here. With it off the consent checkbox's anchor keeps opening
         // your own page, which is the half that carries the clickwrap: a consent binds only where the
-        // full text was reachable BEFORE agreeing (§ 305 Abs. 2 BGB), and a dialog opened by script
-        // is not reachable without script. The dialog goes OVER that link, never in its place.
+        // full text was reachable before agreeing (§ 305 Abs. 2 BGB), and a dialog opened by script
+        // is not reachable without script. The dialog goes over that link, never in its place.
         //
         // It adds no exposure. What it returns is the text you already publish at the address the
-        // checkbox links to; only the shape differs. It serves PUBLISHED documents only, under a
+        // checkbox links to; only the shape differs. It serves published documents only, under a
         // registered key, in a configured locale — a draft is nobody's terms and answers 404.
         //
         // No `auth` in the default stack, deliberately: the reader of a registration form has not
@@ -523,7 +523,7 @@ return [
     | Change-notice mail
     |--------------------------------------------------------------------------
     |
-    | The seams on the three change notices. TOP-LEVEL rather than inside `notifications`:
+    | The seams on the three change notices. Top-level rather than inside `notifications`:
     | they were placed here while this package merged one level deep, and moving them now
     | would strand the value in every published copy that carries them at the top. How the
     | merge works today is described at the top of this file.
@@ -533,18 +533,18 @@ return [
     | mail without being asked for would move the bytes of a document nobody can correct
     | afterwards.
     |
-    | `view` — the package's own Markdown shell, and the one default that is NOT inert.
+    | `view` — the package's own Markdown shell, and the one default that is not inert.
     | Before it, a German § 126b declaration went out inside Laravel's global template with
-    | "Hello!", "Regards," and "If you're having trouble clicking", resolved from YOUR
+    | "Hello!", "Regards," and "If you're having trouble clicking", resolved from your
     | application's translations. Set it to null to go back to that template. It must stay a
-    | MARKDOWN view: a plain `->view()` renders only its own template, which need not print the
+    | markdown view: a plain `->view()` renders only its own template, which need not print the
     | notice's lines, while the proof row is still built from them and would certify lines the
     | subject may never have seen.
     |
     | `identity` — § 126b BGB wants "eine lesbare Erklärung, in der die Person des
-    | Erklärenden genannt ist". Name yours and it is appended to the notice AND therefore to
+    | Erklärenden genannt ist". Name yours and it is appended to the notice and therefore to
     | the proof row. Left null, nothing is added and your notices are byte-for-byte what they
-    | were. In a MULTI-TENANT application do not use this block: bind your own
+    | were. In a multi-tenant application do not use this block: bind your own
     | `ResolvesNoticeIdentity` instead — one global declarant names the wrong legal person in
     | every tenant but one, which is worse than naming none.
     |
@@ -587,7 +587,7 @@ return [
     | This package stores and freezes legal texts; it does not own the pages that
     | display them. Set a resolver and every surface that shows a document — the
     | registration checkboxes, the re-consent gate, and "Your consents" — links its
-    | title to the full text. Configure an INVOKABLE CLASS-STRING:
+    | title to the full text. Configure an invokable class-string:
     |
     |   'document_url' => App\\Legal\\DocumentUrl::class,
     |
@@ -609,7 +609,7 @@ return [
     | reproduces it. `legal-consent:doctor` reports a closure here for that reason.
     | A misconfigured value yields no link rather than a broken one.
     |
-    | A TOP-LEVEL key, placed here while this package merged one level deep, and kept here
+    | A top-level key, placed here while this package merged one level deep, and kept here
     | so a published copy that carries it goes on working. How the merge works today is
     | described at the top of this file.
     |
@@ -648,10 +648,10 @@ return [
     |
     | Which authenticated subjects the enforcement middleware gates. Null gates every
     | authenticated `Model` (the default). Set a predicate — return false to let a subject
-    | through — so the gate can be ordered AFTER your own verification / onboarding /
+    | through — so the gate can be ordered after your own verification / onboarding /
     | suspension gates instead of overtaking them (e.g. do not ask an unverified user for
-    | legally-binding consent before they confirm their address). Configure an INVOKABLE
-    | CLASS-STRING:
+    | legally-binding consent before they confirm their address). Configure an invokable
+    | class-string:
     |
     |   'subject_filter' => App\\Legal\\SubjectFilter::class,
     |
@@ -661,26 +661,26 @@ return [
     | — also works and is fine while iterating locally. Do NOT ship one: it makes
     | `php artisan config:cache` fail in the deploy, and nothing before that point
     | reproduces it. `legal-consent:doctor` reports a closure here for that reason.
-    | A misconfigured predicate fails SAFE — the subject stays gated.
+    | A misconfigured predicate fails safe — the subject stays gated.
     */
     'gate' => [
         'subject_filter' => null,
 
         /*
-        | FIRST-USE GATING — off by default, and the default is a decision.
+        | First-use gating — off by default, and the default is a decision.
         |
-        | The gate above enforces a CHANGE: a document published as an active re-consent, whose
+        | The gate above enforces a change: a document published as an active re-consent, whose
         | enforcement date has passed, that the subject has not accepted at its current major.
-        | It says nothing about a subject who never accepted ANYTHING, because a first acceptance
+        | It says nothing about a subject who never accepted anything, because a first acceptance
         | is not a change and `notice_mode` — the field the gate filters on — has no opinion to
         | give about it.
         |
-        | Turn this on and the middleware also stops a subject who owes a FIRST acceptance of a
+        | Turn this on and the middleware also stops a subject who owes a first acceptance of a
         | mandatory document. That is the honest behavior for an application whose sign-up has no
         | consent checkbox — an OAuth-only sign-in, for instance — where the alternative is
         | treating people as having accepted a text they were never shown.
         |
-        | IT IS OFF BY DEFAULT BECAUSE TURNING IT ON WITHOUT A SCREEN IS A DEAD END. The
+        | It is off by default because turning it on without a screen is a dead end. The
         | middleware sends the subject to `routes.consent_name`, which is allowlisted, so there is
         | no redirect loop — but if that page mounts only the re-consent form, it will tell them
         | "everything current, nothing to do" while the gate keeps stopping them. Mount the form
@@ -701,7 +701,7 @@ return [
     | The two halves of a double opt-in are two ledger rows: `Consent::requestConfirmation()`
     | writes an `optin_requested` row, `Consent::confirm()` writes a `confirmed` one. Only the
     | second makes the consent held — the first is a declaration nobody has yet tied to the address
-    | it names, which for advertising e-mail is precisely NOT a valid consent (§ 7 Abs. 2 UWG with
+    | it names, which for advertising e-mail is precisely not a valid consent (§ 7 Abs. 2 UWG with
     | Art. 7 DSGVO, and the burden of proof is the controller's under Art. 7(1)).
     |
     | `confirm_within` is how long a request stays confirmable — an English relative time ('7 days',
@@ -716,7 +716,7 @@ return [
     | that does not has it exactly once, which is the case this key is for.
     |
     | A confirmation is refused for two further reasons regardless of this setting: there is no
-    | pending request (already confirmed, withdrawn, or never made), or a new MAJOR version was
+    | pending request (already confirmed, withdrawn, or never made), or a new major version was
     | published in between — confirming that one would freeze a text the subject never read.
     |
     */
@@ -731,8 +731,8 @@ return [
     |
     | Warning: this default is safe only because a registration form validated the tick.
     |
-    | For a CONSENT document the recorder checks the submitted field itself and
-    | skips the key when it is absent. For a CONTRACT or an ACKNOWLEDGMENT it
+    | For a consent document the recorder checks the submitted field itself and
+    | skips the key when it is absent. For a contract or an acknowledgment it
     | does not: those are mandatory, RegistrationRules makes them required, and
     | re-checking here would be a second truth about the same thing. So the
     | recorder accepts them unconditionally and relies on the form.
@@ -744,24 +744,24 @@ return [
     | anything — in the one table whose entire purpose is to prove that a human
     | did.
     |
-    | The recorder now SAYS so: recording a mandatory document whose
+    | The recorder now says so: recording a mandatory document whose
     | `legal_<key>` field is absent from the request logs a warning naming the
     | keys. It still records them — refusing would break every application whose
     | form names the fields differently — so treat that warning as the signal
     | that this switch is wrong for your sign-in route, not as a failed write.
     |
-    | If your application has no registration form, turn this OFF and capture
+    | If your application has no registration form, turn this off and capture
     | the first acceptance where it actually happens: an interstitial after
     | authentication and before first use, recorded under
     | ConsentMethod::FirstUseGate.
     |
-    | `without_form_fields` decides what that warning IS. `warn` (the default) logs and records;
-    | `refuse` raises UnevidencedConsentException and records NOTHING — the recorder resolves every
+    | `without_form_fields` decides what that warning is. `warn` (the default) logs and records;
+    | `refuse` raises UnevidencedConsentException and records nothing — the recorder resolves every
     | document before its first write, so a registration keeps all of its consents or none.
     |
     | The default is `warn` and not `refuse`, and that is a deliberate asymmetry rather than
     | timidity. The check can only look for the field name `RegistrationRules` generates. An
-    | application with its OWN registration form, naming its fields differently, validates the tick
+    | application with its own registration form, naming its fields differently, validates the tick
     | perfectly well and still carries no `legal_terms` on the request — under `refuse` it would get
     | a failed registration the day it updated, on the one path every current consumer uses. A
     | warning to such an application is noise; a refusal is an outage.
@@ -785,7 +785,7 @@ return [
         'dispatch_notices' => true,
         'close_objection_windows' => true,
 
-        // OFF by default, unlike its two siblings: this sweep DELETES. Turning it on is how the
+        // Off by default, unlike its two siblings: this sweep deletes. Turning it on is how the
         // `retention_after_end` period stops being a statement and starts being enforced —
         // until then nothing ever removes an expired record. Opt in deliberately, once.
         'prune' => false,
@@ -819,8 +819,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Advance-notice periods are per-regime, never one global value — a single number
-    | is legally wrong for several regimes. At publish, a SCHEDULED change that owes a notice
-    | must give at least the minimum lead for its mode AND its regime; the two are combined,
+    | is legally wrong for several regimes. At publish, a scheduled change that owes a notice
+    | must give at least the minimum lead for its mode and its regime; the two are combined,
     | not chosen between, because a deemed-consent change under P2B owes both the § 308 Nr. 5
     | benchmark and the Art. 3 standstill. Override per document via `min_lead_days` in
     | `documents` — which may shorten a period only where the law fixes no floor.
@@ -846,8 +846,8 @@ return [
     |          dcd_327r  -> nothing; § 327r Abs. 2 fixes no number (see below)
     |
     | Every key below is a lead time and every one of them is read. That is the whole rule for
-    | this block, and it is why the § 327r Abs. 3 free-termination window is NOT among them: that
-    | window runs from the LATER of notice and modification, so it is a figure your notice has to
+    | this block, and it is why the § 327r Abs. 3 free-termination window is not among them: that
+    | window runs from the later of notice and modification, so it is a figure your notice has to
     | state, not a period before anything. It is also fixed at 30 days by statute, so a setting for
     | it would offer to change a number nobody can change. The package neither reads it nor stores
     | it; state it in your own notice text.
@@ -900,11 +900,11 @@ return [
     'tamper_evidence' => false,
 
     /*
-    | Optional HMAC secret that KEYS the tamper-evidence chain. Held OUTSIDE the database
+    | Optional HMAC secret that keys the tamper-evidence chain. Held outside the database
     | (env / secret store, never in `legal_consents`). When set, row hashes use HMAC-SHA-256
     | instead of a bare SHA-256, so an actor with only table-write access — who does not hold the
     | secret — can no longer re-chain a tampered row into a self-consistent chain the verifier
-    | reports as intact (the re-chain gap called out in the tamper-evidence notes). Set it BEFORE
+    | reports as intact (the re-chain gap called out in the tamper-evidence notes). Set it before
     | the first chained row: the rows are append-only and cannot be re-keyed, so changing the secret
     | invalidates prior links. Null keeps the legacy unkeyed hash. Rotation / KMS sourcing is the
     | app's concern — this reads whatever the env provides.
@@ -931,7 +931,7 @@ return [
     | Age gate (Art. 8 DSGVO). When enabled, the registration ruleset additionally
     | requires an `age_confirmed` checkbox to be accepted — the minimum-age attestation.
     | `threshold` only shapes the message (the German floor is 16; some member states set
-    | 13–16). The package gates on the attestation; verifying the ACTUAL age (and handling
+    | 13–16). The package gates on the attestation; verifying the actual age (and handling
     | parental consent below the threshold) remains the consuming app's responsibility.
     */
     'age_gate' => [
@@ -970,7 +970,7 @@ return [
     | Admin screens
     |--------------------------------------------------------------------------
     |
-    | The publishable LegalTextManager / LegalTextEditor Livewire components fail CLOSED: with
+    | The publishable LegalTextManager / LegalTextEditor Livewire components fail closed: with
     | no ability named here they 404, so the package never exposes an ungated publish button.
     | Opt in by naming a Gate ability the current user must pass; there is no opt-out.
     |
@@ -984,7 +984,7 @@ return [
          * is edited is your decision. Set it and every cell of the overview becomes a link to that
          * text, so an operator gets from the overview to a document without typing its address.
          *
-         * The parameters are filled BY POSITION — document first, locale second — so
+         * The parameters are filled by position — document first, locale second — so
          * `admin/legal/{document}/{locale}` and `admin/legal/{key}/{lang}` both work. A name that
          * is not registered, or a route these two cannot fill, leaves the cells unlinked rather
          * than turning the overview into an error page; `legal-consent:doctor` reports it.

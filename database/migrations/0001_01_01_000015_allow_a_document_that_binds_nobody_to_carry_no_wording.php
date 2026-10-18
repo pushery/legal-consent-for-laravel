@@ -30,7 +30,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // BEFORE the column changes, not after. The guard below refuses an engine it cannot
+        // Before the column changes, not after. The guard below refuses an engine it cannot
         // protect, and the MySQL family commits DDL implicitly — so a refusal raised after the
         // ALTER leaves the column already nullable with no row in `migrations`, and every re-run
         // dies at the same place. Asking first costs a refused operator one message instead of a
@@ -42,15 +42,15 @@ return new class extends Migration
             $table->text('ui_wording')->nullable()->change();
         });
 
-        // NOT optional, and not defensive coding. SQLite cannot alter a column in place, so
+        // Not optional, and not defensive coding. SQLite cannot alter a column in place, so
         // the change above is Laravel's twelve-step rebuild: create a new table, copy, drop,
-        // rename. Indexes survive that. TRIGGERS DO NOT — so without this line the proof guard
+        // rename. Indexes survive that. Triggers do not — so without this line the proof guard
         // installed by 000011 is silently gone, on the one table whose entire purpose is being
         // un-editable. Measured here: the immutability test went red across all 30 proof
         // columns the moment this migration was added, and green again with this line.
         //
         // It is also what keeps the MySQL and SQLite arms correct, independently of the rebuild:
-        // those two ENUMERATE the protected columns at install time, so a re-install is what
+        // those two enumerate the protected columns at install time, so a re-install is what
         // teaches them about a column whose definition just changed.
         ProofColumnGuard::install();
     }
@@ -61,7 +61,7 @@ return new class extends Migration
         // one that is not a fresh lie: the empty string. Any real sentence written here would
         // be this migration inventing an acceptance nobody gave — the defect it exists to undo.
         //
-        // This runs BEFORE the column changes back, or the ALTER fails on the very rows the
+        // This runs before the column changes back, or the ALTER fails on the very rows the
         // feature created.
         // The proof trigger refuses this UPDATE — it fails closed against a migration-time write
         // exactly as it does against runtime tampering — so it comes off first and goes back on

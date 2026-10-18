@@ -19,12 +19,12 @@ use stdClass;
 /**
  * Decides which mandatory documents a subject still owes acceptance for.
  *
- * The comparison is over `major_version` ONLY, never the content hash: an editorial
+ * The comparison is over `major_version` only, never the content hash: an editorial
  * fix (same major) never forces a re-consent, while a material change (a new major,
  * published with requires_reconsent) does — but only once its enforcement window has
  * opened (EDPB 05/2020 Rz. 110; the grace period comes from enforce_from).
  *
- * Only an ACTIVE re-consent (NoticeMode::ActiveReconsent) hard-blocks. An info-only change
+ * Only an active re-consent (NoticeMode::ActiveReconsent) hard-blocks. An info-only change
  * takes effect regardless and a deemed-consent change binds by silence (via the objection
  * window, not an access block) — neither gates. This is what keeps a privacy notice, which
  * is info-only, from ever blocking access (WP260 rev.01 Rz. 30-31): forcing acknowledgment
@@ -108,7 +108,7 @@ final class ConsentGate
         return $cache
             ->resolvedFor($locale)
             ->filter(fn (LegalDocument $document): bool => $document->type->isConsentBearing()
-                // Informational is checked FIRST and separately, because the opt-in flag cannot
+                // Informational is checked first and separately, because the opt-in flag cannot
                 // express it: an informational page has `requires_explicit_optin = false`, which
                 // is the same value a contract carries — so the next condition alone would let an
                 // Impressum block every authenticated request the moment it were published as an
@@ -143,22 +143,22 @@ final class ConsentGate
     /**
      * The mandatory documents the subject does not hold — the first-acceptance question.
      *
-     * The predicate is `held === 0`, which is wider than "never accepted": an ENDING action drops
+     * The predicate is `held === 0`, which is wider than "never accepted": an ending action drops
      * the holding to zero (see {@see standingFor()}), so a withdrawn, declined or terminated
      * document lands here as well. Deliberate — that subject holds no agreement, and excluding
      * them would reinstate exactly the divergence this method exists to close.
      *
      * {@see outstandingFor()} cannot answer it, and that is not a defect in it: it filters on
-     * `notice_mode`, which states how a version CHANGE is communicated. A first acceptance is not
+     * `notice_mode`, which states how a version change is communicated. A first acceptance is not
      * a change — nothing was announced because nothing moved — so the field has no opinion to
      * give, and a document first published as a silent editorial version stayed invisible to the
      * gate for good. Measured on 0.19.0: a subject who accepted nothing got `outstanding = true`
-     * from `statusFor()` and an EMPTY set from `outstanding()`, for the same documents, at the
+     * from `statusFor()` and an empty set from `outstanding()`, for the same documents, at the
      * same moment. The application then treated them as having accepted a text they were never
      * shown, in a ledger that is append-only.
      *
-     * THE TWO QUESTIONS STAY SEPARATE, and the split is `held === 0` rather than
-     * `held < major_version`. Once a subject holds ANYTHING for a key, the next version is a
+     * The two questions stay separate, and the split is `held === 0` rather than
+     * `held < major_version`. Once a subject holds anything for a key, the next version is a
      * change, and an operator who published that change as silent has said in the published row
      * that it needs no re-consent. Folding the two sets would overrule that decision from here.
      *
@@ -181,7 +181,7 @@ final class ConsentGate
 
         $held = $this->currentHoldings($subject, $this->keysOf($mandatory));
 
-        // `! isset` rather than `=== 0`: at major 0 the old spelling called an ACCEPTED document
+        // `! isset` rather than `=== 0`: at major 0 the old spelling called an accepted document
         // unaccepted, because the fold stores that holding as the same 0 it uses for "none".
         return $mandatory
             ->filter(fn (LegalDocument $document): bool => ! isset($held[$document->key]))
@@ -204,7 +204,7 @@ final class ConsentGate
     }
 
     /**
-     * The major version the subject CURRENTLY holds per document key, ACROSS ALL LOCALES.
+     * The major version the subject currently holds per document key, across all locales.
      *
      * Consent attaches to a document's identity, not the language it was read in: accepting the
      * terms in `en` satisfies the `de` gate for the same document (a locale switch is a display
@@ -221,17 +221,17 @@ final class ConsentGate
     }
 
     /**
-     * The majors the subject CURRENTLY holds, keyed by document — a PRESENCE, not a number.
+     * The majors the subject currently holds, keyed by document — a presence, not a number.
      *
-     * THE DIFFERENCE TO {@see heldMajorByKey()} ONLY BECOMES VISIBLE AT MAJOR 0, AND THERE IT IS
-     * TOTAL. That map uses 0 as its sentinel for "holds nothing", so a document published as
+     * The difference to {@see heldMajorByKey()} only becomes visible at major 0, and there it is
+     * total. That map uses 0 as its sentinel for "holds nothing", so a document published as
      * `0.9.0` folds to the same 0 as a withdrawal and as a key nobody ever touched. Every
      * comparison of the form `($held[$key] ?? 0) >= $document->major_version` is then true for
-     * EVERYONE — the gate for that document is off, the settings screen tells a person they hold a
+     * everyone — the gate for that document is off, the settings screen tells a person they hold a
      * contract they never saw, and `outstanding` is false so it is never offered to them either.
      * Measured before this existed: a subject with an empty ledger read as `held`.
      *
-     * A holding is a presence. This map carries a key only while an ACCEPTING row is the subject's
+     * A holding is a presence. This map carries a key only while an accepting row is the subject's
      * latest state for it. The discriminator is `standingFor()['version']`, which the fold clears
      * to null on an ending action and which is NOT NULL in the schema — so null there means "no
      * live accepting row" and can mean nothing else.
@@ -276,7 +276,7 @@ final class ConsentGate
     }
 
     /**
-     * Both projections of the subject's ledger, from ONE read of it.
+     * Both projections of the subject's ledger, from one read of it.
      *
      * They are one method because they are one query. The settings screen wants both, and asking
      * twice would read the same rows twice for a page whose whole query budget is guarded — the
@@ -286,7 +286,7 @@ final class ConsentGate
      *
      * `pending` is the middle state of a double opt-in, which the held-major fold cannot express:
      * entered but not yet confirmed folds to exactly the same zero as never entered. It is the
-     * LATEST row that decides, not "has one anywhere" — a request since confirmed, withdrawn or
+     * latest row that decides, not "has one anywhere" — a request since confirmed, withdrawn or
      * superseded is not pending, and a subject who entered themselves twice has one, not two.
      *
      * The held-major fold is withdrawal- and objection-aware rather than a monotonic MAX:
@@ -358,7 +358,7 @@ final class ConsentGate
             $type = (string) $subject->getMorphClass();
 
             // The type and the id are carried as VALUES and never read back out of an array key.
-            // PHP turns a numeric-looking key into an int on the way in, and a morph ALIAS may be
+            // PHP turns a numeric-looking key into an int on the way in, and a morph alias may be
             // written as a number — the same footgun {@see SubjectToken::forSubjects()} documents.
             // Grouping by the key while reading the value keeps both strings without a cast.
             //
@@ -383,7 +383,7 @@ final class ConsentGate
                 }
             }
 
-            // Walked over the SUBJECTS rather than over the rows that came back, which is what
+            // Walked over the subjects rather than over the rows that came back, which is what
             // makes "every subject gets an entry" structural instead of a separate seeding pass:
             // one the ledger has never seen simply folds an empty bucket.
             foreach ($batch['ids'] as $id) {
@@ -425,17 +425,17 @@ final class ConsentGate
     }
 
     /**
-     * ONE subject's rows, folded. The only implementation of the rules the class docblock states.
+     * One subject's rows, folded. The only implementation of the rules the class docblock states.
      *
      * `latest` and `ended` answer the two questions a status line asks that the four older keys
      * cannot: an ended holding reads as `held = 0, version = null, at = null`, which says that
-     * nothing is held and nothing at all about WHAT ended it or WHEN. "Withdrawn on 3 September"
+     * nothing is held and nothing at all about what ended it or when. "Withdrawn on 3 September"
      * needs both, and a ledger where nothing was ever held — an objection on its own, say — had
      * nothing to say beyond "not held".
      *
-     * `ended` survives a later NEUTRAL row, which is the whole subtlety. An objection after a
+     * `ended` survives a later neutral row, which is the whole subtlety. An objection after a
      * withdrawal does not change what ended the consent, so `??=` keeps the earlier answer for the
-     * same reason the holding keeps its prior state. An ACCEPTING row clears it to null, because
+     * same reason the holding keeps its prior state. An accepting row clears it to null, because
      * a holding that is live again has not been ended by anything.
      *
      * `at` is `string|null` in both new keys to match the existing `at`, whose null is the ending
@@ -511,7 +511,7 @@ final class ConsentGate
 
     /**
      * The subject's most recent ledger entry for a document key — the source of truth for
-     * whether they CURRENTLY hold it, since a monotonic max cannot see a later withdrawal
+     * whether they currently hold it, since a monotonic max cannot see a later withdrawal
      * (Art. 7(3)). Cross-locale by default (identity-keyed); pass an explicit `$locale` only
      * where the answer must be per-text — the deemed-consent sweep writes one § 308 proof row
      * per locale, so it evaluates each locale's objection window on its own locale's actions.

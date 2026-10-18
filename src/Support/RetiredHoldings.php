@@ -16,18 +16,18 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * Retiring a document is `is_active = false` — the supported route, the column being in
  * {@see LegalDocument::MUTABLE_AFTER_PUBLISH} — and it does not touch the ledger. The acceptance
  * stays on file, the gate's fold keeps reporting it as held, and the application keeps processing
- * on it. But every standing surface reads the ACTIVE set, so the document disappears from the one
+ * on it. But every standing surface reads the active set, so the document disappears from the one
  * screen the package ships for Art. 7(3) at the moment the subject most plausibly wants it: their
  * consent still binds and there is nothing left to press.
  *
  * The withdrawal itself already works — {@see DefaultConsentManager::documentForTransition()} falls
  * back to the version the subject accepted. This is the other half: making that route visible.
  *
- * ONE implementation, called by both surfaces (the presenter's settings screen and the manager's
+ * One implementation, called by both surfaces (the presenter's settings screen and the manager's
  * status map), because two would be exactly the divergence between screens that this package
  * argues against everywhere else — and the two are already held to each other by a test.
  *
- * The version shown is the one the SUBJECT accepted, read back from their own ledger row, not the
+ * The version shown is the one the subject accepted, read back from their own ledger row, not the
  * last one the operator published. Their standing is a fact about the text they agreed to, and a
  * screen that names a different version is describing a document they never saw.
  */
@@ -59,9 +59,9 @@ final readonly class RetiredHoldings
             // rows reach the host's `document_url` resolver on exactly the same footing.
             ->select(['id', 'key', 'title', 'version', 'major_version', 'type', 'locale', 'requires_explicit_optin'])
             ->whereIn('key', $keys)
-            // RETIRED means no active version ANYWHERE, not merely none in the locale on screen.
+            // Retired means no active version anywhere, not merely none in the locale on screen.
             // A document published in `de` and not (yet) in `en` is not retired: a mandatory one
-            // reaches the `en` screen as ACTIVE through the locale chain, and a voluntary one is
+            // reaches the `en` screen as active through the locale chain, and a voluntary one is
             // simply not offered there. Without this arm a partially published document would
             // appear on the other locale's screen labeled as withdrawn from service — a claim about
             // the operator's registry that is simply untrue.
@@ -69,7 +69,7 @@ final readonly class RetiredHoldings
                 ->whereColumn('live.key', 'legal_documents.key')
                 ->where('live.is_active', true)
                 ->when($tenant->enabled(), fn (QueryBuilder $scoped): QueryBuilder => $scoped->where('live.tenant_id', $tenant->current())))
-            // ONE query for the whole set rather than a ledger read per key: the subject's own rows
+            // One query for the whole set rather than a ledger read per key: the subject's own rows
             // name the version they accepted by (key, locale, version), which is the triple that
             // identifies a version exactly — the reason migration 000008 could drop the foreign key.
             ->whereExists(fn (QueryBuilder $row): QueryBuilder => $row->from('legal_consents')

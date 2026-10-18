@@ -37,7 +37,7 @@ final readonly class RecordedConsent
      * The subject's primary key, narrowed.
      *
      * `Model::getKey()` is `mixed` because a key can be anything a cast returns. Every caller here
-     * needs one answer, so the narrowing happens ONCE, in the place both the capture and the
+     * needs one answer, so the narrowing happens once, in the place both the capture and the
      * comparison go through — narrowing it twice is how a subject gets stored under one key and
      * looked up under another.
      */

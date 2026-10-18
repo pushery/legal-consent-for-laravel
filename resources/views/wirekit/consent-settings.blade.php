@@ -19,7 +19,7 @@
     is silent exactly where Art. 7(3) assumes the subject knows what they are deciding about.
 
     This is the twin of the framework-agnostic stub, not of the Livewire view. It is rendered on
-    an ordinary page, so it withdraws with a FORM POST to `withdraw_url` — the bundled session
+    an ordinary page, so it withdraws with a form post to `withdraw_url` — the bundled session
     route, switched on with `legal-consent.routes.web`. It used to carry `wire:click="withdraw(…)"`,
     copied from the Livewire twin, which on a page with no Livewire component behind it is inert:
     the dialog opens, the button is pressed, and nothing whatsoever happens. No error, no log, no
@@ -48,7 +48,7 @@
         @endif
     </div>
 
-    {{-- The all-empty case gets ONE sentence instead of three headings over nothing. It is not the
+    {{-- The all-empty case gets one sentence instead of three headings over nothing. It is not the
          edge case it looks like: the groups come from the `legal_documents` table, which is empty
          until `legal-consent:publish` runs — so this is what every consumer sees between
          `composer require` and their first publish. --}}
@@ -61,7 +61,7 @@
         <x-wirekit::stack gap="xs">
             @forelse ($contracts as $item)
                 {{-- The title can be in a language this page is not in — a document published
-                     only in the default locale still binds, and a RETIRED row is deliberately shown
+                     only in the default locale still binds, and a retired row is deliberately shown
                      in the language the subject read it in. Without `lang` a screen reader speaks it
                      with the page's phonetics (WCAG 3.1.2). See the plain stub, and
                      ContentLanguage for the rule. --}}
@@ -85,7 +85,7 @@
         <x-wirekit::stack gap="xs">
             @forelse ($acknowledgements as $item)
                 {{-- The title can be in a language this page is not in — a document published
-                     only in the default locale still binds, and a RETIRED row is deliberately shown
+                     only in the default locale still binds, and a retired row is deliberately shown
                      in the language the subject read it in. Without `lang` a screen reader speaks it
                      with the page's phonetics (WCAG 3.1.2). See the plain stub, and
                      ContentLanguage for the rule. --}}

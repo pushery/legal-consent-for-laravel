@@ -78,13 +78,13 @@ use Throwable;
 final class LegalConsentServiceProvider extends ServiceProvider
 {
     /**
-     * Top-level config blocks a publishing host owns WHOLE, never merged into.
+     * Top-level config blocks a publishing host owns whole, never merged into.
      *
      * The test for this list is not "is it a map" — the merge already answers that — but whether
-     * the block is a REGISTRY or a set of SETTINGS. A settings block has defaults, and a host who
+     * the block is a registry or a set of settings. A settings block has defaults, and a host who
      * customized part of it still wants a corrected default for the part they did not touch: that
      * is the entire reason the merge recurses. A registry has no defaults, because every entry is
-     * a statement about what this application serves. There the shipped content is an EXAMPLE, the
+     * a statement about what this application serves. There the shipped content is an example, the
      * config file says so at the block, and merging it back in states something on the host's
      * behalf that they deleted on purpose.
      *
@@ -92,11 +92,11 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * package is for: a resurrected `legal_basis: consent` entry is consent-gating, so it appears
      * in every surface that enumerates the registry and blocks sign-in as soon as it is published.
      * Nothing turns red — it was found in a consuming application only because a guard there
-     * checked the set of unreachable paths in BOTH directions.
+     * checked the set of unreachable paths in both directions.
      *
      * Adding a key here is therefore a decision about ownership, not about merge convenience.
      *
-     * PUBLIC because a second reader needs the same answer: `legal-consent:doctor` reports keys the
+     * Public because a second reader needs the same answer: `legal-consent:doctor` reports keys the
      * published file does not name, and for a block on this list a missing key is the host's
      * statement rather than drift. A copy of the list there would be a second place to change and
      * a first place to forget — and the failure would be a red lane in exactly the installations
@@ -111,7 +111,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * the same constraint `composer.json` pins for the dev dependency, held in lockstep by a
      * test that reads both.
      *
-     * It is a FLOOR for the automatic choice, not a requirement of the package: below it the
+     * It is a floor for the automatic choice, not a requirement of the package: below it the
      * plain views are served instead. A Blade component tag compiles unconditionally, so serving
      * views that name a component the installed WireKit does not have turns a silent styling
      * problem into a hard exception — on the re-consent gate, at the moment a legal change lands.
@@ -125,12 +125,14 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * quiet through `:announce-new-tab="false"` and the editor view stopped filtering the kit's own
      * write-out on load, which the kit no longer reports as input (both first shipped in 2.56.0).
      * The first-shipped versions were read off the tags themselves rather than from a changelog.
+     * Raised 2.56.0 -> 2.67.0 when the development constraint moved to `^2.67.0`: no older release
+     * has been installed to prove the views against since then, and the floor names the oldest one.
      *
      * A consumer below the floor therefore receives the plain views instead of the WireKit variant,
      * which is this constant working rather than failing: the alternative is a Blade tag compiling
      * against a component that is not there, or a dialog that does not close after its action.
      */
-    public const string WIREKIT_MINIMUM = '2.56.0';
+    public const string WIREKIT_MINIMUM = '2.67.0';
 
     /**
      * Whether the bundled migrations are registered automatically. Disable with
@@ -160,9 +162,9 @@ final class LegalConsentServiceProvider extends ServiceProvider
             new ConsentGate,
             $this->defaultLocale(),
             new PublishedDocumentReader($this->defaultLocale()),
-            // The registration checklist resolves against the SAME registry and age gate the rules
+            // The registration checklist resolves against the same registry and age gate the rules
             // and the recorder use, so the displayed, validated and recorded sets cannot diverge.
-            // That registry is the REGISTRATION one: a document carrying
+            // That registry is the registration one: a document carrying
             // `ask_at_registration => false` leaves all three together or none of them.
             $this->registrationDocumentsConfig(),
             $this->boolConfig('legal-consent.age_gate.enabled', false),
@@ -173,12 +175,12 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         $this->app->bind(LegalConsentMonitor::class, NullMonitor::class);
 
-        // Who is DECLARING a change (§ 126b BGB). The shipped resolver reads the static config
+        // Who is declaring a change (§ 126b BGB). The shipped resolver reads the static config
         // block; a multi-tenant application binds its own, because one global declarant names the
         // wrong legal person in every tenant but one.
         $this->app->bind(ResolvesNoticeIdentity::class, ConfigNoticeIdentity::class);
 
-        // The package ships the SEAM and the human-review gate, never a provider: an app binds its
+        // The package ships the seam and the human-review gate, never a provider: an app binds its
         // own implementation. Unbound, a Translate action fails loud rather than filing the
         // untranslated source as a translation.
         $this->app->bind(LegalTextTranslator::class, UnavailableTranslator::class);
@@ -205,7 +207,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->registrationDocumentsConfig(),
             $this->defaultLocale(),
             // The literal, not RegistrationConsentRecorder::WITHOUT_FORM_FIELDS_WARN.
-            // The config-drift test reads these inline defaults out of the SOURCE and compares
+            // The config-drift test reads these inline defaults out of the source and compares
             // them to the shipped config file, so an application whose published config predates a
             // key cannot end up behaving differently from a fresh one — and a class constant is
             // not something that reader can evaluate. It would drop out of the comparison
@@ -259,7 +261,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // scoped, not singleton, for the same reason RegistrationRules is: the class memoizes its
         // lookups, so the memo has to be discarded between requests rather than outliving them.
         //
-        // This one is a TIDINESS change rather than a correctness fix, and saying so is the point —
+        // This one is a tidiness change rather than a correctness fix, and saying so is the point —
         // the memo is already capped at the store's own TTL, so a stale entry expires on its own
         // either way. What `scoped` buys is that the lifetime is stated by the binding instead of
         // being an internal detail a reader has to go and check, and that the two memoizing
@@ -305,7 +307,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         Event::listen(LegalDocumentPublished::class, FlushEnforceableCacheOnPublish::class);
 
-        // The durable-medium proof follows the DELIVERY, not the dispatch. The notice
+        // The durable-medium proof follows the delivery, not the dispatch. The notice
         // notifications are queued, so the sweep only hands jobs to a worker; a row written there
         // would certify an enqueue, and `legal_notices` refuses every UPDATE, so it could never be
         // corrected afterwards. Registered unconditionally — whether a proof is owed at all is
@@ -371,7 +373,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
                     ->onOneServer();
             }
 
-            // Opt-IN, unlike its two siblings: this sweep DELETES. An app upgrading into this
+            // Opt-IN, unlike its two siblings: this sweep deletes. An app upgrading into this
             // version must not silently start erasing records it has been accumulating — that
             // decision belongs to the consumer, once, deliberately. Daily is enough for a
             // period measured in years, and it keeps the nightly window small.
@@ -391,7 +393,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
             }
         });
 
-        // WITHOUT THIS, `optimize:clear` LEAVES THE RENDERED DOCUMENTS BEHIND — for up to
+        // Without this, `optimize:clear` leaves the rendered documents behind — for up to
         // `cache.ttl` seconds, 86 400 by default. The operator runs the command whose whole job is
         // making a stale cache go away, and keeps being served the old legal text. It only bites
         // where the consumer configured `legal-consent.cache.store`, which is exactly the
@@ -401,7 +403,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // demand and invalidated by a publish, so an eager pass would populate a cache from a
         // process that is not serving anyone.
         //
-        // It is a method to CALL, not one to override — `ServiceProvider::optimizes()` registers
+        // It is a method to call, not one to override — `ServiceProvider::optimizes()` registers
         // into two static maps. Declaring it as a return-an-array hook reads plausible and is
         // silently inert; PHPStan catches it as a signature mismatch, which is the only reason it
         // did not ship that way.
@@ -430,13 +432,13 @@ final class LegalConsentServiceProvider extends ServiceProvider
     /**
      * The view paths this package registers under the `legal-consent` namespace, in lookup order.
      *
-     * A single path for the plain set; two for the WireKit set, the WireKit directory FIRST. The
+     * A single path for the plain set; two for the WireKit set, the WireKit directory first. The
      * finder returns the first hint that has the file, so the WireKit variant wins for every view
      * it carries and everything else (the mail shell, its theme) falls through to the plain
      * directory — which is why this is a path list rather than a swap.
      *
      * A view the consumer published into `resources/views/vendor/legal-consent` is still checked
-     * BEFORE either of these: `loadViewsFrom()` registers the host's vendor path first, so
+     * before either of these: `loadViewsFrom()` registers the host's vendor path first, so
      * publishing keeps overriding both sets exactly as it did.
      *
      * @return string|list<string>
@@ -481,7 +483,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
     }
 
     /**
-     * Whether a version STRING clears the floor — the decision, separated from where the string
+     * Whether a version string clears the floor — the decision, separated from where the string
      * came from.
      *
      * Separated because the environment cannot be varied: this package's own suite always has one
@@ -526,9 +528,9 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * a host that manages them itself can run a subset), and a sweep against two of three tables
      * fails exactly as loudly as one against none.
      *
-     * AN UNREACHABLE DATABASE REGISTERS, and that direction is chosen rather than defaulted to.
+     * An unreachable database registers, and that direction is chosen rather than defaulted to.
      * A connection that cannot be opened is not a consumer who declined the tables — it is an
-     * outage. Registering means the command fails loudly for as long as it lasts; NOT registering
+     * outage. Registering means the command fails loudly for as long as it lasts; not registering
      * means three legally owed sweeps disappear silently and come back only when somebody notices.
      * A loud failure during an outage is the cheaper of the two, and it is the one an operator can
      * see.
@@ -553,7 +555,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * `config_path()` / `database_path()` / `resource_path()` / `lang_path()` helpers.
      *
      * Not a dependency argument — the manifest requires `laravel/framework`, so those helpers are
-     * present. It is that a path a provider publishes to is the APPLICATION's, and asking the
+     * present. It is that a path a provider publishes to is the application's, and asking the
      * application instance for it is the honest way to say so: the methods live on
      * Illuminate\Contracts\Foundation\Application, the type `$this->app` already has, and the
      * value follows an application that has moved its config or lang directory. The global helpers
@@ -563,14 +565,14 @@ final class LegalConsentServiceProvider extends ServiceProvider
     {
         // Each standard group carries the umbrella tag `legal-consent` as well, so
         // `vendor:publish --tag=legal-consent` publishes the whole normal set in one go while each
-        // group stays individually addressable. The umbrella deliberately EXCLUDES the opt-in
+        // group stays individually addressable. The umbrella deliberately excludes the opt-in
         // migrations below (one drops a column, one backfills) and the WireKit view variant (it
         // maps onto the plain stubs' own destinations, and needs --force to actually replace them).
         $this->publishes([
             __DIR__.'/../config/legal-consent.php' => $this->app->configPath('legal-consent.php'),
         ], ['legal-consent', 'legal-consent-config']);
 
-        // publishes(), NOT publishesMigrations() — and that is a decision with a receipt.
+        // publishes(), not publishesMigrations() — and that is a decision with a receipt.
         //
         // publishesMigrations() makes vendor:publish rewrite each filename's date prefix to a
         // fresh timestamp. It was adopted here on 2026-07-31 and reverted the same day, because
@@ -586,14 +588,14 @@ final class LegalConsentServiceProvider extends ServiceProvider
         //    backfill writes into. Reproduced by sorting the published set both ways.
         //
         // A second reason to leave it alone, independent of the first: the publish command tests
-        // whether a file already exists under its ORIGINAL name and renames only afterwards, so a
+        // whether a file already exists under its original name and renames only afterwards, so a
         // re-publish never recognizes the copy it wrote last time and lays down a duplicate of
         // every migration under a fresh timestamp — and the upgrade guide at
         // https://github.com/pushery/legal-consent-for-laravel/blob/main/UPGRADE.md tells
         // consumers to re-publish after an upgrade. The URL is absolute because that file is
         // export-ignored from the Composer dist: a reader in `vendor/` has no local copy.
-        // FILE BY FILE, not the directory. `vendor:publish` enumerates a published directory
-        // RECURSIVELY (VendorPublishCommand::moveManagedFiles walks `listContents('from://', true)`),
+        // File by file, not the directory. `vendor:publish` enumerates a published directory
+        // recursively (VendorPublishCommand::moveManagedFiles walks `listContents('from://', true)`),
         // so publishing `database/migrations` also copied `database/migrations/optional/` — the two
         // opt-in migrations the comment above says the umbrella excludes, one of which drops a
         // column from the host `users` table. They land inert, because the migrator globs
@@ -601,11 +603,11 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // `legal-consent-backfill` deliberately. A flat map publishes exactly what is auto-loaded.
         $this->publishes($this->autoloadedMigrations(), ['legal-consent', 'legal-consent-migrations']);
 
-        // THE OPT-IN GROUPS LIVE ON THEIR OWN PROVIDER, and moving them there is the fix rather
+        // The opt-in groups live on their own provider, and moving them there is the fix rather
         // than a tidy-up. `publishes()` merges into `static::$publishes[static::class]` whatever
         // tag it is given, so `vendor:publish --provider="…\LegalConsentServiceProvider"` — an
         // interactive first-class choice, and the obvious thing to type — published the three
-        // groups the tag design deliberately withholds, one of which DROPS columns from the host
+        // groups the tag design deliberately withholds, one of which drops columns from the host
         // `users` table. Tags are global and keep working exactly as documented.
         $this->app->register(LegalConsentOptInPublishing::class);
 
@@ -676,7 +678,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $normalized = [];
 
         foreach ($documents as $key => $config) {
-            // Decided by the VALUE, as {@see \Pushery\LegalConsent\Support\DocumentMatrix::keys()}
+            // Decided by the value, as {@see \Pushery\LegalConsent\Support\DocumentMatrix::keys()}
             // decides it. A document whose key looks like a number, `'2025' => [...]`, is an int
             // once PHP holds it as an array key and is still a document with a definition; an entry
             // of a config written as a list is a bare name. Every reader that walks these keys
@@ -691,16 +693,16 @@ final class LegalConsentServiceProvider extends ServiceProvider
     }
 
     /**
-     * The subset of the registry the REGISTRATION form covers.
+     * The subset of the registry the registration form covers.
      *
      * A document may be published, rendered and enforceable without belonging on a sign-up form.
-     * Setting `ask_at_registration => false` removes it from all THREE sides at once — the rules,
+     * Setting `ask_at_registration => false` removes it from all three sides at once — the rules,
      * the checklist and the recorder — because they are only honest while they resolve the same
      * set: a form that never showed a control must not validate one, and above all must not write
      * a ledger row claiming an acceptance nobody was asked for.
      *
-     * It does NOT make the document optional. A mandatory one still gates, so a subject meets it at
-     * the re-consent screen instead of at sign-up. This moves WHEN it is asked, not WHETHER.
+     * It does not make the document optional. A mandatory one still gates, so a subject meets it at
+     * the re-consent screen instead of at sign-up. This moves when it is asked, not whether.
      *
      * A publication duty that binds nobody — an Impressum (§ 5 DDG), a cookie policy — wants
      * `legal_basis => 'informational'` instead, which takes it out of the gate as well.
@@ -778,7 +780,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
     }
 
     /**
-     * A config value that is meaningfully ABSENT rather than defaulted — an unset confirmation
+     * A config value that is meaningfully absent rather than defaulted — an unset confirmation
      * window means "no window", which is not the same statement as any string.
      */
     private function nullableStringConfig(string $key): ?string
@@ -801,15 +803,15 @@ final class LegalConsentServiceProvider extends ServiceProvider
     }
 
     /**
-     * Merge the shipped config UNDER a published one, descending into maps.
+     * Merge the shipped config under a published one, descending into maps.
      *
-     * Laravel's `mergeConfigFrom()` is a flat `array_merge`, so it asks one question per TOP-LEVEL
+     * Laravel's `mergeConfigFrom()` is a flat `array_merge`, so it asks one question per top-level
      * key: is it already there? A host that ran `vendor:publish` has every top-level key, so a key
-     * this package adds INSIDE one of those blocks in a later release never reaches them. Their
+     * this package adds inside one of those blocks in a later release never reaches them. Their
      * block wins whole, the new setting reads as null, and nothing errors or logs. A corrected
      * security default never takes effect for exactly the hosts that customized that area.
      *
-     * RECURSING IS NOT ENOUGH ON ITS OWN — A LIST IS A VALUE, NEVER A STRUCTURE. The trap next
+     * Recursing is not enough on its own — a list is a value, never a structure. The trap next
      * door is `array_replace_recursive()`, which the framework's own `replaceConfigRecursivelyFrom()`
      * uses: it merges lists BY INDEX. A host narrowing this package's shipped
      * `routes.api_middleware` to a single entry would get the removed ones back. On a middleware
@@ -819,8 +821,8 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * `array_is_list([])` is true, which is the behavior you want: an empty array is a host saying
      * "none", and descending into it could only re-introduce what it emptied.
      *
-     * AND A LIST IS NOT THE ONLY THING A HOST OWNS WHOLE. `documents` is a map of maps, so the
-     * list rule cannot see it — and it is a REGISTRY rather than a settings block: it is the list
+     * And a list is not the only thing a host owns whole. `documents` is a map of maps, so the
+     * list rule cannot see it — and it is a registry rather than a settings block: it is the list
      * of what this application serves, not a set of knobs with defaults. Recursing into it
      * resurrects a document the host deleted on purpose, and on a consent package that is not a
      * merge artifact: a `legal_basis: consent` entry appears in every surface that enumerates the
@@ -852,7 +854,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $existing = $repository->get($key);
 
         // Neither side is provably string-keyed: a config array is just an array. The recursion
-        // below is written for that -- it asks whether a value is a LIST, never whether a key is
+        // below is written for that -- it asks whether a value is a list, never whether a key is
         // a string.
         $repository->set($key, $this->mergeConfigSections(
             is_array($shipped) ? $shipped : [],
@@ -883,7 +885,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
             // The key set is the fix: an entry the host did not name is one they do not serve, and
             // adding it back states something on their behalf.
             //
-            // Descending into the entries they DID name is the half that is easy to drop, and
+            // Descending into the entries they did name is the half that is easy to drop, and
             // dropping it would be a quiet second defect: a field this package adds to a document
             // in a later release — a retention window, a new source — would stop reaching exactly
             // the hosts who published the block, which is the failure the recursion exists to end.
@@ -903,7 +905,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 continue;
             }
 
-            // Recurse only where BOTH sides are maps. If either is a list, or the published value
+            // Recurse only where both sides are maps. If either is a list, or the published value
             // is a scalar or an explicit null, what the host wrote stands. An explicit null is a
             // value like any other here, which keeps "write => null to switch this off" working
             // exactly as the shipped config file describes it.
@@ -916,7 +918,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
     }
 
     /**
-     * Merge shipped entries INTO the ones a registry's owner named, and into no others.
+     * Merge shipped entries into the ones a registry's owner named, and into no others.
      *
      * The host's keys are the whole set — this never adds one. Within a key they both have, the
      * ordinary section merge runs, so a field added to a shipped document in a later release still
@@ -924,7 +926,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
      *
      * A shipped entry the host renamed is simply a key they do not have, and there is no way to
      * tell that apart from one they removed. That is a property of the data rather than a gap here:
-     * the config file says every shipped key is an example to rename freely, so a rename IS a
+     * the config file says every shipped key is an example to rename freely, so a rename is a
      * removal plus an addition, and the addition is theirs.
      *
      * @param  array<array-key, mixed>  $shipped

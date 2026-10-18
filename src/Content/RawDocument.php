@@ -17,6 +17,12 @@ use Carbon\CarbonImmutable;
  * type from the registry entry for this key. Dates and materiality are optional: a
  * Markdown file can declare them in frontmatter, a headless HTML source may leave them
  * null and let the operator set them at publish.
+ *
+ * `sourceVersion` is the version as the source counts it, such as the whole number another
+ * system gives each revision of a text. It is recorded beside the SemVer version, on the
+ * published row and on every consent given to it, and it decides nothing: the re-consent gate
+ * reads the SemVer version alone. A source that gives a source version and no SemVer version
+ * publishes each new one as the next minor of the active version.
  */
 final readonly class RawDocument
 {
@@ -32,5 +38,6 @@ final readonly class RawDocument
         public ?bool $isMaterial = null,
         public ?string $uiWording = null,
         public ?string $sourceRef = null,
+        public ?string $sourceVersion = null,
     ) {}
 }

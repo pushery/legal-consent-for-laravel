@@ -10,7 +10,7 @@ use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\TableLookup;
 
 /**
- * Give a NEW chain a root only a key-holder can produce, and record where "new" begins.
+ * Give a new chain a root only a key-holder can produce, and record where "new" begins.
  *
  * The hole this closes: the chain root is a public constant (64 zeros), so an actor with only
  * table-write access can plant a consent nobody granted by inserting a single row for a fresh
@@ -18,7 +18,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  * token, and that row — being the last of its own chain — has its hash compared against nothing.
  * `verify-ledger` then exits 0 over a forged ledger.
  *
- * WHY THE ROOT ITSELF IS NOT KEYED, WHICH IS THE OBVIOUS FIX AND DOES NOT WORK HERE.
+ * Why the root itself is not keyed, which is the obvious fix and does not work here.
  * Two independent reasons, both measured rather than reasoned:
  *
  *  1. Every existing first row already stores the constant. A keyed root invalidates all of them,
@@ -29,7 +29,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  *    point at genesis, as a single `!= <constant>` predicate. A per-subject root leaves that
  *    comparison with no value to compare against.
  *
- * So the root stays the constant and the proof moves BESIDE it, into a column of its own. Nothing
+ * So the root stays the constant and the proof moves beside it, into a column of its own. Nothing
  * that reads `genesis()` changes, no stored hash moves, and no existing row is touched.
  *
  * Two things ship here because they are one mechanism:
@@ -45,7 +45,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  * write useless — and the MAC is the half that still holds when the attacker reaches the database
  * by a path no trigger sits on (a restored backup, a replica, a migration run as the owner role).
  *
- * NOT a hashed proof field. `canonical()` walks a fixed list, so a new column is invisible to it
+ * Not a hashed proof field. `canonical()` walks a fixed list, so a new column is invisible to it
  * and no stored hash moves — the same property migration 000019 relied on, and what lets this ship
  * without re-chaining a single row. Adding a column does not rebuild the table on any engine here,
  * so both ledgers keep their triggers.
@@ -74,13 +74,13 @@ return new class extends Migration
             return;
         }
 
-        // NOTHING IS STAMPED WITHOUT A KEY, AND THE FIRST VERSION OF THIS GOT IT WRONG.
+        // Nothing is stamped without a key, and the first version of this got it wrong.
         // It stamped unconditionally, which quietly required the secret to be configured before
         // `migrate` — otherwise the marker was born holding an unkeyed hash, and the day the
         // operator set the key it could never verify again. A permanent break produced by
         // following the documented order of operations is worse than no marker at all.
         //
-        // So the marker is stamped by whoever first opens a chain WITH a key (see
+        // So the marker is stamped by whoever first opens a chain with a key (see
         // DefaultConsentManager::appendChained). Migrating with the key already in place still
         // stamps here, which keeps the common case a single step.
         if (! app(LedgerHashChain::class)->isKeyed()) {
@@ -91,8 +91,8 @@ return new class extends Migration
         // before a root proof could exist, so it is exempt by construction — and an install that
         // has never written a consent gets 0, which exempts nothing.
         //
-        // THIS BLESSES WHATEVER IS ALREADY IN THE TABLE, INCLUDING A FORGERY PLANTED BEFORE
-        // TODAY. It has to: there is no evidence left to tell the two apart, and inventing one
+        // This blesses whatever is already in the table, including a forgery planted before
+        // today. It has to: there is no evidence left to tell the two apart, and inventing one
         // would be worse than saying so. What it does close is every forgery from here on.
         $highest = DB::table('legal_consents')->max('id');
         $boundary = is_int($highest) || is_string($highest) ? (int) $highest : 0;

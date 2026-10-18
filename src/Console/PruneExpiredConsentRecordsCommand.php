@@ -34,7 +34,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 /**
  * Delete consent records past the retention period (default 3 years, § 31 Abs. 2 OWiG /
  * § 195 BGB), or past the period `retention_by_document` gives their document. DELETE is the one mutation the append-only ledger allows; anonymization of a
- * live record is deliberately NOT offered (it would be an UPDATE, which the ledger blocks).
+ * live record is deliberately not offered (it would be an UPDATE, which the ledger blocks).
  * Chunked with per-chunk garbage collection, and chained rows are pruned one subject_token at a
  * time, so peak memory does not grow with the size of the table: the sweep holds one chunk of ids,
  * one page of tokens and one subject's ledger at a time.
@@ -49,22 +49,22 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * does not become a place to insert one. Nothing is removed from the consent ledger while a
  * boundary or its count does not hold.
  *
- * DELETING THE SUBJECT DOES NOT ORPHAN THEIR ROWS IN THE SENSE THIS SWEEP MEANS. Removing a
+ * Deleting the subject does not orphan their rows in the sense this sweep means. Removing a
  * person's own record leaves `subject_type` and `subject_id` exactly as they were, so the
  * `is null` arm of the eligibility rule below is never reached that way. Those rows are therefore
  * neither orphaned nor superseded — no newer row will ever arrive for them — and are kept for
- * good, with the ip address and user agent still in them. Stripping the subject from a row IS
- * supported — `Consent::forget($subject)` runs the Art. 17 erasure, and it must run BEFORE the
+ * good, with the ip address and user agent still in them. Stripping the subject from a row is
+ * supported — `Consent::forget($subject)` runs the Art. 17 erasure, and it must run before the
  * person's own record is deleted, because it needs the model. After it, the `subject_id is null`
  * arm below is reached and these rows are pruned normally.
  *
- * Retention is measured from acceptance, but a subject's CURRENT standing — the newest
+ * Retention is measured from acceptance, but a subject's current standing — the newest
  * ledger row for a (tenant, subject, document, locale) — is never pruned by age alone: deleting
  * it would destroy the very Art. 7(1) proof the still-active relationship depends on. Only
- * SUPERSEDED rows (an even newer row exists for the same tenant, subject, document and locale)
- * and ORPHANED rows (the subject was deleted, so no live relationship remains) are eligible.
+ * superseded rows (an even newer row exists for the same tenant, subject, document and locale)
+ * and orphaned rows (the subject was deleted, so no live relationship remains) are eligible.
  *
- * The notice-delivery ledger is pruned on the SAME rule, and must be: it holds personal data
+ * The notice-delivery ledger is pruned on the same rule, and must be: it holds personal data
  * (the subject and the exact message they were served), so leaving it to grow forever would
  * break storage limitation (Art. 5(1)(e)) — the very principle the retention period exists
  * for. Its newest row per triple is kept for the same reason: it is what proves the change
@@ -193,7 +193,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
             return self::FAILURE;
         }
 
-        // Report even a zero sweep: this is the one scheduled task whose SILENCE is the failure.
+        // Report even a zero sweep: this is the one scheduled task whose silence is the failure.
         // A dispatch that stops running leaves visibly missing mail; a prune that stops running
         // just keeps personal data past its retention period, with nothing failing and nobody
         // noticing (Art. 5(1)(e)). The heartbeat is what makes that detectable.
@@ -432,10 +432,10 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      * removed and nobody re-linked afterwards.
      *
      * The same condition {@see VerifyLedgerCommand} reports as "chain does not start at genesis (a
-     * prior row may have been removed)", asked as ONE aggregate instead of a walk: the first
+     * prior row may have been removed)", asked as one aggregate instead of a walk: the first
      * chained row per token, joined back to its own row, compared against the public genesis value.
      *
-     * WHAT IT DOES NOT SEE, stated because the difference matters: a break in the MIDDLE of a
+     * What it does not see, stated because the difference matters: a break in the middle of a
      * chain whose first row survived. Detecting that means recomputing every row's hash, which is
      * what `legal-consent:verify-ledger` is for and what a nightly delete sweep should not carry.
      * The sweep makes such a break when it removes a superseded row behind one that is still
@@ -478,12 +478,12 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      * lives in {@see LedgerChainRepair} because the Art. 17 erasure needs the identical one, and
      * two copies of a walk this subtle drift apart on the first change to either.
      *
-     * Only the rows whose link actually MOVED are rewritten. A sweep that removed a chain's TAIL
+     * Only the rows whose link actually moved are rewritten. A sweep that removed a chain's tail
      * changes nothing for the rows before it, and rewriting them would be churn on an append-only
      * table — the thing this command is most careful about.
      *
      * Ids are reused rather than reassigned. The verifier flags an unchained row whose id is past
-     * the first chained row IN THE WHOLE TABLE, so a rewritten row at a fresh id would land past
+     * the first chained row in the whole table, so a rewritten row at a fresh id would land past
      * that watermark and be reported as a direct database write.
      *
      * Runs inside the caller's transaction, which also holds the rows it read.
@@ -500,7 +500,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         $rows = array_map($repair->toRow(...), $rows);
         $corrected = $repair->relink($rows);
 
-        // Only the rows whose link actually MOVED, so the repair is never churn on an append-only
+        // Only the rows whose link actually moved, so the repair is never churn on an append-only
         // table. The filter and array_values() change nothing in the ledger they leave: an unmoved
         // row deleted and inserted again comes back identical, id included. What the filter saves
         // is the work.
@@ -523,7 +523,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         DB::table('legal_consents')->whereIn('id', array_column($moved, 'id'))->delete();
 
         // Chunked multi-row inserts rather than one statement per row. A subject's whole re-linked
-        // chain used to make one round trip EACH, inside a transaction the rest of the sweep waits
+        // chain used to make one round trip each, inside a transaction the rest of the sweep waits
         // on — and the set is the tail of one subject's ledger, so it grows with how long that
         // person has been a customer.
         //
@@ -537,7 +537,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         // The chunk is not decoration, and it is not a number written down here either. It used to
         // be 500 rows, which at 24 columns is 12 000 placeholders — past a 999-build's ceiling by a
         // factor of twelve, and thirteen times what the erasure allowed itself for the identical
-        // rows. Measured before the repair: a subject with 47 consent rows produced ONE insert
+        // rows. Measured before the repair: a subject with 47 consent rows produced one insert
         // binding 1104 placeholders. The budget is now derived per row width, in the one place both
         // rewriters read.
         foreach ($repair->batches($moved) as $batch) {
@@ -545,11 +545,11 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         }
 
         // A moved link changes the row's hash, so the mac recorded for it no longer describes it —
-        // and one of these rows is a chain TAIL, which is the row the mac is the only witness for.
+        // and one of these rows is a chain tail, which is the row the mac is the only witness for.
         // Without this the sweep would leave the ledger reporting itself as tampered, permanently,
         // which is precisely the failure the re-link exists to prevent one layer down.
         //
-        // APPENDED, not corrected: the store keeps the old mac beside the new one, so the history of
+        // Appended, not corrected: the store keeps the old mac beside the new one, so the history of
         // lawful rewrites stays readable. Ids survive a rewrite (the rows are re-inserted with their
         // own), which is what lets a mac keep pointing at the row it describes.
         (new LedgerRecordMacs)->record(array_column($moved, 'id'));
@@ -558,7 +558,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
     }
 
     /**
-     * Eligible = past the cutoff AND (orphaned OR superseded). Orphaned = the subject was
+     * Eligible = past the cutoff and (orphaned OR superseded). Orphaned = the subject was
      * deleted (no live relationship remains). Superseded = a newer row exists for the same
      * tenant, subject, document and locale, so this older one is no longer the current standing.
      * The newest row per tenant has no such successor and is kept, even past the cutoff, so an
@@ -587,7 +587,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
     {
         // Retention runs across all tenants, and past the cutoff of each record's own document.
         return $cutoffs->expired($query->withoutGlobalScope(TenantScope::class), $timestamp)
-            // BUILT, NOT WRITTEN, and that is the whole repair. This was the package's last
+            // Built, not written, and that is the whole repair. This was the package's last
             // hand-assembled runtime statement: a `whereRaw` naming `legal_consents` literally on
             // both sides of the correlation. Everything else on this sweep is builder work, and a
             // builder applies the connection's table prefix itself — so this was the one place the

@@ -49,9 +49,9 @@ readonly class DefaultConsentManager implements ConsentManager
     private const int MAX_CHAIN_ATTEMPTS = 5;
 
     /**
-     * `$documents` IS NULLABLE BECAUSE "NOT GIVEN" AND "GIVEN AND EMPTY" ARE DIFFERENT ANSWERS,
+     * `$documents` is nullable because "NOT GIVEN" AND "GIVEN AND EMPTY" are different answers,
      * and conflating them was a defect rather than a nicety. The old signature defaulted to `[]` and
-     * read `!== []` as "a registry was configured", so an installation where EVERY document carries
+     * read `!== []` as "a registry was configured", so an installation where every document carries
      * `ask_at_registration => false` — a real configuration, and the one that says "ask nobody at
      * sign-up" — produced an empty registry, skipped the intersection, and put every active
      * consent-bearing document back on the checklist. The rules and the recorder resolved the same
@@ -106,10 +106,10 @@ readonly class DefaultConsentManager implements ConsentManager
 
         $documents = $this->checklistRows($locale);
 
-        // A MANDATORY document not published in the locale the visitor sees is still legally required,
-        // so walk the rest of the resolution chain (fallback_locale, then default_locale) and SHOW it —
+        // A mandatory document not published in the locale the visitor sees is still legally required,
+        // so walk the rest of the resolution chain (fallback_locale, then default_locale) and show it —
         // as its own-locale control, the one language they have to read before agreeing. This mirrors
-        // RegistrationConsentRecorder and RegistrationRules, so the DISPLAYED, VALIDATED and RECORDED
+        // RegistrationConsentRecorder and RegistrationRules, so the displayed, validated and recorded
         // sets resolve identically: the form can never require or record a document it did not show.
         // An optional consent has nothing to fall back to.
         foreach (RegistrationLocaleChain::resolve($locale, $this->defaultLocale) as $candidate) {
@@ -124,11 +124,11 @@ readonly class DefaultConsentManager implements ConsentManager
             }
         }
 
-        // Intersect with the CONFIGURED registry, exactly as the rules and the recorder do. Without
+        // Intersect with the configured registry, exactly as the rules and the recorder do. Without
         // this the checklist offered controls those two never validate or record — a published
         // document nobody registered would render a checkbox whose tick goes nowhere.
         if ($this->documents !== null) {
-            // filter(), NOT only(): Eloquent\Collection::only() selects by PRIMARY KEY, not by the
+            // filter(), not only(): Eloquent\Collection::only() selects by PRIMARY KEY, not by the
             // array key — an override that silently returns an empty set here.
             $registered = $this->documents;
             $documents = $documents->filter(
@@ -154,7 +154,7 @@ readonly class DefaultConsentManager implements ConsentManager
             // The filter above already removed every non-consent-bearing document, and only
             // those may carry a null sentence — so reaching this line with one means a row that
             // asks for an acceptance it cannot name. Dropping it silently would remove a
-            // REQUIRED checkbox from the form and let a registration complete without it, which
+            // required checkbox from the form and let a registration complete without it, which
             // is the one failure this screen must never have. Named, not skipped.
             if ($document->ui_wording === null) {
                 throw new RuntimeException(
@@ -175,16 +175,16 @@ readonly class DefaultConsentManager implements ConsentManager
                 // The render-time fingerprint, so a form that renders hashField() activates the
                 // accept-time guard for the version actually shown (opt-in — see the recorder).
                 contentHash: self::acceptanceFingerprint($document),
-                // Resolved from the DOCUMENT, so the link carries this item's locale rather than the
+                // Resolved from the document, so the link carries this item's locale rather than the
                 // page's — the distinction the class docblock has always insisted on, now made by
                 // the package instead of left to every consumer.
                 url: $this->urls->for($document),
             );
         }
 
-        // The age attestation is a control the form MUST render, because the rules require it — a
+        // The age attestation is a control the form must render, because the rules require it — a
         // form built from this checklist alone would omit the field and could then never pass
-        // validation. It is about the PERSON, not a document, so it carries no type, version or
+        // validation. It is about the person, not a document, so it carries no type, version or
         // locale: there is nothing to freeze, and nothing is recorded for it (Art. 8 DSGVO is an
         // attestation the app gates on; the package does not claim to prove an age).
         if ($this->ageGateEnabled) {
@@ -207,7 +207,7 @@ readonly class DefaultConsentManager implements ConsentManager
      * and its default-locale fallback are built from.
      *
      * `id` is selected because each row is handed to the host's `document_url` resolver, which
-     * receives the MODEL: the most ordinary thing a Laravel host does with one is
+     * receives the model: the most ordinary thing a Laravel host does with one is
      * `route('legal.show', $document)`, implicit route-model binding, and that reads the primary
      * key. Without the column it reads null and the seam raises a UrlGenerationException — a 500 on
      * the sign-up form, while the same closure works on the re-consent gate, whose document set
@@ -237,7 +237,7 @@ readonly class DefaultConsentManager implements ConsentManager
             throw NotWithdrawableException::for($documentKey, $document->type);
         }
 
-        // A confirmation is the SECOND half of a double opt-in, and its whole evidential value is
+        // A confirmation is the second half of a double opt-in, and its whole evidential value is
         // that a first half exists: for advertising e-mail the confirmed double opt-in is the
         // benchmark (§ 7 Abs. 2 UWG with Art. 7 DSGVO), and a lone confirmation row documents a
         // two-step consent that only ever had one step. confirm() refuses it; this is the same
@@ -264,7 +264,7 @@ readonly class DefaultConsentManager implements ConsentManager
     {
         $document = $this->activeDocument($documentKey, $this->resolveLocale($context, $locale));
 
-        // BEFORE the hash comparison below, and the order is the whole point. That comparison
+        // Before the hash comparison below, and the order is the whole point. That comparison
         // builds `[null, acceptanceFingerprint($document), …]`, and PHP evaluates an array literal
         // eagerly — so the fingerprint is computed on every call, including one that passes no hash
         // at all. acceptanceFingerprint() refuses an informational document, so a guard placed
@@ -278,7 +278,7 @@ readonly class DefaultConsentManager implements ConsentManager
         // has since been re-released, refuse rather than freeze a version they never read
         // (Art. 7(1)). The caller re-shows the current text before recording consent.
         //
-        // The comparison covers the acceptance SENTENCE as well as the body. content_hash is taken
+        // The comparison covers the acceptance sentence as well as the body. content_hash is taken
         // over the document text alone, but a re-consent form shows only `ui_wording` — so a release
         // that changed nothing but that one sentence (the single string the subject actually reads
         // before ticking) would have slipped through the guard untouched.
@@ -292,7 +292,7 @@ readonly class DefaultConsentManager implements ConsentManager
     }
 
     /**
-     * Record that a subject was SHOWN an informational page the operator flagged, with the sentence
+     * Record that a subject was shown an informational page the operator flagged, with the sentence
      * their own form put next to it.
      *
      * Not a consent and never a gate. An informational page binds nobody -- that is the meaning of
@@ -300,7 +300,7 @@ readonly class DefaultConsentManager implements ConsentManager
      * anyone out of anything: {@see ConsentGate} is not routed through here and keeps asking
      * `isConsentBearing()`.
      *
-     * THE SENTENCE COMES FROM THE CALLER, AND THAT IS THE DESIGN RATHER THAN A CONVENIENCE. The
+     * The sentence comes from the caller, and that is the design rather than a convenience. The
      * ledger column holding it is NOT NULL, and an informational document has no `ui_wording` of its
      * own precisely because the package never asks the reader for anything on such a page. Three
      * ways out of that, and two of them are worse than the gap:
@@ -317,7 +317,7 @@ readonly class DefaultConsentManager implements ConsentManager
      * document.
      *
      * `$expectedContentHash` guards the same mid-session release `accept()` guards, against the
-     * BODY alone. Not the acceptance fingerprint: that folds in the package's own sentence, and
+     * body alone. Not the acceptance fingerprint: that folds in the package's own sentence, and
      * there is none here. The body is the only thing this package rendered.
      */
     public function acknowledge(Model $subject, string $documentKey, ConsentContext $context, string $acknowledgmentWording, ?string $locale = null, ?string $expectedContentHash = null): LegalConsent
@@ -365,7 +365,7 @@ readonly class DefaultConsentManager implements ConsentManager
         // method of the bundled Livewire component is a reachable endpoint whether or not the
         // template renders a button for it, so an unguarded transition is one an authenticated
         // subject can drive with nobody having offered it. What it would leave behind is a row in
-        // an APPEND-ONLY ledger asserting a state that does not legally exist — and a wrong row
+        // an append-only ledger asserting a state that does not legally exist — and a wrong row
         // there is worse than a missing one, because it cannot be corrected and every later
         // reader takes it as proof.
         if (! $document->type->isObjectable()) {
@@ -410,7 +410,7 @@ readonly class DefaultConsentManager implements ConsentManager
         }
 
         // Cross-locale, like every other holding question: consent attaches to a document's
-        // identity, not to the language it was read in. The LATEST row is what decides — a request
+        // identity, not to the language it was read in. The latest row is what decides — a request
         // that was already confirmed, or withdrawn since, is not pending any more, and a fold over
         // history would happily confirm it twice.
         $pending = $this->gate->latestActionFor($subject, $documentKey);
@@ -423,7 +423,7 @@ readonly class DefaultConsentManager implements ConsentManager
             throw NotConfirmableException::windowClosed($documentKey, (string) $this->confirmWithin);
         }
 
-        // A new MAJOR between the two halves means the subject would be confirming a text they
+        // A new major between the two halves means the subject would be confirming a text they
         // never read (Art. 7(1)). Major, not any change: that is the line the gate already draws
         // everywhere else — an editorial fix never forces a fresh acceptance, a material change
         // always does — and drawing a second, stricter line here would make the two disagree.
@@ -502,7 +502,7 @@ readonly class DefaultConsentManager implements ConsentManager
     {
         $locale ??= $this->defaultLocale;
 
-        // The active set comes from the SAME cached, publish-invalidated fact the gate reads on
+        // The active set comes from the same cached, publish-invalidated fact the gate reads on
         // every authenticated request, rather than a private `legal_documents` query per call.
         // This method is public API — `HasLegalConsents::hasAcceptedCurrentLegal()` is one line
         // over it — so a consumer asking about three keys in one request paid three uncached
@@ -513,7 +513,7 @@ readonly class DefaultConsentManager implements ConsentManager
             ->first(static fn (LegalDocument $document): bool => $document->key === $documentKey);
 
         if (! $active instanceof LegalDocument) {
-            // No published document means the subject holds NOTHING — the honest answer to
+            // No published document means the subject holds nothing — the honest answer to
             // "does this subject currently hold the active version?". Returning true here made
             // the permission read `if (hasCurrent(...)) { send() }` fire for a typo'd key or a
             // deactivated document. The gate's separate "nothing to block on" question lives in
@@ -521,10 +521,10 @@ readonly class DefaultConsentManager implements ConsentManager
             return false;
         }
 
-        // Held is computed cross-locale and withdrawal/objection-aware, via the SAME fold the
+        // Held is computed cross-locale and withdrawal/objection-aware, via the same fold the
         // gate uses — so hasCurrent() and outstandingFor() can never disagree about one subject.
         //
-        // Scoped to the ONE key being asked about, exactly as the gate scopes it to the keys it
+        // Scoped to the one key being asked about, exactly as the gate scopes it to the keys it
         // could block on. The ledger is append-only and grows for the life of the account, so an
         // unfiltered fold made a single-key question cost a scan proportional to how long the
         // subject has been a customer. The fold is per-key independent — the rows are ordered by
@@ -550,7 +550,7 @@ readonly class DefaultConsentManager implements ConsentManager
             return array_fill_keys($documentKeys, false);
         }
 
-        // ONE read of the ledger, for the keys asked about that have a document to hold. The fold is
+        // One read of the ledger, for the keys asked about that have a document to hold. The fold is
         // per-key independent, so the answer for each key is the one a fold of the whole ledger gives,
         // without the rows of every other document, which grow for the life of the account.
         $standing = $this->gate->standingFor($subject, $keys);
@@ -583,14 +583,14 @@ readonly class DefaultConsentManager implements ConsentManager
         $acceptedAt = $standing['at'];
         $pending = $standing['pending'];
 
-        // The active set comes from the SAME cached, publish-invalidated fact the gate reads on
+        // The active set comes from the same cached, publish-invalidated fact the gate reads on
         // every authenticated request — the seam `hasCurrent()` above already sits on, and the one
         // the banner moved onto. This method is the sibling that was left behind, and it is the
         // one that hurts most: a consuming application renders a consent banner out of every
         // layout, so this ran on every full page view of a signed-in member and paid an uncached
         // query for a fact that changes a few times a year.
         //
-        // THE LEDGER FOLD ABOVE STAYS UNCACHED, AND THAT IS THE POINT OF DOING ONLY HALF. It is
+        // The ledger fold above stays uncached, and that is the point of doing only half. It is
         // per-subject state, and a stale answer either strands somebody at a consent gate or waves
         // them past it. The global half is the half that is safe, and it needs no new invalidation
         // to reason about: publishing already flushes this cache, and its payload is plain
@@ -607,7 +607,7 @@ readonly class DefaultConsentManager implements ConsentManager
             // `! requires_explicit_optin`, the same false a contract carries — would be
             // permanently true. A "your agreements" screen built from this map would then show
             // a row for the Impressum that can never be satisfied.
-            // …plus an informational page the operator flagged for acknowledgment. That one HAS
+            // …plus an informational page the operator flagged for acknowledgment. That one has
             // standing to report, which is the whole reason it is here: a row was written, so
             // `accepted_major` is a real number rather than a permanent 0, and the difference
             // between it and `current_major` is exactly the "which version did they see" question
@@ -616,7 +616,7 @@ readonly class DefaultConsentManager implements ConsentManager
             ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing()
                 || RegistrationAcknowledgment::covers($document->key));
 
-        // The holdings whose document has been retired out from under them. Resolved by the SAME
+        // The holdings whose document has been retired out from under them. Resolved by the same
         // class the settings screen uses, because a status map and the screen built from it
         // disagreeing about which documents a subject stands in is the divergence this package
         // refuses everywhere else. See RetiredHoldings for why the row belongs here at all.
@@ -645,7 +645,7 @@ readonly class DefaultConsentManager implements ConsentManager
             $status[$document->key] = [
                 'key' => $document->key,
                 'accepted_major' => $acceptedMajor,
-                // For a retired row this is the version the SUBJECT accepted, not a current one:
+                // For a retired row this is the version the subject accepted, not a current one:
                 // there is no current version, and naming a later one would describe a text they
                 // never saw.
                 'current_major' => $document->major_version,
@@ -655,7 +655,7 @@ readonly class DefaultConsentManager implements ConsentManager
                 // in ConsentPresenter::settingsFor().
                 // An informational page is never outstanding either, and for the same reason a
                 // retired holding is not: nothing is being enforced. A flagged one can absolutely
-                // be STALE — `accepted_major` below `current_major` says so, and that is the signal
+                // be stale — `accepted_major` below `current_major` says so, and that is the signal
                 // a consumer turns into a banner, a hint or nothing at all, as they choose. Calling
                 // it outstanding would turn a page that binds nobody into a gate by writing it
                 // down, which is the one thing this feature must not do.
@@ -669,17 +669,17 @@ readonly class DefaultConsentManager implements ConsentManager
                 // from this map would invite the subject to enter themselves a second time and a
                 // report would count them as having declined.
                 'pending_confirmation' => in_array($document->key, $pending, true),
-                // WHICH text was accepted, and when. `accepted_major` alone cannot answer either:
+                // Which text was accepted, and when. `accepted_major` alone cannot answer either:
                 // it is a major, so 2.0.0 and 2.7.3 are the same number, and it carries no date.
                 //
                 // The reason this is not decoration is that the two diverge exactly when something
-                // is outstanding. A screen showing only the CURRENT version renders a stale consent
+                // is outstanding. A screen showing only the current version renders a stale consent
                 // identically to a fresh one — and the whole question such a screen exists to answer
                 // is what the subject actually agreed to.
                 //
                 // Null once the holding ends, in step with `accepted_major` dropping to 0. The
                 // alternative — keeping the last accepted version as a historical fact — reads
-                // better on a support screen and is wrong here: this map reports what is HELD, and
+                // better on a support screen and is wrong here: this map reports what is held, and
                 // reporting a withdrawn opt-in as still held is the exact defect the
                 // withdrawal-aware fold was built to end. The historical answer lives in
                 // `history()`, which is the call whose job it is.
@@ -716,6 +716,7 @@ readonly class DefaultConsentManager implements ConsentManager
                 'document_type' => $consent->document_type->value,
                 'document_version' => $consent->document_version,
                 'document_major_version' => $consent->document_major_version,
+                'document_source_version' => $consent->document_source_version,
                 'content_hash' => $consent->content_hash,
                 'locale' => $consent->locale,
                 'ui_wording' => $consent->ui_wording_snapshot,
@@ -740,7 +741,7 @@ readonly class DefaultConsentManager implements ConsentManager
     }
 
     /**
-     * @param  string|null  $shownWording  the sentence the SUBJECT read, supplied by the
+     * @param  string|null  $shownWording  the sentence the subject read, supplied by the
      *                                     caller for an informational page the operator
      *                                     has flagged. See acknowledge() for why it comes
      *                                     from outside rather than from the document.
@@ -787,7 +788,7 @@ readonly class DefaultConsentManager implements ConsentManager
             throw SubjectWithoutKey::for((string) $subject->getMorphClass());
         }
 
-        // Checked HERE rather than left to the column, because the column answers differently on
+        // Checked here rather than left to the column, because the column answers differently on
         // every engine: SQLite keeps an over-long key, PostgreSQL and MySQL refuse it with a raw
         // SQLSTATE at the first write of the subject's life. One named refusal at the door is the
         // only version of this a consumer can act on — and it is the door every recorded consent
@@ -808,6 +809,9 @@ readonly class DefaultConsentManager implements ConsentManager
                 'document_type' => $document->type,
                 'document_version' => $document->version,
                 'document_major_version' => $document->major_version,
+                // What the document's source calls this version, word for word, so the consent can
+                // be matched to an archive that counts its own versions.
+                'document_source_version' => $document->source_version,
                 'content_hash' => $document->content_hash,
                 'locale' => $document->locale,
                 'ui_wording_snapshot' => $shownWording ?? $document->ui_wording,
@@ -873,14 +877,14 @@ readonly class DefaultConsentManager implements ConsentManager
         for ($attempt = 1; ; $attempt++) {
             try {
                 return DB::transaction(function () use ($token, $attributes, $chain, $macs): LegalConsent {
-                    // Chain onto the subject's last ALREADY-CHAINED row. Rows written before
+                    // Chain onto the subject's last already-chained row. Rows written before
                     // tamper-evidence was enabled carry a NULL link and are skipped, so the first
                     // chained row for such a subject starts at genesis — matching the verifier's
                     // walk, which begins each subject at genesis.
                     $previous = $this->latestChainedRow($token);
                     $attributes['prev_record_hash'] = $chain->linkFor($previous);
 
-                    // The row that OPENS a chain carries a proof of who opened it. Every other row
+                    // The row that opens a chain carries a proof of who opened it. Every other row
                     // is already vouched for by its predecessor's hash; the first one has nothing
                     // behind it but a public constant, which is exactly what let a forged consent
                     // be planted as a fresh chain and read back as intact. Null when the chain is
@@ -898,12 +902,12 @@ readonly class DefaultConsentManager implements ConsentManager
                     $consent = LegalConsent::resolve();
                     $consent->forceFill($attributes)->save();
 
-                    // THE ROW IS RE-READ HERE, AND THE ID IS ALL THAT IS HANDED OVER. Until
+                    // The row is re-read here, and the ID is all that is handed over. Until
                     // this row has a mac of its own it is the one row of its chain nobody
-                    // witnesses — the link that vouches for a row lives on the row that FOLLOWS
+                    // witnesses — the link that vouches for a row lives on the row that follows
                     // it, and this one has no follower yet.
                     //
-                    // The mac must be taken over what the DRIVER returns, never over the
+                    // The mac must be taken over what the driver returns, never over the
                     // attributes just written: `tenant_id` is stamped by a `creating` listener
                     // during save(), and `accepted_at` comes back from PostgreSQL carrying the
                     // connection's offset. {@see LedgerRecordMacs} does the read, so no call site
@@ -950,7 +954,7 @@ readonly class DefaultConsentManager implements ConsentManager
      * Which document types each ledger action may legally be written against.
      *
      * The predicates are the ones {@see DocumentType} already publishes, so this table asserts no
-     * law of its own — it puts the SAME rule on the untyped door that each named transition
+     * law of its own — it puts the same rule on the untyped door that each named transition
      * applies to itself. `deemed_accepted` is spelled out rather than derived because there is no
      * predicate for it: silence is deemed acceptance only for a contract change (§ 308 Nr. 5 BGB;
      * BGH XI ZR 26/20), which is exactly what the publisher refuses to classify any other way.
@@ -984,7 +988,7 @@ readonly class DefaultConsentManager implements ConsentManager
     }
 
     /**
-     * The document a TRANSITION out of a holding — a withdrawal, an objection, a termination —
+     * The document a transition out of a holding — a withdrawal, an objection, a termination —
      * is recorded against.
      *
      * The active version when there is one. When there is not, the version the subject actually
@@ -1079,7 +1083,7 @@ readonly class DefaultConsentManager implements ConsentManager
             }
         }
 
-        // The default locale too, for a MANDATORY document: the gate resolves the set a subject owes
+        // The default locale too, for a mandatory document: the gate resolves the set a subject owes
         // through the whole chain (EnforceableDocumentCache::resolvedFor()), so a subject in an
         // untranslated locale is stopped for the default-locale terms. Accepting them has to find the
         // same version, or the gate would stop somebody and then refuse the acceptance it asked for.
@@ -1127,7 +1131,7 @@ readonly class DefaultConsentManager implements ConsentManager
      * Takes the PublishedDocument too, because that is the only type the documented public read
      * path hands out ({@see ConsentManager::published()}). Without it a consumer rendering its own
      * page had exactly three options, all wrong: rebuild this hash by hand (the second
-     * implementation this docblock rules out), record `content_hash` alone (which does NOT cover
+     * implementation this docblock rules out), record `content_hash` alone (which does not cover
      * `ui_wording` — a hash of a different text than the one shown), or reach past the DTO to the
      * Eloquent model and leave the read path the reader calls the only one to use. One function,
      * both types, so the two sides cannot drift.

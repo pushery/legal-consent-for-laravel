@@ -7,7 +7,7 @@ namespace Pushery\LegalConsent\Exceptions;
 use RuntimeException;
 
 /**
- * The HTML parser stopped before the end of a legal text, so the sanitized output is a FRAGMENT.
+ * The HTML parser stopped before the end of a legal text, so the sanitized output is a fragment.
  *
  * This is refused rather than rendered, and the reason is the hash. `content_hash` is taken over
  * the sanitizer's output, and the resulting row is append-only proof of the text somebody agreed
@@ -15,10 +15,10 @@ use RuntimeException;
  * published — the one question this package exists to answer, answered wrongly, with no signal.
  *
  * The only cause seen so far is libxml's hard nesting limit of 256 elements. Measured: 260 nested
- * `<div>`s produce exactly one error, and it is FATAL, while unclosed tags, stray closing tags,
+ * `<div>`s produce exactly one error, and it is fatal, while unclosed tags, stray closing tags,
  * unquoted attributes, entity smuggling, CDATA, processing instructions and NUL bytes produce
  * either nothing or a recoverable error and parse in full. That is why the refusal keys on the
- * error LEVEL and not on a message: recoverable noise is what an HTML parser is for.
+ * error level and not on a message: recoverable noise is what an HTML parser is for.
  */
 final class LegalDocumentUnparsable extends RuntimeException
 {

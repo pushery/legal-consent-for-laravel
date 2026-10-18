@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 /**
- * Where a document's title sits inside the acceptance sentence, so the NAME itself can be the link.
+ * Where a document's title sits inside the acceptance sentence, so the name itself can be the link.
  *
- * THE SENTENCE IS NEVER REWRITTEN, and that is the whole constraint this class exists under.
+ * The sentence is never rewritten, and that is the whole constraint this class exists under.
  * `wording` is the snapshotted text the ledger records as the thing that was agreed to; it is frozen
- * proof. So the linked run comes out of the WORDING by offset — never by substituting the title —
+ * proof. So the linked run comes out of the wording by offset — never by substituting the title —
  * and {@see before} . {@see match} . {@see after} reassembles the original byte for byte.
  *
  * **The lookup is case-insensitive because an exact one would have linked almost nothing.** Measured
@@ -19,7 +19,7 @@ namespace Pushery\LegalConsent\Support;
  * comparison links a handful and leaves the rest silently unlinked, which is the failure shape this
  * package keeps meeting: correct for the case someone tested, quietly wrong for the rest.
  *
- * THAT COUNT SAID "fourteen … two documents" AND WAS A SENTENCE, NOT A MEASUREMENT. The third
+ * That count said "fourteen … two documents" and was a sentence, not a measurement. The third
  * consent type had never been in it, and that is where the one real gap sat: `es/newsletter`
  * carried the heading `Boletín` against a sentence saying `la newsletter`, so twenty of the
  * twenty-one pairs anchored and one silently fell back to the separate-link layout. The shipped
@@ -29,14 +29,14 @@ namespace Pushery\LegalConsent\Support;
  * in the sentence — `die AGB` against `Allgemeine Geschäftsbedingungen` — and then there is nothing
  * to anchor. The caller falls back to the separate link, because a text that cannot be reached at
  * all is the one outcome that breaks the clickwrap requirement (§ 305 Abs. 2 BGB): consent binds
- * only if the full text was available BEFORE agreeing.
+ * only if the full text was available before agreeing.
  */
 final readonly class ConsentWordingLink
 {
     private function __construct(
         /** The wording up to the title, verbatim. */
         public string $before,
-        /** The title AS THE SENTENCE SPELLS IT — taken from the wording, never from the title. */
+        /** The title as the sentence spells it — taken from the wording, never from the title. */
         public string $match,
         /** The wording after the title, verbatim. */
         public string $after,
@@ -67,7 +67,7 @@ final readonly class ConsentWordingLink
 
         return new self(
             mb_substr($wording, 0, $at),
-            // From the WORDING, not the title: this is what keeps the sentence unaltered when the
+            // From the wording, not the title: this is what keeps the sentence unaltered when the
             // two differ in case, which is every shipped locale but German.
             mb_substr($wording, $at, $length),
             mb_substr($wording, $at + $length),

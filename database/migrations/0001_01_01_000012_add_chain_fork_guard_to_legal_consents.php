@@ -18,7 +18,7 @@ use Pushery\LegalConsent\Support\IndexName;
  * catches that and retries against the now-advanced tail, so the loser chains on cleanly instead of
  * forking (see `DefaultConsentManager::appendChained`).
  *
- * NULLs are distinct in a unique index on all three engines, so this constrains only CHAINED rows
+ * NULLs are distinct in a unique index on all three engines, so this constrains only chained rows
  * (both columns non-null): unchained pre-feature rows (`prev_record_hash IS NULL`) and rows with no
  * token are unaffected, and can still coexist freely.
  */

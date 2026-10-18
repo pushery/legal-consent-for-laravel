@@ -11,7 +11,7 @@ use Carbon\CarbonImmutable;
  * SemVer parts, and the delayed-notice timeline. This is the in-memory shape the
  * pipeline produces and the manager caches; persisting it freezes a LegalDocument row.
  *
- * The content hash is computed over the SANITIZED, canonicalized HTML — the "copy of
+ * The content hash is computed over the sanitized, canonicalized HTML — the "copy of
  * the information presented" a controller must be able to reconstruct (EDPB 05/2020
  * Rz. 108). A pure formatting change therefore never changes the hash.
  */
@@ -39,7 +39,7 @@ final readonly class Document
         public ?CarbonImmutable $enforceAt = null,
         public ?string $sourceRef = null,
         /**
-         * The hash of the SOURCE text this HTML was rendered from, and a fingerprint of the
+         * The hash of the source text this HTML was rendered from, and a fingerprint of the
          * renderer that produced it. Both are frozen onto the published row, and together they are
          * what `legal-consent:check-drift` reads to tell a changed text from a changed rendering.
          *
@@ -49,13 +49,15 @@ final readonly class Document
          */
         public ?string $sourceHash = null,
         public ?string $renderFingerprint = null,
+        /** The version as the source counts it, recorded for proof; see {@see RawDocument}. */
+        public ?string $sourceVersion = null,
     ) {}
 
     /**
      * The same document under a different version number.
      *
      * The one case that needs it is the presentation re-render: the table an untouched text
-     * suddenly renders as has to be frozen into a NEW row, because the published one is append-only
+     * suddenly renders as has to be frozen into a new row, because the published one is append-only
      * proof — and the version the source declares is the one already on file. So the re-render
      * publishes the next PATCH, carrying the identical text under a version the source never
      * mentions. Composed from the three parts rather than parsed from a string, so there is no
@@ -80,6 +82,7 @@ final readonly class Document
             sourceRef: $this->sourceRef,
             sourceHash: $this->sourceHash,
             renderFingerprint: $this->renderFingerprint,
+            sourceVersion: $this->sourceVersion,
         );
     }
 

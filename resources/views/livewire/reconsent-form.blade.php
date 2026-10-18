@@ -5,7 +5,7 @@
 --}}
 <div class="legal-consent-reconsent">
     {{-- WCAG 4.1.3 + 2.4.3: on submit the outstanding list can empty and the whole <form> is
-         replaced by the "all current" message. That message is inserted WITH its text (so it is not
+         replaced by the "all current" message. That message is inserted with its text (so it is not
          announced) and the focused submit button vanishes. This always-present polite region carries
          the confirmation instead and takes focus so it does not drop to <body>. Focus is driven by
          x-effect, not x-init: x-init runs once and does not re-run on a Livewire morph. --}}
@@ -27,7 +27,7 @@
                 {{-- `wire:key` on the one loop that shrinks and carries state. Measured: `pending`
                      goes [marketing, privacy, terms] → [privacy, terms] after a submit, so the node
                      at index 0 changes identity from `legal_marketing` to `legal_privacy`. And the
-                     server renders NO `checked` attribute — a ticked box lives only as a DOM
+                     server renders no `checked` attribute — a ticked box lives only as a DOM
                      property, so there is nothing in the markup for a keyless morph to reset it
                      with. A box that stayed ticked across that swap is a pre-ticked checkbox the
                      subject did not tick in this round, which is the Planet49 condition (C-673/17)
@@ -59,7 +59,7 @@
             {{-- `aria-busy`, not `disabled`, and the focus is why. `wire:loading.attr="disabled"` is the
                  common idiom, but it blurs the very button the subject just activated, so focus falls to
                  <body> for the whole in-flight window — the same WCAG 2.4.3 failure the status region's
-                 focus move exists to prevent, except here it would happen on EVERY request rather than
+                 focus move exists to prevent, except here it would happen on every request rather than
                  in one edge case. `aria-busy="true"` keeps the control focusable and in the tab order and
                  still reports the wait. The WireKit twins carry the identical pair, passed through
                  x-wirekit::button's attribute bag, so a publish flag cannot change how a wait is reported. --}}

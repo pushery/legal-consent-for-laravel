@@ -12,7 +12,7 @@ use RuntimeException;
 final class LegalDocumentNotFound extends RuntimeException
 {
     /**
-     * The reference the ACTIVE-VERSION lookup identifies itself by.
+     * The reference the active-version lookup identifies itself by.
      *
      * Named here rather than spelled out twice, because two places have to agree on it and only one
      * of them would notice if they drifted: the manager passes it when its own lookup comes up
@@ -33,14 +33,14 @@ final class LegalDocumentNotFound extends RuntimeException
     }
 
     /**
-     * Whether the ACTIVE-VERSION lookup is what failed — as opposed to a content source, a draft
+     * Whether the active-version lookup is what failed — as opposed to a content source, a draft
      * store or a Markdown file.
      *
      * Only the first one is a client error, and the difference is not academic. This same exception
-     * type is raised while RENDERING a document, which a consuming application's listener on
-     * `ConsentRecorded` can trigger long AFTER the ledger row is committed. Answering that with
+     * type is raised while rendering a document, which a consuming application's listener on
+     * `ConsentRecorded` can trigger long after the ledger row is committed. Answering that with
      * "unknown_document" would tell a client that a published key does not exist and invite a retry
-     * that appends a SECOND row to an append-only ledger — while the listener's real bug is
+     * that appends a second row to an append-only ledger — while the listener's real bug is
      * swallowed and surfaces nowhere.
      */
     public function isMissingPublishedVersion(): bool

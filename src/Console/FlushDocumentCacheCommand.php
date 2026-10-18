@@ -60,7 +60,7 @@ final class FlushDocumentCacheCommand extends Command
      */
     private function flushTenant(LegalSourceRenderer $manager, EnforceableDocumentCache $enforceable, mixed $key, mixed $locale): int
     {
-        // The gate caches WHICH versions are active, invalidated by publish plus a short TTL. An
+        // The gate caches which versions are active, invalidated by publish plus a short TTL. An
         // out-of-band `is_active` write — a manual UPDATE, a restored dump — fires no publish, so it
         // shows only when that TTL runs out, and this command is the documented way to show it at
         // once, so it must clear that set too. Flush every locale even when one was named: the
@@ -82,7 +82,7 @@ final class FlushDocumentCacheCommand extends Command
         // `DocumentMatrix::keys()` rather than `array_keys()`, and it takes nothing away from this
         // command: the matrix drops only an INT key whose definition is not an array — the
         // list-config case, where `0` and `1` are bare names and not documents. A document whose
-        // key merely LOOKS like a number, `'2024' => [...]`, has a definition and is kept, which is
+        // key merely looks like a number, `'2024' => [...]`, has a definition and is kept, which is
         // the support this command already had.
         $keys = is_string($key) ? [$key] : DocumentMatrix::keys();
         $locales = is_string($locale) ? [$locale] : DocumentMatrix::locales();

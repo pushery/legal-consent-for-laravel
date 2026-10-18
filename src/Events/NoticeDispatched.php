@@ -8,15 +8,15 @@ use Illuminate\Queue\SerializesModels;
 use Pushery\LegalConsent\Models\LegalDocument;
 
 /**
- * Fired once per version AFTER its sweep finished — with the number the sweep handed to the queue.
+ * Fired once per version after its sweep finished — with the number the sweep handed to the queue.
  *
  * The counterpart of {@see NoticeDispatching}, and the more useful half in practice: it is the
  * signal that says how far a legally required communication reached. A run that quietly reaches
  * nobody is the defect this package has already paid for once, and a metric on this event is what
  * makes it visible without reading a log.
  *
- * THE TWO NUMBERS MEASURE DIFFERENT MOMENTS, and the gap between them is the useful part.
- * `$notified` is what this run QUEUED. `$proofed` is how many append-only `legal_notices` rows
+ * The two numbers measure different moments, and the gap between them is the useful part.
+ * `$notified` is what this run queued. `$proofed` is how many append-only `legal_notices` rows
  * stand for this version by the time the sweep ends — evidence of actual delivery, written when a
  * notice leaves the mailer rather than when its job is enqueued. With a synchronous queue the two
  * agree; with a worker `$proofed` is whatever has been delivered so far, which is usually nothing

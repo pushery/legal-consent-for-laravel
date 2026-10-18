@@ -11,7 +11,7 @@ use RuntimeException;
 /**
  * An action was recorded against a document type it cannot legally describe.
  *
- * Every NAMED transition on the manager checks this for its own action and says so in its own
+ * Every named transition on the manager checks this for its own action and says so in its own
  * words — {@see NotWithdrawableException}, {@see NotObjectableException},
  * {@see NotTerminableException}, {@see NotGrantableException}. This is the same rule for the
  * general door, `record()`, which takes an arbitrary action from an arbitrary caller and is

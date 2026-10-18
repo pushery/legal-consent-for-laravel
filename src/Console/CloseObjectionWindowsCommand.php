@@ -34,7 +34,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * Closes the objection window of a deemed-consent (Zustimmungsfiktion) change: for every
  * active DeemedConsent version whose objection deadline has passed but which has not yet been
  * closed, append a system-generated `DeemedAccepted` ledger row for every affected subject
- * who neither objected nor terminated in time — so silence binds PROVABLY (§ 308 Nr. 5 BGB),
+ * who neither objected nor terminated in time — so silence binds provably (§ 308 Nr. 5 BGB),
  * without ever hard-blocking access. Streams subjects lazily and collects garbage per version, so
  * peak memory does not grow with the size of the audience — mirroring the notice sweep.
  *
@@ -42,14 +42,14 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * decision refuses a subject who already holds this version (a DeemedAccepted row gives them it),
  * so even a mid-run crash + re-run never double-deems a subject.
  *
- * THE WATERMARK IS STAMPED ONLY ON A VERSION THAT WAS FULLY WORKED THROUGH. A version that could
+ * The watermark is stamped only on a version that was fully worked through. A version that could
  * not deem part of its population keeps its window open, so this task stays red until somebody
  * acts on it — the notice sweep applies the same rule to both of its hold-backs. Stamping a
  * partially handled version retires it from the selection above while that population is still
  * unbound: the first run exits non-zero, and every run after it is green over a state nothing
  * restored.
  *
- * SILENCE BINDS ONLY AGAINST A PROOF ROW. § 308 Nr. 5 lit. b BGB makes the special warning a
+ * Silence binds only against a proof row. § 308 Nr. 5 lit. b BGB makes the special warning a
  * validity condition of the fiction, so this sweep deems nobody it cannot show a delivered notice
  * for — a `legal_notices` row for that subject and version whose mandatory content actually
  * rendered, and which was delivered by the objection deadline. The warning belongs at the start of
@@ -57,7 +57,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * nobody. Refusals are counted and reported: doing nothing quietly is the worst outcome here,
  * because it looks exactly like success.
  *
- * That makes the durable-medium proof a PREREQUISITE of deemed consent rather than an option. With
+ * That makes the durable-medium proof a prerequisite of deemed consent rather than an option. With
  * `durable_medium.proof` off no such row is ever written, so the sweep refuses to run at all rather
  * than deem an entire population against no evidence — and says so, instead of leaving an operator
  * to discover it from an empty ledger.
@@ -98,7 +98,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
         $now = CarbonImmutable::now();
 
-        // Snapshot the ledger BEFORE writing anything, so the run sweeps the parties as they stood
+        // Snapshot the ledger before writing anything, so the run sweeps the parties as they stood
         // when it started. A subject whose first agreement lands while the run is still paging
         // never received this version's notice, so the run leaves them out. The DeemedAccepted
         // rows this sweep appends belong to subjects it was already handed, so they change nothing
@@ -120,7 +120,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
             ->get();
 
         if ($versions->isNotEmpty() && ! config('legal-consent.durable_medium.proof', true)) {
-            // Refuse the WHOLE run rather than close windows that can deem nobody. Closing them
+            // Refuse the whole run rather than close windows that can deem nobody. Closing them
             // would burn the one watermark that lets a corrected configuration try again, and it
             // would do it while reporting success.
             $this->error('Deemed consent needs the durable-medium proof: `legal-consent.durable_medium.proof` is off, so no notice proof is ever written and § 308 Nr. 5 lit. b silence cannot lawfully bind anyone. Turn it on, re-run the notice dispatch for the affected versions, then close their windows.');
@@ -146,14 +146,14 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
                     [$proved, $delivered] = $this->provenSubjects($version, $subjects, $publisher);
 
                     foreach ($subjects as $subject) {
-                        // Pin the version's tenant around the WHOLE evaluation — the read as much as
+                        // Pin the version's tenant around the whole evaluation — the read as much as
                         // the write. A scheduled/console run has no authenticated user, so an
                         // unpinned read would query the shared '' bucket (LegalConsent carries the
                         // TenantScope) and miss the subject's own Objected row — deeming someone who
                         // objected in time to have agreed by silence. An unpinned write would
                         // likewise strand the § 308 proof outside the tenant it belongs to.
                         $tenant->forTenant($version->tenant_id, function () use ($version, $subject, $consent, $decision, $proved, $delivered, &$deemed, &$unprovedHere, &$lateHere): void {
-                            // Read LIVE (not from the snapshot): only this can see an objection or an
+                            // Read live (not from the snapshot): only this can see an objection or an
                             // express acceptance recorded since the sweep started. An objection that
                             // answered no open change is passed over there, see latestThatCounts().
                             $latest = $decision->latestThatCounts($subject, $version);
@@ -165,7 +165,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
                                 // objected, terminated, or already holds this version is the system
                                 // working — counting them as a missing notice would bury the real
                                 // deficiency in a number that is never zero. Only a subject who
-                                // WOULD have been bound, and cannot be for want of proof, counts,
+                                // would have been bound, and cannot be for want of proof, counts,
                                 // and a notice that did arrive, only too late, is counted apart.
                                 if (! $noticeProved && $decision->shouldDeem($latest, $version, noticeProved: true)) {
                                     if (isset($delivered[$key])) {
@@ -191,14 +191,14 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
                     }
                 });
 
-            // STAMP ONLY A VERSION THAT WAS FULLY WORKED THROUGH — the rule the notice sweep
-            // already applies to both of its hold-backs ("Skip WITHOUT stamping. The version stays
+            // Stamp only a version that was fully worked through — the rule the notice sweep
+            // already applies to both of its hold-backs ("Skip without stamping. The version stays
             // due"). The selection above takes only versions whose `objection_closed_at` is null,
             // so stamping a version that could not deem part of its population retires it while
             // that population stays unbound: the first run exits 1, every run after it exits 0 over
             // a state nothing restored, and § 308 Nr. 5 BGB never takes hold for those subjects.
             //
-            // Leaving it open keeps the alarm STICKY, which is the point. It does not promise that
+            // Leaving it open keeps the alarm sticky, which is the point. It does not promise that
             // a late notice can still bind anyone — a § 308 Nr. 5 lit. b warning served after the
             // objection deadline cannot found a fiction, and re-announcing is a new version's job.
             // It promises that the scheduled task keeps saying so until somebody acts.
@@ -254,7 +254,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
             ->where('document_id', $version->getKey())
             ->where('mandatory_content_ok', true)
             ->whereIn('subject_id', $subjects->map(fn (Model $subject): ?string => SubjectKey::for($subject))->all())
-            // Cast for the reason SubjectToken carries the same one: a morph ALIAS written as a
+            // Cast for the reason SubjectToken carries the same one: a morph alias written as a
             // number comes back as the int PHP made of that array key, and the closure would then
             // violate its own return type — a fatal sweep, on a configuration Laravel allows.
             ->whereIn('subject_type', $subjects->map(fn (Model $subject): string => (string) $subject->getMorphClass())->unique()->values()->all())

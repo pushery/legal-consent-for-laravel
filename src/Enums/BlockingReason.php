@@ -7,7 +7,7 @@ namespace Pushery\LegalConsent\Enums;
 /**
  * Why one locale is not ready to be released.
  *
- * THIS REPLACES SIX HARDCODED ENGLISH SENTENCES, and the reason is a consumer who could not
+ * This replaces six hardcoded english sentences, and the reason is a consumer who could not
  * translate them. A support class that returns finished prose leaves an application
  * exactly one option: use the sentence itself as a translation key. That works until the package
  * rewords anything — at which point the lookup misses and the screen silently falls back to English,
@@ -17,7 +17,7 @@ namespace Pushery\LegalConsent\Enums;
  *
  * **The backing value is the original English sentence on purpose.** It keeps
  * `LegalReleaseNotReady`'s message, and anything logging it, byte-identical to before — so the only
- * thing that changed for a consumer is the TYPE, which their editor and static analysis point at,
+ * thing that changed for a consumer is the type, which their editor and static analysis point at,
  * rather than a string that shifts under them silently. A break you are told about is cheaper than
  * one you discover in production.
  */
@@ -30,7 +30,7 @@ enum BlockingReason: string
      * because a caller asks "which locales blocked this" and an empty answer to a refused release
      * would read as a defect in the refusal.
      *
-     * The two halves of a release read different texts: readiness is judged over the DRAFTS, and
+     * The two halves of a release read different texts: readiness is judged over the drafts, and
      * the publisher reads whatever source the document is configured for. For a document on
      * `drafts` those are the same bytes. For any other they are not, and a reviewed draft would be
      * checked while a different text — one the reviewer never saw — is frozen as the evidence.

@@ -16,7 +16,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  * well-formed. `ca-ES-valencia` is a valid BCP 47 tag at 14 characters; `1.0.0-alpha.1+build.123`
  * is valid SemVer at 23. The tight one is `locale`, and it is tight enough to hit ordinary
  * traffic rather than exotica: `zh-Hant-TW`, `zh-Hans-CN` and `sr-Latn-RS` are each exactly 10, so
- * a consumer serving Traditional Chinese sits ON the limit and any variant subtag goes over it.
+ * a consumer serving Traditional Chinese sits on the limit and any variant subtag goes over it.
  *
  * And the failure is invisible where people develop. SQLite ignores a `varchar` length
  * completely: `ca-ES-valencia` goes into a `VARCHAR(10)` column and comes back at 14 characters.
@@ -30,19 +30,19 @@ use Pushery\LegalConsent\Support\TableLookup;
  * `(key, locale, version, tenant_id)`, which grows from 158 to 227 characters — 908 bytes under
  * utf8mb4, well inside InnoDB's 3072-byte key limit.
  *
- * SQLITE IS SKIPPED ON PURPOSE, AND SKIPPING IT IS WHAT MAKES THIS MIGRATION SAFE. There is
+ * SQLite is skipped on purpose, and skipping it is what makes this migration safe. There is
  * nothing to widen there — the length is not enforced — and a `change()` would be Laravel's
  * twelve-step table rebuild, which drops the triggers `ProofColumnGuard` installs and brings the
- * partial one-active index back FULL (the warning migration 000025 carries in its own words). A
+ * partial one-active index back full (the warning migration 000025 carries in its own words). A
  * rebuild that gains nothing is a rebuild not worth its risk.
  *
  * On MySQL and PostgreSQL the change is an in-place ALTER: triggers survive it, and MySQL accepts
  * it even on `legal_documents.locale`, which a STORED generated column concatenates and a unique
  * index covers — measured against a real 8.4 server before this was written.
  *
- * THE CREATE MIGRATIONS ARE LEFT AT 10 AND 20 ON PURPOSE, AND THAT IS THE OPPOSITE OF WHAT IT
- * LOOKS LIKE. Widening them too would mean a fresh install never holds the narrow column — tidier
- * to read, and it puts the SAME number in six files plus this one, with nothing holding them in
+ * The create migrations are left at 10 and 20 on purpose, and that is the opposite of what it
+ * looks like. Widening them too would mean a fresh install never holds the narrow column — tidier
+ * to read, and it puts the same number in six files plus this one, with nothing holding them in
  * lockstep. The next person to change a width would have to find all seven, and the one they miss
  * is silent: an `ALTER` to a width the table already has succeeds and changes nothing, so a stale
  * CREATE and a correct CREATE look identical afterwards.
@@ -82,7 +82,7 @@ return new class extends Migration
 
     private function resize(int $locale, int $version): void
     {
-        // THE DRIVER CHECK SITS AT THE ALTER, NOT HERE, AND THAT IS DELIBERATE. It used to guard
+        // The driver check sits at the alter, not here, and that is deliberate. It used to guard
         // this whole method, which made the two "not there" branches below unreachable on the only
         // engine the coverage run measures — three lines nothing could enter, holding the floor
         // under 100% for a reason that had nothing to do with the change. Behavior is identical:
@@ -92,7 +92,7 @@ return new class extends Migration
         // `legal_documents` is the proof-guarded table, so its columns move with the guard down,
         // exactly as migration 000015 and 000022 do it. The guard fails closed against a
         // migration-time write, and following the rule without exception is the point: the engine
-        // where it is NOT belt and braces is the one that fails silently.
+        // where it is not belt and braces is the one that fails silently.
         ProofColumnGuard::whileDisarmed(function () use ($locale, $version): void {
             foreach (self::WIDENED as $target) {
                 if (! TableLookup::exists($target['table'])) {
@@ -127,7 +127,7 @@ return new class extends Migration
 
         $column = $table->string($name, $width);
 
-        // THE COLLATION HAS TO BE RESTATED ON MySQL OR THE CHANGE UNDOES 000022. A `MODIFY`
+        // The collation has to be restated on MySQL or the change undoes 000022. A `MODIFY`
         // that names neither charset nor collation takes the TABLE default, and 000022 put
         // `legal_documents`.`locale` and `version` on `utf8mb4_bin` precisely so the three engines
         // agree on what "the same document" means. Widening them back into a case-insensitive

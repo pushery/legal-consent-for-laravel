@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Schema;
  * A referential SET NULL is an UPDATE of the ledger row, and the two engines disagree about what
  * that means when a BEFORE UPDATE trigger guards the table: PostgreSQL runs the action through
  * SPI, so the trigger fires and the parent DELETE aborts with "legal_consents is append-only";
- * MySQL applies the action WITHOUT firing the row trigger, so it silently mutates a row the
+ * MySQL applies the action without firing the row trigger, so it silently mutates a row the
  * package promises is immutable. Either way, deleting a superseded `legal_documents` row — an
  * ordinary admin/retention action — hits it.
  *

@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
  * The seam through which a host replaces a legal-consent model with its own subclass.
  *
  * `legal-consent.models` maps the package class to the host's, and the package reaches its models
- * only through model() and resolve(). So the subclass comes back on EVERY path — a query, a new
+ * only through model() and resolve(). So the subclass comes back on every path — a query, a new
  * row, a relation — and not only where the host queries it itself. One path that named
  * the package class directly would give the host two views of one table.
  *

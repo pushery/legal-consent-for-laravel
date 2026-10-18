@@ -57,7 +57,7 @@ trait GuardsPublishedDocument
             }
         });
 
-        // Any write to this table can change WHICH versions are cached, so it drops the gate's sets.
+        // Any write to this table can change which versions are cached, so it drops the gate's sets.
         // Tying invalidation to the publish event alone would leave every other path stale — an
         // activate(), a seeder, a consumer inserting a row by hand — and a stale enforceable set is a
         // gate that fires late or not at all. An inactive row counts too: the sets also hold the
@@ -79,7 +79,7 @@ trait GuardsPublishedDocument
         static::saved($flush);
         static::deleted($flush);
 
-        // The text a subject was shown exists exactly ONCE, here, in `content`. The ledger row
+        // The text a subject was shown exists exactly once, here, in `content`. The ledger row
         // beside it holds `content_hash` and the acceptance sentence — a fingerprint verifies a
         // text somebody produces, it cannot produce one. So deleting a version that consents point
         // at destroys the Art. 7(1) evidence for every one of them, silently: the rows survive,

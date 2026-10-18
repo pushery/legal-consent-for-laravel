@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\IndexName;
 
 /**
- * Append-only proof that a CHANGE NOTICE was delivered to a subject on a durable medium.
+ * Append-only proof that a change notice was delivered to a subject on a durable medium.
  * The consent ledger proves the document content and the subject's acceptance; this table
  * proves the missing third fact — that the subject was actually informed, when, in what
  * form, and that the notice carried its mandatory content. Required for a disadvantageous
@@ -30,7 +30,7 @@ return new class extends Migration
             // Polymorphic + nullable subject, same shape as legal_consents — the proof
             // survives account deletion; subject_token is the stable pseudonym.
             $table->string('subject_type')->nullable();
-            // A STRING key, not an integer one, and 64 rather than 36. The ledger has to hold
+            // A string key, not an integer one, and 64 rather than 36. The ledger has to hold
             // whatever the consuming app keys its subjects by: an auto-increment id survives as
             // its own decimal text, a UUID is 36 characters, a ULID 26. 64 matches the width this
             // table already gives `document_key` and `tenant_id`, and leaves room for a prefixed
@@ -50,7 +50,7 @@ return new class extends Migration
             $table->unsignedBigInteger('document_id')->nullable();
 
             // Denormalized snapshot of the version the notice was about. The locale belongs in
-            // that snapshot: a version is published per locale, so key + version alone do NOT
+            // that snapshot: a version is published per locale, so key + version alone do not
             // identify which language the subject was actually served — and document_id, being
             // deliberately FK-free and nullable, may be gone by the time the proof is read.
             $table->string('document_key', 64);
@@ -181,7 +181,7 @@ return new class extends Migration
     }
 
     /**
-     * The ONE place this migration's hand-built DDL reaches the connection.
+     * The one place this migration's hand-built DDL reaches the connection.
      *
      * The statements carry a table prefix that is only known at runtime, so they cannot be literal
      * strings. Funneling them through a single method keeps the static exemption for

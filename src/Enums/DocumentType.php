@@ -9,7 +9,7 @@ use ValueError;
 /**
  * The kinds of document a user interacts with, and how each one binds them.
  *
- * The first three are NOT the same operation: bundling them (the common mistake) is
+ * The first three are not the same operation: bundling them (the common mistake) is
  * a GDPR violation. Each carries a different legal basis, UI requirement, and
  * retention rule:
  *
@@ -24,14 +24,14 @@ use ValueError;
  *
  * The fourth is different in kind, and that is the point:
  *
- * - Informational  — a page that is PUBLISHED but binds nobody: Impressum (§ 5 DDG),
+ * - Informational  — a page that is published but binds nobody: Impressum (§ 5 DDG),
  *                    a cookie policy, an accessibility statement. It is a legal page
  *                    an operator must publish and keep current, and it asks the
  *                    reader for nothing at all.
  *
  * Informational exists so such a page can use the draft store — the editor, the
  * review gate, the translation seam, the sanitizing pipeline, the frozen published
- * row — WITHOUT acquiring consent semantics. Before it, registering an Impressum
+ * row — without acquiring consent semantics. Before it, registering an Impressum
  * meant a checkbox at sign-up, because every registered document produced one; the
  * only way out was to keep those pages outside the package entirely and lose all of
  * that machinery for them.
@@ -79,13 +79,13 @@ enum DocumentType: string
     }
 
     /**
-     * Does this document ask the subject for ANYTHING — an acceptance, an
+     * Does this document ask the subject for anything — an acceptance, an
      * acknowledgment, or a consent?
      *
      * This is the predicate that keeps an informational page out of the registration
-     * form, the gate, and the notice sweeps. It is deliberately NOT expressible as
+     * form, the gate, and the notice sweeps. It is deliberately not expressible as
      * `! isMandatory()`: that already means "ConsentOptin", which is precisely a
-     * document that DOES ask something (an optional checkbox). Asking whether a
+     * document that does ask something (an optional checkbox). Asking whether a
      * document is mandatory and asking whether it binds at all are two questions, and
      * conflating them is what forced an Impressum to appear at sign-up.
      */
@@ -124,7 +124,7 @@ enum DocumentType: string
     /**
      * Mandatory documents (contract + privacy) gate access; a real consent never
      * does (Art. 7(4) Kopplungsverbot), and neither does an informational page —
-     * it has nothing to gate ON, since no subject ever accepts one.
+     * it has nothing to gate on, since no subject ever accepts one.
      */
     public function isMandatory(): bool
     {
@@ -141,7 +141,7 @@ enum DocumentType: string
     }
 
     /**
-     * Can a subject OBJECT to this document?
+     * Can a subject object to this document?
      *
      * An objection is one of exactly two things, and the contract's own docblock names both: a
      * Widerspruch against a change deemed accepted by silence (§ 308 Nr. 5 lit. a BGB), or an
@@ -154,7 +154,7 @@ enum DocumentType: string
      * binds nobody, so there is nothing to object to.
      *
      * Deliberately NOT narrowed to "the active version runs an objection window". That is a
-     * property of the VERSION, it changes over time, and an Art. 21 objection to a privacy notice
+     * property of the version, it changes over time, and an Art. 21 objection to a privacy notice
      * has nothing to do with a notice window at all — a guard built on it would refuse a lawful
      * objection whenever no change happened to be pending.
      */
@@ -164,9 +164,9 @@ enum DocumentType: string
     }
 
     /**
-     * Can a subject TERMINATE against this document?
+     * Can a subject terminate against this document?
      *
-     * The free right to terminate before a change takes effect exists against a CONTRACT
+     * The free right to terminate before a change takes effect exists against a contract
      * (§ 675g Abs. 2 BGB, § 327r Abs. 3, P2B). A privacy notice is information, a consent is
      * withdrawn, and an informational page binds nobody — none of the three is a thing that can
      * end.

@@ -10,7 +10,7 @@ use Pushery\LegalConsent\Notifications\ChangeNotification;
 use Pushery\LegalConsent\Support\NoticeAttempts;
 
 /**
- * A notice that could not be delivered is still OWED — so it is recorded, and the version goes back
+ * A notice that could not be delivered is still owed — so it is recorded, and the version goes back
  * on the sweep while that subject has attempts left.
  *
  * The dispatch watermark says "this version's audience has been handed to the queue", and that is
@@ -27,7 +27,7 @@ use Pushery\LegalConsent\Support\NoticeAttempts;
  * counted all the same, and the sweep that follows picks it up.
  *
  * All of this is gated on the durable-medium proof being on: without it there is no resume marker,
- * so re-opening the version would re-notify the WHOLE population on every sweep for as long as the
+ * so re-opening the version would re-notify the whole population on every sweep for as long as the
  * mail configuration stays broken. With proof off the operator's repair is
  * `legal-consent:renotify`, which is what that command exists for.
  */
@@ -62,7 +62,7 @@ final class ReopenVersionOnNoticeFailure
         $version = $notification->document;
 
         // A version whose row is gone is left alone: `forceFill()->saveQuietly()` on a model whose
-        // row was deleted does not update nothing, it INSERTS the row back, and a refused mail
+        // row was deleted does not update nothing, it inserts the row back, and a refused mail
         // transport would re-create a legal document somebody deleted.
         if (! $version->exists) {
             return;

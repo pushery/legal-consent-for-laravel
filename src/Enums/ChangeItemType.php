@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Enums;
 
 /**
- * What one entry in a change description DOES to the subject's position.
+ * What one entry in a change description does to the subject's position.
  *
  * The six are not a taxonomy of edits — they are the distinctions that decide what else the notice
  * owes. A clarification and a restriction can be the same number of words and are not the same
@@ -45,7 +45,7 @@ enum ChangeItemType: string
      *
      * Deliberately conservative. `Removed` counts even though a removal is often a gift, because
      * the harm of over-informing is one extra sentence and the harm of under-informing is a notice
-     * missing a mandatory line. `Modified` does NOT count — a change that is neither wider nor
+     * missing a mandatory line. `Modified` does not count — a change that is neither wider nor
      * narrower cannot be classified from its type alone, and treating every edit as adverse would
      * make the signal mean nothing.
      */
@@ -55,7 +55,7 @@ enum ChangeItemType: string
     }
 
     /**
-     * Does this entry describe a THIRD PARTY that now handles the subject's data?
+     * Does this entry describe a third party that now handles the subject's data?
      *
      * Only these carry the EDPB Opinion 22/2024 Rz. 22 facets (who, where, contact, purpose), and
      * only for these is an incomplete facet set a defect rather than an empty field.

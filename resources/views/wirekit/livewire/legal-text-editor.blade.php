@@ -8,12 +8,12 @@
     It still lives behind `wire:ignore` — that is WireKit's documented integration for this
     component, not a leftover of the old binding workaround.
 --}}
-{{-- POLLS ONLY WHILE A QUEUED TRANSLATION IS RUNNING, and only where one can run at all: the
+{{-- Polls only while a queued translation is running, and only where one can run at all: the
      component answers false when `translation.queue` is off, so an application without a queue never
      polls. A dispatched job is invisible to the page that dispatched it, and without this the
      operator would click Translate, read that it is running, and have to guess when to reload.
 
-     `?? false` because this view is ALSO rendered standalone, by the tests that check its markup
+     `?? false` because this view is also rendered standalone, by the tests that check its markup
      against real components. There is no Livewire component behind those, so the flag is absent —
      and absent means "do not poll", which is the only thing a render without a component could
      honestly mean. Calling `$this->translating()` here instead threw on every one of them.
@@ -21,7 +21,7 @@
      Each tick calls `pollTranslation`, which answers without a render while the run is still going.
      The tick after it ends renders, takes the result, and stops the poll. --}}
 <div @if ($translating ?? false) wire:poll.3s="pollTranslation" @endif>
-    {{-- The label is assembled into an attribute bag, because a Blade `@if` INSIDE a component
+    {{-- The label is assembled into an attribute bag, because a Blade `@if` inside a component
          tag does not compile — it is emitted as literal text into the rendered attribute list.
          The landmark takes its name directly when the heading is gone: `aria-labelledby` pointing
          at a missing id names nothing, and an unnamed region is not an improvement on a duplicated
@@ -35,7 +35,7 @@
             <x-wirekit::heading :level="1" id="lc-editor-heading">{{ $lcTitle }}</x-wirekit::heading>
         @endif
 
-        {{-- WHETHER A HUMAN HAS SIGNED OFF ON THESE EXACT BYTES, on the screen where that happens.
+        {{-- Whether a human has signed off on these exact bytes, on the screen where that happens.
              `reviewState` reached this view and was rendered nowhere, so a reviewed draft looked
              exactly like an unreviewed one the moment the status line was replaced by the next
              action — on the one screen whose product is the sign-off.
@@ -53,9 +53,9 @@
         @endif
 
         {{-- WCAG 4.1.3: the stale-source warning stays always-present and only its inner text is
-             gated, so a staleness that flips true as the RESULT of a Livewire action is still
+             gated, so a staleness that flips true as the result of a Livewire action is still
              announced — inserting the whole alert together with its text would not be. Plain
-             x-wirekit::text, NOT x-wirekit::alert: the alert is itself a role="status" region, and
+             x-wirekit::text, not x-wirekit::alert: the alert is itself a role="status" region, and
              nesting one live region in another double-announces (same reason as the status region
              above). Assertive, matching the plain stub, for an irreversible-publish blocker. --}}
         <div role="alert" aria-live="assertive" wire:key="lc-editor-stale"
@@ -68,9 +68,9 @@
             @endif
         </div>
 
-        {{-- KEYED ON THE SERVER'S BODY NONCE, and that key is the fix rather than decoration.
+        {{-- Keyed on the server's body nonce, and that key is the fix rather than decoration.
              `wire:ignore` holds the subtree out of Livewire's morph, which is what keeps the mounted
-             editor alive — and it holds a server-side REPLACEMENT out as well. After Translate the
+             editor alive — and it holds a server-side replacement out as well. After Translate the
              visible editor still showed the old text while the hidden field already carried the new
              one, so the reader edited what they saw, the engine wrote its document back on the next
              keystroke, and Save stored the old text over the translation with nothing reporting it.
@@ -82,7 +82,7 @@
              where no component supplies it. A constant is the honest answer there — a render with
              no component behind it has no replacement to report.
 
-             ONLY A PERSON'S EDIT REACHES `body`. From 2.56.0, the floor of these views, the editor
+             Only a person's edit reaches `body`. From 2.56.0, below the floor of these views, the editor
              no longer reports its own serialization of the text as input when it loads, so a save
              without an edit stores the bytes the draft was opened with. --}}
         <div wire:ignore wire:key="lc-editor-body-{{ $bodyNonce ?? 0 }}">
@@ -94,7 +94,7 @@
                  the bytes ride along with the save/translate/markReviewed action, so typing costs no
                  round-trip.
 
-                 wire:ignore STAYS. It is not part of the retired binding workaround: it is the
+                 wire:ignore stays. It is not part of the retired binding workaround: it is the
                  integration WireKit itself documents for this component. Livewire would otherwise
                  morph the editor subtree, keeping the mounted ProseMirror node while Alpine builds a
                  fresh component — two views on one node, content rendered twice, and every toolbar
@@ -140,7 +140,7 @@
                 <x-wirekit::button surface="outline" wire:click="markReviewed" loading-target="markReviewed" :disable-on-loading="false">{{ __('legal-consent::ui.admin_mark_reviewed') }}</x-wirekit::button>
             @endif
 
-            {{-- OFFERED ONLY WHERE IT CAN DO SOMETHING: a translation that has a draft. The source
+            {{-- Offered only where it can do something: a translation that has a draft. The source
                  draft cannot be discarded — every translation measures its freshness against it and
                  falls back to it — and a locale with nothing written has nothing to take away.
 
@@ -165,20 +165,20 @@
                     </x-wirekit::alert-dialog.actions>
                 </x-wirekit::alert-dialog>
             @endif
-            {{-- WCAG 4.1.3: Save / Translate / Mark reviewed announce their result here, BESIDE THE
-             BUTTONS THEY BELONG TO. It used to sit above the field, so the result of pressing Save
+            {{-- WCAG 4.1.3: Save / Translate / Mark reviewed announce their result here, beside the
+             buttons they belong to. It used to sit above the field, so the result of pressing Save
              appeared above a field whose button is below it — on a phone, off screen. The region is
                  ALWAYS in the DOM so the update is spoken — a live region inserted together with its
-                 text is not announced. The text is a plain x-wirekit::text, NOT an x-wirekit::alert:
+                 text is not announced. The text is a plain x-wirekit::text, not an x-wirekit::alert:
                  the alert is itself a role="status" region, and nesting one live region in another
                  double-announces and conflicts on politeness. --}}
-            {{-- `sr-only` while EMPTY, and only then — the pattern the consent panel already carries,
+            {{-- `sr-only` while empty, and only then — the pattern the consent panel already carries,
                  for the same measured reason there: an empty region has no height but is still a
                  child of the stack, so it takes a gap.
 
                  On this region it is consistency, not a measured saving, and that is written here
                  so nobody re-derives it. Measured at 390 px: with the hiding and without it, the
-                 widest action ends at 390 px either way — this region sits AFTER the buttons now, so
+                 widest action ends at 390 px either way — this region sits after the buttons now, so
                  an empty one has nothing to push. The stale region above is where it does act (96 px
                  against 90 between the heading and the field). Treating the two live regions of one
                  screen differently would cost the next reader more than the attribute does. --}}
@@ -194,9 +194,9 @@
              refuses every mode for it but the silent one. A caller that passes no such value
              keeps the form, as before. --}}
         @if ($offersDeemedRelease ?? true)
-        {{-- RELEASE WITH AN OBJECTION WINDOW — the WireKit twin of the plain stub's form.
+        {{-- Release with an objection window — the WireKit twin of the plain stub's form.
              Same placement decision and the same reason: a deemed-consent release binds people by
-             their SILENCE (§ 308 Nr. 5 BGB), so it belongs where somebody has actually read the
+             their silence (§ 308 Nr. 5 BGB), so it belongs where somebody has actually read the
              text, not behind a button on an overview grid. `date-picker` and `toggle` are used
              here because WireKit owns their keyboard and screen-reader behavior; the plain stub
              uses native `type="date"` and checkboxes for the same reason in the other direction. --}}
@@ -208,9 +208,9 @@
             <x-wirekit::date-picker wire:model="objectionDeadline" name="objectionDeadline" required :label="__('legal-consent::ui.admin_deemed_deadline')" />
             <x-wirekit::date-picker wire:model="enforceAt" name="enforceAt" required :label="__('legal-consent::ui.admin_deemed_enforce')" />
 
-            {{-- THE CLASSIFICATION, beside the dates rather than apart from them: one release
+            {{-- The classification, beside the dates rather than apart from them: one release
                  carries both, and five of the seven fields were built here while the two that say
-                 what KIND of change it is were not. A release from this screen therefore froze a
+                 what kind of change it is were not. A release from this screen therefore froze a
                  contract change with no regime and no class, and said nothing about it.
 
                  The regime is a select over the publisher's own list, because it refuses one it
@@ -218,7 +218,7 @@
                  calls it a tag. --}}
             <x-wirekit::select wire:model="regime" name="regime" required :label="__('legal-consent::ui.admin_deemed_regime')">
                 <option value="">{{ __('legal-consent::ui.admin_deemed_regime_none') }}</option>
-                {{-- THE PUBLISHER'S OWN LIST, read from it rather than written out here: it
+                {{-- The publisher's own list, read from it rather than written out here: it
                      refuses a regime it does not know, so a second vocabulary on this screen would
                      be free to drift -- and the drift shows up as a refusal on a release somebody
                      has already scheduled.

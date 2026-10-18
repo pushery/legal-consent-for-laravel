@@ -12,7 +12,7 @@ use RuntimeException;
  * The column is a `varchar(64)` on both ledgers, and the three supported engines disagree about
  * a longer value: SQLite stores it whole (it enforces no column width), PostgreSQL raises
  * `22001 value too long for type character varying(64)` and MySQL in strict mode `1406 Data too
- * long`. Left to the engine, the same application is green in development and fails at its FIRST
+ * long`. Left to the engine, the same application is green in development and fails at its first
  * ledger write in production — registration, re-consent, withdrawal and notice delivery at once —
  * with a driver error naming a column rather than a cause.
  */

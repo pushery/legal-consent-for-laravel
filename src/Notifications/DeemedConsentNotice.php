@@ -9,10 +9,10 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Override;
 
 /**
- * The deemed-consent (Zustimmungsfiktion) notice: a minor/peripheral CONTRACT change where
+ * The deemed-consent (Zustimmungsfiktion) notice: a minor/peripheral contract change where
  * silence counts as acceptance (NoticeMode::DeemedConsent). The `warning` line is the
  * § 308 Nr. 5 lit. b BGB special warning — that not objecting by the deadline is treated as
- * consent — which is a VALIDITY CONDITION of the fiction, not courtesy copy. It also states
+ * consent — which is a validity condition of the fiction, not courtesy copy. It also states
  * the change, the objection deadline, and the free right to terminate before the effective
  * date. Deemed consent is lawful only for a contract (BGH XI ZR 26/20); a privacy notice and
  * a real consent never bind on silence, so this notice is contract-only.

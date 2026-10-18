@@ -8,10 +8,10 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Pushery\LegalConsent\Enums\DocumentType;
 
 /**
- * The INFO-ONLY change notification (NoticeMode::InfoPush): the subject is actively informed
- * on a durable medium that a legal text changed, but NO action is required — it takes effect
+ * The info-only change notification (NoticeMode::InfoPush): the subject is actively informed
+ * on a durable medium that a legal text changed, but no action is required — it takes effect
  * regardless. This is the § 675g / Finom case ("keine Aktion erforderlich") and the material
- * privacy-notice update (Art. 13/14, WP260 rev.01). It NEVER threatens restriction and never
+ * privacy-notice update (Art. 13/14, WP260 rev.01). It never threatens restriction and never
  * frames a privacy notice as consent (EDPB 05/2020 Rz. 122): a notice is acknowledged, and
  * where a right exists it states the objection (Art. 21) or free-termination right instead.
  */
@@ -31,7 +31,7 @@ class LegalChangeInformational extends ChangeNotification
             ->subject($this->line('subject', ['title' => $this->document->title]))
             ->line($this->line('intro', ['title' => $this->document->title]));
 
-        // WHAT changed, before the call to action — a reader decides whether to click on the
+        // What changed, before the call to action — a reader decides whether to click on the
         // strength of the delta, not the other way round.
         $this->addChangeItems($mail, $this->document);
 
@@ -89,12 +89,12 @@ class LegalChangeInformational extends ChangeNotification
     }
 
     /**
-     * What the proof row certifies for an info-only notice: that it states WHEN the change takes
+     * What the proof row certifies for an info-only notice: that it states when the change takes
      * effect, that a contract carries its free-termination line wherever `rightApplies()` owes one,
      * and that each of these lines reaches the subject as a readable statement rather than an
      * untranslated token.
      *
-     * It does not certify that the notice says WHAT changed. The notice renders the version's
+     * It does not certify that the notice says what changed. The notice renders the version's
      * change description where one was written (`addChangeItems()` in `toMail()`), and whether one
      * has to exist is decided before the version is: with `change_items.required` on, the release
      * of a document from the draft store refuses a version that owes a notice and lacks a complete

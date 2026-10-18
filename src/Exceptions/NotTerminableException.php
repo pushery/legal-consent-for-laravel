@@ -10,7 +10,7 @@ use RuntimeException;
 /**
  * Thrown when a termination is attempted on a document that is not a contract.
  *
- * The free right to terminate before a change takes effect exists against a CONTRACT
+ * The free right to terminate before a change takes effect exists against a contract
  * (§ 675g Abs. 2 BGB for a payment contract, § 327r Abs. 3 for digital products, P2B for a
  * platform's terms). There is nothing to terminate in a privacy notice, which is information; in
  * a consent, which is withdrawn; or in an informational page, which binds nobody.

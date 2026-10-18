@@ -8,7 +8,7 @@ use Pushery\LegalConsent\Contracts\LegalTextTranslator;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
 
 /**
- * The default binding: no translator. Fails LOUD rather than pretending.
+ * The default binding: no translator. Fails loud rather than pretending.
  *
  * A null-object that quietly returned the source text would be the worst possible default here —
  * it would file the untranslated original as a translation, a human would review it against a

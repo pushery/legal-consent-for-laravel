@@ -9,9 +9,9 @@ use Pushery\LegalConsent\Content\Drivers\DraftDocumentSource;
 use Pushery\LegalConsent\Content\LegalDocumentSource;
 
 /**
- * Does this document take its text from somewhere OTHER than the draft store?
+ * Does this document take its text from somewhere other than the draft store?
  *
- * ONE question, asked by two readers who used to answer it differently — and only one of them
+ * One question, asked by two readers who used to answer it differently — and only one of them
  * knew it was a question at all. {@see LegalDocumentReleaser} refuses such a document outright;
  * the readiness the admin overview builds from {@see LegalDraftSet::blockingLocales()} asked
  * about drafts, review and staleness and never about the source. So the overview armed a button
@@ -42,7 +42,7 @@ final readonly class DocumentSourceKind
 
         // Written as an instanceof on the interface rather than `$source !== null`, and the two say
         // the same thing here only by accident of the local being initialized to null. The positive
-        // form states the condition this actually needs — a source that RESOLVED and is not the
+        // form states the condition this actually needs — a source that resolved and is not the
         // draft store — so it keeps reading correctly if this ever stops being a nullable local.
         return $source instanceof LegalDocumentSource && ! $source instanceof DraftDocumentSource;
     }

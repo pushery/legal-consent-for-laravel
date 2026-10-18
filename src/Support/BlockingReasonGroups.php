@@ -25,7 +25,7 @@ use Pushery\LegalConsent\Enums\BlockingReason;
  * grid's row data instead, it would be one more key every row has to carry; held in each view, it
  * would be two copies of one rule, and two copies drift.
  *
- * ## Keyed by the LABEL, and the locales keep their order
+ * ## Keyed by the label, and the locales keep their order
  *
  * The key is the translated sentence rather than the enum, because the view renders it and a view
  * that translated a key would be the second place deciding what a reason is called. Insertion order

@@ -10,12 +10,12 @@ use Pushery\LegalConsent\Support\PublishedDocumentReader;
 use Pushery\LegalConsent\Support\TenantContext;
 
 /**
- * Renders the configured SOURCE — NOT the published row. This is a preview/drift tool.
+ * Renders the configured source — not the published row. This is a preview/drift tool.
  *
  * Warning: do not build a public legal page on this. It resolves the live source (a Markdown file, a
  * draft, a CMS row), renders and hashes it, and caches the result. That text can differ from the
  * published `legal_documents` row at any moment — between an author's edit and the next publish,
- * this returns the NEW text while the gate enforces, and the ledger snapshots, the OLD one. A page
+ * this returns the new text while the gate enforces, and the ledger snapshots, the old one. A page
  * built here would show a subject text A while proving they accepted hash(text B) — silently, with
  * nothing failing. That is the exact defect the ledger exists to prevent.
  *
@@ -32,7 +32,7 @@ final readonly class LegalSourceRenderer
     /**
      * The default cache-key namespace.
      *
-     * IT CARRIES NO PAYLOAD VERSION, AND THAT IS A DECISION MADE AFTER MEASURING — a `:v2` was
+     * It carries no payload version, and that is a decision made after measuring — a `:v2` was
      * written here and taken back out. Two reasons, either sufficient:
      *
      *  1. **It would not have taken effect.** The runtime value comes from
@@ -60,7 +60,7 @@ final readonly class LegalSourceRenderer
     ) {}
 
     /**
-     * The rendered SOURCE for (type, locale) — the pre-publish preview, never the proof.
+     * The rendered source for (type, locale) — the pre-publish preview, never the proof.
      */
     public function renderSource(string $type, string $locale): Document
     {
@@ -88,7 +88,7 @@ final readonly class LegalSourceRenderer
     /**
      * The cached shape: primitives only, never the {@see Document} itself.
      *
-     * THIS USED TO CACHE THE OBJECT, and the sibling cache had already learned why that is wrong.
+     * This used to cache the object, and the sibling cache had already learned why that is wrong.
      * An application running a serializing store under `cache.serializable_classes` reads a cached
      * object back as `__PHP_Incomplete_Class`, so the `instanceof` guard on the read path failed on
      * every single hit — and the method then re-rendered and re-wrote, forever, with nothing going
@@ -122,6 +122,7 @@ final readonly class LegalSourceRenderer
             'sourceRef' => $document->sourceRef,
             'sourceHash' => $document->sourceHash,
             'renderFingerprint' => $document->renderFingerprint,
+            'sourceVersion' => $document->sourceVersion,
         ];
     }
 
@@ -155,7 +156,7 @@ final readonly class LegalSourceRenderer
             return null;
         }
 
-        foreach (['uiWording', 'announceAt', 'enforceAt', 'sourceRef', 'sourceHash', 'renderFingerprint'] as $nullable) {
+        foreach (['uiWording', 'announceAt', 'enforceAt', 'sourceRef', 'sourceHash', 'renderFingerprint', 'sourceVersion'] as $nullable) {
             if (! array_key_exists($nullable, $row) || (! is_string($row[$nullable]) && $row[$nullable] !== null)) {
                 return null;
             }
@@ -178,6 +179,7 @@ final readonly class LegalSourceRenderer
             sourceRef: $row['sourceRef'],
             sourceHash: $row['sourceHash'],
             renderFingerprint: $row['renderFingerprint'],
+            sourceVersion: $row['sourceVersion'],
         );
     }
 

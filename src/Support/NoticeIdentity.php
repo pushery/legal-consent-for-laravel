@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Support;
 
 /**
- * Who is DECLARING a legal change, for the notice that carries it.
+ * Who is declaring a legal change, for the notice that carries it.
  *
  * § 126b BGB wants "eine lesbare Erklärung, in der die Person des Erklärenden genannt ist". The
  * package claims the durable medium in its migration and in its config, and named nobody: the

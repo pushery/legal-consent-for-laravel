@@ -8,9 +8,9 @@ use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\ProofColumnGuard;
 
 /**
- * A published version records the SOURCE it was rendered from, and the renderer that rendered it.
+ * A published version records the source it was rendered from, and the renderer that rendered it.
  *
- * `content_hash` alone cannot say WHY the HTML of a document changed, and the difference decides
+ * `content_hash` alone cannot say why the HTML of a document changed, and the difference decides
  * what the operator has to do. Registering CommonMark's TableExtension turned a paragraph of pipe
  * characters into a real table in every text that held one; `legal-consent:check-drift` could only
  * report "source differs from published v1.0.0 — publish a new version and set its materiality",
@@ -19,12 +19,12 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  *
  * `source_hash` is taken over the source text before rendering, `render_fingerprint` over the
  * markdown options, the extension list, the sanitizer allowlists and the installed CommonMark
- * version. Together they let the checker separate a changed TEXT from a changed PRESENTATION, and
+ * version. Together they let the checker separate a changed TEXT from a changed presentation, and
  * they let `legal-consent:rerender` prove a text is untouched before it re-freezes it.
  *
- * BOTH ARE NULLABLE, AND NO BACKFILL IS POSSIBLE — that is the honest shape rather than a
+ * Both are nullable, and no backfill is possible — that is the honest shape rather than a
  * shortcut. A row published before this migration was rendered from a source whose bytes nobody
- * kept; the only value that could be written now is a hash of TODAY's source, which would claim
+ * kept; the only value that could be written now is a hash of today's source, which would claim
  * the text was unchanged at publish time without anything having checked. So a legacy row says
  * "unknown", the checker reports exactly that, and the first ordinary publish fills it in.
  *

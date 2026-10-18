@@ -1,7 +1,7 @@
 {{--
     WireKit-native variant of the change banners. Publish with `--tag=legal-consent-wirekit`.
 
-    Built from real `x-wirekit::*` components — needs `pushery/wirekit` >= 2.56.0, the floor the
+    Built from real `x-wirekit::*` components — needs `pushery/wirekit` >= 2.67.0, the floor the
     provider itself applies (`LegalConsentServiceProvider::WIREKIT_MINIMUM`), and `@wirekitScripts`
     in the layout for the live countdown. The `countdown` component itself landed in 2.13.0, and
     that is the number this comment used to name. WireKit's own localized screen-reader strings
@@ -11,7 +11,8 @@
     close on confirm landed in 2.49.0, and the quiet new-tab link and the editor that reports only
     a person's edit landed in 2.56.0. The
     package's own test suite renders these views against the installed WireKit and fails on any
-    component the release lacks, so this never reaches for one the app cannot resolve.
+    component the release lacks, so this never reaches for one the app cannot resolve. The floor
+    is the oldest release that suite installs.
 
     Three legally distinct banners, never merged into one: an ActiveReconsent countdown (act, or
     access stops), an InfoPush heads-up (nothing to do), and a DeemedConsent objection window
@@ -24,11 +25,11 @@
     $deemed:        list{key, title, version, objection_deadline, objection_date, enforce_from, days_left}
     $consentUrl:    where the subject acts.
 
-    The countdown carries its OWN `role="timer"` (an implicit aria-live=off), so its ticking value
+    The countdown carries its own `role="timer"` (an implicit aria-live=off), so its ticking value
     is never announced as it ticks — it is safe inside the region landmark above.
 --}}
 @php
-    // A legal deadline is an ABSOLUTE instant. The countdown is driven by that instant, never a
+    // A legal deadline is an absolute instant. The countdown is driven by that instant, never a
     // duration: a duration drifts the moment the tab sleeps or the page is cached, and a drifting
     // § 308 Nr. 5 deadline misstates the subject's rights.
     $lcWarn = 7 * 24 * 60 * 60; // the final week reads as urgent
@@ -51,7 +52,7 @@
 
                     @if (! empty($item['enforce_from']))
                         {{-- `show-seconds="false"`, and the default is `true`. The threshold two
-                             lines up is a WEEK and the value on screen is "N days left", so a
+                             lines up is a week and the value on screen is "N days left", so a
                              seconds place would render a digit nobody reads while re-rendering the
                              element once a second — a DOM write and a CSS transition per tick, per
                              open change, on every authenticated page. It is the only continuous
@@ -60,7 +61,7 @@
                              It slows the timer as well. The kit derives its interval from the
                              smallest unit it shows: without seconds that is minutes, so the
                              countdown ticks every 30 seconds rather than every second. From 2.56.0,
-                             the version these views are served from, it also stops while the tab
+                             below the floor these views are served from, it also stops while the tab
                              is hidden. --}}
                         <x-wirekit::countdown
                             :until="$item['enforce_from']"

@@ -11,6 +11,7 @@ use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Exceptions\InvalidDocumentDate;
 use Pushery\LegalConsent\Exceptions\InvalidDocumentVersion;
+use Pushery\LegalConsent\Exceptions\InvalidSourceVersion;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Exceptions\MissingAcceptanceWording;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -22,12 +23,12 @@ use Throwable;
  * classification behind it — which must never take effect unnoticed. The check is reporting-only;
  * it never mutates anything.
  *
- * AND IT SAYS WHICH KIND OF CHANGE IT IS, BECAUSE THE TWO NEED OPPOSITE ANSWERS. A differing
+ * And it says which kind of change it is, because the two need opposite answers. A differing
  * content hash used to be reported as "source differs — publish a new version and set its
  * materiality", whoever or whatever had moved. Registering CommonMark's TableExtension then made
  * every document holding a table differ, and the report sent operators into a materiality decision
  * about texts nobody had edited. Since migration 000030 a row records the hash of its source and a
- * fingerprint of the renderer, so the three cases separate: the TEXT moved, only its PRESENTATION
+ * fingerprint of the renderer, so the three cases separate: the TEXT moved, only its presentation
  * moved, or both — and a row that predates those columns is reported as the unknown it is.
  */
 final readonly class LegalDriftChecker
@@ -65,7 +66,7 @@ final readonly class LegalDriftChecker
             $rendered = $this->pipeline->process($source->resolve($key, $locale));
         } catch (LegalDocumentNotFound $e) {
             return $this->withoutSource($active, $source, $key, $locale, $e);
-        } catch (InvalidDocumentDate|InvalidDocumentVersion|MissingAcceptanceWording $e) {
+        } catch (InvalidDocumentDate|InvalidDocumentVersion|InvalidSourceVersion|MissingAcceptanceWording $e) {
             // A source that cannot even be rendered into a valid document is a specific,
             // actionable drift — surface it clearly rather than as a vague "could not be
             // rendered", which reads like an infrastructure hiccup and hides the real cause.
@@ -104,7 +105,7 @@ final readonly class LegalDriftChecker
     }
 
     /**
-     * WHY the published HTML and the live one differ, in the operator's terms.
+     * Why the published HTML and the live one differ, in the operator's terms.
      *
      * The order is the order of consequence. A changed text is a legal decision and outranks
      * everything else, so it is stated first and never softened by a rendering change riding

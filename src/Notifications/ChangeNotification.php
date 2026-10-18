@@ -25,10 +25,10 @@ use Pushery\LegalConsent\Support\TenantContext;
 /**
  * What the three notice-mode notifications share, and the seams a consuming developer activates.
  *
- * NOT final, and that is the whole point: a consumer subclasses one of the three to change how a
+ * Not final, and that is the whole point: a consumer subclasses one of the three to change how a
  * legally-required notice reads without reimplementing the dispatch, the proof rendering or the
  * mode routing. Everything `protected` here is therefore public surface for them — which is why
- * there are exactly THREE members a subclass must supply, and why the shared behavior is one
+ * there are exactly three members a subclass must supply, and why the shared behavior is one
  * method (`envelope()`) rather than a dozen hooks.
  *
  * The three:
@@ -56,7 +56,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
 
     /**
      * Every column of `legal_documents`, so {@see getQueryForModelRestoration()} can name what a
-     * queued notice needs by SUBTRACTION instead of by an allow-list that would silently drop a
+     * queued notice needs by subtraction instead of by an allow-list that would silently drop a
      * column added later — the failure mode being a legal text rendered from a null. The list is
      * held against the live schema, so a column added to the table and not to this list fails
      * loudly rather than arriving as a missing attribute.
@@ -71,22 +71,22 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         'notified_at', 'created_at', 'updated_at', 'notice_mode', 'change_class', 'regime',
         'notice_period_days', 'offers_termination', 'keeps_unmodified_offered',
         'objection_deadline', 'objection_closed_at', 'source_hash', 'render_fingerprint',
-        'objection_min_days',
+        'objection_min_days', 'source_version',
     ];
 
     public function __construct(public readonly LegalDocument $document) {}
 
     /**
-     * Columns a queued notice job does NOT need restored with its document.
+     * Columns a queued notice job does not need restored with its document.
      *
      * `SerializesModels` puts a model identifier in the payload — 1.9 KB rather than 424 KB, which
      * is right — and the worker then restores the row with `select *`. That pulls the whole legal
-     * text back out of the database for every RECIPIENT, and `content` is allowed up to 512 KB
+     * text back out of the database for every recipient, and `content` is allowed up to 512 KB
      * ({@see RenderPipeline}) while a notice renders the title, the
      * version, the key, the dates and the notice mode. At a hundred thousand recipients that is
      * tens of gigabytes moved for text no mail ever shows.
      *
-     * Narrowed HERE rather than on the model, deliberately: a `newQueryForRestoration()` override
+     * Narrowed here rather than on the model, deliberately: a `newQueryForRestoration()` override
      * would apply to every restore of a LegalDocument anywhere, and only this path is known to be
      * safe. A subclass whose `toMail()` reaches for the body widens the list back.
      *
@@ -145,7 +145,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
     /**
      * The last thing every `toMail()` does: put the mode-specific lines into the shared envelope.
      *
-     * Order of operations is deliberate. The subject is decorated FIRST, because it is the first
+     * Order of operations is deliberate. The subject is decorated first, because it is the first
      * line of the proof body; the declarant is appended as an outro line, so it is inside the
      * hashed body rather than in the template — a § 126b declaration that lived only in the view
      * would be absent from the very row that exists to prove it. Everything after that is
@@ -181,7 +181,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
             // failure a legal notice should have: loud and before anything is sent, rather than a
             // silent fall back to the global template.
             //
-            // ->markdown(), NEVER ->view(). A plain view renders only its own template, which does
+            // ->markdown(), never ->view(). A plain view renders only its own template, which does
             // not have to print introLines and outroLines, while the proof body is still built
             // from them: the proof would certify lines the subject may never have seen, and
             // mandatory_content_ok would keep saying true.
@@ -189,7 +189,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
             $mail->markdown($view, [
                 'identity' => $identity,
                 'document' => $this->document,
-                // So the shell can leave the do-not-reply note out when a reply address IS
+                // So the shell can leave the do-not-reply note out when a reply address is
                 // configured — telling a subject not to reply to an address that accepts replies
                 // is the kind of small wrongness that makes a legal notice look automated.
                 'replyTo' => $replyTo,
@@ -255,7 +255,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
     }
 
     /**
-     * The last gate before a notice actually leaves, and the only one that runs in the WORKER.
+     * The last gate before a notice actually leaves, and the only one that runs in the worker.
      *
      * The audience is resolved when the sweep runs; the mail goes out when a queue worker picks
      * the job up, which can be minutes later under load. A subject who agreed in between has
@@ -280,12 +280,12 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         }
 
         // "Has this subject already accepted this version's major", NOT "is it outstanding now".
-        // The two differ exactly where it matters: a re-consent notice is usually the ADVANCE
+        // The two differ exactly where it matters: a re-consent notice is usually the advance
         // announcement of a change whose enforce_from is still in the future, so the document is
         // not yet enforceable and `outstanding()` would report nothing — suppressing every
         // scheduled notice the package exists to send.
         //
-        // Restricted to the ONE key this answer turns on. The question runs in the worker, once
+        // Restricted to the one key this answer turns on. The question runs in the worker, once
         // per recipient, and the ledger it reads grows for the life of the account — so the
         // unrestricted fold made a single-key yes/no cost more the longer someone had been a
         // customer, for rows it then threw away.

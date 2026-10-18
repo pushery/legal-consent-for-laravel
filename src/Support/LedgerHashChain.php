@@ -13,29 +13,29 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  *
  * Each new row stores `prev_record_hash` = the hash of the subject's immediately-preceding
  * row (or the genesis constant for the subject's first chained row). A row's hash folds in
- * both its immutable content AND its own `prev_record_hash`, so a later edit, insertion,
- * reorder, or a MID-chain deletion that leaves the rest of the chain UNTOUCHED breaks the link
+ * both its immutable content and its own `prev_record_hash`, so a later edit, insertion,
+ * reorder, or a MID-chain deletion that leaves the rest of the chain untouched breaks the link
  * and is surfaced by `legal-consent:verify-ledger`.
  *
- * What this does NOT detect — state it plainly, because the guarantee is narrower than a hash
- * chain intuitively promises. Two things set the strength: whether a secret KEYS the hash (config
- * `tamper_evidence_key`), and the head is always UNSIGNED (no external anchor).
+ * What this does not detect — state it plainly, because the guarantee is narrower than a hash
+ * chain intuitively promises. Two things set the strength: whether a secret keys the hash (config
+ * `tamper_evidence_key`), and the head is always unsigned (no external anchor).
  *
- * UNKEYED (no `tamper_evidence_key`): the algorithm and the hashed field-set are public (this is a
+ * Unkeyed (no `tamper_evidence_key`): the algorithm and the hashed field-set are public (this is a
  * public package) and there is no secret, so an actor with write access to the table — the very
  * threat tamper-evidence is sold against — can edit, insert, reorder, or delete a mid-chain row and
- * then RECOMPUTE `prev_record_hash` for that row and every successor, producing a fully
+ * then recompute `prev_record_hash` for that row and every successor, producing a fully
  * self-consistent chain the verifier reports as intact. Detection then holds only against tampering
- * that does NOT re-chain (a naive edit, an out-of-band `UPDATE`, a partial delete).
+ * that does not re-chain (a naive edit, an out-of-band `UPDATE`, a partial delete).
  *
- * KEYED (`tamper_evidence_key` set, held OUTSIDE the database): row hashes are HMAC-SHA-256, so a
- * table-write attacker WITHOUT the secret can no longer produce matching links — the re-chain path
- * above is closed for them. An actor who ALSO holds the secret can still re-chain, so keep it off the
+ * Keyed (`tamper_evidence_key` set, held outside the database): row hashes are HMAC-SHA-256, so a
+ * table-write attacker without the secret can no longer produce matching links — the re-chain path
+ * above is closed for them. An actor who also holds the secret can still re-chain, so keep it off the
  * database host. The secret must be fixed before the first chained row (append-only rows cannot be
  * re-keyed).
  *
- * WHAT KEYING DOES NOT CLOSE — say it plainly, because "keyed" invites more confidence than it earns.
- * Two structural gaps used to survive any key. ONE OF THEM IS NOW CLOSED, and the distinction matters
+ * What keying does not close — say it plainly, because "keyed" invites more confidence than it earns.
+ * Two structural gaps used to survive any key. One of them is now closed, and the distinction matters
  * because the remaining one calls for a different defense:
  *  1. CLOSED (keyed installations only). The chain ROOT was a public constant: `genesis()` depends on
  *     neither the key nor the subject, and the verifier resets to it at every new `subject_token`. An
@@ -57,7 +57,7 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  * real defense, and `verify-ledger`'s "intact" means "no evidence of re-chaining, and above the
  * boundary every chain was opened by a key holder", never "authentic".
  *
- * Independent of keying, the UNSIGNED head leaves two limits. A tail TRUNCATION is still invisible:
+ * Independent of keying, the unsigned head leaves two limits. A tail truncation is still invisible:
  * deleting a subject's newest row leaves nothing to mismatch, and its orphaned mac says nothing —
  * a lawful retention sweep deletes rows too, so the two look alike. And a row written straight to
  * the table with a NULL `prev_record_hash` opts out of the walk, so the verifier separately flags
@@ -65,14 +65,14 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  * self-derived watermark. To also anchor the head, periodically notarize the per-subject head hash
  * to an append-only external store; the append-only DB triggers are the primary defense meanwhile.
  *
- * Chaining is per SUBJECT (keyed by the stable `subject_token`, which survives
+ * Chaining is per subject (keyed by the stable `subject_token`, which survives
  * anonymization), not global — so it detects unauthorized tampering of a subject's proof
  * without serializing every write on a single global tail. A retention prune re-links the
  * chains it shortens, in the transaction that removes the rows, and leaves a chain that fails
  * to verify untouched, so a break reported after a prune was not made by the prune.
  *
- * THE CHAIN IS BOUND TO THE ENGINE AND THE CONNECTION TIME ZONE IT WAS STARTED ON. Both the
- * writer and the verifier hash the SAME database-read representation, so there is no
+ * The chain is bound to the engine and the connection time zone it was started on. Both the
+ * writer and the verifier hash the same database-read representation, so there is no
  * write-vs-read drift while those two facts hold — and they are facts about the deployment, not
  * about the code. `accepted_at` enters the hash as the string the driver hands back, and that
  * string differs between engines (PostgreSQL renders `timestamptz` with an offset, MySQL and
@@ -89,7 +89,7 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  * change the canonical form of every row already written, on every engine, and the only way back
  * to a verifiable ledger is to re-chain the whole table: rewriting every proof row is exactly the
  * operation this chain exists to make conspicuous, and afterwards nothing can show that the
- * ledger verified BEFORE the change. An engine migration is therefore a deliberate re-chain
+ * ledger verified before the change. An engine migration is therefore a deliberate re-chain
  * event, decided by an operator who knows why, not a silent one imposed by a package upgrade.
  */
 final class LedgerHashChain
@@ -119,7 +119,13 @@ final class LedgerHashChain
     public const string TENANT_FIELD = 'tenant_id';
 
     /**
-     * The columns deliberately OUTSIDE the hash, each for a reason that is not "we forgot":
+     * Hashed, and encoded conditionally after the tenant — see {@see canonical()}. The version the
+     * source of the document counts itself, copied from the document when the row is written.
+     */
+    public const string SOURCE_VERSION_FIELD = 'document_source_version';
+
+    /**
+     * The columns deliberately outside the hash, each for a reason that is not "we forgot":
      *
      *  - `id` is assigned by the database and is preserved verbatim by every lawful rewrite;
      *  - `created_at` is when the row was stored, not what it asserts (`accepted_at` is that);
@@ -146,10 +152,10 @@ final class LedgerHashChain
     }
 
     /**
-     * The proof a NEW chain's first row carries beside the genesis link, or null when the chain is
+     * The proof a new chain's first row carries beside the genesis link, or null when the chain is
      * unkeyed and there is therefore no secret to prove anything with.
      *
-     * THIS SITS BESIDE THE ROOT RATHER THAN REPLACING IT, and that is not a stylistic call.
+     * This sits beside the root rather than replacing it, and that is not a stylistic call.
      * Keying `genesis()` itself invalidates every first row already stored — correcting those means
      * UPDATE on an append-only table whose MySQL trigger refuses one unconditionally — and it also
      * strips `PruneExpiredConsentRecordsCommand` of the single constant its SQL compares against.
@@ -173,14 +179,14 @@ final class LedgerHashChain
     /**
      * Record where key-bound roots begin, the first time anyone opens a chain with a key.
      *
-     * THIS DOES NOT BELONG IN THE MIGRATION, and putting it there was the first attempt.
-     * A marker stamped at migrate-time is stamped with whatever key was configured THEN — and the
+     * This does not belong in the migration, and putting it there was the first attempt.
+     * A marker stamped at migrate-time is stamped with whatever key was configured then — and the
      * documented order of operations lets an operator set the secret afterwards. The marker was
      * then born holding an unkeyed hash it could never reproduce again, so a correctly-followed
      * setup produced a permanent, unfixable break. Stamping on first keyed use cannot drift from
      * the key in use, because it is written by the same call that uses it.
      *
-     * The boundary is `max(id)` as it stands BEFORE the opening row is inserted, so that row falls
+     * The boundary is `max(id)` as it stands before the opening row is inserted, so that row falls
      * above its own boundary and must carry a proof — including the very first one.
      *
      * An attacker cannot pre-stamp a high boundary to exempt a forgery: the marker carries a MAC
@@ -261,7 +267,7 @@ final class LedgerHashChain
      * and honest about proving nothing, which is the same posture the chain itself takes without a
      * secret.
      *
-     * `$domain` SEPARATES TWO MARKERS THAT LIVE IN ONE TABLE. `legal_ledger_markers` holds the
+     * `$domain` separates two markers that live in one table. `legal_ledger_markers` holds the
      * chain-root boundary and {@see LedgerRecordMacs::BOUNDARY_MARKER}, and both are "an id with a
      * MAC over it". Without a domain in the payload the two proofs are interchangeable: an
      * attacker copies the row whose boundary is higher onto the name whose boundary constrains
@@ -280,7 +286,7 @@ final class LedgerHashChain
     }
 
     /**
-     * The `prev_record_hash` a NEW row should carry: the hash of the previous row for the
+     * The `prev_record_hash` a new row should carry: the hash of the previous row for the
      * same subject, or genesis when the subject has no prior chained row.
      *
      * @throws UnhashableProofFieldException when the previous row is not a raw database row
@@ -315,7 +321,7 @@ final class LedgerHashChain
     }
 
     /**
-     * The HMAC secret keying the chain, or null for the legacy unkeyed hash. Held OUTSIDE the
+     * The HMAC secret keying the chain, or null for the legacy unkeyed hash. Held outside the
      * database (config `tamper_evidence_key`, populated from env/KMS), so an actor with only
      * table-write access cannot re-chain. The writer and verifier both read it here, so they stay
      * in step; an existing chain cannot be re-keyed (append-only), so the secret must be fixed
@@ -335,15 +341,15 @@ final class LedgerHashChain
      * and length-prefixes every value, so a field containing the old `\x1f` separator can no longer
      * shift boundaries.
      *
-     * WHY tenant_id IS HASHED AT ALL, AND WHY IT IS HASHED LIKE THIS. Under multi-tenancy the gate
-     * filters on that column ({@see ConsentGate::standingFor()}), so it decides WHETHER a subject
+     * Why tenant_id is hashed at all, and why it is hashed like this. Under multi-tenancy the gate
+     * filters on that column ({@see ConsentGate::standingFor()}), so it decides whether a subject
      * holds a document — and while it sat outside the hash, an actor with DELETE+INSERT rights (both
      * of which this table allows on purpose, so retention and Art. 17 erasure can work) could move
      * an acceptance from one tenant into another, leave `prev_record_hash` untouched, and have
      * `verify-ledger` report the chain intact. No secret needed: a keyed hash does not close a gap
      * over a field that is not in the payload.
      *
-     * It is appended LAST and only when it names a tenant, so a row in the shared bucket (`''`,
+     * It is appended last and only when it names a tenant, so a row in the shared bucket (`''`,
      * which is every row of every single-tenant installation — the column is NOT NULL and defaults
      * to the empty string) produces a canonical string byte-for-byte identical to the one it
      * produced before this field existed. Those chains keep verifying with no operator action. A
@@ -352,21 +358,29 @@ final class LedgerHashChain
      * before it is fixed and every part is length-prefixed, so a trailing part can only be read as
      * the tenant, and every move — into, out of, or between tenants — changes the payload.
      *
-     * WHAT THE INJECTIVITY CLAIM COVERS — it is narrower than "two distinct rows differ", and saying
-     * so is the point. The form is injective over the STRING VALUES of the fields: two rows whose
+     * The version the source of the document counts itself enters the same way and for the same
+     * reason: last, and only when the row carries one, so every row written before the column existed,
+     * and every row of a source that counts nothing, produces the canonical string it always did and
+     * no chain needs re-chaining. It carries its own tag, `V<byte-length>:<value>`, because both
+     * trailing parts are optional: with the `S` of the tenant part on both, a row holding only a
+     * tenant and a row holding only a source version could end on the same bytes. With the tag, what
+     * follows the fixed fields reads one way only.
+     *
+     * What the injectivity claim covers — it is narrower than "two distinct rows differ", and saying
+     * so is the point. The form is injective over the string values of the fields: two rows whose
      * fields string-cast differently always produce different canonical strings, so a fabricated row
      * cannot be crafted to hash-collide onto a real one.
      *
-     * It deliberately does NOT distinguish values that string-cast identically, because that is what
+     * It deliberately does not distinguish values that string-cast identically, because that is what
      * makes the hash stable across PDO drivers for the same stored value: a column returned as `2`
      * by one driver and `'2'` by another has to agree, or every consumer's chain would depend on
-     * their driver. It does NOT make the hash stable across ENGINES — a column whose stored value is
-     * RENDERED differently (`accepted_at` on PostgreSQL versus MySQL, and either one under a
+     * their driver. It does not make the hash stable across engines — a column whose stored value is
+     * rendered differently (`accepted_at` on PostgreSQL versus MySQL, and either one under a
      * different connection time zone) is a different string here, and the class docblock states that
      * binding. The cost of the choice is that a value with no lossless string form cannot be
      * admitted at all. A bool casts to `''` or `'1'` and an array to `'Array'`, each the string form
      * of a legitimate value, so admitting them would put two different rows on one hash; an object
-     * without `__toString()` does not cast at all. All of them are REFUSED
+     * without `__toString()` does not cast at all. All of them are refused
      * (UnhashableProofFieldException) rather than folded.
      */
     private function canonical(object $row): string
@@ -381,6 +395,15 @@ final class LedgerHashChain
 
         if ($tenant !== null && $tenant !== '') {
             $parts[] = $this->encode(self::TENANT_FIELD, $tenant);
+        }
+
+        $sourceVersion = $row->{self::SOURCE_VERSION_FIELD} ?? null;
+
+        if ($sourceVersion !== null && $sourceVersion !== '') {
+            // Tagged `V` rather than `S`: the tenant part before it is optional as well, and two
+            // optional parts that looked alike would let a row carrying only a tenant and a row
+            // carrying only a source version end on the same bytes.
+            $parts[] = 'V'.substr($this->encode(self::SOURCE_VERSION_FIELD, $sourceVersion), 1);
         }
 
         return implode('', $parts);

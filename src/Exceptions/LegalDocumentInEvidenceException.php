@@ -11,7 +11,7 @@ use RuntimeException;
  *
  * The full text a subject was shown exists exactly once, in `legal_documents.content`. The ledger
  * row beside it carries the version, the content hash and the acceptance sentence — a fingerprint,
- * which can VERIFY a text somebody produces but cannot produce one. Delete the version and every
+ * which can verify a text somebody produces but cannot produce one. Delete the version and every
  * acceptance of it keeps looking intact while the answer to "what exactly did this person agree
  * to?" (Art. 7(1)) no longer exists anywhere.
  *

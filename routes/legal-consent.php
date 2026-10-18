@@ -8,7 +8,7 @@ use Pushery\LegalConsent\Http\Controllers\LegalDocumentFragmentController;
 use Pushery\LegalConsent\Http\Controllers\WithdrawConsentController;
 use Pushery\LegalConsent\Support\SessionWriteThrottle;
 
-// The one SESSION-BACKED route in the package: a form POST that withdraws a consent and redirects
+// The one session-backed route in the package: a form POST that withdraws a consent and redirects
 // back. Opt-in, like the API, and deliberately the only thing it does.
 //
 // It exists because the framework-agnostic settings stub had a withdraw button and nowhere to
@@ -18,10 +18,10 @@ use Pushery\LegalConsent\Support\SessionWriteThrottle;
 // working control and did nothing, while the comment above it promised Art. 7(3), withdrawal as
 // easy as the granting was.
 //
-// Withdrawal ONLY. Object and terminate are reachable through the API and the Livewire component;
+// Withdrawal only. Object and terminate are reachable through the API and the Livewire component;
 // adding them here would widen a public, session-backed surface for a case no bundled view has.
 //
-// The path is `consent/withdraw`, not `withdraw`, so that turning BOTH ways on cannot collide with
+// The path is `consent/withdraw`, not `withdraw`, so that turning both ways on cannot collide with
 // the API's `POST {api_prefix}/withdraw`. Two routes registered under one URI do not warn — the
 // later registration silently replaces the earlier — and both default to the `legal` prefix.
 if (config('legal-consent.routes.web', false)) {
@@ -33,7 +33,7 @@ if (config('legal-consent.routes.web', false)) {
     // put `api_throttle` in front of the JSON API (below) is about the ledger, not about JSON, and
     // this route reaches the same append. Listed after the configured chain rather than ahead of
     // it: the framework's middleware priority places the throttle after the session and the guard
-    // anyway, and that is what makes the bucket the SUBJECT rather than the address.
+    // anyway, and that is what makes the bucket the subject rather than the address.
     $webThrottle = SessionWriteThrottle::middleware();
 
     if ($webThrottle !== null) {
@@ -46,14 +46,14 @@ if (config('legal-consent.routes.web', false)) {
         ->name('legal-consent.web.withdraw');
 }
 
-// Way D — the published text of one document as a FRAGMENT, for a dialog over a registration form.
+// Way D — the published text of one document as a fragment, for a dialog over a registration form.
 //
 // The path is `document/{key}/{locale}`, which collides with neither of the two above: Way B is a
 // POST to `consent/withdraw` and Way C's GET is `status`. All three default to the `legal` prefix,
 // and two routes under one URI do not warn — the later registration silently replaces the earlier —
 // so the segment is chosen rather than found to be free.
 //
-// READ-ONLY and unauthenticated by default, which is the one place this package's routes differ from
+// Read-only and unauthenticated by default, which is the one place this package's routes differ from
 // each other on purpose. The reader of a registration form has not signed up yet; a login wall in
 // front of the terms they are being asked to accept would be the defect, not the protection. It
 // serves published documents only, and those are already public at the address the checkbox links to.
@@ -87,7 +87,7 @@ $stack = is_array($middleware) ? $middleware : ['api', 'auth'];
 //
 // It is a separate setting because both ways of arriving here have to be covered: a consumer who
 // replaces `api_middleware` wholesale — which the config invites, since they supply their own auth
-// — would drop a throttle bundled into that list, and an application whose CACHED config predates
+// — would drop a throttle bundled into that list, and an application whose cached config predates
 // this key does not receive it until the cache is rebuilt (the provider does not merge while a cache
 // exists). In that second case this default is the only value that runs.
 $throttle = config('legal-consent.routes.api_throttle', '60,1');

@@ -45,6 +45,7 @@ use Pushery\LegalConsent\Support\TenantContext;
  * @property string|null $ui_wording the acceptance sentence; NULL for an informational page, which asks the reader for nothing
  * @property string $source_driver
  * @property string|null $source_reference
+ * @property string|null $source_version the version as the source counts it, beside the SemVer one; it decides nothing
  * @property bool $requires_reconsent
  * @property NoticeMode|null $notice_mode
  * @property string|null $change_class
@@ -104,7 +105,7 @@ class LegalDocument extends Model
     public const array MUTABLE_AFTER_PUBLISH = ['is_active', 'updated_at', 'notified_at', 'objection_closed_at'];
 
     /**
-     * How many ledger rows prove themselves against THIS version.
+     * How many ledger rows prove themselves against this version.
      *
      * Both links are checked, and the second is not redundant. `document_id` is the direct one, but
      * it is nullable and migration 000008 removed its foreign key on the grounds that every ledger
@@ -201,11 +202,11 @@ class LegalDocument extends Model
         // publishes would each deactivate the other's predecessors, and the database's
         // one-active-version constraint would refuse the second one; with it, the second one
         // waits its turn. A row lock is not enough: on a first publish there are no rows to lock,
-        // so the set is serialized by NAME instead.
+        // so the set is serialized by name instead.
         //
         // Already inside a transaction? Then an orchestrating caller — the atomic multi-locale
         // releaser — owns this: it holds the very same lock across the OUTER transaction, while a
-        // lock taken here would be released when this method returns, BEFORE that commit. That is
+        // lock taken here would be released when this method returns, before that commit. That is
         // false comfort, not serialization, and re-taking the shared name would self-deadlock. The
         // rule is therefore explicit: whoever opens the transaction owns the lock.
         if (ActivationLock::ownedByCaller()) {
@@ -247,7 +248,7 @@ class LegalDocument extends Model
     }
 
     /**
-     * The name the one-active-version set is serialized under: one lock per (tenant, KEY).
+     * The name the one-active-version set is serialized under: one lock per (tenant, key).
      *
      * Deliberately NOT per locale, and deliberately the same name {@see LegalDocumentReleaser}
      * takes: an atomic multi-locale release and a single `legal-consent:publish` of the same
@@ -269,9 +270,9 @@ class LegalDocument extends Model
      * The cache store the activation lock lives on — the package's own
      * (`legal-consent.cache.store`), not whatever happens to be the app default.
      *
-     * PUBLIC AND STATIC because it has two callers, and having had two spellings is what the
+     * Public and static because it has two callers, and having had two spellings is what the
      * method exists to prevent. {@see LegalDocumentReleaser} took the
-     * same lock NAME through the bare `Cache` facade, which resolves the app default. Both sides
+     * same lock name through the bare `Cache` facade, which resolves the app default. Both sides
      * agreed in every test because the package store is unset there and both fell back to the same
      * default; the moment an operator sets `LEGAL_CONSENT_CACHE_STORE` — which this very docblock
      * recommends — a release and a `legal-consent:publish` of the same document held two different

@@ -7,9 +7,9 @@ namespace Pushery\LegalConsent;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * The publish groups a consumer has to ask for BY NAME, held on a provider of their own.
+ * The publish groups a consumer has to ask for by name, held on a provider of their own.
  *
- * THIS CLASS EXISTS BECAUSE `--provider` IGNORES TAGS, and that is a framework fact rather than
+ * This class exists because `--provider` ignores tags, and that is a framework fact rather than
  * an oversight anyone could have coded around in place. `ServiceProvider::publishes()` merges every
  * path into `static::$publishes[static::class]` regardless of the tag it was given, and
  * `pathsForProviderOrGroup()` hands back that whole map when a provider is named without a group.
@@ -39,7 +39,7 @@ use Illuminate\Support\ServiceProvider;
  * publish map lives, and naming it in the manifest would suggest it is something to reason about.
  *
  * **There is deliberately no `runningInConsole()` guard in `boot()` below**, and its absence is
- * measured rather than forgotten. That single registration site sits INSIDE the main provider's own
+ * measured rather than forgotten. That single registration site sits inside the main provider's own
  * `if ($this->app->runningInConsole())`, and the manifest names only the main provider, so nothing
  * can register this class outside a console run. A guard here would be a branch no run can enter —
  * which is precisely what the coverage floor reported when one was written: not a missing test, but
@@ -62,11 +62,11 @@ final class LegalConsentOptInPublishing extends ServiceProvider
             __DIR__.'/../database/migrations/optional/0001_01_01_000004_backfill_v1_legal_acceptances.php' => $this->app->databasePath('migrations/0001_01_01_000004_backfill_v1_legal_acceptances.php'),
         ], 'legal-consent-backfill');
 
-        // WireKit-native variants — this tag maps component-built views onto the SAME destinations
+        // WireKit-native variants — this tag maps component-built views onto the same destinations
         // the plain stubs use. It does not overwrite them on its own: `vendor:publish` skips a
         // target that already exists, so on an installation that has published views before, this
-        // tag needs `--force`, or every file is reported as SKIPPED and nothing changes. Whichever
-        // tag ran FIRST wins otherwise, not whichever is more specific. It covers the Livewire views
+        // tag needs `--force`, or every file is reported as skipped and nothing changes. Whichever
+        // tag ran first wins otherwise, not whichever is more specific. It covers the Livewire views
         // too: those are what the ConsentSettings/ReConsentForm components actually render, so a tag
         // that skipped them would leave a WireKit+Livewire app with unstyled reactive screens while
         // reporting that it had themed the UI.

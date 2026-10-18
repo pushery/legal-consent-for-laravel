@@ -10,7 +10,7 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * deleted, on any of the three engines.
  *
  * 000011 froze the columns of a published row and stopped there, and the gap that left is the one
- * the whole ledger rests on. The full text a subject accepted exists exactly ONCE, in
+ * the whole ledger rests on. The full text a subject accepted exists exactly once, in
  * `legal_documents.content`. A ledger row denormalizes the key, the version, the hash and the one
  * acceptance sentence — never the text. A hash can verify a text somebody puts in front of it; it
  * cannot produce one. So a DELETE of a superseded version left every consent recorded against it
@@ -19,9 +19,9 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * only reads rows that are still there, and `history()` keeps returning the hash it always did.
  *
  * The asymmetry that made this visible is inside this package. `legal_change_sets` and
- * `legal_change_items` — descriptions OF a change — have carried a BEFORE DELETE guard since they
+ * `legal_change_items` — descriptions of a change — have carried a BEFORE DELETE guard since they
  * were created, and `legal_notices` keeps its own copy of the delivered text in `notice_body`. The
- * package proved what it TOLD a subject better than what a subject AGREED to.
+ * package proved what it told a subject better than what a subject agreed to.
  *
  * The guard is conditional, and the condition is the part that keeps it honest: a version nobody
  * ever consented to stays deletable. Retirement of a version that does bind somebody runs through
@@ -29,7 +29,7 @@ use Pushery\LegalConsent\Support\ProofColumnGuard;
  * would be routed around rather than kept.
  *
  * The trigger SQL lives in {@see ProofColumnGuard} with the UPDATE guard, and for the same reason:
- * SQLite rebuilds a table to alter a column and a rebuild DROPS TRIGGERS, so any later migration
+ * SQLite rebuilds a table to alter a column and a rebuild drops triggers, so any later migration
  * touching this table has to be able to put both back. `install()` is idempotent — it drops first —
  * so re-running it here is how an installation that already ran 000011 receives the new arm.
  *
@@ -51,7 +51,7 @@ return new class extends Migration
      * The guard is one object with one entry point: `install()` puts both arms on, `uninstall()`
      * takes both off. Subtracting only the DELETE arm would mean a second, older copy of the
      * trigger SQL living in this migration — the exact duplication that keeping it in `src/` was
-     * meant to prevent, and the copy would then be the one that rots. Taking BOTH arms off would
+     * meant to prevent, and the copy would then be the one that rots. Taking both arms off would
      * be worse: rolling back one migration would leave `legal_documents` un-frozen while 000011 is
      * still recorded as applied, which is the failure with no symptom.
      *

@@ -9,8 +9,8 @@ use Pushery\LegalConsent\Models\LegalDraft;
 /**
  * A draft was thrown away: the row is gone, and the locale is back to having no draft at all.
  *
- * THE MODEL CARRIED HERE NO LONGER HAS A ROW BEHIND IT. It is the last state the draft had, so a
- * listener can say WHAT was discarded — key, locale, origin, review state, revision — without a
+ * The model carried here no longer has a row behind it. It is the last state the draft had, so a
+ * listener can say what was discarded — key, locale, origin, review state, revision — without a
  * second query that would find nothing. Saving it would recreate what the caller just removed.
  *
  * The actor is an opaque string the caller supplies and is not stored, for the same reason

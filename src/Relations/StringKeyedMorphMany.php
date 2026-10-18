@@ -25,7 +25,7 @@ use Pushery\LegalConsent\Support\SubjectKey;
  * with `operator does not exist: bigint = character varying`.
  *
  * MySQL does not fail, and that is its own defect: it compares a varchar column with a number by
- * turning both sides into a DOUBLE. The `(subject_type, subject_id)` index is then good for the
+ * turning both sides into a double. The `(subject_type, subject_id)` index is then good for the
  * type alone, so every read scans every consent of that subject type, and past 2^53 two
  * neighboring keys compare equal and one subject is handed the other's consents. So the parent
  * key is bound as a string on every path, the form {@see SubjectKey} gives the package's own
@@ -65,7 +65,7 @@ final class StringKeyedMorphMany extends MorphMany
      * gives, and the morph type as MorphOneOrMany adds it.
      *
      * Through `whereIn`, never Eloquent's `whereIntegerInRaw`, which it picks whenever the local key
-     * is the parent's own integer primary key and which writes the keys INTO the statement unquoted:
+     * is the parent's own integer primary key and which writes the keys into the statement unquoted:
      * `where "legal_consents"."subject_id" in (1, 2)`. PostgreSQL types a bare `1` as `integer` and
      * refuses the comparison. A bound parameter is sent without a declared type, so the server
      * infers it from the column it meets.
@@ -122,9 +122,9 @@ final class StringKeyedMorphMany extends MorphMany
      * The existence query behind `has()`, `whereHas()`, `whereDoesntHave()` and `withCount()`,
      * with the parent key compared as text on PostgreSQL and MySQL.
      *
-     * That query compares two COLUMNS, `"users"."id" = "legal_consents"."subject_id"`, so there is no
+     * That query compares two columns, `"users"."id" = "legal_consents"."subject_id"`, so there is no
      * parameter for the server to infer a type from, and binding cannot help. The cast sits on the
-     * PARENT side on purpose: the outer key is one value per outer row, while a cast on
+     * parent side on purpose: the outer key is one value per outer row, while a cast on
      * `subject_id` would hide the column from the `(subject_type, subject_id)` index every lookup
      * relies on.
      *
@@ -132,7 +132,7 @@ final class StringKeyedMorphMany extends MorphMany
      * two columns as DOUBLEs, for the reason in the class docblock. SQLite compares a text column
      * with an integer one exactly, so the framework's comparison stays what it was there.
      *
-     * The columns are applied AFTER the framework has built its query rather than handed to it, and
+     * The columns are applied after the framework has built its query rather than handed to it, and
      * the result is the same: every existence query starts with `select($columns)`, and `select()`
      * replaces the column list. Handing them through would pass a value typed as a model property
      * list, which `count(*)` from `withCount()` is not.

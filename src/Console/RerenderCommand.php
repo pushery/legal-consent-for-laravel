@@ -15,13 +15,13 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
 
 /**
- * Re-freeze published versions whose text is unchanged and whose RENDERING has moved — the answer
+ * Re-freeze published versions whose text is unchanged and whose rendering has moved — the answer
  * `legal-consent:check-drift` points at when it reports "PRESENTATION only".
  *
  * It publishes the identical text again, under the next patch version and the silent mode: no
  * re-consent, no notice, no materiality decision, because there is no change to classify. Whether
  * the text really is identical is decided by the source hash the row carries, never by the caller,
- * and a document whose text HAS moved is refused here rather than quietly re-published.
+ * and a document whose text has moved is refused here rather than quietly re-published.
  *
  * Without arguments it covers the whole configured matrix, which is the point: a renderer change
  * lands on every document at once, and fixing it one key and one locale at a time by hand is what

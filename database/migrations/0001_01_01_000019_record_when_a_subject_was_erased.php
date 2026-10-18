@@ -16,12 +16,12 @@ use Pushery\LegalConsent\Support\TableLookup;
  * change records itself. A `subject_id` that is simply null cannot say whether a person was
  * erased or the row never had one (the v1 backfill can write either).
  *
- * NOT a hashed proof field, deliberately. `LedgerHashChain::canonical()` walks a FIXED list of
+ * Not a hashed proof field, deliberately. `LedgerHashChain::canonical()` walks a fixed list of
  * eighteen columns, so a new one is invisible to it and no stored hash moves — which is what lets
  * this ship without re-chaining a single existing row. It is a marker for an operator and for the
  * retention sweep, never a claim the chain vouches for.
  *
- * Adding a column does not rebuild the table on any engine here (only CHANGING one does), so the
+ * Adding a column does not rebuild the table on any engine here (only changing one does), so the
  * append-only triggers PostgreSQL and MySQL keep on both ledgers stay installed, and on SQLite the
  * proof guard on `legal_documents`, which reads `legal_consents`, is never caught by a rebuild —
  * the hazard 000011 and 000018 both had to plan around.
