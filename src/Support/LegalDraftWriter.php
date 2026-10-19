@@ -30,13 +30,13 @@ use Pushery\LegalConsent\Models\LegalDraft;
  *
  * Exactly two writers of `source_hash`, and the third method's abstention is the deliberate part:
  *
- *  - save()             a human typed → review resets to Draft. `source_hash` is NOT touched, so
+ *  - save()             a human typed → review resets to Draft. `source_hash` is not touched, so
  *                       editing the SOURCE locale stales every translation by derivation, with
  *                       zero rows written — and editing a STALE translation cannot un-stale it.
  *  - markReviewed()     the explicit human sign-off → stamps `source_hash` from the source row.
- *                       Reviewing IS the act of confirming this text against the current source,
+ *                       Reviewing is the act of confirming this text against the current source,
  *                       so it is the one place a human may assert freshness.
- *  - applyTranslation() the machine → records the source hash it translated FROM and stays Draft.
+ *  - applyTranslation() the machine → records the source hash it translated from and stays Draft.
  *                       Fresh but unreviewed: proof that the two predicates are independent.
  *
  * There is no path from applyTranslation() to Reviewed. That is what makes "a machine draft can

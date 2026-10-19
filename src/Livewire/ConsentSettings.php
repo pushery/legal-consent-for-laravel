@@ -35,7 +35,7 @@ use Pushery\LegalConsent\Support\ConsentPresenter;
  *    privacy notice, an objection against a consent). That keeps the append-only ledger free of
  *    rows asserting states that do not legally exist — which cannot be corrected afterwards and
  *    which every later reader takes as proof.
- *  - `$allowObjection` / `$allowTermination` let YOU decide whether the endpoints exist at all.
+ *  - `$allowObjection` / `$allowTermination` let you decide whether the endpoints exist at all.
  *    They are on by default, because the package's own contract offers all three. Turn one off
  *    when your product has no answer to it: an app that only offers withdrawal does not want a
  *    reachable "terminate" that nothing downstream reacts to.

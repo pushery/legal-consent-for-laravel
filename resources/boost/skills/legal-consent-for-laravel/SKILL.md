@@ -97,7 +97,7 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   every session-backed ledger write — that route and the Livewire components' grant, withdraw,
   object and terminate actions. Same shape as `routes.api_throttle`; `null` switches it off.
 - `ui.variant` — `auto` by default: the WireKit-native views are served when `pushery/wirekit`
-  ≥ 2.67.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
+  ≥ 2.68.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
 - `notice_mail` — the change-notice mail. `identity.declarant` names the declaring legal person
   (§ 126b BGB) and is appended to the notice AND to its append-only proof row; leave it null and
   the notice is byte-for-byte what it was. Multi-tenant apps bind `ResolvesNoticeIdentity` instead
@@ -264,12 +264,12 @@ acceptance in an interstitial shown after authentication and before first use, a
 ```
 
 **Drop in the optional UI** (needs `livewire/livewire`. The WireKit-native views are served
-automatically when `pushery/wirekit` ≥ 2.67.0 is installed — `legal-consent.ui.variant` defaults to
+automatically when `pushery/wirekit` ≥ 2.68.0 is installed — `legal-consent.ui.variant` defaults to
 `auto`; publish `legal-consent-wirekit` only to customize them. The floor is part of the automatic
 choice rather than advice because the views name components that must exist: WireKit's own localized
 screen-reader strings landed in 2.26.0, the busy-state props these stubs use landed in 2.47.0, and
 the release dialog's close on confirm landed in 2.49.0, and the quiet new-tab link and the editor
-that reports only a person's edit landed in 2.56.0; 2.67.0 is the oldest release the package's
+that reports only a person's edit landed in 2.56.0; 2.68.0 is the oldest release the package's
 own suite installs):
 
 ```blade

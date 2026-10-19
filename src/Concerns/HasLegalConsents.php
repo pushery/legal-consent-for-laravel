@@ -39,7 +39,7 @@ trait HasLegalConsents
      */
     public function legalConsents(): MorphMany
     {
-        // Deliberately NOT `$this->morphMany(...)`, which hands back a plain MorphMany: its eager
+        // Deliberately not `$this->morphMany(...)`, which hands back a plain MorphMany: its eager
         // constraint and its existence query both compare the varchar `subject_id` against the
         // subject's own key type, and PostgreSQL refuses that for an integer or a uuid key. See
         // StringKeyedMorphMany.

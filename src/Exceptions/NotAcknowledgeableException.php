@@ -13,11 +13,11 @@ use RuntimeException;
  *
  * Two different mistakes land here, and the message tells them apart because the fix differs:
  *
- *  - a CONSENT-BEARING document. It has its own acceptance sentence and its own guard, so it goes
+ *  - a consent-bearing document. It has its own acceptance sentence and its own guard, so it goes
  *    through `accept()`. Routing it here would record the caller's sentence over the one the package
  *    rendered, which is the drift {@see DefaultConsentManager::acceptanceFingerprint()}
  *    exists to prevent.
- *  - an informational page the operator has NOT flagged. This is the default and stays refused: a
+ *  - an informational page the operator has not flagged. This is the default and stays refused: a
  *    page that binds nobody does not collect ledger rows because a caller asked nicely. The operator
  *    declares the ones their registration form actually shows, per document, and nothing else can.
  */

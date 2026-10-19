@@ -250,7 +250,7 @@ class LegalDocument extends Model
     /**
      * The name the one-active-version set is serialized under: one lock per (tenant, key).
      *
-     * Deliberately NOT per locale, and deliberately the same name {@see LegalDocumentReleaser}
+     * Deliberately not per locale, and deliberately the same name {@see LegalDocumentReleaser}
      * takes: an atomic multi-locale release and a single `legal-consent:publish` of the same
      * document must exclude each other. Two different lock names would let them interleave — which
      * is exactly how a "serialized" activation still ends with two active rows.

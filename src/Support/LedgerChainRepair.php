@@ -107,7 +107,7 @@ final readonly class LedgerChainRepair
             // sibling. Unkeyed, rootProof() is null and the verifier demands nothing — so the
             // whole thing is a no-op on an unkeyed ledger rather than a special case.
             //
-            // Only when absent: the row that was ALWAYS the opener keeps the proof it was written
+            // Only when absent: the row that was always the opener keeps the proof it was written
             // with, so a repair never rewrites a value it did not have to.
             if (! $previousChained instanceof stdClass && $token !== null && ($row['root_proof'] ?? null) === null) {
                 $row['root_proof'] = $this->chain->rootProof($token);

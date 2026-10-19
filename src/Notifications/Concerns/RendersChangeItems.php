@@ -48,7 +48,7 @@ trait RendersChangeItems
             $mail->line($this->renderItem($item));
         }
 
-        // Impact AFTER the list. § 327r Abs. 2 Satz 2 Nr. 1 BGB wants the characteristics of the
+        // Impact after the list. § 327r Abs. 2 Satz 2 Nr. 1 BGB wants the characteristics of the
         // change and WP260 rev.01 Rz. 31 separately wants its likely effect — a reader who has just
         // seen what moved is the one who can use the second sentence.
         if (($set->impact ?? '') !== '') {

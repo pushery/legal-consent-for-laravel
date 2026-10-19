@@ -6,7 +6,7 @@ declare(strict_types=1);
 // legal kinds stay separately labeled ('contracts' / 'acknowledgements' / 'consents'). Informal (tu).
 return [
     // The version line of the document-fragment stub. It is not decoration: somebody reading that
-    // fragment in a dialog is about to agree to it, and WHICH version they read is the fact a ledger
+    // fragment in a dialog is about to agree to it, and which version they read is the fact a ledger
     // row will later claim. A fragment showing the text and hiding the version would leave that row
     // unverifiable from the only side that matters — the reader's.
     'document_version' => 'Version :version',
@@ -19,7 +19,7 @@ return [
 
     // Empty states. A group with no entries used to render its heading over nothing, and that is
     // not the rare case it looks like: statusFor() reads the `legal_documents` table, which a
-    // freshly installed package has NOTHING in until `legal-consent:publish` runs — so an empty
+    // freshly installed package has nothing in until `legal-consent:publish` runs — so an empty
     // screen is the SHIPPING state every consumer meets first, and three bare headings read as
     // broken rather than as "nothing yet". `nothing_published` covers all three being empty at
     // once, where one sentence says more than three.

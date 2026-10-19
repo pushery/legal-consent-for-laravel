@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Support;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Pushery\LegalConsent\Exceptions\InvalidRetentionPeriod;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalNotice;
@@ -92,6 +93,24 @@ final readonly class RetentionCutoffs
             }
 
             $expired->orWhere(fn (Builder $record): Builder => $record->whereNotIn('document_key', array_keys($this->documents))->where($timestamp, '<', $this->cutoff));
+        });
+    }
+
+    /**
+     * The same narrowing on a query that names its own columns, such as a correlated subquery over an
+     * alias of the ledger: `newer.accepted_at` past the cutoff of the document `newer.document_key` names.
+     *
+     * The sweep asks it of the row that superseded another, because a superseded record's retention
+     * runs from the moment it stopped being the current standing, not from its own acceptance.
+     */
+    public function expiredOn(QueryBuilder $query, string $timestamp, string $documentKey): QueryBuilder
+    {
+        return $query->where(function (QueryBuilder $expired) use ($timestamp, $documentKey): void {
+            foreach ($this->documents as $document => $own) {
+                $expired->orWhere(fn (QueryBuilder $record): QueryBuilder => $record->where($documentKey, $document)->where($timestamp, '<', $own['cutoff']));
+            }
+
+            $expired->orWhere(fn (QueryBuilder $record): QueryBuilder => $record->whereNotIn($documentKey, array_keys($this->documents))->where($timestamp, '<', $this->cutoff));
         });
     }
 

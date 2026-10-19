@@ -44,7 +44,7 @@ use Pushery\LegalConsent\Support\DefaultConsentManager;
  * @property string|null $prev_record_hash
  * @property CarbonImmutable $accepted_at
  * @property CarbonImmutable|null $subject_erased_at when an Art. 17 erasure rewrote this row without
- *                                                   its personal columns. Deliberately NOT a hashed
+ *                                                   its personal columns. Deliberately not a hashed
  *                                                   proof field (migration 000019): it is the trace
  *                                                   that a lawful rewrite happened, never a claim the
  *                                                   tamper chain vouches for — do not add it to
@@ -68,7 +68,7 @@ class LegalConsent extends Model
      * shortens, and the erasure of a subject write through the query builder. Blocking mass
      * assignment makes "the manager is the only door into this model" structural: a stray
      * LegalConsent::create($request->all()) can never forge or backdate a fresh proof row —
-     * subject_id, subject_token, prev_record_hash, accepted_at, content_hash. Mutation AFTER insert
+     * subject_id, subject_token, prev_record_hash, accepted_at, content_hash. Mutation after insert
      * is already refused by the append-only guard; this closes the insert side.
      *
      * @var list<string>

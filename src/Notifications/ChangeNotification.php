@@ -279,7 +279,7 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
             return true;
         }
 
-        // "Has this subject already accepted this version's major", NOT "is it outstanding now".
+        // "Has this subject already accepted this version's major", not "is it outstanding now".
         // The two differ exactly where it matters: a re-consent notice is usually the advance
         // announcement of a change whose enforce_from is still in the future, so the document is
         // not yet enforceable and `outstanding()` would report nothing — suppressing every

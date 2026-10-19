@@ -532,7 +532,7 @@ final class VerifyLedgerCommand extends Command
      *
      * Two failures, and they are genuinely different findings rather than two wordings of one:
      *
-     *  - a mac that does NOT match means the row's content or its link changed after it was
+     *  - a mac that does not match means the row's content or its link changed after it was
      *    recorded. That is the replacement this feature was built for.
      *  - NO mac at all, on a row above the boundary, means the evidence was removed. Without this
      *    half, deleting the mac would be as good as forging it — an unwitnessed row is simply not

@@ -64,11 +64,11 @@ final readonly class LegalDocumentPublisher
      * period has to say `null` here rather than simply be absent.
      *
      * The two nulls are decisions, not gaps:
-     *  - `bgb_agb` — § 308 Nr. 5's "angemessene Frist" IS the mode benchmark below; a second
+     *  - `bgb_agb` — § 308 Nr. 5's "angemessene Frist" is the mode benchmark below; a second
      *    number would be the same rule written twice.
      *  - `dcd_327r` — § 327r Abs. 2 requires notice "within a reasonable period before" and fixes
-     *    no number. `dcd_termination_days` is NOT that number: it is the 30-day free-termination
-     *    window of § 327r Abs. 3, which runs from the LATER of notice and modification, so reading
+     *    no number. `dcd_termination_days` is not that number: it is the 30-day free-termination
+     *    window of § 327r Abs. 3, which runs from the later of notice and modification, so reading
      *    it as a lead time would assert a statutory advance period that does not exist.
      */
     private const array REGIME_PERIOD_KEYS = [

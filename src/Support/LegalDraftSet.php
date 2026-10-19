@@ -25,7 +25,7 @@ use Pushery\LegalConsent\Models\LegalDraft;
  * anything:
  *
  *   isStale()               the source text moved under this translation
- *   review_state            a human signed off on THESE EXACT bytes
+ *   review_state            a human signed off on these exact bytes
  *   hasUnpublishedChanges() approved text is not live yet
  *
  * Precision comes free from the pipeline: `canonicalize()` runs inside the hash, so reformatting

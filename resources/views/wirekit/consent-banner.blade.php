@@ -1,7 +1,7 @@
 {{--
     WireKit-native variant of the change banners. Publish with `--tag=legal-consent-wirekit`.
 
-    Built from real `x-wirekit::*` components — needs `pushery/wirekit` >= 2.67.0, the floor the
+    Built from real `x-wirekit::*` components — needs `pushery/wirekit` >= 2.68.0, the floor the
     provider itself applies (`LegalConsentServiceProvider::WIREKIT_MINIMUM`), and `@wirekitScripts`
     in the layout for the live countdown. The `countdown` component itself landed in 2.13.0, and
     that is the number this comment used to name. WireKit's own localized screen-reader strings

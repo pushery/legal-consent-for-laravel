@@ -216,7 +216,7 @@ final class ReConsentForm extends Component
                     // against the database, so an out-of-band unpublish leaves a minute in which
                     // this button is the ordinary thing to click.
                     //
-                    // Deliberately NOT the 404 the other transitions answer with. Those are single
+                    // Deliberately not the 404 the other transitions answer with. Those are single
                     // actions; this loop may already have recorded rows into an append-only ledger
                     // before it reaches the missing document, and aborting the response there would
                     // leave the subject on an error page with no idea which of their ticks took

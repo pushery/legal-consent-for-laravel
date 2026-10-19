@@ -128,7 +128,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
         $expired = 0;
 
         foreach ($versions as $version) {
-            // Count BEFORE sending, always — not only when a limit is configured. The size of a
+            // Count before sending, always — not only when a limit is configured. The size of a
             // send is the one number an operator can never recover afterwards, and the aggregate
             // line at the end cannot say which version it belonged to. It counts whom this run will
             // send to, the same subjects the stream below serves: a version re-opened for a handful
@@ -224,7 +224,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
                     // Positions from 0, so that the subjects from a stopping one on can be sliced off.
                     $subjects = $chunk->collect()->values();
 
-                    // Recorded BEFORE the send: with a synchronous queue the notice is delivered or
+                    // Recorded before the send: with a synchronous queue the notice is delivered or
                     // fails inside send(), and its outcome has to find the row already there. Only a
                     // notice that goes out by mail ever comes back as delivered or failed; one that
                     // does not would count as on its way until the window ends, and then be queued

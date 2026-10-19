@@ -140,7 +140,7 @@ final readonly class EnsureLegalConsent
     }
 
     /**
-     * Livewire's own endpoints are ALWAYS allowed, exactly like `logout` and the consent route.
+     * Livewire's own endpoints are always allowed, exactly like `logout` and the consent route.
      *
      * The documented wiring puts this middleware on the `web` group, which contains Livewire's update
      * channel — and a Livewire request expects JSON, so the gate answered it with 409. That deadlocks
