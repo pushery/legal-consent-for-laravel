@@ -147,7 +147,7 @@ final class LegalTextEditor extends Component
      * translation. Nothing failed anywhere, which is why this is data loss rather than a display
      * fault.
      *
-     * NOT `md5($body)`, which is the obvious derivation and fires too often. The client's own
+     * Not `md5($body)`, which is the obvious derivation and fires too often. The client's own
      * typing reaches the server with the next action, so a plain save would change that key too and
      * rebuild the editor from scratch — on a privacy notice of some fifteen kilobytes that throws
      * away the cursor and the scroll position of the text somebody is proofreading, every time they

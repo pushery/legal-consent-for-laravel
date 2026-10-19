@@ -14,7 +14,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * Read, print or discard the change description for a pending version — the headless path for an
  * operator with no admin UI, and the inspectable one for CI.
  *
- * Deliberately NOT an authoring wizard. A change description is legal copy in a specific language,
+ * Deliberately not an authoring wizard. A change description is legal copy in a specific language,
  * written once and frozen forever; typing it into an interactive prompt is the wrong medium for
  * something that should be reviewed before it exists. Authoring goes through the facade, where it
  * can live in a migration, a seeder or a release script and be read in a diff.

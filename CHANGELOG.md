@@ -4,6 +4,24 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.48.0] - 2026-10-19
+
+### Added
+
+- **Placeholders are filled and checked, and an application's own text renders without being published.** `Content\Placeholders` fills `{{ name }}` placeholders from the values it is given and refuses a name it was not given or one without a value, naming every such placeholder in `UnresolvedPlaceholders`. A value is escaped for the text's format, so it never becomes markup. `RenderPipeline::render()` renders, sanitizes and hashes a text as a published document is, with its placeholders filled first, and asks for no document key, no version and no acceptance sentence, for a text an application publishes on its own terms, such as the terms of each shop on a storefront.
+
+### Changed
+
+- **The WireKit views need WireKit 2.68.0 or newer.** 2.68.0 is the oldest release this package's test suite installs, so `ui.variant = auto` serves the WireKit views from it and the plain views below it.
+
+### Documentation
+
+- **Legal texts per shop, kept in a tenant's own database, are documented.** The tenant the resolver answers can be a shop, which gives each shop its own active version of every document and its own consents. With `database.connection` left at `null` they are kept in the database a tenancy package switches to, and a source fills each shop's values with `Placeholders`.
+
+### Fixed
+
+- **A superseded acceptance is kept for the retention period after it was superseded, not after it was given.** `legal-consent:prune` measured the period of a superseded record from its own acceptance, while `retention_after_end` is how long proof is kept after a record's relevance ends. An acceptance that had held for longer than the period was deleted on the first run after it was replaced, and a period of its own in `retention_by_document` ended years too early: terms accepted in 2026 and superseded in 2034, with self-billed invoices under them until the end of 2033, lost their proof in 2036 under ten years. The period of a superseded record now runs from the acceptance of the record that superseded it, for the consent ledger and the delivery proofs alike. An orphaned record keeps its own acceptance as the start.
+
 ## [0.47.0] - 2026-10-18
 
 ### Added
@@ -3192,7 +3210,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.47.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.48.0...HEAD
+[0.48.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.44.0...v0.45.0

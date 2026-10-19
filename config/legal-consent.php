@@ -50,10 +50,10 @@ return [
     |
     | The documents this app manages. Each has a source (see `sources` below) and
     | a legal_basis — the load-bearing distinction:
-    |   - contract        Art. 6(1)(b): mandatory, blocking, NOT withdrawable.
+    |   - contract        Art. 6(1)(b): mandatory, blocking, not withdrawable.
     |   - 'acknowledgement'  Art. 13:    mandatory, "zur Kenntnis genommen", never
     |                                    "ich willige ein".
-    |   - consent          Art. 6(1)(a): a real consent — voluntary, NEVER required
+    |   - consent          Art. 6(1)(a): a real consent — voluntary, never required
     |                                    (Kopplungsverbot Art. 7(4)), withdrawable.
     |   - informational                  a page you must PUBLISH but nobody agrees to:
     |                                    Impressum (§ 5 DDG), cookie policy, accessibility
@@ -71,15 +71,15 @@ return [
     | form. That is the default because a document that asks something has to be asked
     | before an account exists. Two ways out, and they are not interchangeable:
     |
-    |   - The page binds NOBODY — an Impressum, a cookie policy, an accessibility
+    |   - The page binds nobody — an Impressum, a cookie policy, an accessibility
     |     statement. Use `legal_basis => 'informational'`. It leaves the form, the gate and
     |     the notice sweeps together, which is right: a record saying someone "accepted the
     |     Impressum" asserts a consent that does not exist in law.
-    |   - The document DOES bind, but not at sign-up — you acknowledge it later, in-app.
+    |   - The document does bind, but not at sign-up — you acknowledge it later, in-app.
     |     Add `'ask_at_registration' => false`. It leaves the rules, the checklist and the
     |     recorder together, and nothing else changes: a mandatory document still gates, so
-    |     the subject meets it at the re-consent screen instead. This moves WHEN it is
-    |     asked, never WHETHER.
+    |     the subject meets it at the re-consent screen instead. This moves when it is
+    |     asked, never whether.
     |
     */
     'documents' => [
@@ -604,7 +604,7 @@ return [
     | because there the subject cannot continue until they agree.
     |
     | A closure — `fn ($document) => route('legal', [$document->key, $document->locale])`
-    | — also works and is fine while iterating locally. Do NOT ship one: it makes
+    | — also works and is fine while iterating locally. Do not ship one: it makes
     | `php artisan config:cache` fail in the deploy, and nothing before that point
     | reproduces it. `legal-consent:doctor` reports a closure here for that reason.
     | A misconfigured value yields no link rather than a broken one.
@@ -658,7 +658,7 @@ return [
     | with `__invoke(Model $subject): bool`. It is resolved from the container.
     |
     | A closure — `fn ($subject) => ! $subject instanceof MustVerifyEmail || $subject->hasVerifiedEmail()`
-    | — also works and is fine while iterating locally. Do NOT ship one: it makes
+    | — also works and is fine while iterating locally. Do not ship one: it makes
     | `php artisan config:cache` fail in the deploy, and nothing before that point
     | reproduces it. `legal-consent:doctor` reports a closure here for that reason.
     | A misconfigured predicate fails safe — the subject stays gated.
@@ -842,7 +842,7 @@ return [
     |          have 31 days.
     |          gdpr      -> privacy_advance_days (no floor: WP260 says "well in advance",
     |                                             which is guidance, not a number)
-    |          bgb_agb   -> nothing; § 308 Nr. 5's "angemessene Frist" IS the mode benchmark
+    |          bgb_agb   -> nothing; § 308 Nr. 5's "angemessene Frist" is the mode benchmark
     |          dcd_327r  -> nothing; § 327r Abs. 2 fixes no number (see below)
     |
     | Every key below is a lead time and every one of them is read. That is the whole rule for

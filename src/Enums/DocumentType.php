@@ -148,12 +148,12 @@ enum DocumentType: string
      * Art. 21 objection to processing on legitimate interest. A contract can meet the first and a
      * privacy notice the second, so both are objectable.
      *
-     * A real consent is NOT. Art. 21 explicitly does not cover consent-based processing, and the
+     * A real consent is not. Art. 21 explicitly does not cover consent-based processing, and the
      * instrument there is withdrawal (Art. 7(3)) — an "Objected" row against a consent reads to a
      * later auditor like a withdrawal that never happened. Neither is an informational page: it
      * binds nobody, so there is nothing to object to.
      *
-     * Deliberately NOT narrowed to "the active version runs an objection window". That is a
+     * Deliberately not narrowed to "the active version runs an objection window". That is a
      * property of the version, it changes over time, and an Art. 21 objection to a privacy notice
      * has nothing to do with a notice window at all — a guard built on it would refuse a lawful
      * objection whenever no change happened to be pending.

@@ -27,6 +27,12 @@ final class LegalDocumentTooLarge extends RuntimeException
         parent::__construct($message);
     }
 
+    /** For a text rendered on its own, which has no document key and no locale to name. */
+    public static function forText(int $bytes, int $maxBytes): self
+    {
+        return new self("The legal text is {$bytes} bytes, exceeding the {$maxBytes}-byte limit.", $bytes, $maxBytes);
+    }
+
     public static function for(string $type, string $locale, int $bytes, int $maxBytes): self
     {
         return new self(

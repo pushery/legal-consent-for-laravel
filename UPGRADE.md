@@ -4,6 +4,14 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.47.0 → 0.48.0
+
+Nothing is required of you, unless you use the WireKit views.
+
+**Raise `pushery/wirekit` to `^2.68.0` if you use the WireKit views.** `auto` serves them from 2.68.0, the oldest release this package's test suite installs, and with an older WireKit it serves the plain views instead.
+
+`legal-consent:prune` keeps a superseded acceptance until the acceptance that superseded it is itself past the retention of its document, instead of counting the period from the superseded one's own acceptance. The first sweep after the upgrade deletes fewer records than the last one before it, and each record it keeps goes once its successor is past that period.
+
 ## 0.46.0 → 0.47.0
 
 **Run `php artisan migrate`.** Migration 000041 adds `legal_documents.source_version` and `legal_consents.document_source_version`, the version a source counts itself. Both stay empty unless a custom source returns `sourceVersion`. A consent folds the value into its record hash only when it has one, so every chain written before keeps verifying as it is.

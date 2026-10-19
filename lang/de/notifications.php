@@ -5,12 +5,12 @@ declare(strict_types=1);
 // Two notifications, kept legally distinct:
 //  - `contract`      ReconsentRequired: a material CONTRACT change asks for renewed
 //                    ZUSTIMMUNG; the consequence line satisfies § 308 Nr. 5 lit. b BGB.
-//  - `informational` LegalChangeInformational: an INFO-ONLY change — NO action required,
+//  - `informational` LegalChangeInformational: an info-only change — no action required,
 //                    never a threat of restriction. A privacy notice is acknowledged
 //                    (zur Kenntnis nehmen), never agreed to (EDPB 05/2020 Rz. 122). Per Du.
 return [
     // Shared lines every change notice can use. `issuer` is the § 126b BGB naming of the
-    // declaring person and is the ONLY one of these that enters the notice body — and therefore
+    // declaring person and is the only one of these that enters the notice body — and therefore
     // the hash of the append-only proof row — and only once a declarant is configured. The rest
     // is envelope: the reason the message arrived, the do-not-reply note, the secondary links.
     'common' => [

@@ -15,6 +15,7 @@ use Pushery\LegalConsent\Exceptions\InvalidDocumentVersion;
 use Pushery\LegalConsent\Exceptions\InvalidSourceVersion;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\MissingAcceptanceWording;
+use Pushery\LegalConsent\Exceptions\UnresolvedPlaceholders;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
 
 /**
@@ -129,11 +130,7 @@ final readonly class RenderPipeline
             throw LegalDocumentTooLarge::for($raw->type, $raw->locale, strlen($raw->body), $this->maxBytes);
         }
 
-        $rendered = $raw->format === ContentFormat::Markdown
-            ? (string) $this->converter->convert($raw->body)
-            : $raw->body;
-
-        $html = $this->sanitizer->sanitize($rendered);
+        $html = $this->sanitizer->sanitize($this->toHtml($raw->body, $raw->format));
         $hash = $this->hashOf($html);
 
         $version = $raw->version ?? '0.0.0';
@@ -177,6 +174,40 @@ final readonly class RenderPipeline
             sourceHash: $this->sourceHashOf($raw->body),
             renderFingerprint: $this->fingerprint(),
             sourceVersion: $raw->sourceVersion,
+        );
+    }
+
+    /**
+     * A text rendered, sanitized and hashed as {@see self::process()} renders, sanitizes and hashes a
+     * document, and nothing more: no version, no acceptance sentence, no registry. It is for a text
+     * an application publishes on its own terms, the terms of one shop on a storefront for example,
+     * and still wants proven the way this package proves a published document.
+     *
+     * The placeholders are filled first, so both hashes cover the text as it is shown, with its
+     * values in it. A text that uses a placeholder it was not given a value for is refused.
+     *
+     * @throws UnresolvedPlaceholders when a placeholder of the text has no value
+     * @throws LegalDocumentTooLarge when the text, filled, is over the byte limit
+     */
+    public function render(string $body, ContentFormat $format = ContentFormat::Markdown, Placeholders $placeholders = new Placeholders): RenderedText
+    {
+        if (strlen($body) > $this->maxBytes) {
+            throw LegalDocumentTooLarge::forText(strlen($body), $this->maxBytes);
+        }
+
+        $text = $placeholders->fill($body, $format);
+
+        if (strlen($text) > $this->maxBytes) {
+            throw LegalDocumentTooLarge::forText(strlen($text), $this->maxBytes);
+        }
+
+        $html = $this->sanitizer->sanitize($this->toHtml($text, $format));
+
+        return new RenderedText(
+            html: $html,
+            contentHash: $this->hashOf($html),
+            sourceHash: $this->sourceHashOf($text),
+            renderFingerprint: $this->fingerprint(),
         );
     }
 
@@ -310,6 +341,14 @@ final readonly class RenderPipeline
         // whole point: never publish a sentence the subject could not read, or a nameless consent.
         return AcceptanceWording::for($raw->type, $raw->locale)
             ?? throw MissingAcceptanceWording::for($raw->type, $raw->locale);
+    }
+
+    /** The text as HTML, before sanitizing: Markdown converted, HTML as it came. */
+    private function toHtml(string $body, ContentFormat $format): string
+    {
+        return $format === ContentFormat::Markdown
+            ? (string) $this->converter->convert($body)
+            : $body;
     }
 
     /**

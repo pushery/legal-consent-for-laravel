@@ -26,7 +26,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  * Why a separate table, which is the part a reader will want to argue with. A column on
  * `legal_consents` is the obvious shape and it cannot work, for two independent reasons:
  *
- *  1. The mac has to be taken over the row AS THE DATABASE RETURNS IT, because that is what the
+ *  1. The mac has to be taken over the row as the database returns it, because that is what the
  *     verifier recomputes from. No value computed before the INSERT can predict the driver's
  *     rendering: `accepted_at` comes back from PostgreSQL as `2026-09-16 18:39:21+02` and from
  *     MySQL and SQLite with no offset at all. A first attempt at this hashed the pre-save shape,

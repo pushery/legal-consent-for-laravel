@@ -58,11 +58,14 @@ use Symfony\Component\Console\Attribute\AsCommand;
  * person's own record is deleted, because it needs the model. After it, the `subject_id is null`
  * arm below is reached and these rows are pruned normally.
  *
- * Retention is measured from acceptance, but a subject's current standing — the newest
- * ledger row for a (tenant, subject, document, locale) — is never pruned by age alone: deleting
- * it would destroy the very Art. 7(1) proof the still-active relationship depends on. Only
- * superseded rows (an even newer row exists for the same tenant, subject, document and locale)
- * and orphaned rows (the subject was deleted, so no live relationship remains) are eligible.
+ * A subject's current standing — the newest ledger row for a (tenant, subject, document,
+ * locale) — is never pruned by age alone: deleting it would destroy the very Art. 7(1) proof the
+ * still-active relationship depends on. Only superseded rows (an even newer row exists for the
+ * same tenant, subject, document and locale) and orphaned rows (the subject was deleted, so no
+ * live relationship remains) are eligible. Retention runs from the moment a row stopped being
+ * relevant: for an orphaned row from its own acceptance, for a superseded row from the acceptance
+ * of the newer row that replaced it. A standing that held for longer than the period is kept for
+ * the whole period after it was replaced.
  *
  * The notice-delivery ledger is pruned on the same rule, and must be: it holds personal data
  * (the subject and the exact message they were served), so leaving it to grow forever would
@@ -558,20 +561,24 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
     }
 
     /**
-     * Eligible = past the cutoff and (orphaned OR superseded). Orphaned = the subject was
-     * deleted (no live relationship remains). Superseded = a newer row exists for the same
-     * tenant, subject, document and locale, so this older one is no longer the current standing.
-     * The newest row per tenant has no such successor and is kept, even past the cutoff, so an
-     * active subject's proof is never destroyed by age. The whole disjunction is parenthesized
-     * so it binds under the cutoff, not beside it.
+     * Eligible = past the cutoff and (orphaned OR superseded long enough ago). Orphaned = the
+     * subject was deleted (no live relationship remains). Superseded = a newer row exists for the
+     * same tenant, subject, document and locale, so this older one is no longer the current
+     * standing, and that newer row is past the cutoff of the document too: it marks the moment
+     * this row stopped being relevant, which is where its retention starts. The newest row per
+     * tenant has no such successor and is kept, even past the cutoff, so an active subject's
+     * proof is never destroyed by age. The whole disjunction is parenthesized so it binds under
+     * the cutoff, not beside it.
      *
      * The tenant belongs in the comparison because a standing is held per tenant: the same
      * person in two tenants has two relationships, and a newer row in one says nothing about the
      * other. The sweep itself runs across every tenant, which is why the correlation has to say so.
      *
-     * A row that is eligible stays eligible while the sweep runs: its superseding row is newer
-     * than it, and the newest row of each (tenant, subject, document, locale), which supersedes
-     * every other, is never removed. finishedChains() relies on that.
+     * A row that is eligible stays eligible while the sweep runs. The newest row of each (tenant,
+     * subject, document, locale), which supersedes every other, is never removed, and a newer row
+     * past the cutoff that the sweep does remove is removed only because a row newer still is past
+     * the cutoff as well, which then supersedes this one in its place. finishedChains() relies on
+     * that.
      *
      * @template TModel of LegalConsent|LegalNotice
      *
@@ -602,13 +609,16 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
             //
             // The alias is prefixed too, by the same grammar, on both the FROM and the columns that
             // reference it — so the two sides agree by construction rather than by convention.
-            ->where(function (Builder $eligible) use ($table): void {
+            ->where(function (Builder $eligible) use ($table, $timestamp, $cutoffs): void {
                 $eligible
                     // Orphaned: the subject was deleted, so no live relationship remains.
                     ->whereNull('subject_id')
                     ->orWhereNull('subject_type')
-                    // Superseded: a newer row exists for the same (tenant, subject, document, locale).
-                    ->orWhereExists(function (QueryBuilder $newer) use ($table): void {
+                    // Superseded long enough ago: a newer row exists for the same (tenant, subject,
+                    // document, locale), and it is itself past the retention of that document. The
+                    // newer row's time is when this one stopped being the current standing, which is
+                    // where its retention starts.
+                    ->orWhereExists(function (QueryBuilder $newer) use ($table, $timestamp, $cutoffs): void {
                         $newer
                             ->selectRaw('1')
                             ->from($table, 'newer')
@@ -618,6 +628,8 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
                             ->whereColumn('newer.document_key', "{$table}.document_key")
                             ->whereColumn('newer.locale', "{$table}.locale")
                             ->whereColumn('newer.id', '>', "{$table}.id");
+
+                        $cutoffs->expiredOn($newer, "newer.{$timestamp}", 'newer.document_key');
                     });
             });
     }

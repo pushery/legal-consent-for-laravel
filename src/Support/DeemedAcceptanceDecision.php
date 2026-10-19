@@ -21,7 +21,7 @@ final class DeemedAcceptanceDecision
 {
     /**
      * @param  LegalConsent|null  $latest  the subject's most recent action for this document+locale,
-     *                                     read live (NOT from the sweep's ledger snapshot)
+     *                                     read live (not from the sweep's ledger snapshot)
      */
     public function shouldDeem(?LegalConsent $latest, LegalDocument $version, bool $noticeProved): bool
     {

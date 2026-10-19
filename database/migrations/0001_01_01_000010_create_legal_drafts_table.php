@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Schema;
  * new `legal_documents` version, and the public page renders that frozen row — so the page and
  * the ledger are one text because they are one column of one row.
  *
- * `body` is ALWAYS `RenderPipeline` output (sanitized HTML), never a raw editor buffer: the same
+ * `body` is always `RenderPipeline` output (sanitized HTML), never a raw editor buffer: the same
  * sanitizer whose output the ledger hashes runs before storage, so there is exactly one allowlist
  * and the stored draft is already the bytes that will be frozen.
  *

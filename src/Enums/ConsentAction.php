@@ -49,7 +49,7 @@ enum ConsentAction: string
 
     /**
      * System-generated: a deemed-consent objection window elapsed with no objection, so
-     * silence is deemed acceptance (Zustimmungsfiktion). IS an accepting action — this is
+     * silence is deemed acceptance (Zustimmungsfiktion). It is an accepting action — this is
      * how "silence binds" becomes provable in the ledger rather than merely asserted.
      */
     case DeemedAccepted = 'deemed_accepted';

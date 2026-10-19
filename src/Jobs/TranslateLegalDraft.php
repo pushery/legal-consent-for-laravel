@@ -98,7 +98,7 @@ final class TranslateLegalDraft implements ShouldQueue
     ) {
         // The lane is set here, on the properties the dispatcher reads.
         //
-        // NOT `viaConnection()` / `viaQueue()`, which is the shape a queued notification or
+        // Not `viaConnection()` / `viaQueue()`, which is the shape a queued notification or
         // listener uses and which nothing in `Illuminate\Bus` or `Illuminate\Queue` consults for a
         // job. Measured before relying on it: zero references in either namespace. Declared on a job
         // they are simply never called, which looks like configuration and is a method nobody runs.

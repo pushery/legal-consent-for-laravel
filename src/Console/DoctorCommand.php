@@ -797,7 +797,7 @@ final class DoctorCommand extends Command
      * Only `database` is answerable from here, and the limit is stated rather than implied.
      * Whether a mailer reaches its host is a question no doctor can answer without sending
      * something, and a check that pretended otherwise would print a green line over a question it
-     * never asked — the failure mode this whole command exists against. What IS answerable is the
+     * never asked — the failure mode this whole command exists against. What is answerable is the
      * one that leaves no trace in the application until a queue worker log is read: `database` is in
      * the channel list and Laravel's `notifications` table was never migrated, so every database
      * notification job fails.

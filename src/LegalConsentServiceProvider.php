@@ -125,14 +125,15 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * quiet through `:announce-new-tab="false"` and the editor view stopped filtering the kit's own
      * write-out on load, which the kit no longer reports as input (both first shipped in 2.56.0).
      * The first-shipped versions were read off the tags themselves rather than from a changelog.
-     * Raised 2.56.0 -> 2.67.0 when the development constraint moved to `^2.67.0`: no older release
-     * has been installed to prove the views against since then, and the floor names the oldest one.
+     * Raised 2.56.0 -> 2.67.0 when the development constraint moved to `^2.67.0`, and 2.67.0 -> 2.68.0
+     * when it moved to `^2.68.0`: no older release has been installed to prove the views against since
+     * then, and the floor names the oldest one.
      *
      * A consumer below the floor therefore receives the plain views instead of the WireKit variant,
      * which is this constant working rather than failing: the alternative is a Blade tag compiling
      * against a component that is not there, or a dialog that does not close after its action.
      */
-    public const string WIREKIT_MINIMUM = '2.67.0';
+    public const string WIREKIT_MINIMUM = '2.68.0';
 
     /**
      * Whether the bundled migrations are registered automatically. Disable with
@@ -579,7 +580,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // both halves of the argument for it were wrong:
         //
         //  - The premise was false. These files are named 0001_01_01_000001 upwards, which sorts
-        //    AFTER a fresh Laravel application's 0001_01_01_000000_create_users_table, not before
+        //    after a fresh Laravel application's 0001_01_01_000000_create_users_table, not before
         //    it. There was no interleaving to fix, and no shipped migration touches an app-owned
         //    table anyway.
         //  - The change actively broke the opt-in pair below. Rewriting only this set, while

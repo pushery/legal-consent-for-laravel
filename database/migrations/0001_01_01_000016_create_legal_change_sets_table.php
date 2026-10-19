@@ -44,7 +44,7 @@ return new class extends Migration
             // Set at freeze time. `document_content_hash` binds the description to exactly the text
             // it describes, so a later reader can tell whether they belong together.
             //
-            // Deliberately NOT a foreign key, for the reason 000006 and 000008 give for the two
+            // Deliberately not a foreign key, for the reason 000006 and 000008 give for the two
             // ledger tables: an `ON DELETE SET NULL` is an UPDATE of this row, and this table
             // carries a BEFORE UPDATE trigger keyed on `state = 'published'`. PostgreSQL runs a
             // referential action through SPI, so the trigger fires and the parent DELETE aborts;

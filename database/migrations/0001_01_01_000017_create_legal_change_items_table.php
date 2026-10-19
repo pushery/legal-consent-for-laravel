@@ -20,7 +20,7 @@ use Pushery\LegalConsent\Support\ChangeSetFreezeGuard;
  * same four facts describe a new payment service provider or a new joint controller, and a column
  * called `subprocessor_name` would have to be duplicated for each of them.
  *
- * Deliberately NOT a JSON column. This package has none anywhere, and PostgreSQL's jsonb reorders
+ * Deliberately not a JSON column. This package has none anywhere, and PostgreSQL's jsonb reorders
  * object keys on write — so a hashed JSON payload would read back different from what was stored
  * and make every load look dirty.
  *

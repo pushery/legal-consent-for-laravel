@@ -299,12 +299,12 @@ final class ConsentGate
      *  - a NEUTRAL action keeps whatever state existed immediately before it — never a global max,
      *    which would resurrect an earlier withdrawal. Two actions are neutral, for the same reason
      *    rather than out of resemblance: an OBJECTION rebuts a *deemed change* (§ 308 Nr. 5 lit. a
-     *    BGB) and not the agreement, and an OPT-IN REQUEST is the unconfirmed first half of a
+     *    BGB) and not the agreement, and an opt-in request is the unconfirmed first half of a
      *    double opt-in. Neither grants anything and neither takes anything away.
      *
      * @param  list<string>|null  $keys  restrict the read to these document keys; null reads the
      *                                   subject's whole ledger, which is what a status screen needs
-     *                                   `version` and `at` describe the SAME row the holding came from — the newest accepting one —
+     *                                   `version` and `at` describe the same row the holding came from — the newest accepting one —
      *                                   and they follow it exactly: an ending action clears them to null alongside dropping the
      *                                   major to 0, a neutral action leaves them where they were. That parity is the point. A
      *                                   screen that showed a version next to a withdrawn holding would report a text as accepted
