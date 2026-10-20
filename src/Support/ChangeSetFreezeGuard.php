@@ -29,14 +29,11 @@ use RuntimeException;
  * statement for the whole table. Laravel's `truncate()` is a `DELETE` on SQLite, which the row
  * trigger answers, and MySQL runs no trigger on `TRUNCATE TABLE`.
  *
- * It ships on all three engines. SQLite used to be left to the model hook alone, on the reasoning
- * that the app layer is the portable baseline — but the hook cannot see the paths this guard is
- * for, and the sibling migration says so in as many words: a `saveQuietly()`, a raw
- * `DB::table()->update()`, a mass `Model::query()->delete()` and a referential cascade all reach
- * the row without firing a single model event. Measured on 2026-08-27, a published change set on
- * SQLite could be rewritten and deleted through every one of those, while the same call refused on
- * PostgreSQL and MySQL — so "physically un-editable" was true on two engines of three, which is
- * the shape of claim that is worse than no claim.
+ * It ships on all three engines, SQLite included: the model hook cannot see the paths this guard
+ * is for. A `saveQuietly()`, a raw `DB::table()->update()`, a mass `Model::query()->delete()` and a
+ * referential cascade all reach the row without firing a single model event, so with the hook
+ * alone a published change set on SQLite could be rewritten and deleted through every one of
+ * those.
  *
  * Lives in `src/` rather than in the migration for the reason ProofColumnGuard documents: SQLite
  * rebuilds a table to alter a column, and a rebuild keeps indexes but drops triggers. Any later
@@ -101,19 +98,16 @@ final class ChangeSetFreezeGuard
      * The engine check, run before anything is dropped — which is why it is its own method rather
      * than the first lines of install().
      *
-     * Both matches above used to carry `default => null`, commented "an engine this package does
-     * not claim to protect". {@see ProofColumnGuard::assertSupportedEngine()} spells out why that
-     * is the wrong arm, and the argument transfers unchanged: a consumer on a fourth engine would
+     * Neither match above has a `default => null` arm, for the reason
+     * {@see ProofColumnGuard::assertSupportedEngine()} gives: a consumer on a fourth engine would
      * get migrations that succeed, a `legal_change_sets` table with no trigger on it, and no signal
-     * anywhere — a published change description silently rewritable on the one table whose purpose
-     * is to record what a subject was told. A migration that stops is recoverable; a frozen row
-     * that only looks frozen is not.
+     * anywhere, so a published change description would be silently rewritable on the one table
+     * whose purpose is to record what a subject was told. A migration that stops is recoverable; a
+     * frozen row that only looks frozen is not.
      *
-     * The migration chain could never reach that arm anyway: 000011 arms {@see ProofColumnGuard}
-     * and refuses a fourth engine there, long before 000016 creates the change tables. So the only
-     * way in was a direct call to this public method, and the only thing a test could have asserted
-     * at it is that the guard installs nothing and says nothing — the behavior the sentence below
-     * refuses to promise.
+     * The migration chain cannot reach a fourth engine here anyway: 000011 arms
+     * {@see ProofColumnGuard} and refuses one there, long before 000016 creates the change tables.
+     * This method refuses it for a direct call as well.
      *
      * The message names the change tables rather than deferring to ProofColumnGuard's, which talks
      * about `legal_documents`: an operator who sees a refusal should be told which table stopped

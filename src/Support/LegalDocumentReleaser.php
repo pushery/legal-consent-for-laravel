@@ -36,6 +36,7 @@ final readonly class LegalDocumentReleaser
         private LegalDocumentPublisher $publisher,
         private AffectedSubjectResolver $resolver,
         private ChangeItemsAuthor $changeItems = new ChangeItemsAuthor(new TenantContext(false)),
+        private ReadTimeLimit $timeLimit = new ReadTimeLimit,
     ) {}
 
     /**
@@ -62,12 +63,11 @@ final readonly class LegalDocumentReleaser
         // would wait out its timeout and throw. Whoever opens the transaction owns the lock, and
         // nobody below re-takes it.
         //
-        // The same name on a different store is no lock at all, and that is what this line used to
-        // be: `Cache::lock(...)` resolves the app default, while the model resolves the package's
-        // own `legal-consent.cache.store`. Both sides agree until an operator sets that option —
-        // which the model's own docblock recommends — and then the two writers of a document's
-        // active version queue on two separate locks and interleave freely. One resolver, called
-        // from both sides, is the only shape that cannot drift again.
+        // The same name on a different store is no lock at all: `Cache::lock(...)` resolves the app
+        // default, while the model resolves the package's own `legal-consent.cache.store`, and once
+        // an operator sets that option the two writers of a document's active version would queue
+        // on two separate locks and interleave freely. One resolver, called from both sides, keeps
+        // them on one store.
 
         // A release is the outermost writer of a document's active version, so it always takes the
         // lock — it never asks ActivationLock::ownedByCaller(), because there is nobody above it to
@@ -111,16 +111,14 @@ final readonly class LegalDocumentReleaser
     /**
      * The version a change of this shape has to carry — the other half of the publisher's refusal.
      *
-     * Since 0.32.0 the publisher refuses a gating mode on a version that keeps the active major,
-     * because the gate asks whether a subject holds a document's major: an active re-consent
-     * published as `1.1.0` reached nobody who had accepted `1.0.0`. That refusal names what is
+     * The publisher refuses a gating mode on a version that keeps the active major, because the
+     * gate asks whether a subject holds a document's major: an active re-consent published as
+     * `1.1.0` would reach nobody who had accepted `1.0.0`. That refusal names what is
      * wrong and, on its own, leaves the operator with the question it raises. The version still
      * comes from the draft row, and a release stamps this answer onto it when nobody wrote one
      * there ({@see stampVersion()}).
      *
      * So this answers it, and it enforces nothing: a caller that has its own numbering keeps it.
-     * What it removes is every consumer writing the same four lines — one of them did, measured
-     * against 0.32.0, and its whole wrapper existed for little else.
      *
      *   gating      the next MAJOR. A text that has to be accepted again is a new major, and that
      *               is the only shape the gate can see.
@@ -156,10 +154,11 @@ final readonly class LegalDocumentReleaser
     /**
      * The same advisory number for a whole release: every locale it covered, every person once.
      *
-     * This is what the shipped manager reports after `release()`, and it is the only place the
-     * number appears. It takes the rows the release returned rather than a key and a major, because
-     * those rows are the release — the version that gates and the locales it reached both come from
-     * the same object, so the count cannot describe a set the release did not write.
+     * This is what the shipped screens report after `release()`, through
+     * {@see affectsReleaseWithin()}, and it is the only place the number appears. It takes the rows
+     * the release returned rather than a key and a major, because those rows are the release — the
+     * version that gates and the locales it reached both come from the same object, so the count
+     * cannot describe a set the release did not write.
      *
      * An empty collection answers 0: nothing was released, so nobody was reached. That is not the
      * same as "no rows in the ledger", and no caller has to tell the two apart, because a release
@@ -181,6 +180,26 @@ final readonly class LegalDocumentReleaser
             $version,
             array_values($released->map(static fn (LegalDocument $row): string => $row->locale)->all()),
             is_numeric($maxConsentId) ? (int) $maxConsentId : 0,
+        );
+    }
+
+    /**
+     * {@see affectsRelease()} under a time limit: null when the count did not finish within $seconds.
+     *
+     * The count reads every consent of the document in the released languages, so it grows with the
+     * ledger, and it runs in the request that wrote the release. A count that outlasts that request
+     * turns a finished release into an error page. Under a limit, PostgreSQL and MySQL stop the count
+     * instead, and the release stands without its number. Null counts however long it takes, and 0
+     * does not count at all. SQLite has no statement timeout and counts to the end under any limit
+     * above 0.
+     *
+     * @param  Collection<int, LegalDocument>  $released
+     */
+    public function affectsReleaseWithin(Collection $released, ?int $seconds): ?int
+    {
+        return $this->timeLimit->run(
+            $seconds === null ? null : $seconds * 1000,
+            fn (): int => $this->affectsRelease($released),
         );
     }
 

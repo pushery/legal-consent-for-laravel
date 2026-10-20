@@ -25,7 +25,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  *  - the document's class cannot carry the transition (an objection against a consent, a
  *    termination against a privacy notice).
  *
- * Both used to arrive as a 500 — "our fault, retry" — for a request that is simply not a thing.
+ * Neither is a server error, and a 500 ("our fault, retry") would answer a request that is simply
+ * not a thing.
  * The manager's guard is untouched and still does its real job, which is keeping rows that assert
  * legally impossible states out of an append-only ledger; only the answer to the client changes.
  *
@@ -47,10 +48,9 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * the exception for whoever chooses to look. Do not document it as one.
  *
  * The exception is thrown directly rather than through `abort()`, matching what `ConsentController`
- * already does with `HttpException`. `abort()` is a Foundation-only global, and the contract test
- * that ratchets those caught it as a new one — correctly, even though the file next door already
- * calls `abort_unless()`. Throwing is not a workaround for that guard: it needs no global at all,
- * and it can carry the refusal as the previous exception, which `abort()` has no way to pass.
+ * already does with `HttpException`. `abort()` is a Foundation-only global, while a direct throw
+ * needs no global at all, and it can carry the refusal as the previous exception, which `abort()`
+ * has no way to pass.
  */
 trait RefusesUnavailableTransitions
 {

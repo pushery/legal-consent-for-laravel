@@ -4,6 +4,18 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.48.0 → 0.49.0
+
+Nothing is required of you, unless you put `EnsureLegalConsent` on Livewire's persistent middleware list, or your database's session time zone is not the application's.
+
+**On that list, a component action on a page the subject may not use now stops.** Livewire runs the listed middleware over a request for the component's page and stops an action only on a redirect or an exception. The gate returned its `409` there, Livewire dropped it, and the action ran. The gate now throws the same response, so the action stops, and the re-consent form keeps working because the gate always allows the consent route. A JSON client receives the same `409 legal_consent_required` as before.
+
+**`legal-consent:doctor` exits 1 when the session time zone of PostgreSQL or MySQL stands apart from `app.timezone`.** Laravel writes `accepted_at` without an offset, so such a session has stored every consent shifted by the difference. Set `timezone` on the connection to the application's zone; rows written before keep the moment they were stored with. A deployment step that runs the doctor goes red until then.
+
+`legal-consent:verify-ledger` now needs the same memory for a ledger of any size, and on PostgreSQL `legal-consent:prune` finds the chains it has to visit in one pass over the ledger. Neither asks anything of you.
+
+After a release, the admin screens give the database five seconds to count the people it reaches. On PostgreSQL and MySQL a longer count is stopped, and the status line names the release without the number. `admin.release_count_seconds` sets the time, `null` restores the count without a limit, and a published config without the key gets the five seconds.
+
 ## 0.47.0 → 0.48.0
 
 Nothing is required of you, unless you use the WireKit views.

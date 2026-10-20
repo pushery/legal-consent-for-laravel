@@ -22,7 +22,7 @@ use Pushery\LegalConsent\Support\DocumentMatrix;
  * which the checkbox views do not have. They are handed `field`, `wording`, `title`, `url`, `locale`
  * and `required`, and no body.
  *
- * Putting the body in the page instead was measured and rejected: a registration form shows up to
+ * Putting the body in the page instead is the worse trade: a registration form shows up to
  * four documents, a privacy notice is tens of kilobytes of HTML, and in the normal case the reader
  * opens none of them. That is a large, certain cost for an uncommon benefit, on the page whose load
  * time decides whether somebody registers at all.

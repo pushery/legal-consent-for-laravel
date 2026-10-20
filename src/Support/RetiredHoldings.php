@@ -25,7 +25,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  *
  * One implementation, called by both surfaces (the presenter's settings screen and the manager's
  * status map), because two would be exactly the divergence between screens that this package
- * argues against everywhere else — and the two are already held to each other by a test.
+ * argues against everywhere else.
  *
  * The version shown is the one the subject accepted, read back from their own ledger row, not the
  * last one the operator published. Their standing is a fact about the text they agreed to, and a
@@ -102,11 +102,9 @@ final readonly class RetiredHoldings
                 continue;
             }
 
-            // The `(int)` casts change no outcome and stay anyway: `major_version` is cast to
-            // `integer` on the model, so no driver hands back a string here. They are kept because the
-            // comparison is `!==`/`===` -- strict, on purpose, so that a holding of 1 never
-            // matches a version of "1" -- and a cast that documents that at the comparison is
-            // worth more than one saved character.
+            // `major_version` is cast to `integer` on the model, and the `(int)` casts restate that
+            // at the comparison, which is strict on purpose (`!==`/`===`), so that a holding of 1
+            // never matches a version of "1".
             if ((int) $previous->major_version !== $holding && (int) $version->major_version === $holding) {
                 // An exact match for what the fold says they hold wins: that is the text binding
                 // them right now.

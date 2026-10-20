@@ -95,20 +95,19 @@ final class ReConsentForm extends Component
      *
      * `EnsureLegalConsent` holds on the UNION of `outstanding()` and `firstAcceptance()` once
      * `gate.first_use` is on, while a mount that names a method answers one of the two. A host
-     * mounting the consent route once — the shape `routes.consent_name` describes, one name and
-     * one route — therefore sent every first-use subject to a form rendering zero documents while
-     * the gate kept holding the next request. The doctor already named the outcome: a dead end,
-     * not a loop.
+     * mounting the consent route once (the shape `routes.consent_name` describes, one name and
+     * one route) would otherwise send every first-use subject to a form rendering zero documents
+     * while the gate kept holding the next request: a dead end, not a loop.
      *
-     * This is a boolean, and a nullable `$method` was tried first and is broken twice over.
-     * Measured on this component: a `#[Locked]` typed property mounted as null reads back as null
-     * on the mount request and as the property's own PHP default on every request after it — so
-     * the form rendered the union, the subject ticked both boxes, and `submit()`, a later
-     * request, was back at `ReConsentGate` and iterated only the changed half. One acceptance
-     * dropped, success message on screen. And it cannot even be mounted: Livewire assigns a mount
-     * argument onto the public property of the same name, so `['method' => null]` is a TypeError
-     * against a non-nullable enum. A boolean round-trips, and it keeps `$method` non-nullable so
-     * nothing downstream has to ask whether the provenance exists.
+     * This is a boolean rather than a nullable `$method`, which would break twice over. A
+     * `#[Locked]` typed property mounted as null reads back as null on the mount request and as
+     * the property's own PHP default on every request after it, so the form would render the
+     * union while `submit()`, a later request, was back at `ReConsentGate` and iterated only the
+     * changed half: one acceptance dropped, success message on screen. And it cannot even be
+     * mounted: Livewire assigns a mount argument onto the public property of the same name, so
+     * `['method' => null]` is a TypeError against a non-nullable enum. A boolean round-trips, and
+     * it keeps `$method` non-nullable so nothing downstream has to ask whether the provenance
+     * exists.
      *
      * `#[Locked]` for the same reason as `$method`: it decides what goes into an append-only
      * ledger row, so it is not something a browser may send back.
@@ -366,19 +365,18 @@ final class ReConsentForm extends Component
      *
      * `outstanding()` filters on the notice mode of a version change, which is meaningless for a
      * subject who never accepted anything: a document first published as a silent editorial
-     * version was never in that set, so a form mounted with `FirstUseGate` rendered zero
-     * documents while `statusFor()` reported the same keys as owed. Measured on 0.19.0, and the
-     * reason this seam exists (LegalConsent's own `ConsentMethod::FirstUseGate` docblock had
-     * described the case since it was introduced).
+     * version was never in that set, so a form mounted with `FirstUseGate` would render zero
+     * documents while `statusFor()` reported the same keys as owed (the case
+     * `ConsentMethod::FirstUseGate` describes in its own docblock).
      *
      * `$method` is `#[Locked]`, so the choice is the embedding application's and not the browser's.
      *
      * A gate-question mount asks both and returns the union — the same set `EnsureLegalConsent`
      * counts when `gate.first_use` is on. It is not a convenience: the branch a host would
-     * otherwise write inverts what the middleware computed two lines earlier, so every one with
-     * OAuth, magic links or invitations wrote the identical one, and a subject who owed both a
-     * first acceptance and a re-consent still saw two screens in sequence with nothing explaining
-     * why the second looked like the first.
+     * otherwise write inverts what the middleware computed two lines earlier, so every host with
+     * OAuth, magic links or invitations would write the identical one, and a subject who owed both
+     * a first acceptance and a re-consent would still see two screens in sequence with nothing
+     * explaining why the second looked like the first.
      *
      * The union carries its own provenance. `$questionByKey` records which of the two sets each
      * key came from, because the answer lands in an append-only ledger row: a first acceptance

@@ -10,7 +10,7 @@ use Pushery\LegalConsent\Enums\DocumentType;
 /**
  * The info-only change notification (NoticeMode::InfoPush): the subject is actively informed
  * on a durable medium that a legal text changed, but no action is required — it takes effect
- * regardless. This is the § 675g / Finom case ("keine Aktion erforderlich") and the material
+ * regardless. This is the § 675g BGB change notice ("keine Aktion erforderlich") and the material
  * privacy-notice update (Art. 13/14, WP260 rev.01). It never threatens restriction and never
  * frames a privacy notice as consent (EDPB 05/2020 Rz. 122): a notice is acknowledged, and
  * where a right exists it states the objection (Art. 21) or free-termination right instead.

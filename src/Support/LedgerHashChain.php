@@ -35,24 +35,23 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  * re-keyed).
  *
  * What keying does not close — say it plainly, because "keyed" invites more confidence than it earns.
- * Two structural gaps used to survive any key. One of them is now closed, and the distinction matters
- * because the remaining one calls for a different defense:
- *  1. CLOSED (keyed installations only). The chain ROOT was a public constant: `genesis()` depends on
- *     neither the key nor the subject, and the verifier resets to it at every new `subject_token`. An
- *     attacker who could INSERT picked a fresh token, linked to genesis, and had a self-consistent
- *     chain the verifier walked as valid — while the GATE reads by `subject_type`+`subject_id` and
- *     never looks at the token, so the fabricated row counted as a real holding. The row that opens a
- *     chain now carries {@see rootProof()}, an HMAC over the token, and the verifier requires it above
- *     the boundary {@see stampRootBoundary()} records. Below that boundary, and on an UNKEYED
- *     installation, this gap is exactly as open as it was — there is no secret to prove anything with.
- *  2. CLOSED, by {@see LedgerRecordMacs}, and it took the shape this line used to prescribe. Only
- *     the backward LINK was stored, never a row's own hash, so the newest row of any chain could be
- *     REPLACED (not just truncated) with nothing to mismatch against — the link lives on the row
- *     that FOLLOWS, and the last row has no follower. What is recorded now is that same value:
- *     `hashRow()` over the STORED row, held in a table of its own because it can only be taken
- *     after the row is read back, and because this one is append-only. It is worth what the chain
- *     is worth — keyed, an attacker cannot produce the mac for a row they substituted; unkeyed
- *     they can, exactly as they can already re-chain.
+ * Two structural gaps survive a key on its own, and each has its own defense:
+ *  1. The chain ROOT is a public constant: `genesis()` depends on neither the key nor the subject,
+ *     and the verifier resets to it at every new `subject_token`. An attacker who could INSERT
+ *     would pick a fresh token, link to genesis, and have a self-consistent chain the verifier
+ *     walks as valid, while the GATE reads by `subject_type`+`subject_id` and never looks at the
+ *     token, so the fabricated row would count as a real holding. Closed on keyed installations:
+ *     the row that opens a chain carries {@see rootProof()}, an HMAC over the token, and the
+ *     verifier requires it above the boundary {@see stampRootBoundary()} records. Below that
+ *     boundary, and on an UNKEYED installation, this gap stays open, since there is no secret to
+ *     prove anything with.
+ *  2. Only the backward LINK is stored on a row, never the row's own hash, so the newest row of
+ *     any chain could be REPLACED (not just truncated) with nothing to mismatch against: the link
+ *     lives on the row that FOLLOWS, and the last row has no follower. Closed by
+ *     {@see LedgerRecordMacs}, which records that same value, `hashRow()` over the STORED row, in a
+ *     table of its own, because it can only be taken after the row is read back, and because this
+ *     one is append-only. It is worth what the chain is worth: keyed, an attacker cannot produce
+ *     the mac for a row they substituted; unkeyed they can, exactly as they can already re-chain.
  * So the append-only DB trigger — extended to restrict INSERT to the application role — remains the
  * real defense, and `verify-ledger`'s "intact" means "no evidence of re-chaining, and above the
  * boundary every chain was opened by a key holder", never "authentic".
@@ -97,11 +96,8 @@ final class LedgerHashChain
     /**
      * The immutable proof fields, in the exact order they are folded into the hash.
      *
-     * Order is part of the format: change it and every stored link stops matching. Held against
-     * the live schema by a test, so a migration that adds a column to `legal_consents` fails the
-     * suite until the column is classified either into this list or into
-     * {@see UNHASHED_COLUMNS} — the list was hand-maintained, and `tenant_id` fell out of the
-     * proof that way for as long as the column existed.
+     * Order is part of the format: change it and every stored link stops matching. Every column of
+     * `legal_consents` belongs either in this list or in {@see UNHASHED_COLUMNS}.
      *
      * @var list<string>
      */

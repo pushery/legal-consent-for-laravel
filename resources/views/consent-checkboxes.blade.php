@@ -20,9 +20,9 @@
     A checklist item's ->toArray() adds 'field', 'contentHash' and 'hashField' on top of that.
 
     $bind (optional): the name of a Livewire property holding one entry per field. Given, each
-    control binds to `{$bind}.{$field}` and the `old()` restore below is dropped — a `checked`
-    next to `wire:model` fights the bound value on every re-render, which is the whole of the
-    report this seam answers. Omitted (the default), nothing about this template changes.
+    control binds to `{$bind}.{$field}` and the `old()` restore below is dropped, because a
+    `checked` next to `wire:model` fights the bound value on every re-render. Omitted (the
+    default), nothing about this template changes.
 
       - Keyed by field, not by key. `field` is what the id, the name, the error bag and
         RegistrationRules already use, and the one control that is not a document — the Art. 8
@@ -38,10 +38,10 @@
 
     `field` is the input name, and it comes from the item rather than from this template. A
     checklist item's `->toArray()` carries it, and RegistrationRules validates exactly that name.
-    Building it here as `legal_{key}` was wrong for the one control that is not a document: the
-    Art. 8 age attestation is named by its key alone, so a hand-built name rendered a required
-    box the visitor could tick and never satisfy. The fallback below keeps the minimal shape above
-    working — that shape lists documents only, and a document is `legal_{key}`.
+    A name built here as `legal_{key}` would be wrong for the one control that is not a document:
+    the Art. 8 age attestation is named by its key alone, so a hand-built name would render a
+    required box the visitor could tick and never satisfy. The fallback below keeps the minimal
+    shape above working, since that shape lists documents only, and a document is `legal_{key}`.
 --}}
 {{-- Block form on purpose. Before it compiles anything else, Blade lifts PHP blocks out of a
      template by pairing each opening of the directive, one-line or block, with the next
@@ -103,16 +103,15 @@
         // an `aria-describedby` pointing at the wrong one of two links is worse than none.
         $memberLinkId = static fn (array $member): string => $field.'_link_'.(string) ($member['key'] ?? '');
 
-        // The label is assembled here rather than written as directives, and that is a measurement
-        // rather than a preference.
+        // The label is assembled here rather than written as directives.
         //
         // An argument-less blade directive immediately preceded by a word character is not
         // compiled. Blade guards the `@` with `\B`, so `X@endif` is a word boundary and stays in
         // the output as literal text. That bites exactly here, because this label may carry no
-        // stray whitespace — it is the accessible name of the control, and the name is the sentence
-        // the consent rests on — so the directives have to sit flush against each other, and
-        // `@endif@endforeach` puts an `f` in front of the second one. Measured: the compiled view
-        // carried `@endforeach@endif@if (…)` verbatim and the sentence rendered empty.
+        // stray whitespace (it is the accessible name of the control, and the name is the sentence
+        // the consent rests on), so the directives would have to sit flush against each other, and
+        // `@endif@endforeach` puts an `f` in front of the second one: the compiled view keeps
+        // `@endforeach@endif@if (…)` verbatim and the sentence renders empty.
         //
         // One output has no adjacency to get wrong. Every dynamic part goes through `e()`, which is
         // what `{{ }}` does; the wording itself is escaped exactly once, as before.
@@ -162,9 +161,9 @@
         //
         // And the link is only a description when it sits outside the label. Where the title
         // appears inside the wording, the link is inside the `<label>` and therefore already part
-        // of the accessible name — measured: name "Ich akzeptiere die Allgemeinen
-        // Geschäftsbedingungen.", description "Allgemeine Geschäftsbedingungen", a substring of the
-        // name. A screen reader then says the document title twice in a row, on every checkbox of
+        // of the accessible name: beside the name "Ich akzeptiere die Allgemeinen
+        // Geschäftsbedingungen." the description would be "Allgemeine Geschäftsbedingungen", a
+        // substring of the name. A screen reader then says the document title twice in a row, on every checkbox of
         // a registration page. The fallback branch below renders the link as a sibling, and there
         // it is a real description; the WireKit twin has always had it that way.
         // The host's own id goes last. The order is the reading order: why this field is flagged,
@@ -172,9 +171,8 @@
         // them. A shared form-level message read before the field's own would answer a question
         // nobody has asked yet.
         // Collapsed, not merely trimmed: the parts are joined with a separator whether or not
-        // they are there, so an absent one leaves a double space inside the value. A browser
-        // tolerates it; an arm asserting the attribute does not, and neither does anybody reading
-        // the rendered page.
+        // they are there, so an absent one would leave a double space inside the value, which a
+        // browser tolerates and a reader of the rendered page does not.
         $describedByIds = (string) preg_replace('/\s+/', ' ', trim(
             ($hasError ? $field.'_error' : '')
             .' '
@@ -192,14 +190,14 @@
     @endphp
     {{-- This stub ships no CSS, and this is the screen where that costs the most. Every class
          here is a BEM hook with no declarations behind it, so whether these controls are usable on
-         a phone is the host's decision — and the box below is a native checkbox. Measured in a real
-         browser with no CSS applied: the input is 13 px and the `<label>` wrapping it is 18 px.
-         Both are under the 24x24 CSS-pixel minimum (WCAG 2.5.8 AA), on the one screen a visitor
-         cannot get past without hitting it.
+         a phone is the host's decision, and the box below is a native checkbox. With no CSS
+         applied, the input is 13 px and the `<label>` wrapping it is 18 px. Both are under the
+         24x24 CSS-pixel minimum (WCAG 2.5.8 AA), on the one screen a visitor cannot get past
+         without hitting it.
 
-         So the label does not rescue this on its own, and an earlier draft of this note assumed
-         it did. The standard's "enclosed" exception is about the label's box — and by default that
-         box is 18 px, not 24. The padding below is required, not merely convenient.
+         So the label does not rescue this on its own. The standard's "enclosed" exception is about
+         the label's box, and by default that box is 18 px, not 24. The padding below is required,
+         not merely convenient.
 
          When you skin these fields: give the interactive control a >= 24px hit target — the
          easiest route is padding on the `<label>`, which already wraps the input and so extends
@@ -207,9 +205,8 @@
          because iOS zooms the page on focus below that and a zoomed registration form loses the
          submit button off-screen.
 
-         The same paragraph lived only in the admin editor stub, which has one textarea and two
-         buttons and is seen by an operator on a desk. Here there is one touch target per document,
-         it is the first view most consumers publish, and it had no guidance at all. --}}
+         The admin editor stub carries the same note. Here there is one touch target per document,
+         on the first view an installation usually publishes. --}}
     <div class="legal-consent-field">
         <label for="{{ $field }}">
             <input

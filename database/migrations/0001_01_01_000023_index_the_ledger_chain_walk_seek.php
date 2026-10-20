@@ -18,9 +18,8 @@ use Pushery\LegalConsent\Support\IndexName;
  *
  * The drop is not tidiness, and it is the half that makes this migration do anything. Adding the
  * pair while the single-column index stays changes nothing on any engine: the planner prefers the
- * narrower index and patches up the second half of the sort key itself. Measured on PostgreSQL
- * 18.4 over 100 subjects with 200 chained rows each, seeking from the middle of one subject's
- * chain:
+ * narrower index and patches up the second half of the sort key itself. On PostgreSQL 18.4, over
+ * 100 subjects with 200 chained rows each, seeking from the middle of one subject's chain:
  *
  *   single-column index only   Index Scan using legal_consents_subject_token_index
  *                              -> Incremental Sort (Sort Key: subject_token, id)
@@ -47,10 +46,10 @@ use Pushery\LegalConsent\Support\IndexName;
  *
  * What it costs on the other engines: nothing, because there it was already this index under
  * another name. InnoDB appends the primary key to every secondary index, so MySQL's
- * `legal_consents_subject_token_index` is physically (subject_token, id) — measured on MySQL
- * 8.4.10, the seek already ran as one index range scan with `10101 < id <= 9999999` inside the
- * index condition, and all three states (before, both, after) produced an identical plan at an
- * identical cost of 4894. SQLite likewise stores the rowid as an index's trailing column and,
+ * `legal_consents_subject_token_index` is physically (subject_token, id): on MySQL 8.4.10 the seek
+ * already runs as one index range scan with `10101 < id <= 9999999` inside the index condition,
+ * and all three states (before, both, after) produce an identical plan at an identical cost of
+ * 4894. SQLite likewise stores the rowid as an index's trailing column and,
  * like PostgreSQL, ignored the pair until the single-column index was gone. So this migration is
  * a real change on PostgreSQL, the engine the package is primary on, and a rename everywhere else.
  *

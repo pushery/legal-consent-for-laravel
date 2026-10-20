@@ -18,6 +18,7 @@ use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Http\Middleware\EnsureLegalConsent;
 use Pushery\LegalConsent\LegalConsentServiceProvider;
+use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\ConfirmationWindow;
@@ -123,11 +124,10 @@ final class DoctorCommand extends Command
      * closure form first and the caching consequence a couple of lines later. A reader copies the
      * example, not the footnote, so the shape that breaks is the shape that gets used.
      *
-     * The failure is distributed in the worst possible way. Locally nothing caches, so it runs. The
-     * package's own suite passes closures on purpose, so it runs. The first time anyone sees it is
-     * `config:cache` in a deploy — after the merge, after a green gate, at the point where turning
-     * back is expensive. Naming it here costs one line of output and moves the discovery to the
-     * machine where the closure was written.
+     * The failure is distributed in the worst possible way. Locally nothing caches, so it runs, and
+     * a test run passes closures without complaint. The first time anyone sees it is `config:cache`
+     * in a deploy, at the point where turning back is expensive. Naming it here costs one line of
+     * output and moves the discovery to the machine where the closure was written.
      *
      * Reported, never failed on: a closure is entirely valid until someone caches, and plenty of
      * installations never do.
@@ -428,10 +428,8 @@ final class DoctorCommand extends Command
     /**
      * What is worth saying about which view set is being served, or null when there is nothing.
      *
-     * Thin on purpose: it reads the environment and hands the three facts to a pure describer. The
-     * environment here cannot be varied — this package's own suite always has one WireKit
-     * installed, so the below-the-floor answer is unreachable through this method and would ship
-     * as prose nobody ever ran. The describer below is where that answer is exercised.
+     * Thin on purpose: it reads the environment and hands the three facts to a pure describer,
+     * which decides every answer, the one for a WireKit below the floor included.
      *
      * @return array{0: string, 1: list<string>}|null the headline and its explanation
      */
@@ -556,7 +554,7 @@ final class DoctorCommand extends Command
                 [
                     '  A chain opened by a direct INSERT — fresh token, genesis link, no root proof —',
                     '  is what that check catches, and without the marker `verify-ledger` reports such',
-                    '  a ledger as intact. Measured: the identical row is caught once the marker exists.',
+                    '  a ledger as intact. The identical row is caught once the marker exists.',
                     '  Not migrated yet: run the package migrations with the key set; 000024 stamps it.',
                     '  Already migrated: running them again changes nothing. The first consent recorded',
                     '  with the key stamps it, and every row already in the ledger then counts as history.',
@@ -576,12 +574,52 @@ final class DoctorCommand extends Command
                     '  configuration, a database or role default, or PGTZ in the environment of the process.',
                     '  A change there makes `verify-ledger` report every chained row as broken although none',
                     '  was touched. Set the key to the zone the chained rows were written under, or, before',
-                    "  the first chained row, to 'UTC' on PostgreSQL and '+00:00' on MySQL.",
+                    "  the first chained row, to the application's time zone: 'UTC' on PostgreSQL and '+00:00'",
+                    '  on MySQL for an application on UTC. Another zone shifts every recorded moment.',
                 ],
             ];
         }
 
         return $findings;
+    }
+
+    /** A shift in seconds as words: whole hours where it is whole hours, minutes otherwise, before or after. */
+    private function describeShift(int $seconds): string
+    {
+        $minutes = intdiv(abs($seconds), 60);
+        $amount = $minutes % 60 === 0
+            ? (intdiv($minutes, 60) === 1 ? '1 hour' : intdiv($minutes, 60).' hours')
+            : ($minutes === 1 ? '1 minute' : $minutes.' minutes');
+
+        return $amount.($seconds > 0 ? ' before' : ' after');
+    }
+
+    /**
+     * How far the ledger connection's session time zone stands from the application's right now, in seconds, or null
+     * when the two agree or the engine keeps no session zone.
+     *
+     * Laravel writes a moment as the wall time of `app.timezone`, without an offset, and PostgreSQL and MySQL read that
+     * wall time in the session's zone. Where the two differ, every `accepted_at` is stored that far from the moment of
+     * acceptance. Compared as offsets, so two names for one zone agree.
+     */
+    private function sessionZoneShift(): ?int
+    {
+        // The model's connection, which is a Connection; the builder's is only the interface, which names no driver.
+        $connection = LegalConsent::model()::query()->getModel()->getConnection();
+
+        $seconds = match ($connection->getDriverName()) {
+            'pgsql' => $connection->scalar('select extract(timezone from now())::integer'),
+            'mysql' => $connection->scalar('select timestampdiff(second, utc_timestamp(), now())'),
+            default => null,
+        };
+
+        if (! is_numeric($seconds)) {
+            return null;
+        }
+
+        $shift = (int) $seconds - CarbonImmutable::now()->getOffset();
+
+        return $shift === 0 ? null : $shift;
     }
 
     /**
@@ -633,10 +671,9 @@ final class DoctorCommand extends Command
      */
     private function unknownRegistrationMode(): ?string
     {
-        // The literal, for the same reason the provider uses one: the config-drift test reads
-        // inline defaults out of the source and cannot evaluate a class constant, so a constant
-        // here would drop out of that comparison without a word. The constants below are the
-        // vocabulary, which is a different job.
+        // The literal, for the same reason the provider uses one: an inline default can be read out
+        // of the source and compared with the published config file, and a class constant cannot.
+        // The constants below are the vocabulary, which is a different job.
         $value = config('legal-consent.registration.without_form_fields', 'warn');
 
         $known = [
@@ -665,6 +702,7 @@ final class DoctorCommand extends Command
     private function unreadableWholeNumbers(): array
     {
         $keys = [
+            'admin.release_count_seconds',
             'age_gate.threshold',
             'cache.ttl',
             'cache.enforceable_ttl',
@@ -830,7 +868,7 @@ final class DoctorCommand extends Command
 
         // No `try` around this: databaseFindings() opens the connection before any reader runs and
         // reports the database as unreachable when it cannot, so a guard here would answer a question
-        // that is already answered, on a line no run can enter.
+        // that is already answered.
         return TableLookup::exists('notifications') ? [] : ['database'];
     }
 
@@ -864,6 +902,7 @@ final class DoctorCommand extends Command
      *     incoherent: bool,
      *     unpublished: list<array{0: string, 1: string}>,
      *     tamper: list<array{0: string, 1: list<string>}>,
+     *     zoneShift: int|null,
      *     databaseCache: array{0: string, 1: string}|null,
      *     undeliverable: list<string>,
      * }|null
@@ -881,6 +920,7 @@ final class DoctorCommand extends Command
                 'incoherent' => $this->deemedConsentWithoutProof(),
                 'unpublished' => $this->unpublishedCombinations(),
                 'tamper' => $this->tamperEvidenceFindings(),
+                'zoneShift' => $this->sessionZoneShift(),
                 'databaseCache' => $this->databaseBackedDocumentCache(),
                 'undeliverable' => $this->undeliverableNotificationChannels(),
             ];
@@ -916,6 +956,7 @@ final class DoctorCommand extends Command
         $incoherent = $database['incoherent'] ?? false;
         $unpublished = $database['unpublished'] ?? [];
         $tamperFindings = $database['tamper'] ?? [];
+        $zoneShift = $database['zoneShift'] ?? null;
         $databaseCache = $database['databaseCache'] ?? null;
         $undeliverable = $database['undeliverable'] ?? [];
 
@@ -966,6 +1007,17 @@ final class DoctorCommand extends Command
                 $this->line($line);
             }
 
+            $this->newLine();
+        }
+
+        if ($zoneShift !== null) {
+            $this->newLine();
+            $this->error('Every accepted_at is stored '.$this->describeShift($zoneShift).' the moment of acceptance:');
+            $this->line("  the database's session time zone and the application's ('".date_default_timezone_get()."') stand that far apart.");
+            $this->line('  Laravel writes a moment as the wall time of app.timezone, without an offset, and the');
+            $this->line('  database reads that wall time in its session time zone. Set `timezone` on the connection');
+            $this->line("  to the application's zone before more consents are recorded. Rows written before keep");
+            $this->line('  the moment they were stored with.');
             $this->newLine();
         }
 
@@ -1151,7 +1203,7 @@ final class DoctorCommand extends Command
         // returns each restating the rule is how the legal contradiction fell out of the exit code
         // on the third one: the same deemed-consent-without-proof installation ended 1 or 0
         // depending on whether the published config happened to carry an unrelated stale key.
-        $failed = $incoherent || $refusedFallbacks !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null || $documentRetentionProblems !== [] || $confirmWindowProblem !== null;
+        $failed = $incoherent || $refusedFallbacks !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null || $documentRetentionProblems !== [] || $confirmWindowProblem !== null || $zoneShift !== null;
 
         // $this->laravel->configPath() rather than the config_path() helper, as the provider does
         // when it publishes: the path is the application's, so it is asked of the application this

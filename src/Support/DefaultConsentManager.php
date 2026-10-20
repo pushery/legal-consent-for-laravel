@@ -40,8 +40,8 @@ use RuntimeException;
  * immutable ledger entry, snapshotting the active version's proof fields plus the
  * server-side context, then fires the matching event.
  *
- * Not `final`: the tamper-chain tail read is a `protected` seam ({@see latestChainedRow}) so a test
- * can force the stale read a concurrent writer sees and exercise the fork-retry deterministically.
+ * Not `final`: the tamper-chain tail read is a `protected` seam ({@see latestChainedRow}), so a
+ * subclass can return the stale tail a concurrent writer sees and drive the fork-retry.
  */
 readonly class DefaultConsentManager implements ConsentManager
 {
@@ -138,8 +138,8 @@ readonly class DefaultConsentManager implements ConsentManager
 
         // Order the checklist by document key in a package-defined, engine-independent way. SORT_STRING
         // (byte order) is explicit: the default SORT_REGULAR would compare numeric-looking keys
-        // numerically, and the pre-cache v0.4 path ordered by the DB collation (locale/case-folding) —
-        // both make the checkbox order depend on something outside the package. This pins it here.
+        // numerically, and the DB collation would fold locale and case; both would make the checkbox
+        // order depend on something outside the package. This pins it here.
         // An informational page (Impressum, cookie policy) is published through the same store but
         // asks the reader for nothing, so it must never become a control. Filtered after the
         // registry intersection and before the items are built, so it can neither render as a
@@ -931,9 +931,8 @@ readonly class DefaultConsentManager implements ConsentManager
      * MySQL, for a subject with no chained row, it locks a gap in the index instead of a row, which
      * is how two first appends can deadlock; appendChained() repeats the one rolled back.
      *
-     * A `protected` seam: overriding it lets a test return the stale tail a concurrent writer sees
-     * and drive the fork-retry deterministically, which no single-connection test could otherwise
-     * provoke.
+     * A `protected` seam: overriding it returns the stale tail a concurrent writer sees and drives
+     * the fork-retry deterministically, which a single connection cannot otherwise provoke.
      */
     protected function latestChainedRow(string $token): ?object
     {

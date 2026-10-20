@@ -161,6 +161,7 @@ return [
     'admin_status_changed_before_review' => 'O texto foi alterado depois de ser mostrado aqui, por isso não foi marcado como revisto. Volta a carregá-lo e revê a versão atual.',
     'admin_status_release_blocked' => '«:key» não foi publicado: :reasons',
     'admin_status_released' => '«:key» publicado em :count idioma(s) — afeta :affects pessoa(s).',
+    'admin_status_released_uncounted' => '«:key» publicado em :count idioma(s). O tempo previsto não bastou para contar as pessoas afetadas.',
     'admin_status_wording_changed' => 'A frase de aceitação mudou em :languages, e cada consentimento dado a partir de agora regista a nova.',
     'admin_deemed_heading' => 'Publicar com prazo de oposição',
     'admin_deemed_explainer' => 'Uma alteração com consentimento tácito vincula se o prazo de oposição terminar sem oposição. O prazo tem de respeitar pelo menos o pré-aviso legal.',

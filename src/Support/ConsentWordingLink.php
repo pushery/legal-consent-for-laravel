@@ -12,18 +12,11 @@ namespace Pushery\LegalConsent\Support;
  * proof. So the linked run comes out of the wording by offset — never by substituting the title —
  * and {@see before} . {@see match} . {@see after} reassembles the original byte for byte.
  *
- * **The lookup is case-insensitive because an exact one would have linked almost nothing.** Measured
- * across the twenty-one published rows (seven locales, three consent document types): only the
- * German ones write the title the way the title reads. The rest lower-case it mid-sentence —
- * `Terms of Use` as the title against *"I accept the terms of use."* in the wording. An exact
- * comparison links a handful and leaves the rest silently unlinked, which is the failure shape this
- * package keeps meeting: correct for the case someone tested, quietly wrong for the rest.
- *
- * That count said "fourteen … two documents" and was a sentence, not a measurement. The third
- * consent type had never been in it, and that is where the one real gap sat: `es/newsletter`
- * carried the heading `Boletín` against a sentence saying `la newsletter`, so twenty of the
- * twenty-one pairs anchored and one silently fell back to the separate-link layout. The shipped
- * language files are now walked on every run, so the number is measured rather than quoted.
+ * **The lookup is case-insensitive because an exact one would link almost nothing.** Of the
+ * shipped acceptance sentences (seven locales, three consent document types), only the German
+ * ones write the title the way the title reads. The rest lower-case it mid-sentence: `Terms of
+ * Use` as the title against *"I accept the terms of use."* in the wording. An exact comparison
+ * would link a handful and leave the rest silently unlinked.
  *
  * A null return is not an error and must not be treated as one. The title genuinely may not appear
  * in the sentence — `die AGB` against `Allgemeine Geschäftsbedingungen` — and then there is nothing

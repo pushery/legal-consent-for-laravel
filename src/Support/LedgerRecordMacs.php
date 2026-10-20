@@ -26,8 +26,7 @@ use Pushery\LegalConsent\Console\VerifyLedgerCommand;
  * itself — "both the writer and the verifier hash the SAME database-read representation" — and it
  * is the reason this lives in a second table rather than in a column. A value computed before the
  * INSERT cannot predict the rendering: `accepted_at` comes back from PostgreSQL carrying the
- * connection's offset and from MySQL and SQLite carrying none. A first attempt hashed the
- * pre-save shape, passed the whole SQLite suite, and broke every Postgres engine suite at once.
+ * connection's offset and from MySQL and SQLite carrying none.
  *
  * Append-only by use, not by trigger. A row is never corrected: the retention sweep, which
  * re-links through {@see LedgerChainRepair::relink()}, changes a row's link and therefore its hash,
@@ -158,13 +157,12 @@ final readonly class LedgerRecordMacs
     /**
      * Record where macs begin, the first time one is written.
      *
-     * Not in the migration, and that is the whole point of the method. Migration 000024 learned
-     * this about its own marker and wrote it down; the first version of 000031 stamped at
-     * migrate-time anyway. A marker stamped then carries a proof computed with whatever key was
-     * configured then, and the documented order of operations lets an operator set the secret
-     * afterwards — the marker is born holding a hash it can never reproduce, and the verifier
-     * reports a permanent break on an untouched ledger. Stamped by the call that writes the first
-     * mac, it cannot drift from the key in use.
+     * Not in the migration, and that is the whole point of the method. A marker stamped at
+     * migrate-time carries a proof computed with whatever key was configured then, and the
+     * documented order of operations lets an operator set the secret afterwards: the marker would
+     * be born holding a hash it can never reproduce, and the verifier would report a permanent
+     * break on an untouched ledger. Stamped by the call that writes the first mac, it cannot drift
+     * from the key in use.
      *
      * The boundary is `max(id)` as it stands now, which includes the row whose mac is about to be
      * written. That row is exempt from the absence check and from nothing else — it carries a mac,

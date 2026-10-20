@@ -22,8 +22,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  * change is safe at all. `LedgerHashChain::canonical()` length-prefixes the string cast of every
  * proof field precisely so a column returned as `2` by one PDO driver and `'2'` by another hashes
  * the same. An integer key and its decimal text therefore produce an identical canonical form, so
- * the tamper-evidence chain reads exactly as it did before the type moved. Asserted rather than
- * assumed, by each engine suite, against rows written before the type moved.
+ * the tamper-evidence chain reads exactly as it did before the type moved.
  *
  * Per-driver SQL for PostgreSQL, because of the way back: PostgreSQL widens `bigint` to `varchar`
  * on its own, but narrowing `varchar` to `bigint` in `down()` needs a `USING` clause ("column
@@ -40,8 +39,8 @@ use Pushery\LegalConsent\Support\TableLookup;
  * guard on `legal_documents` names `legal_consents` in its DELETE arm, and the rebuild's last step
  * renames the replacement table into place while the original is already gone. SQLite re-parses
  * every trigger in the schema at that rename, so a trigger pointing at the missing table is a hard
- * error — measured: "error in trigger legal_documents_no_referenced_delete: no such table:
- * main.legal_consents", raised after `legal_consents` has been dropped. Disarming first turns a
+ * error ("error in trigger legal_documents_no_referenced_delete: no such table:
+ * main.legal_consents"), raised after `legal_consents` has been dropped. Disarming first turns a
  * destroyed ledger table into an ordinary schema change.
  */
 return new class extends Migration

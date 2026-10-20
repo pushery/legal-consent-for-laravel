@@ -161,6 +161,7 @@ return [
     'admin_status_changed_before_review' => 'De tekst is gewijzigd nadat hij hier werd getoond, en is daarom niet als gecontroleerd gemarkeerd. Laad hem opnieuw en controleer de huidige versie.',
     'admin_status_release_blocked' => '‘:key’ is niet gepubliceerd: :reasons',
     'admin_status_released' => '‘:key’ gepubliceerd in :count taal/talen — betreft :affects perso(o)n(en).',
+    'admin_status_released_uncounted' => '‘:key’ gepubliceerd in :count taal/talen. De ingestelde tijd was te kort om de betrokken personen te tellen.',
     'admin_status_wording_changed' => 'De acceptatiezin is gewijzigd in :languages, en elke toestemming vanaf nu legt de nieuwe vast.',
     'admin_deemed_heading' => 'Publiceren met bezwaartermijn',
     'admin_deemed_explainer' => 'Een wijziging met stilzwijgende instemming bindt als de bezwaartermijn zonder bezwaar afloopt. De termijn moet minstens de wettelijke aankondigingstermijn aanhouden.',

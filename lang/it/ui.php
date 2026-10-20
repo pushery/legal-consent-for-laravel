@@ -161,6 +161,7 @@ return [
     'admin_status_changed_before_review' => 'Il testo è stato modificato dopo essere stato mostrato qui, quindi non è stato contrassegnato come revisionato. Ricaricalo e rivedi la versione attuale.',
     'admin_status_release_blocked' => '«:key» non è stato pubblicato: :reasons',
     'admin_status_released' => '«:key» pubblicato in :count lingua/e — riguarda :affects persona/e.',
+    'admin_status_released_uncounted' => '«:key» pubblicato in :count lingua/e. Il tempo previsto non è bastato per contare le persone interessate.',
     'admin_status_wording_changed' => 'La frase di accettazione è cambiata in :languages, e ogni consenso dato d’ora in poi registra quella nuova.',
     'admin_deemed_heading' => 'Pubblica con termine di opposizione',
     'admin_deemed_explainer' => 'Una modifica a consenso tacito vincola se il termine di opposizione si chiude senza opposizione. Il termine deve rispettare almeno il preavviso di legge.',

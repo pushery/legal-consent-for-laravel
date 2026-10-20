@@ -23,14 +23,14 @@ use Pushery\LegalConsent\Support\TableLookup;
  * does have a successor, that same string already sits in the next row's `prev_record_hash`. The
  * feature is only that the last row now has one too.
  *
- * Why a separate table, which is the part a reader will want to argue with. A column on
- * `legal_consents` is the obvious shape and it cannot work, for two independent reasons:
+ * Why a separate table: a column on `legal_consents` is the obvious shape and it cannot work, for
+ * two independent reasons:
  *
  *  1. The mac has to be taken over the row as the database returns it, because that is what the
  *     verifier recomputes from. No value computed before the INSERT can predict the driver's
  *     rendering: `accepted_at` comes back from PostgreSQL as `2026-09-16 18:39:21+02` and from
- *     MySQL and SQLite with no offset at all. A first attempt at this hashed the pre-save shape,
- *     passed 71 arms on SQLite, and broke 14 on a real PostgreSQL.
+ *     MySQL and SQLite with no offset at all, so a mac over the pre-save shape fails to verify on
+ *     PostgreSQL.
  *  2. Reading the row back means a SECOND statement, and `legal_consents` is append-only — the
  *     trigger from migration 000002 refuses an UPDATE unconditionally on MySQL. There is no second
  *     statement to be had on that table.
@@ -82,19 +82,15 @@ return new class extends Migration
             });
         }
 
-        // The boundary is not stamped here, and the first version of this file stamped it here.
-        // Migration 000024 already wrote down why that is wrong, about its own marker, and the
-        // mistake survived being read: a marker stamped at migrate-time carries a proof computed
-        // with whatever key was configured then, and the documented order of operations lets an
-        // operator set `tamper_evidence_key` afterwards. The marker is then born holding an unkeyed
-        // hash it can never reproduce again, and `verify-ledger` reports a break for ever on a
-        // ledger nobody touched.
+        // The boundary is not stamped here, for the reason migration 000024 gives about its own
+        // marker: a marker stamped at migrate-time carries a proof computed with whatever key was
+        // configured then, and the documented order of operations lets an operator set
+        // `tamper_evidence_key` afterwards. The marker is then born holding an unkeyed hash it can
+        // never reproduce again, and `verify-ledger` reports a break for ever on a ledger nobody
+        // touched.
         //
-        // The tempting counter-argument is the one that made it past review the first time: this
-        // boundary means "where macs begin", which does not depend on a key. True of the boundary,
-        // false of its proof — and the proof is what the verifier recomputes. Measured: four arms
-        // went red at once, all of them installations that set the key after migrating, which is
-        // the documented order.
+        // That the boundary means "where macs begin", which does not depend on a key, is true of
+        // the boundary and false of its proof, and the proof is what the verifier recomputes.
         //
         // So {@see LedgerRecordMacs::record()} stamps it, the first time a mac is written. It
         // cannot drift from the key in use, because it is written by the same call that uses it.

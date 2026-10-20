@@ -270,14 +270,11 @@ class LegalDocument extends Model
      * The cache store the activation lock lives on — the package's own
      * (`legal-consent.cache.store`), not whatever happens to be the app default.
      *
-     * Public and static because it has two callers, and having had two spellings is what the
-     * method exists to prevent. {@see LegalDocumentReleaser} took the
-     * same lock name through the bare `Cache` facade, which resolves the app default. Both sides
-     * agreed in every test because the package store is unset there and both fell back to the same
-     * default; the moment an operator sets `LEGAL_CONSENT_CACHE_STORE` — which this very docblock
-     * recommends — a release and a `legal-consent:publish` of the same document held two different
-     * locks and stopped excluding each other, which is precisely how a serialized activation still
-     * ends with two active rows. A comparison of lock names cannot see that class of defect.
+     * Public and static because it has two callers, {@see LegalDocumentReleaser} among them, and
+     * both must take the lock on the same store. Through the bare `Cache` facade, which resolves the
+     * app default, a release and a `legal-consent:publish` of the same document would hold two
+     * different locks as soon as an operator sets `LEGAL_CONSENT_CACHE_STORE`, and stop excluding
+     * each other.
      *
      * The serialization is only as real as the store's lock. `array` and `null` both implement
      * LockProvider — so an interface check alone would call them serializing — but an array lock is

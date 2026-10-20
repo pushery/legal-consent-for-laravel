@@ -108,17 +108,14 @@ final readonly class WithdrawConsentController
     private function backToOwnOrigin(Request $request): RedirectResponse
     {
         $home = config('legal-consent.routes.home', '/');
-        // The `!== ''` half is defensive and cannot be observed from outside — measured, so that
-        // nobody writes the test it invites. The URL generator normalizes an empty target and a
-        // bare slash to the same place: `url()->previous('')` and `url()->previous('/')` both
-        // answer the application root, and so do both `redirect()->to()` calls, with a foreign
-        // Referer as well as without one. Removing this half therefore changes no response
-        // anywhere, and an arm asserting "an empty home redirects to /" passes with the half
-        // deleted. The `is_string()` half is different and is held — a non-string home is a
-        // configuration a consumer really writes, and it has an arm.
+        // The `!== ''` half is defensive and cannot be observed from outside. The URL generator
+        // normalizes an empty target and a bare slash to the same place: `url()->previous('')` and
+        // `url()->previous('/')` both answer the application root, and so do both
+        // `redirect()->to()` calls, with a foreign Referer as well as without one. The
+        // `is_string()` half is different: a non-string home is a configuration that really
+        // occurs.
         //
-        // It stays because it costs nothing and states the intent at the point of use, not
-        // because a test could fail without it.
+        // It stays because it costs nothing and states the intent at the point of use.
         $fallback = is_string($home) && $home !== '' ? $home : '/';
 
         $previous = url()->previous($fallback);
@@ -148,18 +145,15 @@ final readonly class WithdrawConsentController
         // A backslash: browsers treat `\` as `/`, so `/\evil` is fetched as `//evil`, and
         // parse_url genuinely reads no authority there. That half is load-bearing.
         //
-        // The `//` half is redundant, and this comment used to give it a reason that is false.
-        // It said a protocol-relative `//host` "has no scheme for parse_url to hang a host on".
-        // Measured: `parse_url('//host', PHP_URL_HOST)` returns `'host'`, and every degenerate
-        // shape (`//`, `///`, `//?x`, `///host`) returns `false` — never `null`. The final line
-        // compares strictly against `null`, so all of them fall through to the host comparison and
-        // are refused there. No `//…` input reaches a redirect through this door either way.
+        // The `//` half is redundant: `parse_url('//host', PHP_URL_HOST)` returns `'host'`, and
+        // every degenerate shape (`//`, `///`, `//?x`, `///host`) returns `false`, never `null`.
+        // The final line compares strictly against `null`, so all of them fall through to the host
+        // comparison and are refused there. No `//…` input reaches a redirect through this door
+        // either way.
         //
-        // It stays as defense in depth on a security path, where a second layer is cheap. What is
-        // not acceptable is a guard whose stated reason is wrong: it stops the next reader from
-        // seeing where the real refusal happens. Nothing reaches this line that the host
-        // comparison would not already refuse, so no test can distinguish it from its own
-        // absence — there is nothing behind it to catch.
+        // It stays as defense in depth on a security path, where a second layer is cheap. The real
+        // refusal is the host comparison: nothing reaches this line that it would not already
+        // refuse.
         if (str_contains($target, '\\') || str_starts_with($target, '//')) {
             return false;
         }

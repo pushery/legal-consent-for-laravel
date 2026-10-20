@@ -19,7 +19,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  * `verify-ledger` then exits 0 over a forged ledger.
  *
  * Why the root itself is not keyed, which is the obvious fix and does not work here.
- * Two independent reasons, both measured rather than reasoned:
+ * Two independent reasons:
  *
  *  1. Every existing first row already stores the constant. A keyed root invalidates all of them,
  *    and correcting them means UPDATE on `legal_consents` — which the append-only trigger from

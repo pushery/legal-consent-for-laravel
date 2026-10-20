@@ -4,6 +4,21 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.49.0] - 2026-10-20
+
+### Changed
+
+- **On PostgreSQL the retention sweep finds the chains it has to visit in one pass over the ledger.** A run checked every consent row past the cutoff for a newer row of the same subject, one index probe per row, and on a ledger where most subjects consented long ago that is most of the ledger, also on a run that deletes nothing. The first search of a run now groups the ledger once and finds up to 5,000 chains in that pass: over 50,000 such rows it read 14,874 shared buffers in 47 ms, where the search row by row read 254,247 in 263 ms. A run with more chains than that continues row by row from where the pass ended. MySQL and SQLite keep the search row by row, which the alternatives measured there did not beat. Which rows a run deletes is unchanged.
+
+### Fixed
+
+- **The legend of the WireKit overview stays inside a narrow screen.** Each entry kept a state's short and long form on one line, and the longest, 47 characters in German and Dutch, ran past a 320 px screen and scrolled the whole page sideways. An entry still moves to the next line as a whole, and wraps inside itself only where it is wider than the screen.
+- **A release on a large ledger no longer waits for its count.** Once a release is written, the admin screens count the people it reaches, and that count reads every consent of the document in the released languages. On MySQL a document with a million consents took seconds, and a count that outlasted the request turned a finished release into an error page. The database now gets `admin.release_count_seconds` for it, 5 by default: PostgreSQL and MySQL stop a longer count, and the status line names the release without the number. `0` skips the count, `null` waits for it, and a custom release screen gets the same answer from `LegalDocumentReleaser::affectsReleaseWithin()`.
+- **`legal-consent:doctor` names a session time zone that shifts every recorded moment.** Laravel writes `accepted_at` as the wall time of `app.timezone`, without an offset, and PostgreSQL and MySQL read that wall time in the session's time zone, so a session in another zone stored every consent shifted by the difference. The doctor now compares the two on PostgreSQL and MySQL, with or without tamper evidence, names the shift and exits 1. Its advice for pinning the zone of a chained ledger now names the application's time zone.
+- **On Livewire's persistent middleware list, the consent gate stops a component's action.** Livewire re-applies the middleware on that list to a component update over a request for the page, and it stops the action only on a redirect or an exception. The gate answered a component update with a returned `409`, which Livewire dropped, so the action ran for a subject the gate stops everywhere else. The gate now throws that response, and a JSON client still receives the same `409 legal_consent_required`. The quick start shows how to add the gate to the list.
+- **`legal-consent:verify-ledger` checks a ledger of any size in the same memory.** The command kept the newest row of every chain and every pair of subject and token until the end of the run, so the memory it needed grew with the number of subjects, and a large ledger stopped the process before it reported anything. It now looks the newest rows up a batch at a time and counts the pairs in the database.
+- **Two overlapping runs of `legal-consent:close-objection-windows` no longer deem a subject twice.** A run that outlasted its lock and the next hourly run beside it could both read a subject's latest action before either wrote, and each appended a `DeemedAccepted` row. Each subject is now decided under the row lock every append takes, so the second run reads the first one's row and passes the subject over.
+
 ## [0.48.0] - 2026-10-19
 
 ### Added
@@ -3210,7 +3225,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.48.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.49.0...HEAD
+[0.49.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.45.0...v0.46.0

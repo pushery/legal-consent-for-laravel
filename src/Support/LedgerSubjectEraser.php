@@ -18,8 +18,8 @@ use stdClass;
  * migration says so outright), so a row is removed and written again without the columns.
  *
  * Why it re-chains, which is the part a consumer cannot get right on its own. The obvious version
- * — delete the row, insert it back carrying the same `prev_record_hash` — was measured and it
- * breaks the chain twice over:
+ * — delete the row, insert it back carrying the same `prev_record_hash` — breaks the chain twice
+ * over:
  *
  *  1. `subject_type`, `subject_id`, `ip_address`, `user_agent` and `request_id` are all inputs to
  *     `LedgerHashChain::canonical()`. There is no subset of the personal data outside the hash, so
@@ -56,14 +56,14 @@ final readonly class LedgerSubjectEraser
     ];
 
     /**
-     * Cleared on a notice row — a shorter list, and the difference is measured rather than assumed.
+     * Cleared on a notice row: a shorter list.
      *
      * That ledger has no `ip_address`, `user_agent` or `request_id` at all; clearing them would
      * write columns the table does not have.
      *
      * `notice_body` stays, and it is the one that looks like it should go. It holds the exact
-     * message served, which reads like per-person data. It is not — but the reason is narrower than
-     * it used to say here, and the old wording pointed at a method that does not exist.
+     * message served, which reads like per-person data. It is not, for a narrower reason than it
+     * seems.
      *
      * `WriteNoticeDeliveryProof::render()` is handed the subject, and passes it to
      * `toMail($notifiable)`. What makes the body the same for everyone is that the three shipped
@@ -339,13 +339,12 @@ final readonly class LedgerSubjectEraser
      * arrays, so a multi-row INSERT needs nothing else from the caller.
      *
      * The chunk arithmetic lives on {@see LedgerChainRepair::batches()} rather than here, because
-     * the retention sweep rewrites the same rows into the same table and had a different answer
-     * for them. A budget that only one of two rewriters reads is not a budget.
+     * the retention sweep rewrites the same rows into the same table, and a budget that only one of
+     * two rewriters reads is not a budget.
      *
-     * The rows are non-empty by contract rather than by a check here. Both callers return early on
-     * an empty read of their own ledger long before they get this far, so an emptiness guard in
-     * this method is a branch no run can enter — and one that quietly makes `$rows[0]` below look
-     * like it needs proving. Stating the precondition in the type is what actually proves it.
+     * The rows are non-empty by contract rather than by a check here: both callers return early on
+     * an empty read of their own ledger long before they get this far, and the precondition is
+     * stated in the type.
      *
      * @param  non-empty-list<array<string, mixed>>  $rows
      */

@@ -13,8 +13,8 @@ namespace Pushery\LegalConsent\Enums;
  * what triggers the objection and free-termination lines (§ 308 Nr. 5, § 675g Abs. 2, § 327r).
  *
  * `Extended` is the case the naive list misses. Something that was optional becoming mandatory
- * removes a choice while adding nothing — the sub-processors that "will become required" in the
- * Productboard notice. Filed as an addition it reads as a bonus; it is a narrowing.
+ * removes a choice while adding nothing, such as a sub-processor that "will become required".
+ * Filed as an addition it reads as a bonus; it is a narrowing.
  */
 enum ChangeItemType: string
 {

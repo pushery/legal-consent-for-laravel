@@ -7,19 +7,16 @@ namespace Pushery\LegalConsent\Enums;
 /**
  * Why one locale is not ready to be released.
  *
- * This replaces six hardcoded english sentences, and the reason is a consumer who could not
- * translate them. A support class that returns finished prose leaves an application
- * exactly one option: use the sentence itself as a translation key. That works until the package
- * rewords anything — at which point the lookup misses and the screen silently falls back to English,
- * on a compliance surface, with no test anywhere able to see it.
+ * A case rather than a finished sentence, so an application can translate it. A support class
+ * that returns finished prose leaves an application exactly one option: use the sentence itself
+ * as a translation key, which works until the package rewords anything, at which point the lookup
+ * misses and the screen silently falls back to English, on a compliance surface.
  *
  * The case is the contract; the wording is not.
  *
- * **The backing value is the original English sentence on purpose.** It keeps
- * `LegalReleaseNotReady`'s message, and anything logging it, byte-identical to before — so the only
- * thing that changed for a consumer is the type, which their editor and static analysis point at,
- * rather than a string that shifts under them silently. A break you are told about is cheaper than
- * one you discover in production.
+ * **The backing value is the English sentence on purpose.** It keeps `LegalReleaseNotReady`'s
+ * message, and anything logging it, stable, and a consumer's editor and static analysis see the
+ * type rather than a string that could shift under them silently.
  */
 enum BlockingReason: string
 {

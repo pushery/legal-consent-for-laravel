@@ -9,10 +9,10 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
 /**
  * Pin the search_path of the six trigger functions this package installs on PostgreSQL.
  *
- * A function without one resolves its names through the search_path of whoever calls it, and
- * SQLens reports every such function (`PGLS.functionSearchPathMutable`, severity medium) in every
- * consumer's audit. All six run as security invoker, so the exposure is small; the finding in
- * each consumer's release report is not.
+ * A function without one resolves its names through the search_path of whoever calls it, and a
+ * schema linter reports every such function (SQLens: `PGLS.functionSearchPathMutable`, severity
+ * medium). All six run as security invoker, so the exposure is small, but without the pin the
+ * finding would sit in every installation's audit.
  *
  * `FROM CURRENT` rather than a literal path: it stores the search_path this migration runs under,
  * which is the one the functions were created in and resolve their names through today. A literal

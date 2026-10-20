@@ -20,6 +20,7 @@ use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
 use Pushery\LegalConsent\Livewire\Concerns\NamesChangedSentences;
 use Pushery\LegalConsent\Livewire\Concerns\WordsPublishRefusals;
+use Pushery\LegalConsent\Livewire\Concerns\WordsReleaseStatus;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
@@ -41,16 +42,17 @@ final class LegalTextManager extends Component
     use AuthorizesLegalAdmin;
     use NamesChangedSentences;
     use WordsPublishRefusals;
+    use WordsReleaseStatus;
 
     /**
      * Whether the screen opens with its own page title.
      *
-     * An application that mounts this inside its own admin frame already has one, and two page
-     * titles on one screen is what a browser sweep rejects. Off, the frame carries the title and
+     * An application that mounts this inside its own admin frame already has one, and a screen with
+     * two page titles has no single heading to navigate by. Off, the frame carries the title and
      * the landmark takes its name directly instead of pointing at a heading that is no longer
-     * there — an unnamed region is not an improvement on a duplicated one.
+     * there, since an unnamed region is not an improvement on a duplicated one.
      *
-     * The same switch the consent panel has carried since it met the same frame.
+     * The consent panel has the same switch.
      */
     #[Locked]
     public bool $heading = true;
@@ -71,22 +73,14 @@ final class LegalTextManager extends Component
 
         // The manager releases a material change in the mode its document type takes: an active
         // re-consent for a contract or a real consent, info-only for a privacy notice, silent for an
-        // informational page. It used to fix an active re-consent for every key, which the publisher
-        // refuses for a privacy notice, so the button failed for every privacy notice and a consuming
-        // app had to fork this final class to release one. The deemed mode is a per-change legal call
-        // made from the editor controls or the CLI, not a button on an overview grid.
+        // informational page; the publisher refuses an active re-consent for a privacy notice. The
+        // deemed mode is a per-change legal call made from the editor controls or the CLI, not a
+        // button on an overview grid.
         //
-        // That sentence named two homes and only one of them existed, for as long as it has been
-        // here. Measured 2026-09-05: `LegalTextEditor` carried nothing — no notice mode, no
-        // objection deadline, no ReleaseOptions — so the only route to a deemed release was
-        // `legal-consent:publish --deemed --objection-at=`. An application with an admin UI had no
-        // in-app path to a capability this package implements end to end, and a consuming app
-        // rebuilt the screen itself rather than adopt one that could not do it.
-        //
-        // The editor has it now ({@see LegalTextEditor::releaseDeemed()}), so the routing above is
-        // true rather than aspirational. The placement stands on its own reasons: a deemed release
-        // binds people by their silence, and the editor is per (key, locale) — the context of "this
-        // one change" is already there, and somebody has read the text.
+        // The editor carries it ({@see LegalTextEditor::releaseDeemed()}), and the placement stands
+        // on its own reasons: a deemed release binds people by their silence, and the editor is per
+        // (key, locale), so the context of "this one change" is already there, and somebody has read
+        // the text. The command line offers it as `legal-consent:publish --deemed --objection-at=`.
 
         // No version is set here. The release derives it inside its own transaction, for this
         // screen and the editor alike ({@see LegalDocumentReleaser::nextVersionFor()}).
@@ -130,17 +124,7 @@ final class LegalTextManager extends Component
             return;
         }
 
-        // Over the whole release, not over its first row. `affects()` answers per (key, locale) —
-        // a consent row carries the language it was given in — so the first row named the people of
-        // whichever language came back first. Measured in a seven-locale consumer: it said 0 where
-        // one person was a major behind, under a sentence an operator reads to decide whether to
-        // check the announcement again.
-        $affects = app(LegalDocumentReleaser::class)->affectsRelease($released);
-        $this->setStatus(__('legal-consent::ui.admin_status_released', [
-            'key' => app(NamesLegalTexts::class)->document($key),
-            'count' => count($released),
-            'affects' => $affects,
-        ]).$this->sentenceChangeNotice(app(LegalDocumentReleaser::class)->sentenceChangedIn($sentencesBefore, $released)));
+        $this->setStatus($this->releasedStatus($key, $released).$this->sentenceChangeNotice(app(LegalDocumentReleaser::class)->sentenceChangedIn($sentencesBefore, $released)));
     }
 
     public function render(): View
@@ -330,10 +314,9 @@ final class LegalTextManager extends Component
     /** @return list<string> */
     private function documentKeys(): array
     {
-        // Through the matrix, not off the raw config. A registry with two readers has two answers,
-        // and only one of them is tested: this line stood identically in the manager and the editor
-        // and neither filtered the list-config case, so `['terms', 'privacy']` reached the screens
-        // as documents named `0` and `1` while every command skipped them.
+        // Through the matrix, not off the raw config: a registry with two readers has two answers,
+        // and read raw, a list config such as `['terms', 'privacy']` would reach the screen as
+        // documents named `0` and `1` while every command skips them.
         return DocumentMatrix::keys();
     }
 

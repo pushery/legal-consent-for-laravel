@@ -56,11 +56,6 @@ final class DeemedAcceptanceDecision
         // two disagree: `document_version !== $version->version` is false there, so without this
         // return a withdrawal recorded against the current text would read as "already settled".
         // A withdrawal is not an answer to a change that came after it.
-        //
-        // The paragraph that used to sit here — "they already hold this version, typically an
-        // express acceptance that landed after the sweep's snapshot" — describes the return at the
-        // bottom, not this branch. It was one statement too high, which read as if a non-accepting
-        // action meant the subject already held the version. It means the opposite.
         if (! $latest->action->isAccepting()) {
             return true;
         }

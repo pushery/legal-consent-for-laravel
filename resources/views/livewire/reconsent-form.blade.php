@@ -24,8 +24,8 @@
                      cannot leave without agreeing (Art. 7(1)/(2), WCAG 3.1.2). See
                      ContentLanguage; null when it matches the page, and nothing is emitted. --}}
                 @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document->locale))
-                {{-- `wire:key` on the one loop that shrinks and carries state. Measured: `pending`
-                     goes [marketing, privacy, terms] → [privacy, terms] after a submit, so the node
+                {{-- `wire:key` on the one loop that shrinks and carries state: `pending` goes
+                     [marketing, privacy, terms] → [privacy, terms] after a submit, so the node
                      at index 0 changes identity from `legal_marketing` to `legal_privacy`. And the
                      server renders no `checked` attribute — a ticked box lives only as a DOM
                      property, so there is nothing in the markup for a keyless morph to reset it

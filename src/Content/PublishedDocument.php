@@ -114,14 +114,12 @@ final readonly class PublishedDocument
      * immutability trigger is there to prevent; this is how a caller holding a read-path document
      * can confirm that for itself.
      *
-     * `legal-consent:verify-documents` does not come through here, and this line used to say it
-     * did. The command sweeps `LegalDocument` rows and makes the identical comparison inline
-     * against `content`/`content_hash` — the same two values, since `fromRow()` maps `html` from
-     * `content`. So the rule is written twice, and changing it here does not move the command.
-     * They are left apart on purpose: the sweep reads whole rows in bulk and building a value
-     * object per row to ask one question is a cost with no answer attached. What is not optional
-     * is that both directions are proved, and the false one is the direction a verifier can lose
-     * without anything going red.
+     * `legal-consent:verify-documents` does not come through here. The command sweeps
+     * `LegalDocument` rows and makes the identical comparison inline against
+     * `content`/`content_hash`, the same two values, since `fromRow()` maps `html` from `content`.
+     * So the rule is written twice, and changing it here does not move the command. They are left
+     * apart on purpose: the sweep reads whole rows in bulk, and building a value object per row to
+     * ask one question is a cost with no answer attached.
      */
     public function verifyIntegrity(RenderPipeline $pipeline): bool
     {

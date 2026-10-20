@@ -68,10 +68,9 @@ return new class extends Migration
     {
         /**
          * The shape is stated rather than re-checked at runtime. Every driver this package
-         * supports builds each entry in the same post-processor step — `columns` is always an
-         * `explode(',', …)`, so it is always a list of strings — and the `is_array()` guards that
-         * used to stand here could not fire on any of them. A branch no run can enter is not a
-         * check; it reads like one while hiding the assumption it was meant to state.
+         * supports builds each entry in the same post-processor step: `columns` is always an
+         * `explode(',', …)`, so it is always a list of strings, and an `is_array()` guard could
+         * not fire on any of them.
          *
          * @var list<array{columns: list<string>}> $foreignKeys
          */

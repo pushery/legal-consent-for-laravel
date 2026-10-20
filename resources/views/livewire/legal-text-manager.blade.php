@@ -124,24 +124,18 @@
                             </td>
                         @endforeach
                     </tr>
-                    {{-- Its own row, across all columns, and the reason is a viewport nobody had
-                         measured. As the last COLUMN of a grid that is documents x locales, the only
-                         control on this screen sat 200 px past the right edge of the visible table at
-                         390 px wide — reachable solely by scrolling the table sideways, with the
-                         reasons a blocked release gives sitting out there beside it.
+                    {{-- Its own row, across all columns. As the last column of a grid that is
+                         documents x locales, the only control on this screen would sit past the right
+                         edge of the visible table on a phone, reachable solely by scrolling the table
+                         sideways, with the reasons a blocked release gives out there beside it. The
+                         locales that share a reason are grouped under it, which keeps the row short.
 
-                         The earlier report against a row here was about height, measured at 1728 px
-                         with one full sentence per language. Grouping the locales under the reason
-                         they share settled that, and the row is short now.
+                         `colspan` counts the locale columns plus the document column. With no release
+                         column of its own, the grid stays as narrow as its locales allow.
 
-                         `colspan` counts the locale columns plus the document column, and the release
-                         column header is gone with the cell — which is also what shrank the grid: at
-                         seven locales it now overflows its scroller by 35 px instead of 530.
-
-                         A `position: sticky` hold was here and is gone, because a red probe showed
-                         it did nothing. Measured at fourteen locales, scrolled to the far end: the
-                         control sat at -115 px with the hold in place, exactly as without it. Shipping
-                         a declaration that cannot be shown to act is worse than shipping none. --}}
+                         A `position: sticky` hold does not help here: at fourteen locales, scrolled to
+                         the far end, the control ends up outside the visible table with or without
+                         it. --}}
                     <tr wire:key="release-{{ $key }}">
                         <td colspan="{{ count($locales) + 1 }}">
                             @if ($rows[$key]['_release']['ready'])

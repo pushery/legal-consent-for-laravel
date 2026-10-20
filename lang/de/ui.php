@@ -161,6 +161,7 @@ return [
     'admin_status_changed_before_review' => 'Der Text wurde geändert, nachdem er hier angezeigt wurde, und ist deshalb nicht als geprüft markiert. Lade ihn neu und prüfe die aktuelle Fassung.',
     'admin_status_release_blocked' => '„:key“ wurde nicht veröffentlicht: :reasons',
     'admin_status_released' => '„:key“ in :count Sprache(n) veröffentlicht — betrifft :affects Person(en).',
+    'admin_status_released_uncounted' => '„:key“ in :count Sprache(n) veröffentlicht. Die vorgesehene Zeit reichte nicht, um die betroffenen Personen zu zählen.',
     'admin_status_wording_changed' => 'Der Zustimmungssatz hat sich in :languages geändert, und jede Zustimmung ab jetzt hält den neuen fest.',
     'admin_deemed_heading' => 'Mit Widerspruchsfenster freigeben',
     'admin_deemed_explainer' => 'Eine Änderung mit Zustimmungsfiktion bindet, wenn das Widerspruchsfenster ohne Widerspruch endet. Das Fenster muss mindestens die gesetzliche Vorlaufzeit einhalten.',

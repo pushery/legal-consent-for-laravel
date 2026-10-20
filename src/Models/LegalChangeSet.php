@@ -87,20 +87,19 @@ class LegalChangeSet extends Model
     /**
      * The stored row as the freeze needs to see it: its state, and the columns the refusal names.
      *
-     * Not loaded is not "NOT PUBLISHED", and reading it that way opened the freeze on exactly
+     * Not loaded is not "not published", and reading it that way would open the freeze on exactly
      * the rows it exists to protect. `getOriginal()` is `Arr::get($this->original, $key, $default)`
      * — on a partially hydrated row, `select(['id', …])`, the key is simply absent and the answer
-     * is null. Null is not `Published`, so the write went through. Partial selects are house style
-     * here. The database triggers refuse the write on every engine as well, but with a raw SQLSTATE
+     * is null. Null is not `Published`, so the write would go through, and partial selects are
+     * common in this package. The database triggers refuse the write on every engine as well, but with a raw SQLSTATE
      * rather than a refusal that names the document.
      *
-     * So it asks the database rather than guessing — one read, only on the path that was wrong,
-     * and it fetches what the message needs too. Refusing without being able to say which document
+     * So it asks the database rather than guessing: one read, only on the path where the state is
+     * unknown, and it fetches what the message needs too. Refusing without being able to say which document
      * was refused is its own kind of unhelpful.
      *
      * The comparison at the call site is against the enum alone: both branches here run the value
-     * through the cast, so the backing string never arrives and a second arm for it would be a
-     * branch no run can enter.
+     * through the cast, so the backing string never arrives.
      *
      * Returns the model whose original attributes are the stored row — this one when it loaded
      * them, a fresh read otherwise. Uniform on purpose: on a freshly fetched model nothing is

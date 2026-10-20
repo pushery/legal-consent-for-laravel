@@ -17,7 +17,7 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
  * 000033 moves these four columns, and the tenant and subject columns of the other tables, to the
  * no-pad `utf8mb4_0900_bin`.
  *
- * What was measured. On SQLite, a document published under `key = 'terms'` is not found by
+ * How the engines differ. On SQLite, a document published under `key = 'terms'` is not found by
  * `where('key', 'TERMS')` (`exact=1 upper=0`), and publishing a second document under `'TERMS'`
  * succeeds — two rows, two identities. PostgreSQL behaves the same way under the collations its
  * usual locales carry. MySQL is the outlier in both directions at once, because Laravel's default

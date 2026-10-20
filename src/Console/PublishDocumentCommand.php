@@ -471,15 +471,14 @@ final class PublishDocumentCommand extends Command
     /**
      * Is the source behind this document one whose empty state means nobody has written it yet?
      *
-     * It resolves without a guard, and a try/catch around it would be a branch no run can enter.
-     * Both call sites sit inside `catch (LegalDocumentNotFound)`, the publisher never raises that
+     * It resolves without a guard, because resolving cannot fail here. Both call sites sit inside `catch (LegalDocumentNotFound)`, the publisher never raises that
      * itself, and the only thing that does is `sources->for($key)->resolve(...)`. Arriving here
      * therefore proves the same key already resolved a source a moment ago, so resolving it again
      * cannot fail for a configuration reason. A misconfigured registry raises
      * `InvalidArgumentException` on the publish attempt instead and is already a failure there.
      *
-     * Guarding it would leave a permanently uncovered line and, worse, imply a fallback for a case
-     * that cannot happen — a reader would look for the misconfiguration it handles and find none.
+     * A guard would imply a fallback for a case that cannot happen, and a reader would look for the
+     * misconfiguration it handles and find none.
      */
     private function awaitsAuthoring(LegalDocumentPublisher $publisher, string $key): bool
     {
