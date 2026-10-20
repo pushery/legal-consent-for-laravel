@@ -32,21 +32,18 @@ final readonly class LegalSourceRenderer
     /**
      * The default cache-key namespace.
      *
-     * It carries no payload version, and that is a decision made after measuring — a `:v2` was
-     * written here and taken back out. Two reasons, either sufficient:
+     * It carries no payload version, for two reasons, either sufficient:
      *
-     *  1. **It would not have taken effect.** The runtime value comes from
-     *     `config('legal-consent.cache.prefix')`, which SHIPS as `legal:doc`; this constant is only
-     *     the fallback. Every real installation — and every installation that published the config
-     *     — would have kept the old namespace while the changelog announced a new one.
+     *  1. **It would not take effect.** The runtime value comes from
+     *     `config('legal-consent.cache.prefix')`, which ships as `legal:doc`; this constant is only
+     *     the fallback. Every real installation, and every installation that published the config,
+     *     would keep the old namespace.
      *  2. **Nothing needs it.** The object→row change degrades to a cache MISS in both directions:
      *     old code meets a row and fails its `instanceof`, new code meets an object and fails
      *     {@see fromRow}. That is unlike the sibling cache's own versioning, which exists because
      *     its mismatch was an uncaught TypeError on a per-request path — a crash, not a miss.
      *
-     * Public and named so a test can derive it. A test that hardcoded the literal key stopped
-     * testing its own subject the moment this moved: the `:v2` experiment turned a
-     * locale-resolution assertion red for a reason that had nothing to do with locales.
+     * Public and named, so code that needs the key derives it rather than repeating the literal.
      */
     public const string PREFIX = 'legal:doc';
 

@@ -44,10 +44,9 @@ return new class extends Migration
 
         // Not optional, and not defensive coding. SQLite cannot alter a column in place, so
         // the change above is Laravel's twelve-step rebuild: create a new table, copy, drop,
-        // rename. Indexes survive that. Triggers do not — so without this line the proof guard
+        // rename. Indexes survive that. Triggers do not, so without this line the proof guard
         // installed by 000011 is silently gone, on the one table whose entire purpose is being
-        // un-editable. Measured here: the immutability test went red across all 30 proof
-        // columns the moment this migration was added, and green again with this line.
+        // un-editable.
         //
         // It is also what keeps the MySQL and SQLite arms correct, independently of the rebuild:
         // those two enumerate the protected columns at install time, so a re-install is what

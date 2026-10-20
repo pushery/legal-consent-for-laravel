@@ -14,11 +14,11 @@ use RuntimeException;
  * to. Truncate silently and the ledger makes a confident claim about a document the operator never
  * published — the one question this package exists to answer, answered wrongly, with no signal.
  *
- * The only cause seen so far is libxml's hard nesting limit of 256 elements. Measured: 260 nested
- * `<div>`s produce exactly one error, and it is fatal, while unclosed tags, stray closing tags,
- * unquoted attributes, entity smuggling, CDATA, processing instructions and NUL bytes produce
- * either nothing or a recoverable error and parse in full. That is why the refusal keys on the
- * error level and not on a message: recoverable noise is what an HTML parser is for.
+ * The known cause is libxml's hard nesting limit of 256 elements: 260 nested `<div>`s produce
+ * exactly one error, and it is fatal, while unclosed tags, stray closing tags, unquoted
+ * attributes, entity smuggling, CDATA, processing instructions and NUL bytes produce either
+ * nothing or a recoverable error and parse in full. That is why the refusal keys on the error
+ * level and not on a message: recoverable noise is what an HTML parser is for.
  */
 final class LegalDocumentUnparsable extends RuntimeException
 {

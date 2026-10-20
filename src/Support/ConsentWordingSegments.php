@@ -20,11 +20,10 @@ namespace Pushery\LegalConsent\Support;
  *
  * The sentence is never rewritten. `wording` is the snapshotted text the ledger records as the
  * thing that was agreed to, so every run comes out of it by offset and the concatenation of all
- * segments is the original byte for byte. An arm holds exactly that, because it is the property a
- * reader of the ledger depends on and the one a refactor would lose silently.
+ * segments is the original byte for byte, which is the property a reader of the ledger depends on.
  *
- * The lookup is case-insensitive for the reason the single-title class measured: only the German
- * rows write the title the way the title reads, and an exact comparison links a handful and leaves
+ * The lookup is case-insensitive for the reason the single-title class gives: only the German rows
+ * write the title the way the title reads, and an exact comparison would link a handful and leave
  * the rest quietly unlinked.
  *
  * ## Overlaps are decided, not left to chance

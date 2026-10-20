@@ -3,10 +3,9 @@
      polls. A dispatched job is invisible to the page that dispatched it, and without this the
      operator would click Translate, read that it is running, and have to guess when to reload.
 
-     `?? false` because this view is also rendered standalone, by the tests that check its markup
-     against real components. There is no Livewire component behind those, so the flag is absent —
-     and absent means "do not poll", which is the only thing a render without a component could
-     honestly mean. Calling `$this->translating()` here instead threw on every one of them.
+     `?? false` because this view can also be rendered standalone, with no Livewire component
+     behind it. The flag is then absent, and absent means "do not poll", which is the only thing a
+     render without a component can honestly mean; calling `$this->translating()` here would throw.
 
      Each tick calls `pollTranslation`, which answers without a render while the run is still going.
      The tick after it ends renders, takes the result, and stops the poll. --}}
@@ -81,12 +80,10 @@
              refuses every mode for it but the silent one. A caller that passes no such value
              keeps the form, as before. --}}
         @if ($offersDeemedRelease ?? true)
-        {{-- Release with an objection window — a deemed-consent change (§ 308 Nr. 5 BGB).
-             It lives here and not on the manager grid, and that is the manager's own stated
-             position: a release that binds people by their silence is a per-change legal call, not
-             a one-click action on an overview. Until now that sentence named two homes for it, the
-             editor and the CLI, and only the CLI had it — an application with an admin UI had no
-             in-app path to a capability this package implements end to end.
+        {{-- Release with an objection window, a deemed-consent change (§ 308 Nr. 5 BGB).
+             It lives here and not on the manager grid: a release that binds people by their
+             silence is a per-change legal call, not a one-click action on an overview. The same
+             release is available from the command line.
 
              Plain form controls with no JavaScript: `type="date"` is what a browser already gives
              a keyboard and a screen reader for free, and this stub ships no CSS or JS by design.
@@ -122,10 +119,9 @@
                      has already scheduled.
 
                      Read as the constant, not through a component method. `$this` is bound only
-                     while Livewire renders this view; the package's own view tests render it
-                     directly, and `$this->regimes()` died there with "Using $this when not in
-                     object context" -- a published stub has to render wherever a consumer puts it.
-                     Measured on the integration gate, not guessed. --}}
+                     while Livewire renders this view, and a published stub has to render wherever
+                     an application puts it: rendered directly, `$this->regimes()` fails with
+                     "Using $this when not in object context". --}}
                 @foreach (\Pushery\LegalConsent\Support\LegalDocumentPublisher::REGIMES as $available)
                     <option value="{{ $available }}">{{ $available }}</option>
                 @endforeach

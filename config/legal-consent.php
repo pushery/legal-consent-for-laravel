@@ -278,10 +278,10 @@ return [
         |     php artisan legal-consent:dispatch-notices --force
         |
         | NULL by default, and that default is deliberate. A limit that ships on would withhold a
-        | legally required notice from every installation that never asked for one — which is the
-        | exact failure this package spent a release removing, and the expensive direction: under
-        | P2B Art. 3(3) a change implemented without notice is void, while an oversized send is
-        | merely expensive. Set it while you find your footing, then decide.
+        | legally required notice from every installation that never asked for one, and that is the
+        | expensive direction: under P2B Art. 3(3) a change implemented without notice is void,
+        | while an oversized send is merely expensive. Set it while you find your footing, then
+        | decide.
         */
         'max_recipients_per_run' => filter_var(env('LEGAL_CONSENT_MAX_RECIPIENTS_PER_RUN'), FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE),
 
@@ -428,11 +428,10 @@ return [
         // Which lane the job takes, and it is a separate question from whether it queues at all.
         // Both null keep today's behavior exactly: the default connection and its default queue.
         //
-        // A minutes-long call does not belong beside an application's short jobs, and the numbers
-        // say why rather than the preference. Measured in a starter kit whose Horizon config ships
-        // from a template: `supervisor-1` gives a worker 60 seconds and the connection retries
-        // after 90, against a job built for minutes — so turning `queue` on there trades a 500 for
-        // a worker killed at its timeout. Raising that supervisor's timeout is not the answer
+        // A minutes-long call does not belong beside an application's short jobs. Horizon's
+        // published configuration gives `supervisor-1` a 60-second timeout, and Laravel's default
+        // redis connection a `retry_after` of 90, against a job built for minutes, so turning
+        // `queue` on there trades a 500 for a worker killed at its timeout. Raising that supervisor's timeout is not the answer
         // either: it would apply to every job the application runs, and `retry_after` would have to
         // move with it. Separating the lane is the whole point.
         'connection' => null,
@@ -990,6 +989,21 @@ return [
          * than turning the overview into an error page; `legal-consent:doctor` reports it.
          */
         'editor_route' => null,
+
+        /*
+         * How long, in whole seconds, the database may take to count the people a release reaches,
+         * the number the status line names once a release is written. The count reads every consent
+         * of the document in the released languages, so it grows with the ledger, and it runs in the
+         * request that released. When the time runs out, PostgreSQL and MySQL stop the count, the
+         * release stands, and the status line says the count did not finish. 0 skips the count, null
+         * waits for it however long it takes. SQLite has no statement timeout and counts to the end
+         * under any value above 0.
+         */
+        'release_count_seconds' => filter_var(
+            env('LEGAL_CONSENT_RELEASE_COUNT_SECONDS', 5),
+            FILTER_VALIDATE_INT,
+            ['flags' => FILTER_NULL_ON_FAILURE, 'options' => ['min_range' => 0]],
+        ) ?? 5,
     ],
 
     /*

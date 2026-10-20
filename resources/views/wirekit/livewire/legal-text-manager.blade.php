@@ -25,14 +25,12 @@
              x-wirekit::alert: the alert is itself a role="status" region, and nesting a live region
              in this one would double-announce.
 
-             Polite, matching the plain twin — and this comment used to say the opposite, having
-             raised it to `assertive` so the two would agree. The agreement was right and the
-             direction was wrong: `role="alert"` implies assertive, and this same element also
-             receives focus, so assistive technology says the message twice — once as a live-region
-             interruption, once as the name of the newly focused element. Dropping the focus move
+             Polite, matching the plain twin. `role="alert"` would imply assertive, and this same
+             element also receives focus, so assistive technology would say the message twice: once
+             as a live-region interruption, once as the name of the newly focused element. Dropping the focus move
              instead would send a keyboard user to <body> after an irreversible action (WCAG 2.4.3).
              The focus move is already immediate, so politeness costs no urgency, and it is what the
-             package's three other status regions have used all along.
+             package's other status regions use.
 
              tabindex="-1" + x-effect is the focus half. The release is confirmed in a modal that
              closes itself; with nowhere to send focus it falls to <body> (WCAG 2.4.3), leaving a
@@ -60,14 +58,17 @@
 
              This matrix carries one column per locale, so the widest state word decides the table's
              width -- and the words are sentences: "Unveröffentlichte Änderungen" is 28 characters,
-             and seven of those columns do not fit any desktop. Measured in a consuming application
-             at 1728px: the table wanted 1407px of content space and had 1400. Letting the cells
-             break inside a word makes it fit and stacks "Nicht geschrieben" one letter per line.
+             and seven of those columns do not fit a 1728px desktop. Letting the cells break inside
+             a word makes them fit and stacks "Nicht geschrieben" one letter per line.
 
              So the cell carries the short form and the badge's accessible name carries the long one
              -- a screen reader announces the sentence, a sighted reader reads the legend once. Each
              short form is drawn from its own language's long wording rather than translated from
-             English, because a legend only explains a word that belongs to the same family. --}}
+             English, because a legend only explains a word that belongs to the same family.
+
+             An entry moves to the next line as a whole and wraps inside itself only where it is
+             wider than the screen: "Unveröffentlicht = Unveröffentlichte Änderungen" is 47
+             characters, more than a 320 px screen holds at this size. --}}
         <x-wirekit::stack gap="sm">
             <x-wirekit::text size="sm" intent="muted">
                 @foreach ([
@@ -78,7 +79,7 @@
                     'admin_needs_update',
                     'admin_unpublished',
                 ] as $state)
-                    <span class="whitespace-nowrap">{{ __('legal-consent::ui.'.$state.'_short') }} = {{ __('legal-consent::ui.'.$state) }}</span>@if (! $loop->last) · @endif
+                    <span class="inline-block max-w-full">{{ __('legal-consent::ui.'.$state.'_short') }} = {{ __('legal-consent::ui.'.$state) }}</span>@if (! $loop->last) · @endif
                 @endforeach
             </x-wirekit::text>
 
@@ -232,9 +233,9 @@
                                 <x-wirekit::button size="sm" disabled :aria-label="__('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key)">{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
                                 {{-- Grouped by reason, one line each, because the per-locale form grew with
                                      the language count and the language count is what an application with
-                                     seven of them cannot reduce. Measured in a browser at 1728 px with seven
-                                     blocked locales: the cell was 486 px wide with nothing overflowing, and
-                                     210 px tall — six documents then show two rows per screen. Every locale
+                                     seven of them cannot reduce. At 1728 px with seven blocked locales the cell
+                                     stays about 486 px wide with nothing overflowing, and short enough that
+                                     six documents show two rows per screen. Every locale
                                      still appears, beside the reason it shares, because an operator needs to
                                      know which language to go and fix. --}}
                                 <x-wirekit::stack gap="xs" id="blocking-{{ $key }}">

@@ -18,8 +18,8 @@ use Symfony\Component\HttpFoundation\Response;
  * reasoning is about the ledger, not about JSON. The settings screen's `grant` and `withdraw`, the
  * re-consent screen's `object` and `terminate`, and the web withdraw route all reach the same
  * `append()` — and a Livewire request is one POST with a CSRF token, as scriptable as any other.
- * Measured: three `grant` calls wrote three `granted` rows, three `withdraw` calls after them wrote
- * three `withdrawn` rows. No transition asks whether the subject's standing changes.
+ * Three `grant` calls write three `granted` rows, and three `withdraw` calls after them write three
+ * `withdrawn` rows: no transition asks whether the subject's standing changes.
  *
  * One budget for the whole surface, however it is reached, so a subject cannot spend a fresh
  * allowance on each way in. Keyed on the subject, and kept apart from any `throttle:` the host

@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Http\Middleware;
 
 use Closure;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Livewire\LivewireManager;
@@ -55,11 +56,15 @@ final readonly class EnsureLegalConsent
         $keys = $owed->map(static fn (LegalDocument $document): string => $document->key)->unique()->values()->all();
 
         if ($request->expectsJson()) {
-            return response()->json([
+            // Thrown rather than returned, and the client sees the same 409 either way. Livewire runs the
+            // middleware on its persistent list over a request for the page a component lives on, and it
+            // stops the component's action only on a redirect or an exception: a 409 returned there would
+            // be dropped, and the action would run for a subject this gate stops everywhere else.
+            throw new HttpResponseException(response()->json([
                 'message' => 'Legal consent is required before continuing.',
                 'error' => 'legal_consent_required',
                 'documents' => $keys,
-            ], Response::HTTP_CONFLICT);
+            ], Response::HTTP_CONFLICT));
         }
 
         // guest() (not to()) stashes the intercepted URL as the intended target, so an app can
@@ -154,12 +159,15 @@ final readonly class EnsureLegalConsent
      * writing an installation's own hash into the allowlist is worse than the bug, because it is
      * green in development and dead in production, where APP_KEY differs.
      *
-     * Consequence to be honest about: a gated subject can still reach other Livewire components.
-     * Livewire re-applies a page's route middleware to the actions of its components only when that
-     * middleware is on Livewire's persistent list (`Authenticate` and `Authorize` are there by
-     * default, and `Livewire::addPersistentMiddleware()` adds more). Whatever is not on that list
-     * does not guard an action, so a component must authorize itself, which is exactly what this
-     * package's own admin screens do in `boot()`.
+     * Consequence to be honest about: a gated subject can still reach other Livewire components
+     * unless this middleware is on Livewire's persistent list. Livewire re-applies a page's route
+     * middleware to the actions of its components only when that middleware is on the list
+     * (`Authenticate` and `Authorize` are there by default, and
+     * `Livewire::addPersistentMiddleware(EnsureLegalConsent::class)` adds this one). On the list, it
+     * stops the action of a component on a page the subject may not use, and the re-consent form keeps
+     * working, because Livewire asks about the page the form is on and the consent route is allowed.
+     * Off the list, a component must authorize itself, which is what this package's own admin screens
+     * do in `boot()`.
      */
     private function isLivewireEndpoint(Request $request): bool
     {

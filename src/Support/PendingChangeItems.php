@@ -143,10 +143,9 @@ final class PendingChangeItems
             $set->forceFill([
                 'key' => $this->key,
                 'locale' => $this->locale,
-                // Also unobservable, for a second reason: the model uses `BelongsToTenant`,
-                // which stamps the tenant on create. With tenancy off the column's '' default agrees
-                // as well, so its absence is unobservable in both configurations. Kept because the
-                // lookup above filters on this column and the write should say what it writes.
+                // The model uses `BelongsToTenant`, which stamps the tenant on create, and with
+                // tenancy off the column's '' default agrees. Written anyway, because the lookup
+                // above filters on this column and the write should say what it writes.
                 'tenant_id' => $tenantId,
                 // This line stores what the schema would store anyway: `version` defaults to '' in
                 // migration 000016, and DRAFT_VERSION is ''. It stays because the row is looked up
@@ -235,7 +234,7 @@ final class PendingChangeItems
     private function plain(string $value): string
     {
         // `Str::squish`, not a hand-rolled `\s+` collapse — the difference is a class of
-        // character `\s` does not cover. Measured: a zero-width space survives the hand-rolled
+        // character `\s` does not cover. A zero-width space survives the hand-rolled
         // form and leaves a line that is non-empty and invisible; `Str::squish` also strips it,
         // along with the soft hyphen and the byte-order mark (`Str::INVISIBLE_CHARACTERS`).
         //

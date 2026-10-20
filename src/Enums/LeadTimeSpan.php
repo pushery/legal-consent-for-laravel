@@ -13,16 +13,13 @@ namespace Pushery\LegalConsent\Enums;
  * contract) — so the span ends at the objection deadline. For every other change that owes notice
  * it ends at enforcement.
  *
- * The refusal used to call both of them "ENFORCEMENT", and that is why this exists. The
- * deemed-consent branch handed the objection deadline to a parameter named `enforceAt`, so the
- * sentence an operator read named the wrong date under the wrong word — in the English message and,
- * once the sentence was translated, in all seven languages. A reported example: announcement
- * 2026-08-01, objection deadline 2026-09-01, enforcement 2026-11-01, and the refusal said
- * enforcement was 2026-09-01.
+ * The refusal names the span it measured, because one word for both names the wrong date: with
+ * announcement 2026-08-01, objection deadline 2026-09-01 and enforcement 2026-11-01, a
+ * deemed-consent change is short at the objection deadline, not at enforcement.
  *
- * The cost of that is not cosmetic. Somebody following the advice moves the enforcement date,
- * which was never too early, and the objection deadline — the one that was — stays where it was.
- * The publish is refused again, and the number they were given has not moved either.
+ * The cost of the wrong word is not cosmetic. Somebody following the advice would move the
+ * enforcement date, which was never too early, and the objection deadline, the one that was,
+ * would stay where it was. The publish would be refused again, with the same number.
  */
 enum LeadTimeSpan: string
 {

@@ -97,10 +97,8 @@ final readonly class LedgerChainRepair
             // reports "chain opened after the boundary with no root proof", which is its wording
             // for a fabricated chain. On a lawful Art. 5(1)(e) deletion.
             //
-            // It does not heal: the next prune no longer collects this token, because its first
-            // link already points at genesis. Measured before this — the prune printed "re-linked
-            // the tamper chain … so a lawful removal does not read as tampering" and the very next
-            // verify-ledger exited 1, permanently.
+            // It would not heal: the next prune no longer collects this token, because its first
+            // link already points at genesis, so every later verify-ledger would fail.
             //
             // Writing it is not a new kind of write. `root_proof` sits in UNHASHED_COLUMNS beside
             // `prev_record_hash`, so it changes no row hash, and this method already writes its
@@ -161,9 +159,7 @@ final readonly class LedgerChainRepair
             $token = $row['subject_token'] ?? null;
 
             if (is_string($token) && $token !== '') {
-                // The set is the keys; the value is a placeholder and nothing ever reads it, so
-                // `false` here would behave identically. Written down because a value that could
-                // be anything invites somebody to conclude it matters.
+                // The set is the keys; the value is a placeholder and nothing reads it.
                 $tokens[$token] = true;
             }
         }
@@ -228,14 +224,11 @@ final readonly class LedgerChainRepair
      * the row's own width keeps it correct as columns are added, which a row-count constant does
      * not: it is the number that silently stops meaning what it says.
      *
-     * It lives here because both rewriters need the same answer and one of them had a
-     * different one. The erasure derived its chunk from this budget; the retention sweep chunked
-     * at a hardcoded 500 rows, which is 12 000 placeholders -- thirteen times the erasure's answer
-     * for the identical rows, written by {@see toRow()}, into the identical table. Measured on a
-     * subject with 47 consent rows: one INSERT binding 1104 placeholders. That is not an exotic
-     * ledger, and on a 999-build it is a driver error inside the transaction that repairs a chain,
-     * reached only by the largest ledgers -- the worst way to find out. Its own comment named the
-     * ceiling correctly and then picked a number above it.
+     * It lives here because both rewriters need the same answer: the rows are the identical rows,
+     * written by {@see toRow()}, into the identical table. A fixed row count does not hold the
+     * ceiling: at 24 columns, 500 rows are 12 000 placeholders, and a subject with 47 consent rows
+     * already binds 1104 in one INSERT, which on a SQLite build limited to 999 is a driver error
+     * inside the transaction that repairs a chain.
      *
      * This class is a pure function over rows and stays one: the callers still own their writes,
      * because they differ (one rewrites every row, the other only the ones whose link moved). What

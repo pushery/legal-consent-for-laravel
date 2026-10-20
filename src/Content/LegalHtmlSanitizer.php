@@ -95,11 +95,9 @@ final class LegalHtmlSanitizer
 
     public function sanitize(string $html): string
     {
-        // A short-circuit, not a correctness guard, and worth the distinction: measured, the parse
-        // path answers `''` for empty and for whitespace-only input too, so removing this changes
-        // no output — it only builds a DOMDocument to arrive at the same string. Nothing can hold
-        // it from outside, and nothing should try; what must not happen is someone reading it as
-        // the empty-input contract and moving the behavior here.
+        // A short-circuit, not a correctness guard: the parse path answers `''` for empty and for
+        // whitespace-only input too, and this only saves building a DOMDocument to arrive at the
+        // same string. It is not the empty-input contract, so behavior does not belong here.
         if (trim($html) === '') {
             return '';
         }
@@ -120,18 +118,18 @@ final class LegalHtmlSanitizer
         libxml_clear_errors();
         libxml_use_internal_errors($previous);
 
-        // The errors used to be thrown away unread, and one class of them means lost content.
+        // The errors are read, because one class of them means lost content.
         //
-        // Measured: 260 nested elements hit libxml's hard depth limit of 256 and the parser stops.
-        // 500 004 bytes of input came back as 6 375 — no error, no warning, no log — and
-        // `content_hash` is taken over the sanitizer's output, so the append-only row then claims
-        // that fragment is the text somebody agreed to. The operator published something else.
+        // 260 nested elements hit libxml's hard depth limit of 256 and the parser stops: half a
+        // megabyte of input can come back as a few kilobytes with no error raised, and
+        // `content_hash` is taken over the sanitizer's output, so the append-only row would then
+        // claim that fragment is the text somebody agreed to.
         //
         // Clearing them is right for the rest, and that is why this keys on the level rather than
         // on a message: unclosed tags, stray closing tags, unquoted attributes, entity smuggling,
         // CDATA, processing instructions and NUL bytes each produce either nothing or a recoverable
-        // error and still parse in full — measured, all of them. Recovering from messy HTML is what
-        // this parser is for. A fatal error is the one that says it gave up.
+        // error and still parse in full. Recovering from messy HTML is what this parser is for. A
+        // fatal error is the one that says it gave up.
         $fatal = array_find($errors, static fn (LibXMLError $error): bool => $error->level === LIBXML_ERR_FATAL);
 
         if ($fatal instanceof LibXMLError) {
@@ -191,20 +189,12 @@ final class LegalHtmlSanitizer
 
     private function cleanElement(DOMElement $element, DOMNode $parent): void
     {
-        // No test can kill the `strtolower` here, and that is a fact about the parser, not a
-        // gap. Measured: libxml's HTML parser already lowercases `tagName`, so `<P>` arrives as
-        // `p` and unwrapping this call cannot change any outcome reachable through
-        // sanitize() -- the only caller.
+        // libxml's HTML parser already lowercases `tagName`, so `<P>` arrives as `p`, and through
+        // sanitize(), the only caller, this `strtolower` changes no outcome.
         //
         // It stays because the guarantee belongs to the parser, not to this function, and the two
         // are one edit apart: loading the same string as XML preserves case, and then every tag
-        // silently stops matching a lowercase allowlist. So removing this call changes nothing
-        // observable -- for exactly as long as that stays true, and not one edit longer.
-        //
-        // Note what this means for the arm named "matches a dangerous tag regardless of how it is
-        // capitalized": the guarantee it asserts is real and worth having, but it passes with this
-        // call removed, so it is evidence about the parser rather than about this line. Read as
-        // coverage of this line it would be misleading, which is why it is said here.
+        // silently stops matching a lowercase allowlist.
         $tag = strtolower($element->tagName);
 
         if (in_array($tag, self::DANGEROUS, true)) {
@@ -242,11 +232,10 @@ final class LegalHtmlSanitizer
         $allowed = self::ALLOWED_ATTRIBUTES[$tag] ?? [];
 
         foreach (iterator_to_array($element->attributes ?? []) as $attribute) {
-            // Same as the tag above, same reason: measured, libxml lowercases attribute names on
-            // the HTML path, so `HREF` arrives as `href` and unwrapping this call would change
-            // nothing. Note the failure direction if it were ever reachable -- an unrecognized name
-            // is dropped a few lines down, so the case would fail safe rather than open, which is
-            // why this is a robustness guard and not a security control.
+            // Same as the tag above, same reason: libxml lowercases attribute names on the HTML
+            // path, so `HREF` arrives as `href`. Should that ever change, an unrecognized name is
+            // dropped a few lines down, so the case fails safe rather than open, which is why this
+            // is a robustness guard and not a security control.
             $name = strtolower($attribute->nodeName);
 
             if (! in_array($name, $allowed, true)) {

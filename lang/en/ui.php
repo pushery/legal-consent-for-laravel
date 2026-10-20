@@ -166,6 +166,7 @@ return [
     'admin_status_changed_before_review' => 'The text was written after it was shown here, so it was not marked reviewed. Reload it and review the current text.',
     'admin_status_release_blocked' => '“:key” was not released: :reasons',
     'admin_status_released' => 'Released “:key” across :count locale(s) — affects :affects subject(s).',
+    'admin_status_released_uncounted' => 'Released “:key” across :count locale(s). The time allowed was not enough to count the affected subjects.',
     'admin_status_wording_changed' => 'The acceptance sentence changed in :languages, and every consent given from now on records the new one.',
     'admin_deemed_heading' => 'Release with an objection window',
     'admin_deemed_explainer' => 'A deemed-consent change binds if the objection window closes without an objection. The window must be at least the statutory lead time.',

@@ -282,9 +282,8 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
         }
 
         if ($held > 0) {
-            // Non-zero, because a held notice is still owed. A scheduled run that reports success
-            // while a legally required notice sits undelivered is the shape of failure this whole
-            // release is about.
+            // Non-zero, because a held notice is still owed, and a scheduled run that reports
+            // success while a legally required notice sits undelivered hides exactly that.
             $this->error("{$held} version(s) held back by notifications.max_recipients_per_run. Review with --dry-run, then release with --force or raise the limit.");
             $monitor->heartbeat('legal-consent:dispatch-notices.held', $held);
         }
@@ -452,23 +451,24 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             //
             // Counted, not streamed, and the reason is correctness before cost. `forVersion()` is
             // the sweep's hydrate path: it loads real subject models a page at a time, and calling
-            // `count()` on it built the entire remaining population as objects purely to arrive at
-            // an integer, in a command whose whole promise is that it writes and sends nothing.
+            // `count()` on it would build the entire remaining population as objects purely to
+            // arrive at an integer, in a command whose whole promise is that it writes and sends
+            // nothing.
             //
-            // The cost was the smaller half. The two paths answer the same question over the same
-            // grouped set EXCEPT for an orphaned group — one whose `subject_type` no longer maps to
-            // a live model class, because the app removed or renamed the model. The aggregate
+            // The cost is the smaller half. The two paths answer the same question over the same
+            // grouped set except for an orphaned group, one whose `subject_type` no longer maps to
+            // a live model class because the app removed or renamed the model. The aggregate
             // counts it; the hydrate path silently drops it, having nothing to build. Subtracting
-            // one from the other therefore booked every orphaned group as `already proofed`:
-            // measured before this change, a ledger holding one live subject and one orphan
-            // reported "2 recipient(s), 1 already proofed, 1 would be sent" with not one proof row
-            // in the database. On the line an operator reads before sending a legally required
-            // communication, a fabricated "already served" is the worst of the available errors.
+            // one from the other would book every orphaned group as `already proofed`, so a ledger
+            // holding one live subject and one orphan would report "2 recipient(s), 1 already
+            // proofed, 1 would be sent" with not one proof row in the database. On the line an
+            // operator reads before sending a legally required communication, a fabricated
+            // "already served" is the worst of the available errors.
             //
-            // What the swap costs, said rather than left to be discovered: `would be sent` now
-            // counts an orphaned group too, and the real run cannot deliver to one. It is an
-            // audience size, not a delivery forecast — it errs toward more notice rather than less,
-            // which is the safe direction here, but it is not the same number.
+            // `would be sent` therefore counts an orphaned group too, and the real run cannot
+            // deliver to one. It is an audience size, not a delivery forecast: it errs toward more
+            // notice rather than less, which is the safe direction here, but it is not the same
+            // number.
             $remaining = $resolver->countForVersion($version, skipNotified: $proofEnabled);
             // The floor changes nothing observable: the resume count reads the same audience with one
             // more condition, so it never exceeds the total. It stays to say the difference cannot go

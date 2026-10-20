@@ -28,18 +28,17 @@ use stdClass;
  * not to holding an outdated version — and P2B Art. 3(3) makes a change implemented without it
  * void, so under-reaching here is the expensive direction.
  *
- * Restricting both to the major-version predicate made the non-gating modes unreachable: the
- * publisher refuses a non-gating mode on a major bump of a contract, so such a change is
+ * Restricting both to the major-version predicate would make the non-gating modes unreachable:
+ * the publisher refuses a non-gating mode on a major bump of a contract, so such a change is
  * necessarily a minor bump, and a minor bump never satisfies "MAX(major) < this major". The sweep
- * then reported success over an empty set and stamped its watermark, which is why nothing surfaced
- * it.
+ * would then report success over an empty set and stamp its watermark.
  *
  * Streamed lazily in bounded chunks and hydrated per subject_type in one query each (no N+1), so
  * peak memory is bounded by the chunk size rather than by the size of the population — a large
  * user base never loads at once.
  *
- * Not final: a test overrides {@see keysetSeekDriver} to cover the MySQL OR-form seek branch on the
- * SQLite suite (the protected-seam pattern DefaultConsentManager uses for its retry test).
+ * Not final, so a subclass can override the two protected seams, {@see keysetSeekDriver} and
+ * {@see chunkSize}.
  */
 readonly class AffectedSubjectResolver
 {
@@ -48,9 +47,8 @@ readonly class AffectedSubjectResolver
     public function __construct(private TenantContext $tenant) {}
 
     /**
-     * The driver whose keyset-seek shape {@see forVersion} uses. A protected seam: a test forces the
-     * `mysql` value to exercise (and prove correct) the OR-form branch on the SQLite suite; in
-     * production this always resolves the live connection driver.
+     * The driver whose keyset-seek shape {@see forVersion} uses. A protected seam, so the OR-form
+     * branch can be selected on any engine; by default it resolves the live connection driver.
      */
     protected function keysetSeekDriver(): string
     {
@@ -70,12 +68,8 @@ readonly class AffectedSubjectResolver
     }
 
     /**
-     * How many subjects {@see forVersion} loads per page. A protected seam for the same reason
-     * {@see keysetSeekDriver} is one: the paging is only exercised by crossing this boundary, and at
-     * the production value that costs 501 rows per test. The three real-engine suites are exactly
-     * where the seek shapes have to be proven — an engine decides whether the seek agrees with the
-     * sort — and paying that fixture three times for a boundary a test can reach with six rows is
-     * what kept them from being written at all.
+     * How many subjects {@see forVersion} loads per page. A protected seam like
+     * {@see keysetSeekDriver}, so a page boundary can be crossed with a handful of subjects.
      *
      * Read once per call and reused for the limit, the loop condition and the hydration batch. A
      * value that changed between them would page past subjects it never yielded.
@@ -108,12 +102,11 @@ readonly class AffectedSubjectResolver
             ->where('locale', $version->locale)
             // The notice sweep crosses tenants, so scope subjects to this version's tenant.
             //
-            // `?? ''` is the fix, and the `->when()` around it is deliberate — see below.
-            // The column is NOT NULL DEFAULT '', but a model that was just created has no value
-            // loaded for it: measured, `$version->tenant_id` is null on a fresh insert and only
-            // becomes '' after a refresh. `where('tenant_id', null)` compiles to IS NULL, which
-            // matches no row of a NOT NULL column — the sweep resolves zero subjects and notifies
-            // nobody, silently. With tenancy on that was one un-refreshed model away.
+            // `?? ''` and the `->when()` around it are deliberate (see below). The column is NOT
+            // NULL DEFAULT '', but a model that was just created has no value loaded for it:
+            // `$version->tenant_id` is null on a fresh insert and only becomes '' after a refresh.
+            // `where('tenant_id', null)` compiles to IS NULL, which matches no row of a NOT NULL
+            // column, so the sweep would resolve zero subjects and notify nobody, silently.
             //
             // The filter stays conditional. Unconditional, it would let `tenant_id` lead the
             // affected-subject index, since a NOT NULL DEFAULT '' column makes the predicate hold
@@ -177,12 +170,8 @@ readonly class AffectedSubjectResolver
                     // comparison, MariaDB reports its own driver name, and an unknown driver may not
                     // compile whereRowValues at all — the index still cuts the constant enormously
                     // there, though that path stays super-linear. An engine-appropriate seek.
-                    // Inverting this branch changes no result, and the paragraph above says
-                    // why: both seek forms resume at the same place and return the same rows.
-                    // What the branch decides is whether the sweep stays linear on this engine, and
-                    // no assertion about the result can see that. The engine-shape arm covers which
-                    // driver gets which form; the paging arms cover that both forms page correctly.
-                    // Neither can see the difference, and a test that could would be timing the query.
+                    // Both seek forms resume at the same place and return the same rows; what this
+                    // branch decides is whether the sweep stays linear on this engine.
                     if ($this->usesRowValueSeek($driver)) {
                         $query->whereRowValues(['subject_type', 'subject_id'], '>', [$lastType, $lastId]);
                     } else {
@@ -249,8 +238,8 @@ readonly class AffectedSubjectResolver
      *
      * Summing `countForVersion()` over the released rows answers neither: it double-counts the
      * bilingual subject. Reporting the first row's count answers the language that happened to come
-     * back first — measured in a seven-locale consumer, that was 0 where the honest answer was 1,
-     * under a sentence saying the release reaches nobody.
+     * back first, which can be 0 where the honest answer is 1, under a sentence saying the release
+     * reaches nobody.
      *
      * So the grouping drops `locale` and the locale filter becomes a set. The gating predicate stays
      * per subject and is the load-bearing part: `MAX(document_major_version) < ?` over every locale

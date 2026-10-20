@@ -666,9 +666,9 @@ final readonly class LegalDocumentPublisher
             // nothing that passed before now fails for a reason nobody declared.
             $minDays = $this->minLeadDays($mode, $regime, $key);
 
-            // `> 0` VS `>= 0` is unobservable here, so no test can tell the two apart. With
-            // `$minDays === 0` the comparison reduces to `earliest notice > enforce`, and that is
-            // false in every state this branch can be reached in:
+            // `> 0` and `>= 0` answer alike here. With `$minDays === 0` the comparison reduces to
+            // `earliest notice > enforce`, and that is false in every state this branch can be
+            // reached in:
             //
             //   - the branch itself requires `$enforce > $now`, so the start of today is below it,
             //     and
@@ -676,9 +676,8 @@ final readonly class LegalDocumentPublisher
             //     date the operator chose, which the timeline invariant above already refused if it
             //     was after `$enforce`.
             //
-            // The `> 0` stays because it says what it means -- a mode and regime with no floor
-            // owes no period, so no period is measured -- and reading that from the arithmetic
-            // instead would make the next reader re-derive the paragraph above.
+            // The `> 0` says what it means: a mode and regime with no floor owes no period, so no
+            // period is measured.
             if ($minDays > 0 && $earliestNotice->addDays($minDays)->greaterThan($enforce)) {
                 throw LeadTimeTooShortException::for($key, $minDays, $earliestNotice, $enforce, LeadTimeSpan::Enforcement);
             }
@@ -738,11 +737,10 @@ final readonly class LegalDocumentPublisher
         // PHP compares equal-length lists element by element, so this is a (major, minor,
         // patch) tuple comparison: true only when the incoming version is strictly lower.
         //
-        // The casts cannot change a value today — the model casts all three columns to `integer`,
-        // so they arrive as ints whatever the driver returned. They are kept as the local statement
-        // of what this comparison requires, because the alternative reads as "these are already
-        // ints" and that is a fact about a `casts()` entry three files away. Drop one there and the
-        // tuple silently starts comparing a string against an int.
+        // The model casts all three columns to `integer`, and the casts here restate that locally:
+        // they are what this comparison requires, and without them the tuple would rest on a
+        // `casts()` entry three files away. Drop one there and the tuple silently starts comparing
+        // a string against an int.
         $current = [(int) $active->major_version, (int) $active->minor_version, (int) $active->patch_version];
         $incoming = [$rendered->majorVersion, $rendered->minorVersion, $rendered->patchVersion];
 
@@ -763,15 +761,13 @@ final readonly class LegalDocumentPublisher
      * ActiveReconsent in another, a subject bound by silence in the first would silently satisfy
      * the hard re-consent gate of the second: a weaker proof standing in for a stronger one.
      *
-     * The atomic releaser did not make this unreachable, and this paragraph used to say it did.
-     * It publishes its locales one after another inside one transaction, so the first locale met
-     * siblings still holding the version being replaced, under its old mode, and was refused.
-     * Measured 2026-09-14: a major released as an active re-consent in `de` and `en`, then 1.1.0 as
-     * a deemed-consent change, failed at `de`. A contract's major must gate, so no deemed-consent
-     * change could follow one in any installation with a second locale. The releaser now names the
-     * locales it publishes together, and those are skipped: each is about to carry the incoming
-     * mode, and a failure at any of them rolls all of them back. The per-locale CLI escape hatch
-     * names none, so it is still checked against every sibling.
+     * The atomic releaser publishes its locales one after another inside one transaction, so the
+     * first locale meets siblings still holding the version being replaced, under its old mode: a
+     * major released as an active re-consent in `de` and `en`, then 1.1.0 as a deemed-consent
+     * change, would be refused at `de`. So the releaser names the locales it publishes together,
+     * and those are skipped: each is about to carry the incoming mode, and a failure at any of
+     * them rolls all of them back. The per-locale CLI escape hatch names none, so it is still
+     * checked against every sibling.
      *
      * @param  list<string>  $releasedTogether  the locales published in the same atomic release
      */

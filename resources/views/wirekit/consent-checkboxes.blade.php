@@ -139,9 +139,8 @@
 
              And it is built with the one-line form, not a block. This file already uses the
              one-line form above, and the raw-block scanner pairs the first of those with the end
-             of any block opened later — swallowing everything between and failing far from here
-             with a syntax error in a compiled file. Measured: adding a block broke the view at its
-             twentieth compiled line, four hundred lines before the block itself.
+             of any block opened later, swallowing everything between and failing far from here
+             with a syntax error in a compiled file.
 
              The link is rendered by its component through a view of its own, never rebuilt here.
              That view says why it cannot be a string literal in this file. --}}

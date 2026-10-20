@@ -11,11 +11,10 @@ use Pushery\LegalConsent\Support\TableLookup;
  * One active version per (key, locale, tenant) — enforced by the database on every engine, not
  * only on PostgreSQL.
  *
- * This closes a gap that was named in the code and then lived with for twenty-four migrations.
- * Migration 000001 creates the partial unique index on PostgreSQL and says in its own comment:
- * *"MySQL/SQLite rely on the app-layer guard in LegalDocument::activate()"*. That guard is a lock
- * taken on the configured cache store — and `array` is process-local, `null` grants every lock,
- * and a store that is no LockProvider cannot be asked at all. On those two engines the invariant
+ * Migration 000001 creates the partial unique index on PostgreSQL only, and MySQL and SQLite relied
+ * on the app-layer guard in `LegalDocument::activate()`. That guard is a lock taken on the
+ * configured cache store, and `array` is process-local, `null` grants every lock, and a store that
+ * is no LockProvider cannot be asked at all. On those two engines the invariant
  * therefore rested on a component that is optional, swappable and not durable, and when it could
  * not serialize, the package logged a warning and wrote anyway.
  *
@@ -23,14 +22,12 @@ use Pushery\LegalConsent\Support\TableLookup;
  * in force when somebody agreed. Two rows with `is_active = true` do not degrade that answer, they
  * remove it — and no later repair can say which of the two a given acceptance was made against.
  *
- * **The obvious fix was to make the lock mandatory, and it was the worse one.** Refusing to publish
- * whenever the store cannot serialize breaks every test suite and every single-process deployment
- * — measured: 28 arms in this package's own suite — and it answers a missing constraint with a
- * distributed lock. A constraint is what this is.
+ * Making the lock mandatory would be the worse fix: refusing to publish whenever the store cannot
+ * serialize breaks every test suite and every single-process deployment, and it answers a missing
+ * constraint with a distributed lock. A constraint is what this is.
  *
  *  - **SQLite** takes the identical partial unique index PostgreSQL already has. It has supported
- *    them since 3.8.0 (2013); nothing about the original comment's reasoning was true by the time
- *    it was written.
+ *    them since 3.8.0 (2013).
  *  - **MySQL** has no partial index, so it gets the standard equivalent: a STORED generated column
  *    that is NULL for an inactive row and the identity triple for an active one, plus a plain
  *    unique index over it. NULLs do not collide in a unique index, so exactly the active rows are
@@ -92,7 +89,7 @@ return new class extends Migration
             // and `tenant_id` on utf8mb4_bin precisely so the three engines agree on what "the
             // same document" means. A derived column takes the table's collation instead, which
             // Laravel leaves at utf8mb4_unicode_ci — case- and accent-insensitive, PAD SPACE. The
-            // index would then be stricter than the one PostgreSQL and SQLite carry: measured,
+            // index would then be stricter than the one PostgreSQL and SQLite carry:
             // ('terms','de','') and ('TERMS','de',''), and a tenant told apart only by 'cafe' vs
             // 'café', are two rows on those engines and a duplicate-key error on MySQL. tenant_id
             // is consumer-supplied, so that is a real path rather than a constructed one — and it

@@ -90,16 +90,15 @@ final class LegalConsentServiceProvider extends ServiceProvider
      *
      * `documents` is the registry, and the cost of getting it wrong is specific to what this
      * package is for: a resurrected `legal_basis: consent` entry is consent-gating, so it appears
-     * in every surface that enumerates the registry and blocks sign-in as soon as it is published.
-     * Nothing turns red — it was found in a consuming application only because a guard there
-     * checked the set of unreachable paths in both directions.
+     * in every surface that enumerates the registry and blocks sign-in as soon as it is published,
+     * with nothing erroring on the way.
      *
      * Adding a key here is therefore a decision about ownership, not about merge convenience.
      *
      * Public because a second reader needs the same answer: `legal-consent:doctor` reports keys the
      * published file does not name, and for a block on this list a missing key is the host's
      * statement rather than drift. A copy of the list there would be a second place to change and
-     * a first place to forget — and the failure would be a red lane in exactly the installations
+     * a first place to forget, and the failure would be a false report in exactly the installations
      * that use the registry correctly.
      *
      * @var list<string>
@@ -207,12 +206,10 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $app->make(ConsentManager::class),
             $this->registrationDocumentsConfig(),
             $this->defaultLocale(),
-            // The literal, not RegistrationConsentRecorder::WITHOUT_FORM_FIELDS_WARN.
-            // The config-drift test reads these inline defaults out of the source and compares
-            // them to the shipped config file, so an application whose published config predates a
-            // key cannot end up behaving differently from a fresh one — and a class constant is
-            // not something that reader can evaluate. It would drop out of the comparison
-            // silently, which is the failure that guard exists to prevent.
+            // The literal, not RegistrationConsentRecorder::WITHOUT_FORM_FIELDS_WARN: an inline
+            // default can be read out of the source and compared with the shipped config file, so
+            // an application whose published config predates a key behaves like a fresh one, and
+            // a class constant cannot be read that way.
             $this->stringConfig('legal-consent.registration.without_form_fields', 'warn'),
         ));
 
@@ -404,10 +401,9 @@ final class LegalConsentServiceProvider extends ServiceProvider
         // demand and invalidated by a publish, so an eager pass would populate a cache from a
         // process that is not serving anyone.
         //
-        // It is a method to call, not one to override — `ServiceProvider::optimizes()` registers
-        // into two static maps. Declaring it as a return-an-array hook reads plausible and is
-        // silently inert; PHPStan catches it as a signature mismatch, which is the only reason it
-        // did not ship that way.
+        // It is a method to call, not one to override: `ServiceProvider::optimizes()` registers
+        // into two static maps, and declaring it as a return-an-array hook reads plausible and is
+        // silently inert.
         $this->optimizes(clear: 'legal-consent:cache-flush', key: 'legal-consent');
 
         if ($this->app->runningInConsole()) {
@@ -487,10 +483,8 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * Whether a version string clears the floor — the decision, separated from where the string
      * came from.
      *
-     * Separated because the environment cannot be varied: this package's own suite always has one
-     * WireKit installed, so a check that only ever asks Composer can never exercise the answer it
-     * gives for an older one. That is the branch that matters, since getting it wrong hands a
-     * consumer a hard exception on the re-consent gate.
+     * Separated so the answer for an older WireKit comes from the same decision as every other,
+     * since getting it wrong hands a consumer a hard exception on the re-consent gate.
      *
      * A branch checkout is read the way Composer orders it. A named branch, reported as `dev-…`, has
      * no number to compare and counts as satisfied, as does no answer at all: somebody developing
@@ -573,20 +567,18 @@ final class LegalConsentServiceProvider extends ServiceProvider
             __DIR__.'/../config/legal-consent.php' => $this->app->configPath('legal-consent.php'),
         ], ['legal-consent', 'legal-consent-config']);
 
-        // publishes(), not publishesMigrations() — and that is a decision with a receipt.
+        // publishes(), not publishesMigrations().
         //
         // publishesMigrations() makes vendor:publish rewrite each filename's date prefix to a
-        // fresh timestamp. It was adopted here on 2026-07-31 and reverted the same day, because
-        // both halves of the argument for it were wrong:
+        // fresh timestamp, and neither half of the argument for it holds here:
         //
-        //  - The premise was false. These files are named 0001_01_01_000001 upwards, which sorts
-        //    after a fresh Laravel application's 0001_01_01_000000_create_users_table, not before
-        //    it. There was no interleaving to fix, and no shipped migration touches an app-owned
-        //    table anyway.
-        //  - The change actively broke the opt-in pair below. Rewriting only this set, while
-        //    those keep their literal names, moves 0001_01_01_000004_backfill in FRONT of the
-        //    rewritten create_legal_consents_table — so `migrate` aborts on the very table the
-        //    backfill writes into. Reproduced by sorting the published set both ways.
+        //  - These files are named 0001_01_01_000001 upwards, which sorts after a fresh Laravel
+        //    application's 0001_01_01_000000_create_users_table, not before it. There is no
+        //    interleaving to fix, and no shipped migration touches an app-owned table anyway.
+        //  - It would break the opt-in pair below. Rewriting only this set, while those keep their
+        //    literal names, moves 0001_01_01_000004_backfill in front of the rewritten
+        //    create_legal_consents_table, so `migrate` would abort on the very table the backfill
+        //    writes into.
         //
         // A second reason to leave it alone, independent of the first: the publish command tests
         // whether a file already exists under its original name and renames only afterwards, so a
@@ -814,7 +806,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
      *
      * Recursing is not enough on its own — a list is a value, never a structure. The trap next
      * door is `array_replace_recursive()`, which the framework's own `replaceConfigRecursivelyFrom()`
-     * uses: it merges lists BY INDEX. A host narrowing this package's shipped
+     * uses: it merges lists by index. A host narrowing this package's shipped
      * `routes.api_middleware` to a single entry would get the removed ones back. On a middleware
      * allowlist that is a security regression rather than a merge. So recursion stops at any list
      * on either side, and what the host wrote stands.
@@ -827,14 +819,11 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * of what this application serves, not a set of knobs with defaults. Recursing into it
      * resurrects a document the host deleted on purpose, and on a consent package that is not a
      * merge artifact: a `legal_basis: consent` entry appears in every surface that enumerates the
-     * registry and can gate sign-in the moment it is published. Measured in a consuming
-     * application after v0.34.0, where a `newsletter` block that had been commented out since the
-     * beginning came back and put a seventh row in the admin overview.
+     * registry and can gate sign-in the moment it is published.
      *
-     * This package had chosen the flat merge for that block deliberately, and said why. The
-     * reasoning is restored here rather than rediscovered: a recursive merge would re-ask every
-     * user for consent to a document nobody meant to serve, which is a worse failure than a
-     * missing default. {@see HOST_OWNED_REGISTRIES}.
+     * So that block keeps the flat merge: a recursive merge would re-ask every user for consent to
+     * a document nobody meant to serve, which is a worse failure than a missing default.
+     * {@see HOST_OWNED_REGISTRIES}.
      *
      * The early return bounds what this can rescue. A cached configuration was merged when it was
      * built: `config:cache` boots a fresh application without the cache, so this method runs there,

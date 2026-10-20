@@ -57,9 +57,8 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
     /**
      * Every column of `legal_documents`, so {@see getQueryForModelRestoration()} can name what a
      * queued notice needs by subtraction instead of by an allow-list that would silently drop a
-     * column added later — the failure mode being a legal text rendered from a null. The list is
-     * held against the live schema, so a column added to the table and not to this list fails
-     * loudly rather than arriving as a missing attribute.
+     * column added later, the failure mode being a legal text rendered from a null. A column added
+     * to the table belongs in this list as well.
      *
      * @var list<string>
      */
@@ -242,9 +241,8 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
     {
         $name = config('legal-consent.routes.consent_name');
 
-        // The `!== ''` is redundant against `Route::has('')`, which is false -- measured, and it
-        // is why deleting that clause changes nothing any test can see. It stays as the cheaper
-        // half of the pair: a name only reaches the router when there is a name to look up.
+        // The `!== ''` is redundant against `Route::has('')`, which is false. It stays as the
+        // cheaper half of the pair: a name only reaches the router when there is a name to look up.
         if (is_string($name) && $name !== '' && Route::has($name)) {
             return route($name);
         }

@@ -38,13 +38,11 @@ use Illuminate\Support\ServiceProvider;
  * of every consumer who lists providers by hand — this one is an implementation detail of where a
  * publish map lives, and naming it in the manifest would suggest it is something to reason about.
  *
- * **There is deliberately no `runningInConsole()` guard in `boot()` below**, and its absence is
- * measured rather than forgotten. That single registration site sits inside the main provider's own
- * `if ($this->app->runningInConsole())`, and the manifest names only the main provider, so nothing
- * can register this class outside a console run. A guard here would be a branch no run can enter —
- * which is precisely what the coverage floor reported when one was written: not a missing test, but
- * a line that cannot be reached. If the registration ever moves out from under that gate, put the
- * guard back with it; until then the console decision stays in one place.
+ * **There is deliberately no `runningInConsole()` guard in `boot()` below.** The single
+ * registration site sits inside the main provider's own `if ($this->app->runningInConsole())`, and
+ * the manifest names only the main provider, so nothing can register this class outside a console
+ * run, and a guard here could never take its other branch. If the registration ever moves out from
+ * under that gate, put the guard back with it; until then the console decision stays in one place.
  */
 final class LegalConsentOptInPublishing extends ServiceProvider
 {

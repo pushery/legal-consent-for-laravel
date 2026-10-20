@@ -161,6 +161,7 @@ return [
     'admin_status_changed_before_review' => 'Le texte a été modifié après son affichage ici, il n\'a donc pas été marqué comme relu. Recharge-le et relis la version actuelle.',
     'admin_status_release_blocked' => '« :key » n\'a pas été publié : :reasons',
     'admin_status_released' => '« :key » publié dans :count langue(s) — concerne :affects personne(s).',
+    'admin_status_released_uncounted' => '« :key » publié dans :count langue(s). Le temps prévu n\'a pas suffi pour compter les personnes concernées.',
     'admin_status_wording_changed' => 'La phrase d’acceptation a changé en :languages, et chaque consentement donné désormais enregistre la nouvelle.',
     'admin_deemed_heading' => 'Publier avec un délai d’opposition',
     'admin_deemed_explainer' => 'Une modification à consentement tacite engage si le délai d’opposition se termine sans opposition. Le délai doit respecter au minimum le préavis légal.',

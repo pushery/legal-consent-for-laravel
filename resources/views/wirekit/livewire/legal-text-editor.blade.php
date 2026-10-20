@@ -13,10 +13,9 @@
      polls. A dispatched job is invisible to the page that dispatched it, and without this the
      operator would click Translate, read that it is running, and have to guess when to reload.
 
-     `?? false` because this view is also rendered standalone, by the tests that check its markup
-     against real components. There is no Livewire component behind those, so the flag is absent —
-     and absent means "do not poll", which is the only thing a render without a component could
-     honestly mean. Calling `$this->translating()` here instead threw on every one of them.
+     `?? false` because this view can also be rendered standalone, with no Livewire component
+     behind it. The flag is then absent, and absent means "do not poll", which is the only thing a
+     render without a component can honestly mean; calling `$this->translating()` here would throw.
 
      Each tick calls `pollTranslation`, which answers without a render while the run is still going.
      The tick after it ends renders, takes the result, and stops the poll. --}}
@@ -36,9 +35,8 @@
         @endif
 
         {{-- Whether a human has signed off on these exact bytes, on the screen where that happens.
-             `reviewState` reached this view and was rendered nowhere, so a reviewed draft looked
-             exactly like an unreviewed one the moment the status line was replaced by the next
-             action — on the one screen whose product is the sign-off.
+             Without it a reviewed draft looks exactly like an unreviewed one once the status line
+             is replaced by the next action, on the one screen whose product is the sign-off.
 
              The state is labeled rather than shown as a bare word: a colored chip saying
              "Reviewed" beside a heading is not self-explanatory, and the color carries no meaning
@@ -68,19 +66,17 @@
             @endif
         </div>
 
-        {{-- Keyed on the server's body nonce, and that key is the fix rather than decoration.
+        {{-- Keyed on the server's body nonce, which is what lets a translation reach the editor.
              `wire:ignore` holds the subtree out of Livewire's morph, which is what keeps the mounted
-             editor alive — and it holds a server-side replacement out as well. After Translate the
-             visible editor still showed the old text while the hidden field already carried the new
-             one, so the reader edited what they saw, the engine wrote its document back on the next
-             keystroke, and Save stored the old text over the translation with nothing reporting it.
+             editor alive, and it holds a server-side replacement out as well: after Translate the
+             visible editor would still show the old text while the hidden field already carried the
+             new one, and the next keystroke and Save would write the old text over the translation.
              A changed key makes Livewire replace the element instead of morphing it, so the editor
              is rebuilt from the new `:value`.
 
-             `$bodyNonce ?? 0` for the same reason as `$translating ?? false` above: this view is
-             also rendered standalone by the tests that check its markup against real components,
-             where no component supplies it. A constant is the honest answer there — a render with
-             no component behind it has no replacement to report.
+             `$bodyNonce ?? 0` for the same reason as `$translating ?? false` above: rendered
+             standalone, no component supplies it, and a render with no component behind it has no
+             replacement to report.
 
              Only a person's edit reaches `body`. From 2.56.0, below the floor of these views, the editor
              no longer reports its own serialization of the text as input when it loads, so a save
@@ -116,8 +112,8 @@
         </div>
 
         {{-- A row that wraps, not a group. `button.group` joins its children into one line at
-             every width, which is right for a segmented control and wrong for three separate acts.
-             Measured at 390 px with German labels: the widest action ended at 548 px, 158 past the
+             every width, which is right for a segmented control and wrong for three separate acts:
+             at 390 px with German labels the widest action would end at 548 px, 158 past the
              viewport. `row`'s own prop documents this case — "the per-page cure has been to add
              `wrap`" — so this uses WireKit's vocabulary rather than a class of its own. --}}
         <x-wirekit::row wrap gap="sm">
@@ -166,22 +162,19 @@
                 </x-wirekit::alert-dialog>
             @endif
             {{-- WCAG 4.1.3: Save / Translate / Mark reviewed announce their result here, beside the
-             buttons they belong to. It used to sit above the field, so the result of pressing Save
-             appeared above a field whose button is below it — on a phone, off screen. The region is
-                 ALWAYS in the DOM so the update is spoken — a live region inserted together with its
-                 text is not announced. The text is a plain x-wirekit::text, not an x-wirekit::alert:
-                 the alert is itself a role="status" region, and nesting one live region in another
+                 buttons they belong to, where a phone shows it. The region is always in the DOM so
+                 the update is spoken: a live region inserted together with its text is not
+                 announced. The text is a plain x-wirekit::text, not an x-wirekit::alert: the alert is
+                 itself a role="status" region, and nesting one live region in another
                  double-announces and conflicts on politeness. --}}
-            {{-- `sr-only` while empty, and only then — the pattern the consent panel already carries,
-                 for the same measured reason there: an empty region has no height but is still a
-                 child of the stack, so it takes a gap.
+            {{-- `sr-only` while empty, and only then, the pattern the consent panel carries for the
+                 same reason: an empty region has no height but is still a child of the stack, so it
+                 takes a gap.
 
-                 On this region it is consistency, not a measured saving, and that is written here
-                 so nobody re-derives it. Measured at 390 px: with the hiding and without it, the
-                 widest action ends at 390 px either way — this region sits after the buttons now, so
-                 an empty one has nothing to push. The stale region above is where it does act (96 px
-                 against 90 between the heading and the field). Treating the two live regions of one
-                 screen differently would cost the next reader more than the attribute does. --}}
+                 On this region it is consistency rather than a saving: it sits after the buttons, so
+                 an empty one has nothing to push. The stale region above is where it does act.
+                 Treating the two live regions of one screen differently would cost the next reader
+                 more than the attribute does. --}}
             <div role="status" aria-live="polite" wire:key="lc-editor-status"
                 @class(['sr-only' => ($status ?? '') === ''])>
                 @if ($status !== '')
@@ -209,9 +202,8 @@
             <x-wirekit::date-picker wire:model="enforceAt" name="enforceAt" required :label="__('legal-consent::ui.admin_deemed_enforce')" />
 
             {{-- The classification, beside the dates rather than apart from them: one release
-                 carries both, and five of the seven fields were built here while the two that say
-                 what kind of change it is were not. A release from this screen therefore froze a
-                 contract change with no regime and no class, and said nothing about it.
+                 carries both, and without the regime and the class a release from this screen would
+                 freeze a contract change with neither, and say nothing about it.
 
                  The regime is a select over the publisher's own list, because it refuses one it
                  does not know; the class is free text, because it takes any and the command line
@@ -224,10 +216,9 @@
                      has already scheduled.
 
                      Read as the constant, not through a component method. `$this` is bound only
-                     while Livewire renders this view; the package's own view tests render it
-                     directly, and `$this->regimes()` died there with "Using $this when not in
-                     object context" -- a published stub has to render wherever a consumer puts it.
-                     Measured on the integration gate, not guessed. --}}
+                     while Livewire renders this view, and a published stub has to render wherever
+                     an application puts it: rendered directly, `$this->regimes()` fails with
+                     "Using $this when not in object context". --}}
                 @foreach (\Pushery\LegalConsent\Support\LegalDocumentPublisher::REGIMES as $available)
                     <option value="{{ $available }}">{{ $available }}</option>
                 @endforeach
@@ -246,9 +237,9 @@
         {{-- The already-sanitized stored bytes — a true fixpoint of what a publish will freeze. --}}
         {{-- `as="section"` for the same reason as the plain twin: `x-wirekit::card` renders a
              `<div>` by default, a div with no role maps to `generic`, and ARIA forbids naming a
-             generic element — the label was discarded. And the label key is the one the plain twin
-             uses: this said `admin_preview`, the heading's own text, so the region would have
-             announced the same words as the heading right above it. --}}
+             generic element, so the label would be discarded. The label key is the one the plain
+             twin uses rather than `admin_preview`, the heading's own text, which would announce the
+             same words as the heading right above it. --}}
         <x-wirekit::card as="section" aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">
             {{-- Through `card.body` and `prose`, because a preview that does not look like its
                  subject invites somebody to "correct" spacing that was never wrong: the published

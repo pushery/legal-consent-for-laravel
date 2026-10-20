@@ -19,12 +19,10 @@
     title becomes a link, because a screen on which the document being withdrawn cannot be read is
     silent exactly where Art. 7(3) assumes the subject knows what they are deciding about.
 
-    `withdraw_url` is where the form posts, and the package fills it now — from the bundled
-    session route, which you switch on with `legal-consent.routes.web`. It is null on every entry
-    that is not a withdrawable consent the subject currently holds, and null everywhere while that
-    route is off; the form is then not rendered at all. Until 0.16.1 this key had no producer
-    anywhere in the package and the action fell back to `#`, so the button looked like a working
-    control and did nothing — under a comment promising Art. 7(3).
+    `withdraw_url` is where the form posts, and the package fills it from the bundled session
+    route, which you switch on with `legal-consent.routes.web`. It is null on every entry that is
+    not a withdrawable consent the subject currently holds, and null everywhere while that route
+    is off; the form is then not rendered at all, rather than offering a button that does nothing.
 
     Pointing it at your own route still works: publish this stub and set the key yourself.
 --}}
@@ -33,13 +31,11 @@
 
     {{-- The result of the redirect the bundled withdrawal route answers with.
 
-         On this path the live region announces nothing, and the comment here used to claim the
-         opposite. Withdrawal is POST -> Redirect -> GET, so the message arrives in a fresh
-         document together with the region that carries it — and a live region present at page
-         load never announces, because there is no mutation for it to report. The "always in the
-         DOM" reasoning is true of the Livewire twins, where the component morphs the region in
-         place, and it does not transfer here. The banner stub already says this correctly about
-         itself; these two lines were the copy that did not.
+         On this path the live region announces nothing. Withdrawal is POST -> Redirect -> GET, so
+         the message arrives in a fresh document together with the region that carries it, and a
+         live region present at page load never announces, because there is no mutation for it to
+         report. The "always in the DOM" reasoning is true of the Livewire twins, where the
+         component morphs the region in place, and it does not transfer here.
 
          What the roles still buy is the reading order: the message sits directly after the
          heading, and `status` / `alert` name it when the subject reaches or navigates to it. That

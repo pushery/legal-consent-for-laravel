@@ -30,6 +30,7 @@ use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
 use Pushery\LegalConsent\Livewire\Concerns\NamesChangedSentences;
 use Pushery\LegalConsent\Livewire\Concerns\WordsPublishRefusals;
+use Pushery\LegalConsent\Livewire\Concerns\WordsReleaseStatus;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\CalendarDate;
 use Pushery\LegalConsent\Support\DocumentMatrix;
@@ -55,6 +56,7 @@ final class LegalTextEditor extends Component
     use AuthorizesLegalAdmin;
     use NamesChangedSentences;
     use WordsPublishRefusals;
+    use WordsReleaseStatus;
 
     /**
      * The draft identity this editor was opened on — one document key, one locale.
@@ -74,19 +76,12 @@ final class LegalTextEditor extends Component
     public string $locale = '';
 
     /**
-     * The objection window a deemed-consent release binds on — announce, deadline, enforce.
+     * The objection window a deemed-consent release binds on: announce, deadline, enforce.
      *
-     * This surface is here rather than on the manager grid, and that placement is the finding
-     * rather than a preference. `LegalTextManager` says in its own words that the deemed and
-     * info-only modes belong to "the editor controls or the CLI, not a button on an overview
-     * grid" — a deemed release binds people by their silence (§ 308 Nr. 5 BGB), and a one-click
+     * This surface is here rather than on the manager grid. The deemed and info-only modes belong
+     * to "the editor controls or the CLI, not a button on an overview grid", as `LegalTextManager`
+     * puts it: a deemed release binds people by their silence (§ 308 Nr. 5 BGB), and a one-click
      * grid action is the wrong amount of friction for that.
-     *
-     * Measured 2026-09-05: of the two routes that sentence names, only the CLI existed. The
-     * editor carried nothing — zero references to a notice mode, an objection deadline or
-     * ReleaseOptions. So an application with an admin UI had no in-app path to a capability this
-     * package implements end to end, and a consuming app rebuilt the screen itself. The prose
-     * described a surface that was not there.
      *
      * Empty strings rather than nulls because they are bound to date inputs, which submit "".
      */
@@ -216,10 +211,9 @@ final class LegalTextEditor extends Component
         abort_unless(in_array($documentKey, $this->documentKeys(), true), 404);
 
         // And the locale, which is the one that fails quietly. releaseDeemed() releases the
-        // locales from the configuration, never the one this screen is editing. Measured: an
-        // editor mounted on `fr` with `locales => ['de']` accepts the text, reports it reviewed,
-        // and then publishes `de` — while telling the operator that »terms« was released. The
-        // text the person just wrote and released is not published, and nothing says so.
+        // locales from the configuration, never the one this screen is editing: an editor mounted
+        // on `fr` with `locales => ['de']` would accept the text, report it reviewed, and then
+        // publish `de` while telling the operator that »terms« was released.
         abort_unless(in_array($locale, $this->locales(), true), 404);
 
         $this->key = $documentKey;
@@ -663,14 +657,7 @@ final class LegalTextEditor extends Component
             return;
         }
 
-        // Over the whole release, like the manager: this screen releases every locale too, and
-        // `affects()` answers per (key, locale), so the first row named the people of one language.
-        $affects = app(LegalDocumentReleaser::class)->affectsRelease($released);
-        $this->setStatus(__('legal-consent::ui.admin_status_released', [
-            'key' => app(NamesLegalTexts::class)->document($this->key),
-            'count' => count($released),
-            'affects' => $affects,
-        ]).$this->sentenceChangeNotice(app(LegalDocumentReleaser::class)->sentenceChangedIn($sentencesBefore, $released)));
+        $this->setStatus($this->releasedStatus($this->key, $released).$this->sentenceChangeNotice(app(LegalDocumentReleaser::class)->sentenceChangedIn($sentencesBefore, $released)));
     }
 
     public function render(): View
@@ -682,15 +669,9 @@ final class LegalTextEditor extends Component
 
         $this->takeQueuedTranslation($draft, $translating);
 
-        // Which sentence, decided here rather than in each view. The judgment has two reasons —
-        // the source moved under a reviewed translation, or nobody ever confirmed this one — and
-        // the old copy narrated the first for both. Two views branching on their own is how they
-        // come to say different things about the same draft.
-        //
-        // Assembled in statements rather than in one nested ternary because a multiline ternary
-        // whose else-arm is the bare constant `null` compiles to no opcode on its own line: pcov
-        // never records it, a 100% floor counts it as executable, and no test can reach it. This
-        // package has a guard for exactly that, and it found this expression.
+        // Which sentence, decided here rather than in each view. The judgment has two reasons (the
+        // source moved under a reviewed translation, or nobody ever confirmed this one), and two
+        // views branching on their own would come to say different things about the same draft.
         $stale = $draft instanceof LegalDraft && $set->isStale($draft);
         $staleNotice = null;
 
@@ -703,13 +684,13 @@ final class LegalTextEditor extends Component
         return view('legal-consent::livewire.legal-text-editor', [
             'translating' => $translating,
             'sourceLocale' => $this->sourceLocale(),
-            // The button said "Translate from de" on a German screen, because the code went
-            // straight into the sentence. The binding is what an application's own switcher
-            // already answers with; the shipped one returns the code, so nothing moves for a
-            // consumer who has not bound one.
+            // A name rather than the code, so the button does not say "Translate from de" on a
+            // German screen. The binding is what an application's own switcher already answers
+            // with; the shipped one returns the code, so nothing moves for a consumer who has not
+            // bound one.
             'sourceLanguage' => app(NamesLegalTexts::class)->language($this->sourceLocale()),
-            // The screen's own title said `terms — de`. Same finding as the overview's row header,
-            // on the screen beside it, and the report listed three places rather than four.
+            // Names for the screen's own title too, which would otherwise read `terms — de`, like
+            // the overview's row header.
             'documentName' => app(NamesLegalTexts::class)->document($this->key),
             'languageName' => app(NamesLegalTexts::class)->language($this->locale),
             'isSource' => $this->locale === $this->sourceLocale(),
@@ -773,14 +754,12 @@ final class LegalTextEditor extends Component
      *
      * All three dates and the regime are required here, and the reason is the mode. A deemed
      * release binds people by their silence, and the window is the statement that binding rests
-     * on. Left empty, the announcement defaulted to the moment of the click, and a change released
-     * without a regime was measured against the tunable default alone: a configuration or a
-     * per-document override that shortens it applied, where the regime would have held the
-     * statutory floor (two months for a payment contract under § 675g BGB). Both are windows
-     * nobody chose. The publisher already refused a missing objection deadline, one field at a time
-     * and in its own English sentence; this names every empty field at once, in the reader's
-     * language. A consumer that wrapped this screen made all four fields required before it would
-     * adopt it.
+     * on. Left empty, the announcement would default to the moment of the click, and a change
+     * released without a regime would be held against the tunable default alone: a configuration or
+     * a per-document override that shortens it would apply, where the regime holds the statutory
+     * floor (two months for a payment contract under § 675g BGB). Both are windows nobody chose.
+     * The publisher refuses a missing objection deadline, one field at a time and in its own English
+     * sentence; this names every empty field at once, in the reader's language.
      *
      * The change class and the two switches stay optional: they describe the change, and an
      * operator who leaves them unset has not left a date to a default.
@@ -802,8 +781,8 @@ final class LegalTextEditor extends Component
      *
      * Returned rather than thrown: the caller turns them into a status line, so an operator who
      * mistyped a date sees which field, not a 500, and not a silently dropped value that releases
-     * with no deadline at all. The line used to carry the field names in English inside a
-     * translated sentence; it names them as the form labels them now.
+     * with no deadline at all. The fields are named as the form labels them, not in English inside
+     * a translated sentence.
      *
      * @return list<string>
      */
@@ -827,10 +806,9 @@ final class LegalTextEditor extends Component
      */
     private function documentKeys(): array
     {
-        // Through the matrix, not off the raw config. A registry with two readers has two answers,
-        // and only one of them is tested: this line stood identically in the manager and the editor
-        // and neither filtered the list-config case, so `['terms', 'privacy']` reached the screens
-        // as documents named `0` and `1` while every command skipped them.
+        // Through the matrix, not off the raw config: a registry with two readers has two answers,
+        // and read raw, a list config such as `['terms', 'privacy']` would reach the screen as
+        // documents named `0` and `1` while every command skips them.
         return DocumentMatrix::keys();
     }
 

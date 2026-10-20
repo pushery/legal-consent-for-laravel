@@ -10,7 +10,6 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Console\Isolatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Console\Concerns\SkipsWhenTablesAreMissing;
 use Pushery\LegalConsent\Contracts\LegalConsentMonitor;
@@ -19,7 +18,6 @@ use Pushery\LegalConsent\Exceptions\LedgerCensusDoesNotVerify;
 use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalNotice;
-use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\LedgerBoundaryCensus;
 use Pushery\LegalConsent\Support\LedgerChainRepair;
 use Pushery\LegalConsent\Support\LedgerChainSoundness;
@@ -27,6 +25,7 @@ use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\LedgerRecordMacs;
 use Pushery\LegalConsent\Support\LockedRows;
 use Pushery\LegalConsent\Support\RetentionCutoffs;
+use Pushery\LegalConsent\Support\RetentionEligibility;
 use Pushery\LegalConsent\Support\SubjectToken;
 use stdClass;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -87,6 +86,14 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      * builds, as the other sweeps do with the same number.
      */
     private const int CHUNK = 500;
+
+    /**
+     * Chain tokens the first search of a run on PostgreSQL finds in its one pass over the ledger.
+     *
+     * Large enough that a daily sweep finds every eligible chain at once, and small enough that the
+     * tokens held in memory stay a fraction of a megabyte.
+     */
+    private const int ONE_PASS_TOKENS = 5000;
 
     protected $signature = 'legal-consent:prune';
 
@@ -267,26 +274,19 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
      */
     private function pruneChains(RetentionCutoffs $cutoffs, LedgerChainSoundness $soundness, int &$relinked, int &$refused): int
     {
+        $eligibility = new RetentionEligibility($cutoffs);
         $deleted = 0;
         $after = null;
 
+        // The first search of a run on PostgreSQL reads the ledger once rather than probing each row
+        // past the cutoff, which is the cheaper answer while eligible chains are few. The search after
+        // a full first page goes row by row from where it ended, where eligible rows lie close together.
+        $inOnePass = LegalConsent::model()::query()->getModel()->getConnection()->getDriverName() === 'pgsql';
+
         do {
-            $tokens = [];
-
-            $page = $this->eligible(LegalConsent::model()::query(), 'legal_consents', 'accepted_at', $cutoffs)
-                ->whereNotNull('prev_record_hash')
-                ->whereNotNull('subject_token')
-                ->when($after !== null, fn (Builder $query): Builder => $query->where('subject_token', '>', $after))
-                ->distinct()
-                ->orderBy('subject_token')
-                ->limit(self::CHUNK)
-                ->pluck('subject_token');
-
-            foreach ($page as $token) {
-                if (is_string($token)) {
-                    $tokens[] = $token;
-                }
-            }
+            $limit = $inOnePass ? self::ONE_PASS_TOKENS : self::CHUNK;
+            $tokens = $inOnePass ? $eligibility->chainTokensInOnePass($limit) : $eligibility->chainTokensRowByRow($after, $limit);
+            $inOnePass = false;
 
             foreach ($tokens as $token) {
                 $outcome = DB::transaction(fn (): ?array => $this->pruneChain($token, $cutoffs, $soundness));
@@ -302,7 +302,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
             }
 
             gc_collect_cycles();
-        } while (count($tokens) === self::CHUNK);
+        } while (count($tokens) === $limit);
 
         return $deleted;
     }
@@ -537,12 +537,9 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         // (subject_token, prev_record_hash) index has room for the moved links whichever way the
         // rows are grouped.
         //
-        // The chunk is not decoration, and it is not a number written down here either. It used to
-        // be 500 rows, which at 24 columns is 12 000 placeholders — past a 999-build's ceiling by a
-        // factor of twelve, and thirteen times what the erasure allowed itself for the identical
-        // rows. Measured before the repair: a subject with 47 consent rows produced one insert
-        // binding 1104 placeholders. The budget is now derived per row width, in the one place both
-        // rewriters read.
+        // The chunk is derived per row width, in the one place both rewriters read, rather than
+        // written down here as a row count: at 24 columns, 500 rows are 12 000 placeholders, far
+        // past the ceiling of a SQLite build limited to 999.
         foreach ($repair->batches($moved) as $batch) {
             DB::table('legal_consents')->insert($batch);
         }
@@ -561,76 +558,16 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
     }
 
     /**
-     * Eligible = past the cutoff and (orphaned OR superseded long enough ago). Orphaned = the
-     * subject was deleted (no live relationship remains). Superseded = a newer row exists for the
-     * same tenant, subject, document and locale, so this older one is no longer the current
-     * standing, and that newer row is past the cutoff of the document too: it marks the moment
-     * this row stopped being relevant, which is where its retention starts. The newest row per
-     * tenant has no such successor and is kept, even past the cutoff, so an active subject's
-     * proof is never destroyed by age. The whole disjunction is parenthesized so it binds under
-     * the cutoff, not beside it.
-     *
-     * The tenant belongs in the comparison because a standing is held per tenant: the same
-     * person in two tenants has two relationships, and a newer row in one says nothing about the
-     * other. The sweep itself runs across every tenant, which is why the correlation has to say so.
-     *
-     * A row that is eligible stays eligible while the sweep runs. The newest row of each (tenant,
-     * subject, document, locale), which supersedes every other, is never removed, and a newer row
-     * past the cutoff that the sweep does remove is removed only because a row newer still is past
-     * the cutoff as well, which then supersedes this one in its place. finishedChains() relies on
-     * that.
+     * The eligible rows of a ledger, by the rule {@see RetentionEligibility} states.
      *
      * @template TModel of LegalConsent|LegalNotice
      *
      * @param  Builder<TModel>  $query
-     * @param  literal-string  $table  the ledger's table. It reaches the correlated subquery
-     *                                 through the grammar rather than by interpolation, so this is
-     *                                 no longer the only thing standing between a caller's value
-     *                                 and a statement — but it stays, because a table name is not
-     *                                 something a caller should be able to choose either way.
+     * @param  literal-string  $table  the ledger's table
      * @return Builder<TModel>
      */
     private function eligible(Builder $query, string $table, string $timestamp, RetentionCutoffs $cutoffs): Builder
     {
-        // Retention runs across all tenants, and past the cutoff of each record's own document.
-        return $cutoffs->expired($query->withoutGlobalScope(TenantScope::class), $timestamp)
-            // Built, not written, and that is the whole repair. This was the package's last
-            // hand-assembled runtime statement: a `whereRaw` naming `legal_consents` literally on
-            // both sides of the correlation. Everything else on this sweep is builder work, and a
-            // builder applies the connection's table prefix itself — so this was the one place the
-            // prefix went missing, and it went missing as a raw SQLSTATE about a table that does
-            // not exist, at 3am, in a scheduled task, on an application whose schema was correct.
-            //
-            // Interpolating the prefix by hand would have fixed the symptom and kept the class of
-            // defect (plus a validated-prefix guard to make the interpolation safe). Handing the
-            // table name to `from()` and `whereColumn()` removes both: the grammar wraps the table,
-            // the alias and every correlated column, so there is no string to get wrong and nothing
-            // hostile can reach a statement in the first place.
-            //
-            // The alias is prefixed too, by the same grammar, on both the FROM and the columns that
-            // reference it — so the two sides agree by construction rather than by convention.
-            ->where(function (Builder $eligible) use ($table, $timestamp, $cutoffs): void {
-                $eligible
-                    // Orphaned: the subject was deleted, so no live relationship remains.
-                    ->whereNull('subject_id')
-                    ->orWhereNull('subject_type')
-                    // Superseded long enough ago: a newer row exists for the same (tenant, subject,
-                    // document, locale), and it is itself past the retention of that document. The
-                    // newer row's time is when this one stopped being the current standing, which is
-                    // where its retention starts.
-                    ->orWhereExists(function (QueryBuilder $newer) use ($table, $timestamp, $cutoffs): void {
-                        $newer
-                            ->selectRaw('1')
-                            ->from($table, 'newer')
-                            ->whereColumn('newer.tenant_id', "{$table}.tenant_id")
-                            ->whereColumn('newer.subject_type', "{$table}.subject_type")
-                            ->whereColumn('newer.subject_id', "{$table}.subject_id")
-                            ->whereColumn('newer.document_key', "{$table}.document_key")
-                            ->whereColumn('newer.locale', "{$table}.locale")
-                            ->whereColumn('newer.id', '>', "{$table}.id");
-
-                        $cutoffs->expiredOn($newer, "newer.{$timestamp}", 'newer.document_key');
-                    });
-            });
+        return new RetentionEligibility($cutoffs)->rows($query, $table, $timestamp);
     }
 }

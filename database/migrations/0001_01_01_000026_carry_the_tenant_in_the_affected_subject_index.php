@@ -24,9 +24,9 @@ use Pushery\LegalConsent\Support\IndexName;
  * the four always-present columns still form the usable prefix and the extra predicate is filtered
  * inside the index rather than against the table.
  *
- * The alternative the finding offered — filter `tenant_id` unconditionally — is rejected: rows
- * written while tenancy was off carry `''`, so an installation that enabled it later holds mixed
- * values, and an unconditional filter would hide its own history from the sweep.
+ * The filter on `tenant_id` stays conditional: rows written while tenancy was off carry `''`, so
+ * an installation that enabled it later holds mixed values, and an unconditional filter would hide
+ * its own history from the sweep.
  */
 return new class extends Migration
 {

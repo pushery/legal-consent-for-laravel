@@ -26,8 +26,8 @@ use RuntimeException;
  * exists exactly once, in `legal_documents.content`. A hash can verify a text somebody produces;
  * it cannot produce one. So deleting a superseded version leaves every consent recorded against it
  * holding a fingerprint of a document nobody has any more, which is precisely the Art. 7(1)
- * evidence the ledger is built to carry. The subordinate `legal_change_sets` tables have had a
- * BEFORE DELETE guard since they were introduced; the load-bearing table had none.
+ * evidence the ledger is built to carry. The subordinate `legal_change_sets` tables carry a BEFORE
+ * DELETE guard of their own.
  *
  * The guard is conditional, and the condition is the point: a version no subject ever consented to
  * is still deletable. Refusing every delete would make the guard something operators route around
@@ -37,26 +37,21 @@ use RuntimeException;
  * The DELETE half names a second table, and on SQLite that has a cost every future migration has
  * to pay: a migration that rebuilds `legal_consents` or `legal_documents` must run inside
  * {@see self::whileDisarmed()}, or it dies mid-rebuild with the original table already dropped.
- * The full mechanism and the measurement are documented on that method.
+ * The full mechanism is documented on that method.
  *
  * This lives in `src/` rather than inside the migration that first created it because it has
- * to be re-installable, and that is not a refactoring preference — it is a portability fact
- * measured here on 2026-08-03. SQLite cannot alter a column in place: Laravel's `->change()`
- * performs the twelve-step rebuild (create a new table, copy, drop, rename), and while indexes
- * survive that, triggers do not. So any later migration that touches a column on this table
- * silently disarms the proof guard on SQLite — no error, no failing migration, just a table
- * that stops being frozen.
- *
- * That failure was caught by a test that asserts the guard from the
- * outside rather than trusting that a migration ran. Keep it that way: the guard here is the
- * mechanism, that test is the proof.
+ * to be re-installable, and that is a portability fact rather than a refactoring preference.
+ * SQLite cannot alter a column in place: Laravel's `->change()` performs the twelve-step rebuild
+ * (create a new table, copy, drop, rename), and while indexes survive that, triggers do not. So
+ * any later migration that touches a column on this table silently disarms the proof guard on
+ * SQLite unless it re-installs it: no error, no failing migration, just a table that stops being
+ * frozen.
  *
  * On PostgreSQL the guard is a true allowlist (`to_jsonb(NEW) - <allowed>` compared to old), so
  * a proof column added by a future migration is protected automatically — it fails closed.
  * MySQL and SQLite cannot diff a row minus columns inside a trigger, so they enumerate every
  * protected column present at install time; a column added later would slip past them (fails
- * open), which is the second reason re-installation matters and the reason that test iterates
- * the live column list rather than a written-down one.
+ * open), which is the second reason re-installation matters.
  */
 final class ProofColumnGuard
 {
@@ -110,21 +105,15 @@ final class ProofColumnGuard
      * anywhere — the immutability this package builds its evidentiary weight on, silently absent.
      * A migration that stops is recoverable; a proof table that only looks frozen is not.
      *
-     * It also removes the one arm no test could ever reach. An unreachable `default` inside a
-     * match is a line that can only be excluded, never covered, and excluding it would be the
-     * second-best answer to a question that has a better one.
-     *
      * Called first, a refusal costs the operator nothing but a message. Called after a schema
-     * change — where it used to sit — it strands the table half-migrated on the MySQL family,
-     * which commits DDL implicitly and so cannot roll the ALTER back: the column is already
-     * altered, the `migrations` row was never written, and every re-run fails the same way.
+     * change, it would strand the table half-migrated on the MySQL family, which commits DDL
+     * implicitly and so cannot roll the ALTER back: the column would already be altered, the
+     * `migrations` row never written, and every re-run would fail the same way.
      * Laravel's own driver name is the config value verbatim, so `mariadb` and `sqlsrv` reach
      * this literally rather than as `mysql`.
      *
      * The return type is the literal union rather than `string`, and that is load-bearing: it is
-     * what lets the `match` in install() stay exhaustive without a `default` arm. A `default` there
-     * would be a line no test can reach — coverable only by exclusion — which is the second-best
-     * answer to a question that has a better one.
+     * what lets the `match` in install() stay exhaustive without a `default` arm.
      *
      * @return 'mysql'|'pgsql'|'sqlite' the driver name, already proven to be one this guard can protect
      */
@@ -148,20 +137,17 @@ final class ProofColumnGuard
      * names a second table, and SQLite has no way to alter a column in place: Laravel changes one
      * by creating a replacement table, copying, dropping the original and renaming the replacement
      * into its place. That final rename re-parses every trigger in the schema — and a trigger
-     * whose referenced table is missing at that instant is a hard error. Measured on 2026-08-27
-     * against SQLite 3.45.2: rebuilding `legal_consents` with this guard installed fails with
-     * "error in trigger legal_documents_no_referenced_delete: no such table: main.legal_consents",
-     * after the original has already been dropped. The ledger table is gone and the migration is
-     * halfway through — the worst outcome in the package, produced by the guard meant to protect
-     * it.
+     * whose referenced table is missing at that instant is a hard error: rebuilding
+     * `legal_consents` with this guard installed fails with "error in trigger
+     * legal_documents_no_referenced_delete: no such table: main.legal_consents", after the original
+     * has already been dropped. The ledger table is gone and the migration is halfway through.
      *
      * So any migration that rebuilds `legal_consents` or `legal_documents` runs its schema work
      * inside this call. The eight that already do (000014, 000018, 000022, 000028, 000030, 000033,
-     * 000038, 000041) are the working examples — and 000030 shows the second reason to use it: it only adds two columns,
-     * which rebuilds nothing, but the MySQL and SQLite triggers enumerate the columns they freeze,
-     * so a column added without the re-install would stay writable on a frozen row. That list is derived from the migration directory by a guard rather than trusted
-     * here: it said "two" while three did it, and it is the sentence the author of the next one
-     * reads before deciding whether they need the wrapper.
+     * 000038, 000041) are the working examples, and 000030 shows the second reason to use it: it
+     * only adds two columns, which rebuilds nothing, but the MySQL and SQLite triggers enumerate the
+     * columns they freeze, so a column added without the re-install would stay writable on a frozen
+     * row.
      *
      * The re-install sits in `finally` deliberately: a schema change that throws must not also
      * leave the proof table unguarded, and an unguarded `legal_documents` is a state with no
@@ -215,20 +201,7 @@ final class ProofColumnGuard
     {
         self::drop();
 
-        // A run that only sees SQLite cannot reach these two, and the reason is the driver
-        // check rather than a missing test. This branch is entered only on a `pgsql` connection,
-        // so nothing inside it executes anywhere else. They are exercised — the PostgreSQL
-        // reversibility arm rolls this migration and asserts each guard function by name.
-        //
-        // Until that arm was written they were executed by nothing, anywhere: no reversibility
-        // test named this migration, and `uninstall()` has exactly one caller. So the gap was real
-        // while looking like ordinary engine-scope noise — which is the argument for reading such
-        // cases rather than dismissing them wholesale.
-        //
-        // Worth recognizing as a class rather than as three lines: every engine-specific branch in
-        // this package has the same property. A branch behind a driver check is not a coverage gap,
-        // and nothing written against SQLite can close it; the question to ask is whether the
-        // engine suites cover the behavior.
+        // The two guard functions exist on PostgreSQL alone.
         if (DB::connection()->getDriverName() === 'pgsql') {
             self::execute('DROP FUNCTION IF EXISTS '.self::quoted(self::FUNCTION).'();');
             self::execute('DROP FUNCTION IF EXISTS '.self::quoted(self::DELETE_FUNCTION).'();');

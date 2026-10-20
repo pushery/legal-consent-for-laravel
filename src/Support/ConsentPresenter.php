@@ -106,16 +106,11 @@ final readonly class ConsentPresenter
         }
 
         foreach ($rows as [$document, $isRetired]) {
-            // Computed before the array rather than as a multi-line ternary inside it: a ternary
-            // whose arms sit on their own lines leaves one of them unexecutable to line coverage
-            // when the condition short-circuits earlier, which reads as an untested branch and is
-            // really a formatting artifact.
-            //
             // The holding test is "> 0", not ">= the active major", and the difference is the whole
             // point: after the operator publishes a new major of a voluntary consent, the subject
             // still holds the old one and the application still processes on it — `withdraw()`
-            // executes against it without complaint. Comparing against the active major removed the
-            // only control the package ships for Art. 7(3) at the moment the subject most plausibly
+            // executes against it without complaint. Comparing against the active major would remove
+            // the only control the package ships for Art. 7(3) at the moment the subject most plausibly
             // wants it, and a voluntary consent never reaches the re-consent screen either, because
             // it never gates (Art. 7(4)). The version difference still reaches the view through
             // `held` / `outstanding`.
@@ -170,12 +165,10 @@ final readonly class ConsentPresenter
                 'withdraw_url' => $offersWithdrawal ? $withdrawUrl : null,
             ];
 
-            // The type boundary is the query above, not this match. The catch-all reads like one
-            // — it is what filed an informational page under "consents", absorbing a basis it had
-            // never been told about while nothing went red — but tightening it here cannot be the
-            // fix: `legalBasis()` is typed `string`, so an exhaustive match is impossible, and an
-            // explicit arm for a basis no shipped type has is a line no run can enter. What keeps a
-            // page that binds nobody out of this loop is the `isConsentBearing()` filter on the
+            // The type boundary is the query above, not this match. The catch-all reads like one,
+            // and on its own it would file an informational page under "consents", but
+            // `legalBasis()` is typed `string`, so an exhaustive match is impossible here. What
+            // keeps a page that binds nobody out of this loop is the `isConsentBearing()` filter on the
             // document set, which is also where statusFor() draws it.
             $group = match ($document->type->legalBasis()) {
                 'contract' => 'contracts',

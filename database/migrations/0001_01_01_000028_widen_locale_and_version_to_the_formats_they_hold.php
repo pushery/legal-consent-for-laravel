@@ -38,7 +38,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  *
  * On MySQL and PostgreSQL the change is an in-place ALTER: triggers survive it, and MySQL accepts
  * it even on `legal_documents.locale`, which a STORED generated column concatenates and a unique
- * index covers — measured against a real 8.4 server before this was written.
+ * index covers.
  *
  * The create migrations are left at 10 and 20 on purpose, and that is the opposite of what it
  * looks like. Widening them too would mean a fresh install never holds the narrow column — tidier
@@ -49,9 +49,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  *
  * So this migration is the single place that states the current width, and a fresh install reaches
  * it the same way an existing one does: create narrow, widen here. The one ALTER a fresh install
- * pays for is the price of there being one number. Proven both ways: with narrow CREATEs and this
- * migration neutered the round-trip arm fails, and with narrow CREATEs and this migration active it
- * passes.
+ * pays for is the price of there being one number.
  */
 return new class extends Migration
 {
@@ -82,12 +80,9 @@ return new class extends Migration
 
     private function resize(int $locale, int $version): void
     {
-        // The driver check sits at the alter, not here, and that is deliberate. It used to guard
-        // this whole method, which made the two "not there" branches below unreachable on the only
-        // engine the coverage run measures — three lines nothing could enter, holding the floor
-        // under 100% for a reason that had nothing to do with the change. Behavior is identical:
-        // SQLite still receives no ALTER, because the return is one level further in. What moved is
-        // that the guards can be driven by a test that drops a table.
+        // The driver check sits at the alter rather than around this whole method, so the two
+        // "not there" branches below answer on every engine, SQLite included, while SQLite still
+        // receives no ALTER.
         //
         // `legal_documents` is the proof-guarded table, so its columns move with the guard down,
         // exactly as migration 000015 and 000022 do it. The guard fails closed against a

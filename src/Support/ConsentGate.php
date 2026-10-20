@@ -150,12 +150,11 @@ final class ConsentGate
      *
      * {@see outstandingFor()} cannot answer it, and that is not a defect in it: it filters on
      * `notice_mode`, which states how a version change is communicated. A first acceptance is not
-     * a change — nothing was announced because nothing moved — so the field has no opinion to
-     * give, and a document first published as a silent editorial version stayed invisible to the
-     * gate for good. Measured on 0.19.0: a subject who accepted nothing got `outstanding = true`
-     * from `statusFor()` and an empty set from `outstanding()`, for the same documents, at the
-     * same moment. The application then treated them as having accepted a text they were never
-     * shown, in a ledger that is append-only.
+     * a change (nothing was announced because nothing moved), so the field has no opinion to give,
+     * and a document first published as a silent editorial version would stay invisible to the
+     * gate for good: a subject who accepted nothing would get `outstanding = true` from
+     * `statusFor()` and an empty set from `outstanding()`, for the same documents, at the same
+     * moment.
      *
      * The two questions stay separate, and the split is `held === 0` rather than
      * `held < major_version`. Once a subject holds anything for a key, the next version is a
@@ -229,7 +228,6 @@ final class ConsentGate
      * comparison of the form `($held[$key] ?? 0) >= $document->major_version` is then true for
      * everyone — the gate for that document is off, the settings screen tells a person they hold a
      * contract they never saw, and `outstanding` is false so it is never offered to them either.
-     * Measured before this existed: a subject with an empty ledger read as `held`.
      *
      * A holding is a presence. This map carries a key only while an accepting row is the subject's
      * latest state for it. The discriminator is `standingFor()['version']`, which the fold clears
@@ -279,10 +277,10 @@ final class ConsentGate
      * Both projections of the subject's ledger, from one read of it.
      *
      * They are one method because they are one query. The settings screen wants both, and asking
-     * twice would read the same rows twice for a page whose whole query budget is guarded — the
-     * fold above exists precisely because this screen used to cost 1 + 2N queries. There is
-     * deliberately no `pendingConfirmationKeys()` sibling: one existed for an afternoon, nothing
-     * ever called it, and a public method no caller reaches is surface without a contract.
+     * twice would read the same rows twice for a page whose whole query budget is guarded; the
+     * fold above keeps that screen from costing 1 + 2N queries. There is deliberately no
+     * `pendingConfirmationKeys()` sibling: a public method no caller reaches is surface without a
+     * contract.
      *
      * `pending` is the middle state of a double opt-in, which the held-major fold cannot express:
      * entered but not yet confirmed folds to exactly the same zero as never entered. It is the
@@ -294,8 +292,7 @@ final class ConsentGate
      *  - an ACCEPTING action (granted / acknowledged / re-accepted / parental / deemed-accepted /
      *    confirmed) sets the held major to that row's major;
      *  - an ENDING action (withdrawn / declined / terminated) drops the holding to 0 — a monotonic
-     *    max cannot see this, which is why a withdrawn opt-in wrongly reported as still held
-     *    (Art. 7(3));
+     *    max cannot see this, and would report a withdrawn opt-in as still held (Art. 7(3));
      *  - a NEUTRAL action keeps whatever state existed immediately before it — never a global max,
      *    which would resurrect an earlier withdrawal. Two actions are neutral, for the same reason
      *    rather than out of resemblance: an OBJECTION rebuts a *deemed change* (§ 308 Nr. 5 lit. a
@@ -308,8 +305,7 @@ final class ConsentGate
      *                                   and they follow it exactly: an ending action clears them to null alongside dropping the
      *                                   major to 0, a neutral action leaves them where they were. That parity is the point. A
      *                                   screen that showed a version next to a withdrawn holding would report a text as accepted
-     *                                   that Art. 7(3) says is no longer held, which is the defect the withdrawal-aware fold was
-     *                                   built to end rather than one to reintroduce a column later.
+     *                                   that Art. 7(3) says is no longer held.
      *                                   `latest` and `ended` say what the four keys above cannot: which action stands newest
      *                                   for a key and when, and which action ended the holding and when. See
      *                                   {@see foldStanding()} for the rules, including why an objection after a withdrawal
@@ -324,13 +320,10 @@ final class ConsentGate
     /**
      * The same standing for many subjects, one query per subject type instead of one per subject.
      *
-     * A page listing ten people asked {@see standingFor()} ten times, against a table that grows
-     * with every re-acceptance. What made a consumer write their own batch instead of looping is
-     * the fold, and that is exactly the part that must not drift: the first such copy built its
-     * own list of four actions, missed two accepting ones (the deemed acceptance and the confirmed
-     * double opt-in) and counted an objection as an ending. So the fold is not reimplemented here
-     * — both readers call the same private one, and an arm holds their answers against each other
-     * over ledgers of every shape.
+     * A page listing ten people would ask {@see standingFor()} ten times, against a table that grows
+     * with every re-acceptance. The fold is the part that must not drift (a copy with its own list
+     * of actions misses an accepting one, or counts an objection as an ending), so it is not
+     * reimplemented here: both readers call the same private one.
      *
      * Keyed by {@see SubjectKey::pair()}, not by the subject key alone: a `User` and a `Team` can
      * both be number 1, and a map keyed by the id would hand one of them the other's standing.
@@ -458,11 +451,10 @@ final class ConsentGate
             $key = $row->document_key;
             $actionValue = $row->action;
 
-            // Both columns are declared strings and PDO hands them back as strings, so `&&` and
-            // `||` would behave identically here -- no row this query can return makes the two
-            // operands disagree. It stays because the fold below indexes by `$key`
-            // and matches on `$actionValue`, and a narrowing at the point of use is what lets the
-            // rest of this loop be read without checking the schema.
+            // Both columns are declared strings and PDO hands them back as strings. The check stays
+            // because the fold below indexes by `$key` and matches on `$actionValue`, and a
+            // narrowing at the point of use lets the rest of this loop be read without checking the
+            // schema.
             if (is_string($key) && is_string($actionValue)) {
                 $action = ConsentAction::from($actionValue);
                 $major = is_numeric($row->document_major_version) ? (int) $row->document_major_version : 0;

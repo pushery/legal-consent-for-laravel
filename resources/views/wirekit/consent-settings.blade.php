@@ -20,21 +20,19 @@
 
     This is the twin of the framework-agnostic stub, not of the Livewire view. It is rendered on
     an ordinary page, so it withdraws with a form post to `withdraw_url` — the bundled session
-    route, switched on with `legal-consent.routes.web`. It used to carry `wire:click="withdraw(…)"`,
-    copied from the Livewire twin, which on a page with no Livewire component behind it is inert:
-    the dialog opens, the button is pressed, and nothing whatsoever happens. No error, no log, no
-    failing test. The confirm button submits the form by its `form` attribute, so it may live
-    inside the dialog while the form sits outside it.
+    route, switched on with `legal-consent.routes.web`. A `wire:click` from the Livewire twin would
+    be inert here, on a page with no Livewire component behind it: the dialog would open, the
+    button would be pressed, and nothing would happen. The confirm button submits the form by its
+    `form` attribute, so it may live inside the dialog while the form sits outside it.
 --}}
 <x-wirekit::stack gap="lg" class="legal-consent-settings">
     <x-wirekit::heading :level="2">{{ __('legal-consent::ui.settings_heading') }}</x-wirekit::heading>
 
     {{-- The result of the redirect the withdrawal route answers with.
 
-         The region is inert on this path, and this comment used to claim the reverse. The
-         withdrawal route answers POST with a redirect, so the message and the region carrying it
-         arrive in the same fresh document — and a live region present at page load has no
-         mutation to announce. That rationale belongs to the Livewire twin, which morphs its
+         The region is inert on this path. The withdrawal route answers POST with a redirect, so
+         the message and the region carrying it arrive in the same fresh document, and a live
+         region present at page load has no mutation to announce. That rationale belongs to the Livewire twin, which morphs its
          region in place. Kept because the roles still name the message in reading order, where it
          sits right after the heading. --}}
     <div role="status" aria-live="polite">

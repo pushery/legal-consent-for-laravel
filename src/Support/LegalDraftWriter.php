@@ -42,9 +42,9 @@ use Pushery\LegalConsent\Models\LegalDraft;
  * There is no path from applyTranslation() to Reviewed. That is what makes "a machine draft can
  * never be published" structural rather than a matter of discipline.
  *
- * Not `final`: `find()` is a `protected` seam so a test can force the stale read a concurrent writer
- * sees (find returns null while the row exists) and exercise the insert→unique-violation→converge
- * path deterministically, which no single-connection test could otherwise provoke.
+ * Not `final`: `find()` is a `protected` seam, so a subclass can return the stale read a concurrent
+ * writer sees (null while the row exists) and drive the insert→unique-violation→converge path,
+ * which a single connection cannot otherwise provoke.
  */
 readonly class LegalDraftWriter
 {
@@ -237,11 +237,10 @@ readonly class LegalDraftWriter
                 // transaction — every following query answers SQLSTATE 25P02, "current transaction
                 // is aborted, commands ignored until end of transaction block" — so the recovery
                 // read below is impossible unless the violation is confined to a savepoint. MySQL
-                // and SQLite abort only the statement, which is why this was invisible on both.
+                // and SQLite abort only the statement.
                 //
-                // Measured on PostgreSQL 18.4: without the wrapper the recovery is reachable only
-                // at transaction level 0, and any consumer wrapping a save in DB::transaction() —
-                // or any test under RefreshDatabase — sits at level 1. Laravel turns a nested
+                // Without the wrapper the recovery is reachable only at transaction level 0, and any
+                // caller wrapping a save in DB::transaction() sits at level 1. Laravel turns a nested
                 // transaction into a SAVEPOINT, so this costs one savepoint and nothing else.
                 return DB::transaction(function () use ($key, $locale, $attributes): LegalDraft {
                     // Saved through the model so the tenant stamp (BelongsToTenant's creating hook) lands.

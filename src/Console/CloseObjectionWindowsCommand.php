@@ -27,6 +27,7 @@ use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\DeemedAcceptanceDecision;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\SubjectKey;
+use Pushery\LegalConsent\Support\SubjectToken;
 use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -40,7 +41,9 @@ use Symfony\Component\Console\Attribute\AsCommand;
  *
  * Idempotent twice over: the per-version `objection_closed_at` watermark stops a re-scan, and the
  * decision refuses a subject who already holds this version (a DeemedAccepted row gives them it),
- * so even a mid-run crash + re-run never double-deems a subject.
+ * so even a mid-run crash + re-run never double-deems a subject. Two runs that overlap, one that
+ * outlasts its lock and the next beside it, decide each subject under its lock, so the second one
+ * sees the first one's row.
  *
  * The watermark is stamped only on a version that was fully worked through. A version that could
  * not deem part of its population keeps its window open, so this task stays red until somebody
@@ -153,40 +156,47 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
                         // objected in time to have agreed by silence. An unpinned write would
                         // likewise strand the § 308 proof outside the tenant it belongs to.
                         $tenant->forTenant($version->tenant_id, function () use ($version, $subject, $consent, $decision, $proved, $delivered, &$deemed, &$unprovedHere, &$lateHere): void {
-                            // Read live (not from the snapshot): only this can see an objection or an
-                            // express acceptance recorded since the sweep started. An objection that
-                            // answered no open change is passed over there, see latestThatCounts().
-                            $latest = $decision->latestThatCounts($subject, $version);
-                            $key = $this->subjectKey($subject);
-                            $noticeProved = isset($proved[$key]);
+                            // Under the subject's lock, the same row lock every append takes. Two runs can overlap:
+                            // one that outlasts its lock, and the next hourly run beside it. Each reads the latest
+                            // action before it decides, and without the lock both would read it before either
+                            // wrote, and the subject would be deemed twice. Holding it, the second run reads the
+                            // first one's DeemedAccepted and passes the subject over.
+                            new SubjectToken()->whileLocked($subject, function () use ($version, $subject, $consent, $decision, $proved, $delivered, &$deemed, &$unprovedHere, &$lateHere): void {
+                                // Read live (not from the snapshot): only this can see an objection or an
+                                // express acceptance recorded since the sweep started. An objection that
+                                // answered no open change is passed over there, see latestThatCounts().
+                                $latest = $decision->latestThatCounts($subject, $version);
+                                $key = $this->subjectKey($subject);
+                                $noticeProved = isset($proved[$key]);
 
-                            if (! $decision->shouldDeem($latest, $version, $noticeProved)) {
-                                // Separate the two refusals, and ask in this order. Someone who
-                                // objected, terminated, or already holds this version is the system
-                                // working — counting them as a missing notice would bury the real
-                                // deficiency in a number that is never zero. Only a subject who
-                                // would have been bound, and cannot be for want of proof, counts,
-                                // and a notice that did arrive, only too late, is counted apart.
-                                if (! $noticeProved && $decision->shouldDeem($latest, $version, noticeProved: true)) {
-                                    if (isset($delivered[$key])) {
-                                        $lateHere++;
-                                    } else {
-                                        $unprovedHere++;
+                                if (! $decision->shouldDeem($latest, $version, $noticeProved)) {
+                                    // Separate the two refusals, and ask in this order. Someone who
+                                    // objected, terminated, or already holds this version is the system
+                                    // working — counting them as a missing notice would bury the real
+                                    // deficiency in a number that is never zero. Only a subject who
+                                    // would have been bound, and cannot be for want of proof, counts,
+                                    // and a notice that did arrive, only too late, is counted apart.
+                                    if (! $noticeProved && $decision->shouldDeem($latest, $version, noticeProved: true)) {
+                                        if (isset($delivered[$key])) {
+                                            $lateHere++;
+                                        } else {
+                                            $unprovedHere++;
+                                        }
                                     }
+
+                                    return;
                                 }
 
-                                return;
-                            }
+                                $consent->record(
+                                    $subject,
+                                    $version->key,
+                                    ConsentAction::DeemedAccepted,
+                                    ConsentContext::forMethod(ConsentMethod::DeemedAcceptance),
+                                    $version->locale,
+                                );
 
-                            $consent->record(
-                                $subject,
-                                $version->key,
-                                ConsentAction::DeemedAccepted,
-                                ConsentContext::forMethod(ConsentMethod::DeemedAcceptance),
-                                $version->locale,
-                            );
-
-                            $deemed++;
+                                $deemed++;
+                            });
                         });
                     }
                 });
@@ -210,9 +220,9 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
             $unproved += $unprovedHere;
             $late += $lateHere;
 
-            // A memory hint, and observable after all: with the automatic collector off, a cycle left
-            // before the run is freed only by this call, and an arm holds that. It stays because this
-            // sweep walks the ledger in chunks and the cycles it drops are real.
+            // A memory hint: with the automatic collector off, a cycle left before the run is freed
+            // only by this call. This sweep walks the ledger in chunks, and the cycles it drops are
+            // real.
             gc_collect_cycles();
         }
 

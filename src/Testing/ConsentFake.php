@@ -24,11 +24,10 @@ use Pushery\LegalConsent\Support\SubjectErasure;
  * An in-memory {@see ConsentManager} for a consuming application's tests. Install it with
  * `Consent::fake()`; nothing it does touches a database.
  *
- * It exists because this package's own suite could never notice the gap it fills. Every test in
- * here runs against a real schema, so the interface is always satisfied by the real manager —
- * while a consuming app that wanted to test "the register form shows the right checkbox" had to
- * either migrate this package's tables into its own test database or hand-roll a stub of every
- * method on it, and a hand-rolled stub silently rots on the next method added here.
+ * Without it, an application that wants to test "the register form shows the right checkbox"
+ * has to either migrate this package's tables into its own test database or hand-roll a stub of
+ * every method on the interface, and a hand-rolled stub silently rots on the next method added
+ * here.
  *
  * Read defaults describe a fully-consented subject: nothing outstanding, `hasCurrent()` true,
  * empty status and history, nothing published. That direction is deliberate. A consuming test about
@@ -292,9 +291,8 @@ final class ConsentFake implements ConsentManager
      * everything and throws at nothing. That is the dangerous direction: the consuming test would
      * be green on exactly the read that 500s in production.
      *
-     * The values are stand-ins — the fake has no database to have read them from — but the shape
-     * is the one {@see ConsentManager::outstanding()} names, and this package's suite holds the
-     * two implementations against that list rather than against each other.
+     * The values are stand-ins, since the fake has no database to have read them from, but the
+     * shape is the one {@see ConsentManager::outstanding()} names.
      *
      * @return Collection<int, LegalDocument>
      */

@@ -63,16 +63,14 @@ final readonly class ConsentBanner
 
             // The `?->` in this payload cannot fire, and the filter above is the reason: it
             // requires `announced()` (which demands a real `announce_from`) and
-            // `enforce_from instanceof CarbonImmutable`. Both fields are therefore non-null by the
-            // time they get here, so dropping the null-safe operator would change no outcome and
-            // no test could tell. The same holds in informationalFor(), whose filter makes the
-            // same two demands.
+            // `enforce_from instanceof CarbonImmutable`, so both fields are non-null by the time
+            // they get here. The same holds in informationalFor(), whose filter makes the same two
+            // demands.
             //
             // deemedFor() is the exception and its `?->` is load-bearing: that filter asks about
             // the objection deadline -- the right question there, since silence binds at the
             // deadline rather than at the effective date -- and never looks at `enforce_from`, so
-            // a row carrying a deadline and no effective date reaches its payload. That case has
-            // a test; these two cannot have one.
+            // a row carrying a deadline and no effective date reaches its payload.
             $pending[] = [
                 'key' => $document->key,
                 'version' => $document->version,
