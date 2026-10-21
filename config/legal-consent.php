@@ -15,14 +15,14 @@ use Pushery\LegalConsent\Content\Drivers\MarkdownFilesDriver;
 | arrives with its default, instead of reading as null. Four things are worth knowing
 | before you shorten your copy:
 |
-|   - A LIST is yours whole. Recursion stops at any list on either side, because a list
+|   - A list is yours whole. Recursion stops at any list on either side, because a list
 |     merged by index would give back what you removed: narrow `routes.api_middleware`
 |     to one entry and one entry is what runs. An empty array means "none".
 |   - `documents` is a registry, and which documents it holds is yours. One you deleted
 |     stays deleted, even while this file still ships it; one you kept still receives a
 |     field a later release adds to it.
 |   - An explicit null you wrote stays null.
-|   - A CACHED configuration is not merged at all. After an update, run
+|   - A cached configuration is not merged at all. After an update, run
 |     `php artisan config:cache` again, or the cache keeps what it had.
 |
 */
@@ -55,7 +55,7 @@ return [
     |                                    "ich willige ein".
     |   - consent          Art. 6(1)(a): a real consent — voluntary, never required
     |                                    (Kopplungsverbot Art. 7(4)), withdrawable.
-    |   - informational                  a page you must PUBLISH but nobody agrees to:
+    |   - informational                  a page you must publish but nobody agrees to:
     |                                    Impressum (§ 5 DDG), cookie policy, accessibility
     |                                    statement. It uses the same editor, review gate and
     |                                    frozen publishing as the rest, and never appears at
@@ -475,7 +475,7 @@ return [
     | works: `'60,1'` for sixty a minute, or the name of a limiter you registered. Set it to null
     | to take the limit off entirely.
     |
-    | `web_throttle` is the same limit for the SESSION-backed writes: the web route above and the
+    | `web_throttle` is the same limit for the session-backed writes: the web route above and the
     | actions of the bundled Livewire components (grant, withdraw, object, terminate). They reach
     | the same append-only ledger, and a Livewire request is one POST with a CSRF token — as
     | scriptable as a JSON call. One budget for the whole surface, however it is reached, keyed on
@@ -832,9 +832,9 @@ return [
     |          silent editorial   -> nothing; it owes no notice, and declaring a regime on
     |                                one is refused rather than silently ignored
     |
-    |   regime psd2_675g -> psd2_min_days      (FLOOR 60 — § 675g Abs. 1 / Art. 54 PSD2)
-    |          p2b       -> p2b_standstill_days (FLOOR 15 — Reg. 2019/1150 Art. 3(2))
-    |          eecc      -> eecc_min_days       (FLOOR 30 — Dir. 2018/1972 Art. 105(4))
+    |   regime psd2_675g -> psd2_min_days      (floor 60 — § 675g Abs. 1 / Art. 54 PSD2)
+    |          p2b       -> p2b_standstill_days (floor 15 — Reg. 2019/1150 Art. 3(2))
+    |          eecc      -> eecc_min_days       (floor 30 — Dir. 2018/1972 Art. 105(4))
     |
     |          psd2_675g and eecc are also checked on the calendar: the law fixes two months and
     |          one month, which are longer than 60 and 30 days whenever the months before the end

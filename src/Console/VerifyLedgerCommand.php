@@ -350,7 +350,7 @@ final class VerifyLedgerCommand extends Command
     }
 
     /**
-     * Every chained row, once, in (subject_token, id) order — KEYSET-paged over a pinned ledger.
+     * Every chained row, once, in (subject_token, id) order — keyset-paged over a pinned ledger.
      *
      * Two things were wrong with `->lazy()`, and only one of them was about speed. Laravel's
      * lazy() pages with `offset()` and `limit()`, which is LIMIT/OFFSET: page N makes the engine
@@ -533,7 +533,7 @@ final class VerifyLedgerCommand extends Command
      *
      *  - a mac that does not match means the row's content or its link changed after it was
      *    recorded. That is the replacement this feature was built for.
-     *  - NO mac at all, on a row above the boundary, means the evidence was removed. Without this
+     *  - No mac at all, on a row above the boundary, means the evidence was removed. Without this
      *    half, deleting the mac would be as good as forging it — an unwitnessed row is simply not
      *    checked, so the cheapest attack on a mac store is to delete from it.
      *

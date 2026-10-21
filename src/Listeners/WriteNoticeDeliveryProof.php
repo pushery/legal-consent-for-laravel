@@ -40,13 +40,13 @@ use Throwable;
  * subject is retried and, once the attempts are used up, reported as unreachable. Three further
  * things follow from writing on delivery, all of them corrections rather than side effects:
  *
- *  - a subject the worker SKIPS gets no proof. {@see ChangeNotification::shouldSend()} runs in the
+ *  - a subject the worker skips gets no proof. {@see ChangeNotification::shouldSend()} runs in the
  *    worker and suppresses a re-consent notice for someone who agreed in the meantime; the sweep
  *    used to write their row anyway.
  *  - the row is rendered against the actual notifiable, not against the version standing in for
  *    one, so a consumer subclass whose `toMail()` reads the recipient is certified on what it
  *    really sent.
- *  - `AffectedSubjectResolver::forVersion(skipNotified: true)` now skips the DELIVERED rather than
+ *  - `AffectedSubjectResolver::forVersion(skipNotified: true)` now skips the delivered rather than
  *    the merely queued, which is what makes `legal-consent:renotify` plus a re-dispatch a working
  *    repair path instead of a run that reports "Dispatched 0".
  *

@@ -11,7 +11,7 @@ use Pushery\LegalConsent\Support\TenantContext;
 /**
  * Makes a model tenant-aware when multi-tenancy is enabled (config `tenancy`): every read is
  * confined to the current tenant via {@see TenantScope}, and a new row is stamped with the
- * current tenant id on insert. Both are NO-OPs when tenancy is off, so single-tenant apps are
+ * current tenant id on insert. Both are no-ops when tenancy is off, so single-tenant apps are
  * unaffected. Laravel calls bootBelongsToTenant() automatically alongside the model's own boot.
  */
 trait BelongsToTenant

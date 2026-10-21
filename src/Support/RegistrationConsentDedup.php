@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use WeakMap;
 
 /**
- * Shared per-SUBJECT idempotency guard for the two registration-recording paths (Way A,
+ * Shared per-subject idempotency guard for the two registration-recording paths (Way A,
  * the Fortify trait; Way B, the Registered listener). Both may fire for the same account
  * in one request and must not double-write — but the 'request' singleton is process-shared,
  * so a global boolean would let a long-lived process (queue/console) firing Registered for

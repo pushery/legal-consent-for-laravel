@@ -4,6 +4,14 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.49.0 → 0.50.0
+
+Nothing is required of you.
+
+**A regional locale reads the package's catalog of its language.** An application running `pt-BR` or `de-AT` now gets the package's Portuguese or German lines instead of `app.fallback_locale`. If you published the language files and added a file for a region yourself, it still wins over the language, key by key.
+
+**`Support\MigrationLocks::bound()` is new public API.** A migration of this package that alters a table calls it first, so a lock it cannot take fails within seconds instead of stalling every query behind it. Running the migration again is the remedy. A migration you published calls it from your application's namespace.
+
 ## 0.48.0 → 0.49.0
 
 Nothing is required of you, unless you put `EnsureLegalConsent` on Livewire's persistent middleware list, or your database's session time zone is not the application's.

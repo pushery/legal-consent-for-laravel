@@ -23,7 +23,7 @@ use Pushery\LegalConsent\Console\VerifyLedgerCommand;
  *
  * The MAC is taken over the row as the driver returns it, never over what was about to be
  * written. That is the invariant the class docblock of {@see LedgerHashChain} states for the chain
- * itself — "both the writer and the verifier hash the SAME database-read representation" — and it
+ * itself — "both the writer and the verifier hash the same database-read representation" — and it
  * is the reason this lives in a second table rather than in a column. A value computed before the
  * INSERT cannot predict the rendering: `accepted_at` comes back from PostgreSQL carrying the
  * connection's offset and from MySQL and SQLite carrying none.

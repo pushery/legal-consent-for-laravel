@@ -49,7 +49,7 @@ readonly class DefaultConsentManager implements ConsentManager
     private const int MAX_CHAIN_ATTEMPTS = 5;
 
     /**
-     * `$documents` is nullable because "NOT GIVEN" AND "GIVEN AND EMPTY" are different answers,
+     * `$documents` is nullable because "not given" and "given and empty" are different answers,
      * and conflating them was a defect rather than a nicety. The old signature defaulted to `[]` and
      * read `!== []` as "a registry was configured", so an installation where every document carries
      * `ask_at_registration => false` — a real configuration, and the one that says "ask nobody at

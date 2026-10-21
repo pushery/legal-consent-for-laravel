@@ -18,12 +18,12 @@ use Pushery\LegalConsent\Enums\DocumentType;
  *
  * The rule, in one place so the read path, the release and the doctor cannot disagree:
  *
- *  - An INFORMATIONAL page falls back, always, and only to the default locale, as it always did.
- *  - An ACKNOWLEDGMENT falls back when its registry entry says `'locale_fallback' => true`, along
+ *  - An informational page falls back, always, and only to the default locale, as it always did.
+ *  - An acknowledgment falls back when its registry entry says `'locale_fallback' => true`, along
  *    the same chain the gate walks to decide what a reader owes ({@see RegistrationLocaleChain}):
  *    `fallback_locale`, then `default_locale`. What is recorded for it is that somebody took notice,
- *    and the ledger row names the version AND the locale that was shown.
- *  - A CONTRACT and a real CONSENT never fall back, whatever the entry says. Both bind, and binding
+ *    and the ledger row names the version and the locale that was shown.
+ *  - A contract and a real consent never fall back, whatever the entry says. Both bind, and binding
  *    somebody to a text in a language they may not read is what the atomic release exists to
  *    prevent. An entry asking for it is refused here and reported by `legal-consent:doctor`.
  */

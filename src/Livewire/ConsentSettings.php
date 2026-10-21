@@ -31,7 +31,7 @@ use Pushery\LegalConsent\Support\ConsentPresenter;
  *
  * Two protections, and they answer different questions:
  *
- *  - The MANAGER refuses a transition the document's class cannot carry (a termination against a
+ *  - The manager refuses a transition the document's class cannot carry (a termination against a
  *    privacy notice, an objection against a consent). That keeps the append-only ledger free of
  *    rows asserting states that do not legally exist — which cannot be corrected afterwards and
  *    which every later reader takes as proof.

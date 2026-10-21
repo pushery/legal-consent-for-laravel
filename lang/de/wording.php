@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Acceptance sentences per document type. IMPORTANT: for privacy, never "I consent" — a
+// Acceptance sentences per document type. For privacy, never "I consent" — a
 // Datenschutzerklärung is information (Art. 13), not consent (EDPB 05/2020 Rz. 122).
 // Informal tone (per Du).
 return [

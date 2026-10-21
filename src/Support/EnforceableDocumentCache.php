@@ -162,7 +162,7 @@ final class EnforceableDocumentCache
 
     /**
      * Every active document for a locale, cached. The caller filters by time and mode: the
-     * enforce/announce windows move on a clock, so caching the ALREADY-filtered set would need a
+     * enforce/announce windows move on a clock, so caching the already-filtered set would need a
      * TTL short enough to be pointless.
      *
      * The cached shape is a list of primitive attribute rows, never an `Eloquent\Collection` of

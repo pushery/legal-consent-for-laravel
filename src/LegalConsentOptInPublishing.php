@@ -23,7 +23,7 @@ use Illuminate\Support\ServiceProvider;
  *    `legal_consents`. Its no-op guard does not help the people it needs to: an installation
  *    without `terms_accepted_at` is exactly the one the migration skips, and one with those
  *    columns — a v1 app — is the case the scenario is about.
- *  - `legal-consent-users-cache` DROPS columns from `users`.
+ *  - `legal-consent-users-cache` drops columns from `users`.
  *  - `legal-consent-wirekit` maps component-based twins onto the plain stubs' own destinations,
  *    which is wrong for an application that does not have the component library installed. (It
  *    needs `--force` to actually replace an existing file — see the note at the group itself.)

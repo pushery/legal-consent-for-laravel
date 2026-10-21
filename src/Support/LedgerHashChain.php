@@ -14,7 +14,7 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  * Each new row stores `prev_record_hash` = the hash of the subject's immediately-preceding
  * row (or the genesis constant for the subject's first chained row). A row's hash folds in
  * both its immutable content and its own `prev_record_hash`, so a later edit, insertion,
- * reorder, or a MID-chain deletion that leaves the rest of the chain untouched breaks the link
+ * reorder, or a mid-chain deletion that leaves the rest of the chain untouched breaks the link
  * and is surfaced by `legal-consent:verify-ledger`.
  *
  * What this does not detect — state it plainly, because the guarantee is narrower than a hash
@@ -36,18 +36,18 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  *
  * What keying does not close — say it plainly, because "keyed" invites more confidence than it earns.
  * Two structural gaps survive a key on its own, and each has its own defense:
- *  1. The chain ROOT is a public constant: `genesis()` depends on neither the key nor the subject,
+ *  1. The chain root is a public constant: `genesis()` depends on neither the key nor the subject,
  *     and the verifier resets to it at every new `subject_token`. An attacker who could INSERT
  *     would pick a fresh token, link to genesis, and have a self-consistent chain the verifier
- *     walks as valid, while the GATE reads by `subject_type`+`subject_id` and never looks at the
+ *     walks as valid, while the gate reads by `subject_type`+`subject_id` and never looks at the
  *     token, so the fabricated row would count as a real holding. Closed on keyed installations:
  *     the row that opens a chain carries {@see rootProof()}, an HMAC over the token, and the
  *     verifier requires it above the boundary {@see stampRootBoundary()} records. Below that
- *     boundary, and on an UNKEYED installation, this gap stays open, since there is no secret to
+ *     boundary, and on an unkeyed installation, this gap stays open, since there is no secret to
  *     prove anything with.
- *  2. Only the backward LINK is stored on a row, never the row's own hash, so the newest row of
- *     any chain could be REPLACED (not just truncated) with nothing to mismatch against: the link
- *     lives on the row that FOLLOWS, and the last row has no follower. Closed by
+ *  2. Only the backward link is stored on a row, never the row's own hash, so the newest row of
+ *     any chain could be replaced (not just truncated) with nothing to mismatch against: the link
+ *     lives on the row that follows, and the last row has no follower. Closed by
  *     {@see LedgerRecordMacs}, which records that same value, `hashRow()` over the STORED row, in a
  *     table of its own, because it can only be taken after the row is read back, and because this
  *     one is append-only. It is worth what the chain is worth: keyed, an attacker cannot produce

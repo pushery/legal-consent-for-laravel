@@ -149,7 +149,7 @@ final class LegalTextEditor extends Component
      * save. The question the key has to answer is not "did the text change" but "did it change
      * without the client doing it", and only the server can know that.
      *
-     * The same shape as `$statusNonce`, and LOCKED where that one is not. The sibling is unlocked
+     * The same shape as `$statusNonce`, and locked where that one is not. The sibling is unlocked
      * because a client bumping it only re-announces a sentence the server already wrote; this one
      * decides whether the mounted editor is torn down and rebuilt, so a client that bumps it throws
      * away its own cursor and whatever the engine holds that the property does not. Nothing needs to

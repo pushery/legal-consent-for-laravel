@@ -20,7 +20,7 @@ return [
     // Empty states. A group with no entries used to render its heading over nothing, and that is
     // not the rare case it looks like: statusFor() reads the `legal_documents` table, which a
     // freshly installed package has nothing in until `legal-consent:publish` runs — so an empty
-    // screen is the SHIPPING state every consumer meets first, and three bare headings read as
+    // screen is the shipping state every consumer meets first, and three bare headings read as
     // broken rather than as "nothing yet". `nothing_published` covers all three being empty at
     // once, where one sentence says more than three.
     'nothing_published' => 'Ainda não há nada aqui — não foi publicado nenhum texto legal.',
@@ -141,7 +141,7 @@ return [
     'admin_status_not_saved' => 'Não guardado — :reason',
     'admin_status_source_not_translated' => 'O idioma de origem é redigido, não traduzido.',
     'admin_status_no_source' => 'Escreve primeiro o texto de origem — não há nada a partir do qual traduzir.',
-    // The status a QUEUED translation reports. It names where the result will appear rather than
+    // The status a queued translation reports. It names where the result will appear rather than
     // asking the reader to do anything, because there is nothing for them to do: the page polls
     // while the job runs and stops when it stops.
     'admin_status_translation_queued' => 'A tradução está em curso. Aparecerá aqui assim que terminar.',
