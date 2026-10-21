@@ -24,7 +24,7 @@ interface LegalDocumentSource
      * `legal-consent.documents` ('terms', 'privacy', …), not a DocumentType value. The key
      * decides which text to return; the document's type comes from the registry.
      *
-     * PIN the given `$locale` for anything you render or translate. A source that calls `__()` — or
+     * Pin the given `$locale` for anything you render or translate. A source that calls `__()` — or
      * otherwise reads the ambient app/session locale — hashes the same published text differently per
      * viewer, producing several conflicting hashes for one version and making `check-drift` flap
      * silently. Render in `$locale`, never the request locale. (This is the seam a consumer uses to

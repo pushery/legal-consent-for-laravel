@@ -11,6 +11,7 @@ use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesConfiguration;
+use Illuminate\Contracts\Translation\Loader;
 use Illuminate\Notifications\Events\NotificationFailed;
 use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Routing\Router;
@@ -60,6 +61,7 @@ use Pushery\LegalConsent\Support\DefaultConsentManager;
 use Pushery\LegalConsent\Support\DocumentUrlResolver;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 use Pushery\LegalConsent\Support\IntegerSetting;
+use Pushery\LegalConsent\Support\LanguageFallbackLoader;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
@@ -153,6 +155,10 @@ final class LegalConsentServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigRecursivelyFrom(__DIR__.'/../config/legal-consent.php', 'legal-consent');
+
+        // A regional locale reads this package's catalog of its language, `pt-BR` from `pt`, in this package's
+        // namespace only. Registered here so it wraps the loader before the translator is built from it.
+        $this->app->extend('translation.loader', static fn (Loader $loader): Loader => new LanguageFallbackLoader($loader, 'legal-consent'));
 
         $this->app->singleton(TenantContext::class, fn (): TenantContext => new TenantContext(
             $this->boolConfig('legal-consent.tenancy.enabled', false),

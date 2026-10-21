@@ -31,7 +31,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  *     rendering: `accepted_at` comes back from PostgreSQL as `2026-09-16 18:39:21+02` and from
  *     MySQL and SQLite with no offset at all, so a mac over the pre-save shape fails to verify on
  *     PostgreSQL.
- *  2. Reading the row back means a SECOND statement, and `legal_consents` is append-only — the
+ *  2. Reading the row back means a second statement, and `legal_consents` is append-only — the
  *     trigger from migration 000002 refuses an UPDATE unconditionally on MySQL. There is no second
  *     statement to be had on that table.
  *

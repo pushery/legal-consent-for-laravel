@@ -19,7 +19,7 @@ namespace Pushery\LegalConsent\Enums;
  *                      only bites on fingierte *nachteilige* declarations — EuGH
  *                      C-287/19.)
  * - InfoPush         — a material but info-only change: the subject is actively
- *                      informed on a durable medium, it takes effect regardless, and NO
+ *                      informed on a durable medium, it takes effect regardless, and no
  *                      action is required (they may object or terminate). A § 675g BGB
  *                      change notice, a material privacy-notice update (Art. 13/14 DSGVO,
  *                      WP260 rev.01), a new-purpose notice (Art. 13(3)), P2B/DSA/EECC.

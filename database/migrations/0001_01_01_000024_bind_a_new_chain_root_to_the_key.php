@@ -25,7 +25,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  *    and correcting them means UPDATE on `legal_consents` — which the append-only trigger from
  *    migration 000002 refuses unconditionally on MySQL. It is why `LedgerSubjectEraser` rewrites
  *    by delete-and-reinsert rather than by update, and why a table-wide backfill is not available.
- *  2. `PruneExpiredConsentRecordsCommand` asks the DATABASE for chains whose first row does not
+ *  2. `PruneExpiredConsentRecordsCommand` asks the database for chains whose first row does not
  *    point at genesis, as a single `!= <constant>` predicate. A per-subject root leaves that
  *    comparison with no value to compare against.
  *

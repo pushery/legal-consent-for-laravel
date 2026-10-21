@@ -31,8 +31,8 @@ use Pushery\LegalConsent\Models\LegalDraft;
  * Exactly two writers of `source_hash`, and the third method's abstention is the deliberate part:
  *
  *  - save()             a human typed → review resets to Draft. `source_hash` is not touched, so
- *                       editing the SOURCE locale stales every translation by derivation, with
- *                       zero rows written — and editing a STALE translation cannot un-stale it.
+ *                       editing the source locale stales every translation by derivation, with
+ *                       zero rows written — and editing a stale translation cannot un-stale it.
  *  - markReviewed()     the explicit human sign-off → stamps `source_hash` from the source row.
  *                       Reviewing is the act of confirming this text against the current source,
  *                       so it is the one place a human may assert freshness.

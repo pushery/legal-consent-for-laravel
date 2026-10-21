@@ -15,7 +15,7 @@ use RuntimeException;
  *  - there is no pending request — nobody entered this subject for this document, or the request
  *    has already been confirmed, withdrawn or superseded;
  *  - the confirmation window closed;
- *  - a new MAJOR version was published after the request, so confirming would freeze a text the
+ *  - a new major version was published after the request, so confirming would freeze a text the
  *    subject never saw.
  *
  * Answering all three with "invalid link" is the easy path and the wrong one: someone who

@@ -18,11 +18,11 @@ use Livewire\Attributes\Locked;
  *
  * The two properties are classified differently on purpose, and the split is the whole point:
  *
- *  - `$status` is SERVER OUTPUT and is `#[Locked]`. Only setStatus() writes it, no view binds it,
+ *  - `$status` is server output and is `#[Locked]`. Only setStatus() writes it, no view binds it,
  *    and it is the sentence a screen reader announces on screens whose product is proof — "your
  *    consent was withdrawn" planted by the client is indistinguishable from the real thing in a
  *    screenshot.
- *  - `$statusNonce` is intentionally UNLOCKED: it is a render nonce, not proof. A client that bumps
+ *  - `$statusNonce` is intentionally unlocked: it is a render nonce, not proof. A client that bumps
  *    it only re-announces the text the server already set — there is nothing to forge.
  */
 trait AnnouncesStatus

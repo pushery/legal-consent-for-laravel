@@ -4,6 +4,14 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.50.0] - 2026-10-21
+
+### Added
+
+- **`Support\MigrationLocks::bound()` bounds how long a migration waits for a lock.** A migration of this package that alters a table calls it first in `up()` and `down()`: on PostgreSQL the transaction then waits three seconds for its lock and holds it thirty at most, on MySQL the session waits three seconds. An ALTER that cannot take its lock fails instead of stalling every query behind it, and running the migration again is the remedy. A published copy of such a migration calls it from the application's namespace, so it is part of the public API.
+
+- **A regional locale reads the package's catalog of its language.** The catalogs ship per language, and Laravel's translator asks for the given locale and then for `app.fallback_locale`, so an application running `pt-BR` or `pt-PT` showed the banner, the consent and settings screens, the notifications and the validation messages in the fallback language. The package now wraps the translation loader so that a regional locale of the `legal-consent` namespace reads its language, `pt-BR` from `pt` and `de-AT` from `de`, a region nobody listed included. A catalog published for the region under `lang/vendor/legal-consent/` wins over the language key by key. Which version of a legal document a subject sees is decided as before, and every other namespace keeps Laravel's lookup.
+
 ## [0.49.0] - 2026-10-20
 
 ### Changed
@@ -3225,7 +3233,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.49.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.46.0...v0.47.0

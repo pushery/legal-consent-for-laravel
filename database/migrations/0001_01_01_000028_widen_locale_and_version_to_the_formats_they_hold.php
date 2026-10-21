@@ -115,7 +115,7 @@ return new class extends Migration
 
         // SQLite ignores a `varchar` length entirely, so there is nothing here to widen — and a
         // `change()` would be Laravel's twelve-step table rebuild, which drops the proof triggers
-        // and brings the partial one-active index back FULL. See the header.
+        // and brings the partial one-active index back full. See the header.
         if (DB::connection()->getDriverName() === 'sqlite') {
             return;
         }

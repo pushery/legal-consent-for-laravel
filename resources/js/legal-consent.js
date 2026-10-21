@@ -17,7 +17,7 @@
  * documented.
  *
  * A file like this one is ordinary JavaScript and none of those restrictions apply to it. An
- * attribute reduced to a call — `load($event)` — parses under BOTH builds, so one template serves a
+ * attribute reduced to a call — `load($event)` — parses under both builds, so one template serves a
  * consumer with a strict policy and one without.
  *
  * ## The text goes in through a ref, never through `x-html`

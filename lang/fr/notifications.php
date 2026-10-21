@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 // Two notifications, kept legally distinct:
-//  - `contract`      ReconsentRequired: a material CONTRACT change asks for renewed
-//                    AGREEMENT; the consequence line satisfies § 308 Nr. 5 lit. b BGB.
+//  - `contract`      ReconsentRequired: a material contract change asks for renewed
+//                    agreement; the consequence line satisfies § 308 Nr. 5 lit. b BGB.
 //  - `informational` LegalChangeInformational: an info-only change — no action required,
 //                    never a threat of restriction. A privacy notice is acknowledged, never
 //                    agreed to (EDPB 05/2020 § 122).

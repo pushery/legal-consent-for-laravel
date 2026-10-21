@@ -22,7 +22,7 @@
             <x-wirekit::heading :level="2">{{ __('legal-consent::ui.settings_heading') }}</x-wirekit::heading>
         @endif
 
-        {{-- WCAG 4.1.3 + 2.4.3: the withdrawal result is announced here — the region is ALWAYS in the
+        {{-- WCAG 4.1.3 + 2.4.3: the withdrawal result is announced here — the region is always in the
              DOM (a live region inserted together with its text is not announced) and role="status"
              carries the announcement, so focus lands on the live region itself, exactly as in the
              plain view. The text is a plain x-wirekit::text, not an x-wirekit::alert (the alert is

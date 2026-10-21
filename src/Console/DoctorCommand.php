@@ -44,8 +44,8 @@ use ValueError;
  * inside a block the copy already declares still arrives. Two states are left that the merge cannot
  * reach, and both are invisible until something does not work:
  *
- *  - a STALE configuration cache. The provider does not merge while one exists, so a key the
- *    package adds after the cache was built is not "undocumented" at runtime, it is GONE until
+ *  - a stale configuration cache. The provider does not merge while one exists, so a key the
+ *    package adds after the cache was built is not "undocumented" at runtime, it is gone until
  *    the cache is rebuilt;
  *  - a key the package has since removed lives on in the published file and still reads like
  *    valid configuration, including entries pointing at classes that no longer exist.

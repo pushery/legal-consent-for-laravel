@@ -36,10 +36,10 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * The refusal's own sentence rides along as the exception message, and it is worth being exact
  * about how far that carries, because the obvious assumption is wrong in both directions:
  *
- *  - the SUBJECT sees nothing. The rendered body is the framework's generic 404 page. That is the
+ *  - the subject sees nothing. The rendered body is the framework's generic 404 page. That is the
  *    right split rather than a shortfall: the sentence names the document key and its legal class,
  *    which is the template author's business and none of the subject's;
- *  - the DEVELOPER does not see it either, by default. `NotFoundHttpException` extends
+ *  - the developer does not see it either, by default. `NotFoundHttpException` extends
  *    `HttpException`, which sits in Laravel's internal don't-report list, so nothing is logged and
  *    the error page shows only "Not Found". It reaches an application that reports 404s itself — a
  *    custom handler, an APM — and nowhere else.

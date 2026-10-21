@@ -223,7 +223,7 @@ cache the consent gate reads, with `uiWording`, `acceptanceFingerprint()` and, u
 
 ```php
 foreach (Consent::registrationChecklist(app()->getLocale()) as $item) {
-    // $item->field() is the input NAME — never build it yourself. A document control is
+    // $item->field() is the input name — never build it yourself. A document control is
     // `legal_{key}`, but the Art. 8 age attestation is named by its key alone, so a
     // hand-built `legal_{$item->key}` renders a required box that can never be satisfied.
     // $item->title, $item->wording, $item->required, $item->url

@@ -25,7 +25,7 @@ use stdClass;
  *     `LedgerHashChain::canonical()`. There is no subset of the personal data outside the hash, so
  *     erasing any of it necessarily changes the row's own hash and every successor's stored link
  *     points at a value that no longer exists.
- *  2. A row's hash folds in its OWN `prev_record_hash`, so fixing one link changes the next one's
+ *  2. A row's hash folds in its own `prev_record_hash`, so fixing one link changes the next one's
  *     input. It is a cascade, not a single correction.
  *
  * So the whole of the subject's chain is rewritten in order, each row linked to the one before it

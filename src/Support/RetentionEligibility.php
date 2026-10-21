@@ -14,7 +14,7 @@ use Pushery\LegalConsent\Models\Scopes\TenantScope;
 /**
  * Which ledger rows the retention sweep may delete, and which chains it has to visit to delete them.
  *
- * Eligible = past the cutoff and (orphaned OR superseded long enough ago). Orphaned = the subject was
+ * Eligible = past the cutoff and (orphaned or superseded long enough ago). Orphaned = the subject was
  * deleted (no live relationship remains). Superseded = a newer row exists for the same tenant,
  * subject, document and locale, so this older one is no longer the current standing, and that newer
  * row is past the cutoff of the document too: it marks the moment this row stopped being relevant,

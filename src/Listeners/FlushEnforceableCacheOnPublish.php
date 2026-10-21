@@ -11,7 +11,7 @@ use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 /**
  * Drops the enforceable-set cache the moment a new version goes live.
  *
- * Runs AFTER COMMIT, and that is not a detail: the atomic releaser publishes every locale inside
+ * Runs after the commit, and that is not a detail: the atomic releaser publishes every locale inside
  * one transaction, so a listener firing synchronously would forget the cache while the new rows
  * are still uncommitted — the very next request would re-read the old set and cache it again, and
  * the release would stay invisible until the TTL expired. Not queued, because forgetting a cache

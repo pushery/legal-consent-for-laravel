@@ -16,7 +16,7 @@ use ValueError;
  * - ContractTerms  — Vertrag, Art. 6(1)(b) DSGVO / § 305 II BGB. Blocking, not
  *                    withdrawable (ends via cancellation, not withdrawal).
  * - PrivacyNotice  — Informationspflicht, Art. 13/14 DSGVO. The user only takes
- *                    NOTICE ("zur Kenntnis genommen"); never "ich willige ein"
+ *                    notice ("zur Kenntnis genommen"); never "ich willige ein"
  *                    (EDPB 05/2020 Rz. 122, Binding Decision 5/2022).
  * - ConsentOptin   — echte Einwilligung, Art. 6(1)(a)/Art. 7 DSGVO. Voluntary,
  *                    granular, never a precondition (Kopplungsverbot Art. 7(4)),

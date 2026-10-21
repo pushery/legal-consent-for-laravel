@@ -289,13 +289,13 @@ final class ConsentGate
      *
      * The held-major fold is withdrawal- and objection-aware rather than a monotonic MAX:
      *
-     *  - an ACCEPTING action (granted / acknowledged / re-accepted / parental / deemed-accepted /
+     *  - an accepting action (granted / acknowledged / re-accepted / parental / deemed-accepted /
      *    confirmed) sets the held major to that row's major;
-     *  - an ENDING action (withdrawn / declined / terminated) drops the holding to 0 — a monotonic
+     *  - an ending action (withdrawn / declined / terminated) drops the holding to 0 — a monotonic
      *    max cannot see this, and would report a withdrawn opt-in as still held (Art. 7(3));
-     *  - a NEUTRAL action keeps whatever state existed immediately before it — never a global max,
+     *  - a neutral action keeps whatever state existed immediately before it — never a global max,
      *    which would resurrect an earlier withdrawal. Two actions are neutral, for the same reason
-     *    rather than out of resemblance: an OBJECTION rebuts a *deemed change* (§ 308 Nr. 5 lit. a
+     *    rather than out of resemblance: an objection rebuts a *deemed change* (§ 308 Nr. 5 lit. a
      *    BGB) and not the agreement, and an opt-in request is the unconfirmed first half of a
      *    double opt-in. Neither grants anything and neither takes anything away.
      *

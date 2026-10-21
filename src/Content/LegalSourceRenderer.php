@@ -38,7 +38,7 @@ final readonly class LegalSourceRenderer
      *     `config('legal-consent.cache.prefix')`, which ships as `legal:doc`; this constant is only
      *     the fallback. Every real installation, and every installation that published the config,
      *     would keep the old namespace.
-     *  2. **Nothing needs it.** The object→row change degrades to a cache MISS in both directions:
+     *  2. **Nothing needs it.** The object→row change degrades to a cache miss in both directions:
      *     old code meets a row and fails its `instanceof`, new code meets an object and fails
      *     {@see fromRow}. That is unlike the sibling cache's own versioning, which exists because
      *     its mismatch was an uncaught TypeError on a per-request path — a crash, not a miss.

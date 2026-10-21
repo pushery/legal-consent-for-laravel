@@ -120,9 +120,9 @@ final readonly class LegalDocumentReleaser
      *
      * So this answers it, and it enforces nothing: a caller that has its own numbering keeps it.
      *
-     *   gating      the next MAJOR. A text that has to be accepted again is a new major, and that
+     *   gating      the next major. A text that has to be accepted again is a new major, and that
      *               is the only shape the gate can see.
-     *   not gating  the next MINOR of the active version. An announced or editorial change keeps
+     *   not gating  the next minor of the active version. An announced or editorial change keeps
      *               the major deliberately: raising it would gate nobody and re-ask everybody.
      *
      * A key with no active version at all answers `1.0.0` — a first publication gates its first
