@@ -25,6 +25,7 @@ use Pushery\LegalConsent\Console\CloseObjectionWindowsCommand;
 use Pushery\LegalConsent\Console\DescribeChangeCommand;
 use Pushery\LegalConsent\Console\DispatchDueLegalNoticesCommand;
 use Pushery\LegalConsent\Console\DoctorCommand;
+use Pushery\LegalConsent\Console\DraftFromSourceCommand;
 use Pushery\LegalConsent\Console\FlushDocumentCacheCommand;
 use Pushery\LegalConsent\Console\PruneExpiredConsentRecordsCommand;
 use Pushery\LegalConsent\Console\PublishDocumentCommand;
@@ -54,6 +55,7 @@ use Pushery\LegalConsent\Livewire\ReConsentForm;
 use Pushery\LegalConsent\Support\AffectedSubjectResolver;
 use Pushery\LegalConsent\Support\ChangeItemsAuthor;
 use Pushery\LegalConsent\Support\ChangeItemsFreezer;
+use Pushery\LegalConsent\Support\ConcludingParty;
 use Pushery\LegalConsent\Support\ConfigNoticeIdentity;
 use Pushery\LegalConsent\Support\ConsentBanner;
 use Pushery\LegalConsent\Support\ConsentGate;
@@ -418,6 +420,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
             $this->commands([
                 FlushDocumentCacheCommand::class,
                 PublishDocumentCommand::class,
+                DraftFromSourceCommand::class,
                 CheckDriftCommand::class,
                 RerenderCommand::class,
                 DispatchDueLegalNoticesCommand::class,
@@ -706,13 +709,18 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * A publication duty that binds nobody — an Impressum (§ 5 DDG), a cookie policy — wants
      * `legal_basis => 'informational'` instead, which takes it out of the gate as well.
      *
+     * A document another model concludes (`concluded_by`, see {@see ConcludingParty}) leaves all
+     * three as well, and for a different reason: the person registering is not a party to it, so
+     * there is nothing to ask them, now or later.
+     *
      * @return array<string, array<string, mixed>>
      */
     private function registrationDocumentsConfig(): array
     {
         return array_filter(
             $this->documentsConfig(),
-            static fn (array $config): bool => ($config['ask_at_registration'] ?? true) !== false,
+            static fn (array $config): bool => ($config['ask_at_registration'] ?? true) !== false
+                && ! ConcludingParty::names($config['concluded_by'] ?? null),
         );
     }
 

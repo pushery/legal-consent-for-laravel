@@ -4,6 +4,14 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.50.0 → 0.51.0
+
+**Nothing is required of you**, unless you published the plain views, or the ledger is on MySQL.
+
+**Publish the plain views again if you published them.** A cell of the plain overview opened its link under one condition and closed it under another, and a published copy keeps that shape until it is replaced: `php artisan vendor:publish --tag=legal-consent-views --force`.
+
+**On MySQL, run the migrations at a quiet moment.** Migration 000042 holds every moment of the package as `DATETIME` instead of `TIMESTAMP`, whose range ends at 2038-01-19 03:14:07 UTC. MySQL copies each of the package's tables once to do that, and writes to a table wait while it is copied. A table it cannot lock within three seconds stops the migration, and running `php artisan migrate` again completes the change. The hash chain keeps every link: each `accepted_at` keeps the string it was hashed as, and from then on a change of the session time zone no longer breaks the chain on MySQL.
+
 ## 0.49.0 → 0.50.0
 
 Nothing is required of you.

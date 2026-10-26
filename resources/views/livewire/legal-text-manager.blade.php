@@ -92,9 +92,7 @@
                         @foreach ($locales as $locale)
                             @php($cell = $rows[$key][$locale])
                             <td>
-                                @if ($cell['url'] !== null)
-                                    <a href="{{ $cell['url'] }}" aria-label="{{ $cell['label'] }}">
-                                @endif
+                                @php(ob_start())
                                 @if (! $cell['written'])
                                     <span title="{{ __('legal-consent::ui.admin_not_written') }}">{{ __('legal-consent::ui.admin_not_written_short') }}</span>
                                 @else
@@ -108,10 +106,19 @@
                                         <span title="{{ __('legal-consent::ui.admin_unpublished') }}"> · {{ __('legal-consent::ui.admin_unpublished_short') }}</span>
                                     @endif
                                 @endif
+                                @php($badges = new \Illuminate\Support\HtmlString((string) ob_get_clean()))
                                 @if ($cell['url'] !== null)
-                                    </a>
+                                    <a href="{{ $cell['url'] }}" aria-label="{{ $cell['label'] }}">{{ $badges }}</a>
+                                @else
+                                    {{ $badges }}
                                 @endif
-                                {{-- Nothing is rendered until `admin.editor_route` names a route, and
+                                {{-- The states are rendered once into `$badges` and then either wrapped
+                                     in the link or echoed as they are, so the link opens and closes in
+                                     one branch. Livewire marks where each condition starts and ends, and
+                                     a link opened under one condition and closed under another would hold
+                                     the end of the first and the start of the second.
+
+                                     Nothing is rendered until `admin.editor_route` names a route, and
                                      that is unchanged rather than a leftover: the package brings no
                                      admin routes, so with no name configured anything here would have
                                      to point at `#` — a link with a fully worded promise standing in a

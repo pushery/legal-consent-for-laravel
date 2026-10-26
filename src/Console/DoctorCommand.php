@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Console;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Console\Command;
+use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Routing\Exceptions\UrlGenerationException;
 use Illuminate\Routing\Router;
@@ -21,6 +22,7 @@ use Pushery\LegalConsent\LegalConsentServiceProvider;
 use Pushery\LegalConsent\Models\LegalConsent;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\Scopes\TenantScope;
+use Pushery\LegalConsent\Support\ConcludingParty;
 use Pushery\LegalConsent\Support\ConfirmationWindow;
 use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\IntegerSetting;
@@ -282,6 +284,39 @@ final class DoctorCommand extends Command
         $default = config('legal-consent.default_locale', 'de');
 
         return array_any(SourceLanguageFallback::standInLocales($key, $type, $locale, is_string($default) && $default !== '' ? $default : 'de'), fn (string $candidate): bool => in_array("{$key}|{$candidate}", $active, true));
+    }
+
+    /**
+     * Registry entries whose `concluded_by` cannot work, each with what keeps it from working.
+     *
+     * A value that names no model binds nobody, so the document holds no one to it, and a model
+     * without Laravel's notification routing cannot be sent the notice a new version owes the
+     * parties that accepted the old one. Both contradict the configuration that asked for them, so
+     * they fail the run.
+     *
+     * @return list<array{0: string, 1: string}> the document key and the reason
+     */
+    private function unconcludableDocuments(): array
+    {
+        $documents = config('legal-consent.documents');
+        $documents = is_array($documents) ? $documents : [];
+        $problems = [];
+
+        foreach ($documents as $key => $definition) {
+            $party = is_array($definition) ? ($definition['concluded_by'] ?? null) : null;
+
+            if (! ConcludingParty::names($party)) {
+                continue;
+            }
+
+            $problem = ConcludingParty::problem($party);
+
+            if ($problem !== null) {
+                $problems[] = [(string) $key, $problem];
+            }
+        }
+
+        return $problems;
     }
 
     /**
@@ -598,16 +633,16 @@ final class DoctorCommand extends Command
      * How far the ledger connection's session time zone stands from the application's right now, in seconds, or null
      * when the two agree or the engine keeps no session zone.
      *
-     * Laravel writes a moment as the wall time of `app.timezone`, without an offset, and PostgreSQL and MySQL read that
-     * wall time in the session's zone. Where the two differ, every `accepted_at` is stored that far from the moment of
-     * acceptance. Compared as offsets, so two names for one zone agree.
+     * Laravel writes a moment as the wall time of `app.timezone`, without an offset, and PostgreSQL, and MySQL while the
+     * moments are TIMESTAMP, read that wall time in the session's zone. Where the two differ, every `accepted_at` is
+     * stored that far from the moment of acceptance. Compared as offsets, so two names for one zone agree.
      */
     private function sessionZoneShift(): ?int
     {
         // The model's connection, which is a Connection; the builder's is only the interface, which names no driver.
         $connection = LegalConsent::model()::query()->getModel()->getConnection();
 
-        $seconds = match ($connection->getDriverName()) {
+        $seconds = match ($this->momentsFollowTheSessionZone($connection) ? $connection->getDriverName() : null) {
             'pgsql' => $connection->scalar('select extract(timezone from now())::integer'),
             'mysql' => $connection->scalar('select timestampdiff(second, utc_timestamp(), now())'),
             default => null,
@@ -625,8 +660,9 @@ final class DoctorCommand extends Command
     /**
      * The session time zone of the ledger's connection, when no `timezone` key pins it.
      *
-     * Null on SQLite, which keeps no session zone and renders no offset, and for a connection whose
-     * configuration carries the key, which Laravel applies when it connects.
+     * Null on SQLite, which keeps no session zone and renders no offset, for a connection whose
+     * configuration carries the key, which Laravel applies when it connects, and on MySQL once migration
+     * 000042 holds the moments as DATETIME, which renders them alike in every session.
      */
     private function unpinnedSessionTimeZone(): ?string
     {
@@ -636,13 +672,36 @@ final class DoctorCommand extends Command
             return null;
         }
 
-        $zone = match ($connection->getDriverName()) {
+        $zone = match ($this->momentsFollowTheSessionZone($connection) ? $connection->getDriverName() : null) {
             'pgsql' => $connection->scalar('show timezone'),
             'mysql' => $connection->scalar('select @@session.time_zone'),
             default => null,
         };
 
         return is_string($zone) ? $zone : null;
+    }
+
+    /**
+     * Whether the ledger's moments follow the session time zone on a connection: on PostgreSQL, whose `timestamptz` is
+     * read and written in it, and on MySQL while `accepted_at` is a TIMESTAMP. Migration 000042 makes it a DATETIME,
+     * which keeps the wall time Laravel writes and renders it alike in every session.
+     */
+    private function momentsFollowTheSessionZone(Connection $connection): bool
+    {
+        if ($connection->getDriverName() === 'pgsql') {
+            return true;
+        }
+
+        if ($connection->getDriverName() !== 'mysql') {
+            return false;
+        }
+
+        $type = $connection->scalar(
+            'select data_type from information_schema.columns where table_schema = database() and table_name = ? and column_name = ?',
+            [$connection->getTablePrefix().LegalConsent::model()::query()->getModel()->getTable(), 'accepted_at'],
+        );
+
+        return is_string($type) && strtolower($type) === 'timestamp';
     }
 
     /**
@@ -947,6 +1006,7 @@ final class DoctorCommand extends Command
         $editorRoute = $this->unresolvableEditorRoute();
         $uncacheable = $this->uncacheableKeys();
         $refusedFallbacks = SourceLanguageFallback::refusedKeys();
+        $unconcludable = $this->unconcludableDocuments();
         $unknownRightsRoutes = $this->unknownRightsRoutes();
         $rightsUndeclared = $this->gateWithoutRightsRoutes();
 
@@ -1185,6 +1245,21 @@ final class DoctorCommand extends Command
             $this->newLine();
         }
 
+        if ($unconcludable !== []) {
+            $this->newLine();
+            $this->error('`concluded_by` names no model a change notice can reach:');
+
+            foreach ($unconcludable as [$key, $problem]) {
+                $this->line("  <fg=red>x</> legal-consent.documents.{$key}: {$problem}");
+            }
+
+            $this->line('  The key names the model that concludes the document, a workspace or a team, and keeps');
+            $this->line('  it away from every person. A value that names no model binds nobody at all. The notice');
+            $this->line('  a new version owes its parties goes through Laravel\'s notification routing, so the');
+            $this->line('  model needs `Notifiable` and a `routeNotificationForMail()` that names who reads it.');
+            $this->newLine();
+        }
+
         if ($unknownRightsRoutes !== []) {
             $this->newLine();
             $this->error('These `middleware.rights_routes` name no route:');
@@ -1203,7 +1278,7 @@ final class DoctorCommand extends Command
         // returns each restating the rule is how the legal contradiction fell out of the exit code
         // on the third one: the same deemed-consent-without-proof installation ended 1 or 0
         // depending on whether the published config happened to carry an unrelated stale key.
-        $failed = $incoherent || $refusedFallbacks !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null || $documentRetentionProblems !== [] || $confirmWindowProblem !== null || $zoneShift !== null;
+        $failed = $incoherent || $refusedFallbacks !== [] || $unconcludable !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null || $documentRetentionProblems !== [] || $confirmWindowProblem !== null || $zoneShift !== null;
 
         // $this->laravel->configPath() rather than the config_path() helper, as the provider does
         // when it publishes: the path is the application's, so it is asked of the application this

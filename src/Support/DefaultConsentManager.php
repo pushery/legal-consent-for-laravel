@@ -23,6 +23,7 @@ use Pushery\LegalConsent\Exceptions\DocumentChangedException;
 use Pushery\LegalConsent\Exceptions\IncompatibleConsentActionException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Exceptions\NotAcknowledgeableException;
+use Pushery\LegalConsent\Exceptions\NotAPartyException;
 use Pushery\LegalConsent\Exceptions\NotConfirmableException;
 use Pushery\LegalConsent\Exceptions\NotConsentBearingException;
 use Pushery\LegalConsent\Exceptions\NotGrantableException;
@@ -613,8 +614,12 @@ readonly class DefaultConsentManager implements ConsentManager
             // between it and `current_major` is exactly the "which version did they see" question
             // an application asks. `outstanding` stays false for it below — the state is reported,
             // nothing is enforced.
-            ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing()
-                || RegistrationAcknowledgment::covers($document->key));
+            // A document another model concludes is reported only for an instance of that model
+            // ({@see ConcludingParty}). For a person it would be a row that is outstanding forever,
+            // for an agreement they are not a party to.
+            ->filter(static fn (LegalDocument $document): bool => ($document->type->isConsentBearing()
+                || RegistrationAcknowledgment::covers($document->key))
+                && ConcludingParty::includes($subject, $document->key));
 
         // The holdings whose document has been retired out from under them. Resolved by the same
         // class the settings screen uses, because a status map and the screen built from it
@@ -776,6 +781,14 @@ readonly class DefaultConsentManager implements ConsentManager
         // its specific message; this arm is what the untyped `record()` never had.
         if (! $this->allowsAction($action, $document->type, $shownWording !== null)) {
             throw IncompatibleConsentActionException::for($document->key, $document->type, $action);
+        }
+
+        // A document another model concludes is written for an instance of that model and for no
+        // other subject ({@see ConcludingParty}). The registration, the gate and every screen leave
+        // it out for a person already; this is the door a direct call or the JSON API would still
+        // come through, with a row asserting an acceptance by somebody who is not a party.
+        if (! ConcludingParty::includes($subject, $document->key)) {
+            throw NotAPartyException::for($document->key, ConcludingParty::nameOf($document->key));
         }
 
         $subjectId = SubjectKey::for($subject);
