@@ -69,7 +69,7 @@ return [
     |
     | Every registered document except an `informational` one appears on the registration
     | form. That is the default because a document that asks something has to be asked
-    | before an account exists. Two ways out, and they are not interchangeable:
+    | before an account exists. Three ways out, and they are not interchangeable:
     |
     |   - The page binds nobody — an Impressum, a cookie policy, an accessibility
     |     statement. Use `legal_basis => 'informational'`. It leaves the form, the gate and
@@ -80,6 +80,12 @@ return [
     |     recorder together, and nothing else changes: a mandatory document still gates, so
     |     the subject meets it at the re-consent screen instead. This moves when it is
     |     asked, never whether.
+    |   - The document is concluded by the customer an account stands for, not by each
+    |     person: a data processing agreement a workspace signs. Add
+    |     `'concluded_by' => App\Models\Workspace::class`. No person is asked for it, not
+    |     at sign-up, not by the gate, the banner or the settings screen. Accept it for the
+    |     workspace, `Consent::accept($workspace, 'dpa', $context)`, and give that model
+    |     `Notifiable` with a `routeNotificationForMail()` naming who reads its notices.
     |
     */
     'documents' => [

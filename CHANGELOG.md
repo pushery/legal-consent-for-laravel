@@ -4,6 +4,25 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.51.0] - 2026-10-26
+
+### Added
+
+- **A document a workspace concludes binds no person.** A registry entry can name the model that concludes it, `'concluded_by' => App\Models\Workspace::class`, for an agreement such as a data processing agreement, which the customer an account stands for signs rather than each person in it. The registration form leaves such a document out, its rules, its checklist and its recorder together, and the gate, the re-consent banner, `statusFor()` and the settings screen leave it out for every subject that is not an instance of the model, also while a new major waits for an active re-consent. It is accepted with `Consent::accept($workspace, 'dpa', $context)` and read with `Consent::hasCurrent($workspace, 'dpa')`, which falls back to false once a new major is published. Recording it for any other subject is refused before a row is written, with `NotAPartyException`, and the JSON API answers `422 not_a_party`. A change notice goes to the workspaces that accepted the version before, through the model's own notification routing, and `legal-consent:doctor` reports a `concluded_by` that names no model or a model without `Notifiable`. A document without the key behaves as before.
+- **`legal-consent:draft-from-source` fills the draft store from the Markdown texts.** The admin editor works on the draft store alone and opens empty for a text without a draft, so moving a document from Markdown onto the drafts store left its text behind. The command reads each text of a document on the drafts store from the `markdown` source, or the one `--from` names, in every configured language with the default language first, through the pipeline the editor saves with, and puts the version the source text declares onto the document. A text that has a draft already is kept, a text on version `0.0.0` is skipped, and nothing is published. `--reviewed` marks what was written as reviewed, a translation only when its source text was written in the same run, and `--tenant` names the tenant with tenancy on.
+
+### Changed
+
+- **On MySQL the package's moments are `DATETIME`, so they hold the years after 2038.** Laravel creates a `timestampTz` column as `TIMESTAMP` on MySQL, whose range ends at 2038-01-19 03:14:07 UTC, and from then on MySQL would refuse every row the package writes, a consent included. Migration 000042 changes every time column of the package's tables to `DATETIME`, one statement per table, in the session time zone the rows have been read in, so `accepted_at` keeps the string the hash chain hashed and every link verifies after the change. From then on that string no longer follows the session time zone, and `legal-consent:doctor` names a session time zone on MySQL only while the moments are still `TIMESTAMP`. PostgreSQL and SQLite are unchanged.
+
+  **Upgrade:** `php artisan migrate` runs the new migration, `0001_01_01_000042_hold_the_moments_as_datetime_on_mysql`, which an application that publishes the package's migrations publishes first. On MySQL it copies each of the package's tables once, and writes to a table wait while it is copied, which on a large ledger is worth a quiet moment. A table it cannot lock within three seconds stops the migration, and running it again completes the change.
+
+### Fixed
+
+- **A cell of the plain overview opens and closes its link under one condition.** The link of a cell opened under one `@if` and closed under a second, so the end marker Livewire writes after the first and the start marker it writes before the second stood inside the link. Livewire 4.4 still pairs them, because the start marker is the link's last child, but a condition that leaves an element open is one step away from a block the morph cannot add a node to. The states of a cell are now rendered once and either wrapped in the link or shown as they are, as the WireKit overview already did.
+
+  **Upgrade:** a copy of the plain views published before keeps the split link. `php artisan vendor:publish --tag=legal-consent-views --force` brings the change.
+
 ## [0.50.0] - 2026-10-21
 
 ### Added
@@ -3233,7 +3252,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.50.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.51.0...HEAD
+[0.51.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.47.0...v0.48.0

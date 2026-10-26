@@ -11,6 +11,7 @@ use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Exceptions\DocumentChangedException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
+use Pushery\LegalConsent\Exceptions\NotAPartyException;
 use Pushery\LegalConsent\Exceptions\NotConsentBearingException;
 use Pushery\LegalConsent\Exceptions\NotObjectableException;
 use Pushery\LegalConsent\Exceptions\NotTerminableException;
@@ -55,6 +56,8 @@ final readonly class ConsentController
             // document, so a client can name a published key that accepts nothing without ever
             // having typed it. That is a client error, not an outage of this package.
             return response()->json(['error' => 'not_consent_bearing', 'message' => $e->getMessage()], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (NotAPartyException $e) {
+            return $this->notAParty($e);
         } catch (LegalDocumentNotFound $e) {
             return $this->unknownDocument($request, $e);
         }
@@ -78,6 +81,8 @@ final readonly class ConsentController
             );
         } catch (NotWithdrawableException $e) {
             return response()->json(['error' => 'not_withdrawable', 'message' => $e->getMessage()], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (NotAPartyException $e) {
+            return $this->notAParty($e);
         } catch (LegalDocumentNotFound $e) {
             return $this->unknownDocument($request, $e);
         }
@@ -101,6 +106,8 @@ final readonly class ConsentController
             );
         } catch (NotObjectableException $e) {
             return response()->json(['error' => 'not_objectable', 'message' => $e->getMessage()], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (NotAPartyException $e) {
+            return $this->notAParty($e);
         } catch (LegalDocumentNotFound $e) {
             return $this->unknownDocument($request, $e);
         }
@@ -124,6 +131,8 @@ final readonly class ConsentController
             );
         } catch (NotTerminableException $e) {
             return response()->json(['error' => 'not_terminable', 'message' => $e->getMessage()], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (NotAPartyException $e) {
+            return $this->notAParty($e);
         } catch (LegalDocumentNotFound $e) {
             return $this->unknownDocument($request, $e);
         }
@@ -144,6 +153,19 @@ final readonly class ConsentController
         // one. A client that decodes this into a dictionary fails on the array, and it fails on
         // exactly the request that carries no other signal that anything is wrong.
         return response()->json((object) $this->consent->statusFor($this->subject($request)));
+    }
+
+    /**
+     * A subject that is not a party to the document: the entry names another model under
+     * `concluded_by`, and the manager records it for an instance of that model only.
+     *
+     * 422 like the other refusals, because the document is real and the request names it, and the
+     * domain sentence goes out with it, because a client can act on it by recording the document for
+     * the model it names.
+     */
+    private function notAParty(NotAPartyException $exception): JsonResponse
+    {
+        return response()->json(['error' => 'not_a_party', 'message' => $exception->getMessage()], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     /**

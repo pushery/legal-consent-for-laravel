@@ -78,7 +78,10 @@ final readonly class ConsentPresenter
             // a "your agreements" row for a page nobody agrees to, with a grant control next to it
             // that can only ever 404. The set is derived from the predicate rather than naming the
             // one type to exclude, so a future type is classified by isConsentBearing() alone.
-            ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing())
+            // The same boundary statusFor() draws for a document another model concludes, too
+            // ({@see ConcludingParty}): a person is not a party to it and has nothing to grant.
+            ->filter(static fn (LegalDocument $document): bool => $document->type->isConsentBearing()
+                && ConcludingParty::includes($subject, $document->key))
             ->values();
 
         // A document the subject still holds whose active version is gone. Retiring one is

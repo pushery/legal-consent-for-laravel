@@ -40,7 +40,7 @@ final class ConsentGate
      */
     public function outstandingFor(Model $subject, string $locale, ?CarbonImmutable $now = null): Collection
     {
-        $enforceable = $this->enforceable($locale, $now ?? CarbonImmutable::now());
+        $enforceable = $this->bindingOn($subject, $this->enforceable($locale, $now ?? CarbonImmutable::now()));
 
         if ($enforceable->isEmpty()) {
             return $enforceable;
@@ -69,8 +69,8 @@ final class ConsentGate
      */
     public function owedFor(Model $subject, string $locale, bool $firstAcceptance = false, ?CarbonImmutable $now = null): Collection
     {
-        $enforceable = $this->enforceable($locale, $now ?? CarbonImmutable::now());
-        $mandatory = $this->mandatory($locale);
+        $enforceable = $this->bindingOn($subject, $this->enforceable($locale, $now ?? CarbonImmutable::now()));
+        $mandatory = $this->bindingOn($subject, $this->mandatory($locale));
         $asked = $firstAcceptance ? $enforceable->concat($mandatory) : $enforceable;
 
         // The short-circuit of the two questions it joins: nothing to ask about, no ledger read.
@@ -132,6 +132,23 @@ final class ConsentGate
         return array_values(array_unique($documents->map(fn (LegalDocument $document): string => $document->key)->all()));
     }
 
+    /**
+     * The documents of a set that bind the subject: all of them, unless a registry entry names
+     * another model as the party that concludes it ({@see ConcludingParty}).
+     *
+     * Applied before any ledger read, so a person whose only open document is a workspace's
+     * contract costs the same nothing as a person with no open document at all.
+     *
+     * @param  Collection<int, LegalDocument>  $documents
+     * @return Collection<int, LegalDocument>
+     */
+    private function bindingOn(Model $subject, Collection $documents): Collection
+    {
+        return $documents
+            ->filter(static fn (LegalDocument $document): bool => ConcludingParty::includes($subject, $document->key))
+            ->values();
+    }
+
     /** Whether a major's active re-consent has reached its effective date. */
     private function gateIsOpen(?LegalDocument $gating, CarbonImmutable $now): bool
     {
@@ -172,7 +189,7 @@ final class ConsentGate
     {
         // Same cache and same short-circuit as outstandingFor(): an install that has published
         // nothing must not pay a ledger read on a path a consumer may put on every request.
-        $mandatory = $this->mandatory($locale);
+        $mandatory = $this->bindingOn($subject, $this->mandatory($locale));
 
         if ($mandatory->isEmpty()) {
             return $mandatory;

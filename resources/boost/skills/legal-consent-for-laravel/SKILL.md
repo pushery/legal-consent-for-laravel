@@ -77,6 +77,10 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   Per document, `'ask_at_registration' => false` takes a document off the SIGN-UP form without
   changing anything else — it still gates, so the subject meets it at the re-consent screen. Use
   it for something acknowledged later in-app; use `informational` for a page that binds nobody.
+  Per document, `'concluded_by' => App\Models\Workspace::class` names the model that concludes
+  it, such as a data processing agreement a workspace signs. No person is asked for it, not at
+  sign-up and not by the gate. Accept it with `Consent::accept($workspace, 'dpa', $context)`, and
+  give that model `Notifiable` with a mail route, because its change notices go to the workspace.
 - `document_url` — an invokable class-string with `__invoke(LegalDocument $document): ?string`.
   **Set this.** Without it every consent surface shows the document's title as dead text: the
   registration checkboxes, the re-consent gate and "Your consents". Resolve from
@@ -165,7 +169,10 @@ app(\Pushery\LegalConsent\Support\TenantContext::class)->resolveUsing(fn () => a
 fall back to the source — so every legal page renders empty with no error and no log. Run
 `legal-consent:publish --all --editorial` once, or ask `legal-consent:doctor`, which says so when
 nothing is published and names every missing language once something is. A document on the drafts
-store publishes nothing before its text is written and released on the admin screen.
+store publishes nothing before its text is written and released on the admin screen. Texts already
+written as Markdown reach that screen with `php artisan legal-consent:draft-from-source`, plus
+`--reviewed` when they were reviewed in the repository. Do NOT write a migration or a command of
+your own for it.
 
 **When the application deletes an account, call `Consent::forget($user)`.** It strips
 `subject_type`, `subject_id`, `ip_address`, `user_agent` and `request_id` from the consent ledger,

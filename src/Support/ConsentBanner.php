@@ -40,7 +40,7 @@ final readonly class ConsentBanner
     public function pendingFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array $accepted = null): array
     {
         $now ??= CarbonImmutable::now();
-        $upcoming = $this->upcomingReconsent($locale ?? $this->defaultLocale, $now);
+        $upcoming = $this->upcomingReconsentFor($subject, $locale ?? $this->defaultLocale, $now);
 
         if ($upcoming->isEmpty()) {
             return [];
@@ -230,14 +230,40 @@ final readonly class ConsentBanner
         // of them asks about and no others: this runs on every authenticated render, for as long as
         // a window is open. Still lazy — with both windows closed nothing is read, so the common
         // "nothing pending" render stays query-free.
-        $keys = $this->keysOf($this->upcomingReconsent($locale, $now)->concat($this->upcomingDeemed($locale, $now)));
+        $keys = $this->keysOf($this->upcomingReconsentFor($subject, $locale, $now)->concat($this->upcomingDeemed($locale, $now)));
         $accepted = $keys === [] ? null : $this->gate->currentHoldings($subject, $keys);
+
+        // An info-only change applies to every party alike, so its heads-up is not per subject in
+        // itself. A document another model concludes has other parties, though, and its heads-up is
+        // left to the banner of that model rather than shown to every person.
+        $informational = [];
+
+        foreach ($this->informationalFor($locale, $now) as $item) {
+            if (ConcludingParty::includes($subject, $item['key'])) {
+                $informational[] = $item;
+            }
+        }
 
         return [
             'reconsent' => $this->pendingFor($subject, $locale, $now, $accepted),
-            'informational' => $this->informationalFor($locale, $now),
+            'informational' => $informational,
             'deemed' => $this->deemedFor($subject, $locale, $now, $accepted),
         ];
+    }
+
+    /**
+     * The open re-consent windows of the documents that bind the subject ({@see ConcludingParty}).
+     *
+     * The deemed-consent windows need no such filter: that banner only ever reaches a party that
+     * already holds the contract.
+     *
+     * @return SupportCollection<int, LegalDocument>
+     */
+    private function upcomingReconsentFor(Model $subject, string $locale, CarbonImmutable $now): SupportCollection
+    {
+        return $this->upcomingReconsent($locale, $now)
+            ->filter(static fn (LegalDocument $document): bool => ConcludingParty::includes($subject, $document->key))
+            ->values();
     }
 
     /**

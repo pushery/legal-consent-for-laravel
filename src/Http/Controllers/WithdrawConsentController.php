@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Pushery\LegalConsent\Contracts\ConsentManager;
 use Pushery\LegalConsent\Enums\ConsentMethod;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
+use Pushery\LegalConsent\Exceptions\NotAPartyException;
 use Pushery\LegalConsent\Exceptions\NotWithdrawableException;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -54,11 +55,13 @@ final readonly class WithdrawConsentController
                 $key,
                 ConsentContext::fromRequest($request, ConsentMethod::SettingsToggle),
             );
-        } catch (NotWithdrawableException $e) {
+        } catch (NotWithdrawableException|NotAPartyException $e) {
             // A contract cannot be "withdrawn" — it is ended by ending the relationship — and the
             // manager refuses that rather than writing a row asserting a state that does not
             // legally exist. Answered as a message on the page, not a 500: the subject did
-            // nothing wrong, and a form post has nowhere else to put an explanation.
+            // nothing wrong, and a form post has nowhere else to put an explanation. A document
+            // another model concludes is not the subject's to withdraw either, and it gets the
+            // same sentence: from where the subject stands, it is one they cannot withdraw.
             //
             // The translated sentence, never $e->getMessage(). The exception carries a hardcoded
             // English string naming the document key and the internal enum value, and the settings

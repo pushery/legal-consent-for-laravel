@@ -75,13 +75,15 @@ use Pushery\LegalConsent\Exceptions\UnhashableProofFieldException;
  * write-vs-read drift while those two facts hold — and they are facts about the deployment, not
  * about the code. `accepted_at` enters the hash as the string the driver hands back, and that
  * string differs between engines (PostgreSQL renders `timestamptz` with an offset, MySQL and
- * SQLite render none) and moves with the session time zone on PostgreSQL and MySQL. Laravel sets
- * that zone from `database.connections.*.timezone` when the key exists; without it the server
- * decides, through its own configuration, a database or role default, or `PGTZ` in the
- * environment of the process that connects. So a dump restored onto the other engine, a change of
- * that key, or without one a change on the server side, invalidates every stored link at once:
- * `verify-ledger` then reports the whole ledger as tampered although nobody touched a row.
- * `legal-consent:doctor` names a session zone no key pins.
+ * SQLite render none) and moves with the session time zone on PostgreSQL, and on MySQL while the
+ * moment is a TIMESTAMP. Migration 000042 holds it as a DATETIME on MySQL, which renders it alike
+ * in every session, and changes it in the session zone it was read in, so every link keeps its
+ * hash. Laravel sets that zone from `database.connections.*.timezone` when the key exists; without
+ * it the server decides, through its own configuration, a database or role default, or `PGTZ` in
+ * the environment of the process that connects. So a dump restored onto the other engine, or on
+ * PostgreSQL a change of that key, or without one a change on the server side, invalidates every
+ * stored link at once: `verify-ledger` then reports the whole ledger as tampered although nobody
+ * touched a row. `legal-consent:doctor` names a session zone no key pins where it matters.
  *
  * That is a precondition of the same shape as the HMAC secret above — fix it before the first
  * chained row — and it is stated rather than removed on purpose. Normalizing the instant would
@@ -371,7 +373,7 @@ final class LedgerHashChain
      * makes the hash stable across PDO drivers for the same stored value: a column returned as `2`
      * by one driver and `'2'` by another has to agree, or every consumer's chain would depend on
      * their driver. It does not make the hash stable across engines — a column whose stored value is
-     * rendered differently (`accepted_at` on PostgreSQL versus MySQL, and either one under a
+     * rendered differently (`accepted_at` on PostgreSQL versus MySQL, and on PostgreSQL under a
      * different connection time zone) is a different string here, and the class docblock states that
      * binding. The cost of the choice is that a value with no lossless string form cannot be
      * admitted at all. A bool casts to `''` or `'1'` and an array to `'Array'`, each the string form
