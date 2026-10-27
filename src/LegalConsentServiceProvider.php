@@ -332,22 +332,26 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
         // A scheduled command that touches this package's tables cannot run where those tables do
         // not exist. The config flag beside each registration below answers whether the consumer
-        // wants that sweep; this asks whether it can run here at all.
+        // wants that sweep; the filter on each asks whether it can run here at all.
+        //
+        // The filter asks when the sweep is due, not when the scheduler is resolved. A process
+        // resolves the scheduler once, often while the application boots, so a host that booted
+        // before `migrate` read a schedule without the sweeps for as long as that process lived: a
+        // long-running `schedule:work`, `schedule:list`, a test that reads the schedule. Registered
+        // whatever the database holds, the schedule reads the same in every environment, and a
+        // fresh install that has not migrated yet skips the sweeps until the tables are there.
         //
         // It asks whether the tables are present, not whether the migrations are registered: with
         // the migrations published and run by the host app, `ignoreMigrations()` has switched
-        // registration off while the tables exist, and the three sweeps have to run there. They carry the change notices owed under § 308 Nr. 5
-        // lit. b BGB, the closing of every objection window, and retention under Art. 5(1)(e)
-        // GDPR.
+        // registration off while the tables exist, and the three sweeps have to run there. They
+        // carry the change notices owed under § 308 Nr. 5 lit. b BGB, the closing of every objection
+        // window, and retention under Art. 5(1)(e) GDPR.
         //
-        // Inside the closure it costs nothing: `callAfterResolving` fires only when something
-        // resolves a Schedule, so a web request never reaches this. A fresh install that has not
-        // migrated yet registers on the first boot after `migrate`, because `schedule:run` boots
-        // the application anew every minute.
+        // It costs nothing on a web request: `callAfterResolving` fires only when something resolves
+        // a Schedule, and the scheduler evaluates a filter only for a sweep that is due.
+        // schedule-gate-ok: each entry carries ->when() on the presence of its tables, read when the entry is due
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
-            if (! $this->ledgerTablesExist()) {
-                return;
-            }
+            $tablesExist = fn (): bool => $this->ledgerTablesExist();
 
             if ((bool) config('legal-consent.schedule.dispatch_notices', true)) {
                 // With `--isolated` on every sweep, so a run started by hand with it and the scheduled
@@ -355,6 +359,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 // entry, and a hand-started run never takes it.
                 $schedule->command('legal-consent:dispatch-notices', ['--isolated'])
                     ->hourly()
+                    ->when($tablesExist)
                     // The overlap lock expires after 55 minutes, inside the hour, rather than after
                     // the 24h default. The expiry only matters when a run dies holding the lock or
                     // outlives it. From laravel/framework 13.2 the scheduler releases the lock
@@ -372,6 +377,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
             if ((bool) config('legal-consent.schedule.close_objection_windows', true)) {
                 $schedule->command('legal-consent:close-objection-windows', ['--isolated'])
                     ->hourly()
+                    ->when($tablesExist)
                     // 55 minutes, for the reason given at dispatch-notices above. A run that
                     // overtakes a long one deems nobody twice: a subject who already holds the
                     // version is refused.
@@ -386,6 +392,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
             if ((bool) config('legal-consent.schedule.prune', false)) {
                 $schedule->command('legal-consent:prune', ['--isolated'])
                     ->daily()
+                    ->when($tablesExist)
                     // Capped like its two siblings, and here the bare default is worse than
                     // anywhere else: 1440 minutes is exactly the interval `daily()` repeats on,
                     // so a run that dies holding the lock (a SIGKILL or an OOM, and below
@@ -532,9 +539,9 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * a host that manages them itself can run a subset), and a sweep against two of three tables
      * fails exactly as loudly as one against none.
      *
-     * An unreachable database registers, and that direction is chosen rather than defaulted to.
-     * A connection that cannot be opened is not a consumer who declined the tables — it is an
-     * outage. Registering means the command fails loudly for as long as it lasts; not registering
+     * An unreachable database lets the sweep run, and that direction is chosen rather than
+     * defaulted to. A connection that cannot be opened is not a consumer who declined the tables —
+     * it is an outage. Running means the command fails loudly for as long as it lasts; skipping
      * means three legally owed sweeps disappear silently and come back only when somebody notices.
      * A loud failure during an outage is the cheaper of the two, and it is the one an operator can
      * see.

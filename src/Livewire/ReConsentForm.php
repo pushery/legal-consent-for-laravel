@@ -16,14 +16,19 @@ use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
 use Pushery\LegalConsent\Livewire\Concerns\RefusesUnavailableTransitions;
 use Pushery\LegalConsent\Models\LegalDocument;
+use Pushery\LegalConsent\Support\ChangeItemsAuthor;
+use Pushery\LegalConsent\Support\ConsentBanner;
 use Pushery\LegalConsent\Support\ConsentContext;
 use Pushery\LegalConsent\Support\DefaultConsentManager;
 use Pushery\LegalConsent\Support\DocumentUrlResolver;
+use Pushery\LegalConsent\Support\FreeTermination;
 
 /**
  * Opt-in reactive re-consent form: lists the documents the subject still owes and records the
- * ticked ones on submit. A nested Livewire component — embed with
- * <livewire:legal-consent.reconsent-form />. Only registers when livewire/livewire is
+ * ticked ones on submit. Beside them it lists the deemed-consent changes whose objection window is
+ * open for the subject, the page their notice and the banner send them to, each with a control for
+ * `object()` and, where the notice names it, for `terminate()`. A nested Livewire component — embed
+ * with <livewire:legal-consent.reconsent-form />. Only registers when livewire/livewire is
  * installed; the plain checkbox stub covers the headless case. Requires an authenticated
  * Eloquent subject (auth()->user()).
  *
@@ -467,7 +472,92 @@ final class ReConsentForm extends Component
         return view('legal-consent::livewire.reconsent-form', [
             'pending' => $pending,
             'urls' => app(DocumentUrlResolver::class)->keyedBy($pending),
+            'deemed' => $subject instanceof Model ? $this->objectionWindowsFor($subject) : [],
         ]);
+    }
+
+    /**
+     * The deemed-consent changes this subject can still object to, or terminate over.
+     *
+     * The deemed-consent notice's call to action and the banner's "Review or object" both lead to
+     * this form, so this is where a subject must find the objection while its window is open: a
+     * window in which the page they are sent to takes no objection runs out for them, and
+     * `legal-consent:close-objection-windows` then books their agreement.
+     *
+     * While the window is open the set is the banner's own ({@see ConsentBanner::deemedDocumentsFor()}):
+     * a party holding an older version who has neither objected nor terminated. Once it has closed, the
+     * notice still promises the free termination until the change takes effect, so a change it named
+     * one for stays listed until then with the termination alone
+     * ({@see ConsentBanner::terminationOnlyDocumentsFor()}). A row leaves once an objection or a
+     * termination is recorded, because either answers the change. The termination is offered exactly
+     * where the notice names it ({@see FreeTermination}), and a change this mount could not act on is
+     * not listed at all: with both endpoints switched off the section is gone.
+     *
+     * @return list<array{key: string, title: string, version: string, locale: string, objection_date: ?string, effective_date: ?string, objectable: bool, terminable: bool, url: ?string}>
+     */
+    private function objectionWindowsFor(Model $subject): array
+    {
+        if (! $this->allowObjection && ! $this->allowTermination) {
+            return [];
+        }
+
+        $banner = app(ConsentBanner::class);
+        $rows = [];
+
+        foreach ($banner->deemedDocumentsFor($subject, $this->locale) as $document) {
+            $row = $this->objectionRow($document, windowOpen: true);
+
+            if ($row !== null) {
+                $rows[] = $row;
+            }
+        }
+
+        if ($this->allowTermination) {
+            foreach ($banner->terminationOnlyDocumentsFor($subject, $this->locale) as $document) {
+                $row = $this->objectionRow($document, windowOpen: false);
+
+                if ($row !== null) {
+                    $rows[] = $row;
+                }
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * One row of the section: the change, the notice's dates, and what this mount offers for it, or
+     * null where it offers nothing.
+     *
+     * The objection date is left out once the window has closed, so the notice's sentence about
+     * silence binding by that date is not repeated after it passed.
+     *
+     * @return array{key: string, title: string, version: string, locale: string, objection_date: ?string, effective_date: ?string, objectable: bool, terminable: bool, url: ?string}|null
+     */
+    private function objectionRow(LegalDocument $document, bool $windowOpen): ?array
+    {
+        $id = $document->getKey();
+        $objectable = $windowOpen && $this->allowObjection;
+        $terminable = $this->allowTermination
+            && FreeTermination::owed($document, is_int($id) ? app(ChangeItemsAuthor::class)->published($id) : null);
+
+        if (! $objectable && ! $terminable) {
+            return null;
+        }
+
+        return [
+            'key' => $document->key,
+            'title' => $document->title,
+            'version' => $document->version,
+            'locale' => $document->locale,
+            // The calendar dates the notice's two sentences name, in the form the banner already
+            // repeats them in.
+            'objection_date' => $windowOpen ? $document->objection_deadline?->toDateString() : null,
+            'effective_date' => $document->enforce_from?->toDateString(),
+            'objectable' => $objectable,
+            'terminable' => $terminable,
+            'url' => app(DocumentUrlResolver::class)->for($document),
+        ];
     }
 
     private function subject(): ?Model

@@ -76,6 +76,18 @@ return [
     'withdraw_confirm_title' => 'Einwilligung widerrufen?',
     'withdraw_confirm_body' => 'Deine Einwilligung zu „:title“ wird widerrufen. Der Widerruf gilt ab sofort und lässt die Rechtmäßigkeit der bisherigen Verarbeitung unberührt.',
     'cancel' => 'Abbrechen',
+    // The deemed-consent changes on the re-consent form, the page the notice and the banner send the
+    // subject to, until they take effect. Objecting and terminating each write an irreversible row,
+    // so each asks once.
+    'upcoming_changes_heading' => 'Anstehende Vertragsänderungen',
+    'object' => 'Widersprechen',
+    'object_for' => 'Widersprechen: :title',
+    'terminate' => 'Kostenfrei kündigen',
+    'terminate_for' => 'Kostenfrei kündigen: :title',
+    'object_confirm_title' => 'Der Änderung widersprechen?',
+    'object_confirm_body' => 'Die Änderung an „:title“ gilt dann nicht als deine Zustimmung. Dein Widerspruch wird mit dem Zeitpunkt erfasst, zu dem du ihn abschickst.',
+    'terminate_confirm_title' => 'Kostenfrei kündigen?',
+    'terminate_confirm_body' => 'Du kündigst den Vertrag „:title“ kostenfrei, bevor die Änderung wirksam wird. Deine Kündigung wird mit dem Zeitpunkt erfasst, zu dem du sie abschickst.',
 
     // Admin screens (LegalTextManager / LegalTextEditor).
     'admin_heading' => 'Rechtstexte',

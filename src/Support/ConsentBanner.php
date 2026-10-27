@@ -150,6 +150,42 @@ final readonly class ConsentBanner
     public function deemedFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array $accepted = null): array
     {
         $now ??= CarbonImmutable::now();
+        $deemed = [];
+
+        foreach ($this->deemedDocumentsFor($subject, $locale, $now, $accepted) as $document) {
+            $deadline = $document->objection_deadline;
+
+            $deemed[] = [
+                'key' => $document->key,
+                'version' => $document->version,
+                'title' => $document->title,
+                'objection_deadline' => $deadline?->toIso8601String(),
+                // The calendar date the § 308 Nr. 5 lit. b warning names, in the format the durable
+                // notice prints it in, so the banner repeats the notice's sentence rather than a second
+                // rendering of the same instant.
+                'objection_date' => $deadline?->toDateString(),
+                'enforce_from' => $document->enforce_from?->toIso8601String(),
+                'days_left' => $deadline instanceof CarbonImmutable ? max(0, (int) $now->diffInDays($deadline)) : 0,
+            ];
+        }
+
+        return $deemed;
+    }
+
+    /**
+     * The documents behind {@see deemedFor()}: the same set, as the versions themselves.
+     *
+     * The re-consent form lists these to take the objection or the free termination the notice and
+     * this banner point at, and it needs what the banner's rows leave out: the version, to decide
+     * whether the notice owed the termination line ({@see FreeTermination}), and the document, to
+     * link its text.
+     *
+     * @param  array<string, int>|null  $accepted  see {@see deemedFor()}
+     * @return list<LegalDocument>
+     */
+    public function deemedDocumentsFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array $accepted = null): array
+    {
+        $now ??= CarbonImmutable::now();
         $upcoming = $this->upcomingDeemed($locale ?? $this->defaultLocale, $now);
 
         if ($upcoming->isEmpty()) {
@@ -195,23 +231,59 @@ final readonly class ConsentBanner
                 continue; // the subject already objected or terminated
             }
 
-            $deadline = $document->objection_deadline;
-
-            $deemed[] = [
-                'key' => $document->key,
-                'version' => $document->version,
-                'title' => $document->title,
-                'objection_deadline' => $deadline?->toIso8601String(),
-                // The calendar date the § 308 Nr. 5 lit. b warning names, in the format the durable
-                // notice prints it in, so the banner repeats the notice's sentence rather than a second
-                // rendering of the same instant.
-                'objection_date' => $deadline?->toDateString(),
-                'enforce_from' => $document->enforce_from?->toIso8601String(),
-                'days_left' => $deadline instanceof CarbonImmutable ? max(0, (int) $now->diffInDays($deadline)) : 0,
-            ];
+            $deemed[] = $document;
         }
 
         return $deemed;
+    }
+
+    /**
+     * Deemed-consent changes whose objection window has closed and which have not taken effect yet, for a party who
+     * has neither objected nor terminated.
+     *
+     * The notice names two rights with two dates: the objection until the deadline, and the free termination until
+     * the change takes effect, which the publisher always puts after the deadline. Between the two only the
+     * termination is left, and {@see deemedDocumentsFor()} no longer lists the change: its window is closed, and a
+     * party who stayed silent holds the version once `legal-consent:close-objection-windows` booked the agreement.
+     * So a party is anyone who holds the contract here, whichever version. Whether the notice named the termination
+     * at all is the caller's question ({@see FreeTermination}).
+     *
+     * @return list<LegalDocument>
+     */
+    public function terminationOnlyDocumentsFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null): array
+    {
+        $now ??= CarbonImmutable::now();
+
+        $closed = $this->resolvedFor($locale ?? $this->defaultLocale)
+            ->map(fn (LegalDocument $document): LegalDocument => $this->cache()->governingVersionOf($document))
+            ->filter(
+                fn (LegalDocument $document): bool => $document->notice_mode === NoticeMode::DeemedConsent
+                    && $this->announced($document, $now)
+                    && $document->objection_deadline instanceof CarbonImmutable
+                    && $document->objection_deadline->lessThanOrEqualTo($now)
+                    && $document->enforce_from instanceof CarbonImmutable
+                    && $document->enforce_from->greaterThan($now)
+            );
+
+        if ($closed->isEmpty()) {
+            return [];
+        }
+
+        $standing = $this->gate->standingFor($subject, $this->keysOf($closed));
+        $holdings = ConsentGate::holdingsOf($standing);
+        $documents = [];
+
+        foreach ($closed as $document) {
+            $latest = $standing['latest'][$document->key]['action'] ?? null;
+
+            if (! isset($holdings[$document->key]) || $latest === ConsentAction::Objected->value || $latest === ConsentAction::Terminated->value) {
+                continue;
+            }
+
+            $documents[] = $document;
+        }
+
+        return $documents;
     }
 
     /**

@@ -9,6 +9,7 @@ use Pushery\LegalConsent\Models\LegalChangeItem;
 use Pushery\LegalConsent\Models\LegalChangeSet;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Support\ChangeItemsAuthor;
+use Pushery\LegalConsent\Support\FreeTermination;
 
 /**
  * Renders the operator's description of a change into a notice — what every real change notice
@@ -64,19 +65,16 @@ trait RendersChangeItems
      */
     protected function hasAdverseChangeItem(LegalDocument $document): bool
     {
-        $set = $this->changeSetFor($document);
+        return FreeTermination::adverse($this->changeSetFor($document));
+    }
 
-        if (! $set instanceof LegalChangeSet) {
-            return false;
-        }
-
-        foreach ($set->items as $item) {
-            if ($item->type->isAdverse()) {
-                return true;
-            }
-        }
-
-        return false;
+    /**
+     * Whether the notice owes the free-termination line, by the same rule the re-consent form uses
+     * to offer the termination ({@see FreeTermination}).
+     */
+    protected function owesFreeTermination(LegalDocument $document): bool
+    {
+        return FreeTermination::owed($document, $this->changeSetFor($document));
     }
 
     /**

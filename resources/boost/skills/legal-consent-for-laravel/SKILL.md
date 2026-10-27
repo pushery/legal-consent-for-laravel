@@ -100,6 +100,10 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
 - `routes.web_throttle` — `'60,1'` by default: one rate limit, keyed on the subject, in front of
   every session-backed ledger write — that route and the Livewire components' grant, withdraw,
   object and terminate actions. Same shape as `routes.api_throttle`; `null` switches it off.
+- `routes.api` — off by default. The headless JSON API under `{api_prefix}`, `legal` by default,
+  behind `routes.api_middleware` and `routes.api_throttle`. An application that keeps what machines
+  call on a host of its own (`api.<domain>`) sets `routes.api_domain`, or
+  `LEGAL_CONSENT_API_DOMAIN`, and the API answers on that host only.
 - `ui.variant` — `auto` by default: the WireKit-native views are served when `pushery/wirekit`
   ≥ 2.68.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
 - `notice_mail` — the change-notice mail. `identity.declarant` names the declaring legal person

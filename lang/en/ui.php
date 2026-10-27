@@ -79,6 +79,18 @@ return [
     'withdraw_confirm_title' => 'Withdraw consent?',
     'withdraw_confirm_body' => 'Your consent to “:title” will be withdrawn. It takes effect immediately and does not affect the lawfulness of processing before it.',
     'cancel' => 'Cancel',
+    // The deemed-consent changes on the re-consent form, the page the notice and the banner send the
+    // subject to, until they take effect. Objecting and terminating each write an irreversible row,
+    // so each asks once.
+    'upcoming_changes_heading' => 'Upcoming contract changes',
+    'object' => 'Object',
+    'object_for' => 'Object: :title',
+    'terminate' => 'Terminate free of charge',
+    'terminate_for' => 'Terminate free of charge: :title',
+    'object_confirm_title' => 'Object to the change?',
+    'object_confirm_body' => 'The change to “:title” will then not count as your agreement. Your objection is recorded with the time you send it.',
+    'terminate_confirm_title' => 'Terminate free of charge?',
+    'terminate_confirm_body' => 'You terminate the contract “:title” free of charge before the change takes effect. Your termination is recorded with the time you send it.',
 
     // Admin screens (LegalTextManager / LegalTextEditor).
     'admin_heading' => 'Legal texts',
