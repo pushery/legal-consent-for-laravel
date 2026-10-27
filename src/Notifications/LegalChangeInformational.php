@@ -76,7 +76,7 @@ class LegalChangeInformational extends ChangeNotification
             return true;
         }
 
-        return $this->document->offers_termination || $this->hasAdverseChangeItem($this->document);
+        return $this->owesFreeTermination($this->document);
     }
 
     /**

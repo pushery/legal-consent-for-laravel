@@ -52,7 +52,7 @@
         "laravel/pint": "^1.0",
         "livewire/livewire": "^4.3",
         "orchestra/testbench": "^11.0",
-        "pestphp/pest": "^5.0 <5.3.1",
+        "pestphp/pest": "^5.0",
         "pestphp/pest-plugin-agent": "^5.0",
         "pestphp/pest-plugin-browser": "^5.0",
         "pestphp/pest-plugin-laravel": "^5.0",

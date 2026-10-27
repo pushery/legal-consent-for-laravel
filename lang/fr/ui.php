@@ -76,6 +76,18 @@ return [
     'withdraw_confirm_title' => 'Retirer le consentement ?',
     'withdraw_confirm_body' => "Ton consentement à « :title » sera retiré. Cela prend effet immédiatement et n'affecte pas la licéité du traitement antérieur.",
     'cancel' => 'Annuler',
+    // The deemed-consent changes on the re-consent form, the page the notice and the banner send the
+    // subject to, until they take effect. Objecting and terminating each write an irreversible row,
+    // so each asks once.
+    'upcoming_changes_heading' => 'Modifications contractuelles à venir',
+    'object' => 'S’opposer',
+    'object_for' => 'S’opposer : :title',
+    'terminate' => 'Résilier gratuitement',
+    'terminate_for' => 'Résilier gratuitement : :title',
+    'object_confirm_title' => 'S’opposer à la modification ?',
+    'object_confirm_body' => 'La modification de « :title » ne vaudra alors pas acceptation de ta part. Ton opposition est enregistrée avec l’heure à laquelle tu l’envoies.',
+    'terminate_confirm_title' => 'Résilier gratuitement ?',
+    'terminate_confirm_body' => 'Tu résilies gratuitement le contrat « :title » avant que la modification ne prenne effet. Ta résiliation est enregistrée avec l’heure à laquelle tu l’envoies.',
 
     // Admin screens (LegalTextManager / LegalTextEditor).
     'admin_heading' => 'Textes juridiques',

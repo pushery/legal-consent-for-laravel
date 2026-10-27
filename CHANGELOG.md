@@ -4,6 +4,22 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.0] - 2026-10-27
+
+### Added
+
+- **The re-consent form takes the objection to a deemed-consent change, and the free termination where the notice names it.** The deemed-consent notice and the banner both send the subject to the consent page to object, and no bundled view offered the objection there: `reconsent-form` listed only the documents the gate holds, and `consent-settings` renders neither `object()` nor `terminate()`. A window in which that page takes no objection runs out, and `legal-consent:close-objection-windows` then books the agreement. The form now lists every deemed-consent change whose objection window is open for the subject, the set the banner counts down, with the notice's own sentences and a control to object. Where the notice names a free termination, the row offers it too, decided by the rule the notices now share (`FreeTermination`). Each control asks once before it writes, in an alert-dialog in the WireKit view and with `wire:confirm` in the plain one, and each appears only where `allowObjection` or `allowTermination` is on. `ConsentBanner::deemedDocumentsFor()` returns the documents behind `deemedFor()`.
+
+  Once the objection window has closed, the notice still promises the free termination until the change takes effect, so a change whose notice names one stays on the form until then with the termination alone, also after `legal-consent:close-objection-windows` has booked the agreement. `ConsentBanner::terminationOnlyDocumentsFor()` returns those changes.
+
+  **Upgrade:** a copy of the re-consent views published before has no such section. `php artisan vendor:publish --tag=legal-consent-views --force` brings the plain one, `php artisan vendor:publish --tag=legal-consent-wirekit --force` the WireKit one.
+
+- **The JSON API can answer on a host of its own.** `routes.api_domain`, or `LEGAL_CONSENT_API_DOMAIN`, names the host, such as `api.example.test`, and the five routes of the API answer on that host only. Unset or blank, they answer on every host, as before. The withdraw route and the document fragment stay on the application's own host, because a browser reaches them from its pages.
+
+### Fixed
+
+- **The three sweeps stand in the schedule whatever the database held when the scheduler was resolved.** `dispatch-notices`, `close-objection-windows` and `prune` were registered only where their tables existed at the moment a process resolved the scheduler, and a process resolves it once, often while the application boots. A host that booted before `migrate` read a schedule without them for as long as that process lived, in `schedule:list`, a long-running `schedule:work` or a test that reads the schedule. Each entry now carries the check as a filter, which the scheduler reads when the entry is due: a sweep switched on always stands in the schedule, and it still runs only where its tables are there. A sweep switched off in `legal-consent.schedule.*` stays out of it.
+
 ## [0.51.0] - 2026-10-26
 
 ### Added
@@ -3252,7 +3268,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.51.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.0...HEAD
+[0.52.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.48.0...v0.49.0

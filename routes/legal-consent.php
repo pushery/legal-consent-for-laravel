@@ -18,8 +18,9 @@ use Pushery\LegalConsent\Support\SessionWriteThrottle;
 // working control and did nothing, while the comment above it promised Art. 7(3), withdrawal as
 // easy as the granting was.
 //
-// Withdrawal only. Object and terminate are reachable through the API and the Livewire component;
-// adding them here would widen a public, session-backed surface for a case no bundled view has.
+// Withdrawal only. Object and terminate are reachable through the API and the Livewire components,
+// and the bundled re-consent form offers both while an objection window is open; the framework-agnostic
+// stubs render neither, so a route here would widen a public, session-backed surface for no control.
 //
 // The path is `consent/withdraw`, not `withdraw`, so that turning both ways on cannot collide with
 // the API's `POST {api_prefix}/withdraw`. Two routes registered under one URI do not warn — the
@@ -101,12 +102,25 @@ if (is_string($throttle) && trim($throttle) !== '') {
     array_unshift($stack, 'throttle:'.$throttle);
 }
 
-Route::middleware($stack)
-    ->prefix(is_string($prefix) ? $prefix : 'legal')
-    ->group(function (): void {
-        Route::post('consent', [ConsentController::class, 'store'])->name('legal-consent.api.store');
-        Route::post('withdraw', [ConsentController::class, 'withdraw'])->name('legal-consent.api.withdraw');
-        Route::post('object', [ConsentController::class, 'object'])->name('legal-consent.api.object');
-        Route::post('terminate', [ConsentController::class, 'terminate'])->name('legal-consent.api.terminate');
-        Route::get('status', [ConsentController::class, 'status'])->name('legal-consent.api.status');
-    });
+// The host the API answers on, for an application whose machines call it on a host of their own,
+// such as `api.example.test`. Unset or blank, it answers on every host. Only this way takes a host:
+// the withdraw route and the fragment above answer a browser on the application's own pages.
+//
+// Set on the group rather than on each route afterwards: the router files a route under its host
+// when the route is added, so the host has to be known before.
+$domain = config('legal-consent.routes.api_domain');
+$domain = is_string($domain) ? trim($domain) : '';
+
+$api = Route::middleware($stack)->prefix(is_string($prefix) ? $prefix : 'legal');
+
+if ($domain !== '') {
+    $api->domain($domain);
+}
+
+$api->group(function (): void {
+    Route::post('consent', [ConsentController::class, 'store'])->name('legal-consent.api.store');
+    Route::post('withdraw', [ConsentController::class, 'withdraw'])->name('legal-consent.api.withdraw');
+    Route::post('object', [ConsentController::class, 'object'])->name('legal-consent.api.object');
+    Route::post('terminate', [ConsentController::class, 'terminate'])->name('legal-consent.api.terminate');
+    Route::get('status', [ConsentController::class, 'status'])->name('legal-consent.api.status');
+});

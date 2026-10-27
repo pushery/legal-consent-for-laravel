@@ -481,6 +481,10 @@ return [
     | works: `'60,1'` for sixty a minute, or the name of a limiter you registered. Set it to null
     | to take the limit off entirely.
     |
+    | `api_domain` is the host the JSON API answers on, for an application whose machines call it
+    | on a host of their own, such as `api.example.test`. Left empty it answers on every host. Only
+    | the API takes a host: the withdraw route and the fragment answer a browser on your own pages.
+    |
     | `web_throttle` is the same limit for the session-backed writes: the web route above and the
     | actions of the bundled Livewire components (grant, withdraw, object, terminate). They reach
     | the same append-only ledger, and a Livewire request is one POST with a CSRF token — as
@@ -498,6 +502,7 @@ return [
         'api_prefix' => 'legal',
         'api_middleware' => ['api', 'auth'],
         'api_throttle' => env('LEGAL_CONSENT_API_THROTTLE', '60,1'),
+        'api_domain' => env('LEGAL_CONSENT_API_DOMAIN'),
         'web' => false,
         'web_prefix' => 'legal',
         'web_middleware' => ['web', 'auth'],

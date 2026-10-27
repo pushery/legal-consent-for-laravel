@@ -127,7 +127,7 @@ class DeemedConsentNotice extends ChangeNotification
      */
     private function terminationOwed(): bool
     {
-        return $this->document->offers_termination || $this->hasAdverseChangeItem($this->document);
+        return $this->owesFreeTermination($this->document);
     }
 
     /**

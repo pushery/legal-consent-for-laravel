@@ -21,10 +21,108 @@
         @endif
     </div>
 
+    {{-- The deemed-consent changes that have not taken effect yet, as in the plain view: the notice
+         and the banner send the subject here, so the objection has to be possible here, and after the
+         window the termination the notice promises until the change takes effect stays on offer
+         alone. Each row repeats the notice's own sentences, the termination appears only where the
+         notice named it, and each control only where this mount allows it. Both write an irreversible
+         row, so each asks once in an alert-dialog, as the withdrawal does, never in the native confirm. --}}
+    @php($deemed ??= [])
+    @if ($deemed !== [])
+        <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-objections-heading" class="legal-consent-objections" wire:key="lc-objections">
+            <x-wirekit::heading :level="2" id="lc-objections-heading">{{ __('legal-consent::ui.upcoming_changes_heading') }}</x-wirekit::heading>
+
+            @foreach ($deemed as $item)
+                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale']))
+                <x-wirekit::stack gap="xs" wire:key="lc-deemed-{{ $item['key'] }}">
+                    <x-wirekit::text>
+                        @if ($item['url'] !== null)
+                            <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
+                        @else
+                            <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
+                        @endif
+                        <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                    </x-wirekit::text>
+
+                    @if ($item['objection_date'] !== null)
+                        <x-wirekit::text>{{ __('legal-consent::notifications.deemed.warning', ['deadline' => $item['objection_date']]) }}</x-wirekit::text>
+                    @endif
+
+                    @if ($item['terminable'] && $item['effective_date'] !== null)
+                        <x-wirekit::text>{{ __('legal-consent::notifications.deemed.termination', ['effective' => $item['effective_date']]) }}</x-wirekit::text>
+                    @endif
+
+                    <x-wirekit::row wrap gap="sm">
+                        @if ($item['objectable'])
+                            <x-wirekit::alert-dialog :name="'lc-object-'.$item['key']">
+                                <x-slot:trigger>
+                                    <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.object_for', ['title' => $item['title']])">
+                                        {{ __('legal-consent::ui.object') }}
+                                    </x-wirekit::button>
+                                </x-slot:trigger>
+
+                                <x-wirekit::alert-dialog.title>
+                                    {{ __('legal-consent::ui.object_confirm_title') }}
+                                </x-wirekit::alert-dialog.title>
+
+                                <x-wirekit::alert-dialog.description>
+                                    {{ __('legal-consent::ui.object_confirm_body', ['title' => $item['title']]) }}
+                                </x-wirekit::alert-dialog.description>
+
+                                <x-wirekit::alert-dialog.actions>
+                                    <x-wirekit::alert-dialog.cancel>
+                                        {{ __('legal-consent::ui.cancel') }}
+                                    </x-wirekit::alert-dialog.cancel>
+
+                                    {{-- An echo, not `@js()`, and the busy state bound with its argument:
+                                         see the withdraw button of the settings view for why. --}}
+                                    <x-wirekit::button intent="danger" wire:click="object({{ \Illuminate\Support\Js::from($item['key']) }})" :loading-target="'object('.\Illuminate\Support\Js::from($item['key']).')'" :disable-on-loading="false">
+                                        {{ __('legal-consent::ui.object') }}
+                                    </x-wirekit::button>
+                                </x-wirekit::alert-dialog.actions>
+                            </x-wirekit::alert-dialog>
+                        @endif
+
+                        @if ($item['terminable'])
+                            <x-wirekit::alert-dialog :name="'lc-terminate-'.$item['key']">
+                                <x-slot:trigger>
+                                    <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.terminate_for', ['title' => $item['title']])">
+                                        {{ __('legal-consent::ui.terminate') }}
+                                    </x-wirekit::button>
+                                </x-slot:trigger>
+
+                                <x-wirekit::alert-dialog.title>
+                                    {{ __('legal-consent::ui.terminate_confirm_title') }}
+                                </x-wirekit::alert-dialog.title>
+
+                                <x-wirekit::alert-dialog.description>
+                                    {{ __('legal-consent::ui.terminate_confirm_body', ['title' => $item['title']]) }}
+                                </x-wirekit::alert-dialog.description>
+
+                                <x-wirekit::alert-dialog.actions>
+                                    <x-wirekit::alert-dialog.cancel>
+                                        {{ __('legal-consent::ui.cancel') }}
+                                    </x-wirekit::alert-dialog.cancel>
+
+                                    <x-wirekit::button intent="danger" wire:click="terminate({{ \Illuminate\Support\Js::from($item['key']) }})" :loading-target="'terminate('.\Illuminate\Support\Js::from($item['key']).')'" :disable-on-loading="false">
+                                        {{ __('legal-consent::ui.terminate') }}
+                                    </x-wirekit::button>
+                                </x-wirekit::alert-dialog.actions>
+                            </x-wirekit::alert-dialog>
+                        @endif
+                    </x-wirekit::row>
+                </x-wirekit::stack>
+            @endforeach
+        </x-wirekit::stack>
+    @endif
+
     @if ($pending->isEmpty())
-        <x-wirekit::callout intent="success" icon>
-            {{ __('legal-consent::ui.all_current') }}
-        </x-wirekit::callout>
+        {{-- "Nothing to do" would contradict an open objection window above it. --}}
+        @if ($deemed === [])
+            <x-wirekit::callout intent="success" icon>
+                {{ __('legal-consent::ui.all_current') }}
+            </x-wirekit::callout>
+        @endif
     @else
         <form wire:submit="submit">
             <x-wirekit::stack gap="md">

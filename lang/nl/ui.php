@@ -76,6 +76,18 @@ return [
     'withdraw_confirm_title' => 'Toestemming intrekken?',
     'withdraw_confirm_body' => 'Je toestemming voor ‘:title’ wordt ingetrokken. Dit gaat direct in en doet geen afbreuk aan de rechtmatigheid van de eerdere verwerking.',
     'cancel' => 'Annuleren',
+    // The deemed-consent changes on the re-consent form, the page the notice and the banner send the
+    // subject to, until they take effect. Objecting and terminating each write an irreversible row,
+    // so each asks once.
+    'upcoming_changes_heading' => 'Aankomende contractwijzigingen',
+    'object' => 'Bezwaar maken',
+    'object_for' => 'Bezwaar maken: :title',
+    'terminate' => 'Kosteloos opzeggen',
+    'terminate_for' => 'Kosteloos opzeggen: :title',
+    'object_confirm_title' => 'Bezwaar maken tegen de wijziging?',
+    'object_confirm_body' => 'De wijziging van ‘:title’ geldt dan niet als jouw akkoord. Je bezwaar wordt vastgelegd met het tijdstip waarop je het verstuurt.',
+    'terminate_confirm_title' => 'Kosteloos opzeggen?',
+    'terminate_confirm_body' => 'Je zegt het contract ‘:title’ kosteloos op voordat de wijziging ingaat. Je opzegging wordt vastgelegd met het tijdstip waarop je die verstuurt.',
 
     // Admin screens (LegalTextManager / LegalTextEditor).
     'admin_heading' => 'Juridische teksten',

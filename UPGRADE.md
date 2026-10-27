@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.51.0 → 0.52.0
+
+**Nothing is required of you**, unless you published the re-consent views.
+
+**Publish the re-consent views again if you published them.** The re-consent form now lists every open objection window of a deemed-consent change with a control to object, and the free termination where the notice names one. A copy published before has no such section and keeps showing the form without it: `php artisan vendor:publish --tag=legal-consent-views --force` brings the plain view, `php artisan vendor:publish --tag=legal-consent-wirekit --force` the WireKit one.
+
 ## 0.50.0 → 0.51.0
 
 **Nothing is required of you**, unless you published the plain views, or the ledger is on MySQL.

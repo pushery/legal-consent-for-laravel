@@ -12,8 +12,54 @@
     <p role="status" aria-live="polite" tabindex="-1" wire:key="lc-reconsent-status"
         x-effect="$wire.statusNonce > 0 && $el.focus()"><span wire:key="lc-reconsent-status-{{ $statusNonce }}">{{ $status ?? '' }}</span></p>
 
+    {{-- The deemed-consent changes that have not taken effect yet. The notice's call to action and
+         the banner's "Review or object" both lead here, so this is where the objection has to be
+         possible: a window in which this page takes none runs out, and the change then binds on
+         silence (§ 308 Nr. 5 BGB). After the window, the free termination the notice promises until
+         the change takes effect stays on offer alone. Each row repeats the notice's own sentences.
+         The termination appears only where the notice named it, and each control appears only where
+         this mount allows it. Both write an irreversible row, so each asks once before it does. --}}
+    @php($deemed ??= [])
+    @if ($deemed !== [])
+        <section class="legal-consent-objections" aria-labelledby="lc-objections-heading" wire:key="lc-objections">
+            <h2 id="lc-objections-heading">{{ __('legal-consent::ui.upcoming_changes_heading') }}</h2>
+            <ul>
+                @foreach ($deemed as $item)
+                    @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale']))
+                    <li wire:key="lc-deemed-{{ $item['key'] }}">
+                        @if ($item['url'] !== null)
+                            <a href="{{ $item['url'] }}"@if ($lang !== null) hreflang="{{ $lang }}" lang="{{ $lang }}"@endif target="_blank" rel="noopener noreferrer">{{ $item['title'] }}</a>
+                        @else
+                            <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $item['title'] }}</span>
+                        @endif
+                        (v{{ $item['version'] }})
+                        @if ($item['objection_date'] !== null)
+                            <span>{{ __('legal-consent::notifications.deemed.warning', ['deadline' => $item['objection_date']]) }}</span>
+                        @endif
+                        @if ($item['terminable'] && $item['effective_date'] !== null)
+                            <span>{{ __('legal-consent::notifications.deemed.termination', ['effective' => $item['effective_date']]) }}</span>
+                        @endif
+                        @if ($item['objectable'])
+                            <button type="button" aria-label="{{ __('legal-consent::ui.object_for', ['title' => $item['title']]) }}" wire:click="object(@js($item['key']))" wire:confirm="{{ __('legal-consent::ui.object_confirm_body', ['title' => $item['title']]) }}" wire:loading.attr="aria-busy" wire:target="object(@js($item['key']))">
+                                {{ __('legal-consent::ui.object') }}
+                            </button>
+                        @endif
+                        @if ($item['terminable'])
+                            <button type="button" aria-label="{{ __('legal-consent::ui.terminate_for', ['title' => $item['title']]) }}" wire:click="terminate(@js($item['key']))" wire:confirm="{{ __('legal-consent::ui.terminate_confirm_body', ['title' => $item['title']]) }}" wire:loading.attr="aria-busy" wire:target="terminate(@js($item['key']))">
+                                {{ __('legal-consent::ui.terminate') }}
+                            </button>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        </section>
+    @endif
+
     @if ($pending->isEmpty())
-        <p>{{ __('legal-consent::ui.all_current') }}</p>
+        {{-- "Nothing to do" would contradict an open objection window above it. --}}
+        @if ($deemed === [])
+            <p>{{ __('legal-consent::ui.all_current') }}</p>
+        @endif
     @else
         <form wire:submit="submit">
             @foreach ($pending as $document)
