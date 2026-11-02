@@ -24,6 +24,7 @@ use Pushery\LegalConsent\Exceptions\LegalPublishRefused;
 use Pushery\LegalConsent\Exceptions\LegalReleaseNotReady;
 use Pushery\LegalConsent\Exceptions\LegalSourceDraftCannotBeDiscarded;
 use Pushery\LegalConsent\Exceptions\NoticeTimelineInvertedException;
+use Pushery\LegalConsent\Exceptions\TranslationRefused;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
 use Pushery\LegalConsent\Jobs\TranslateLegalDraft;
 use Pushery\LegalConsent\Livewire\Concerns\AnnouncesStatus;
@@ -314,7 +315,7 @@ final class LegalTextEditor extends Component
 
         try {
             $translated = app(LegalTextTranslator::class)->translate($source->body, $sourceLocale, $this->locale);
-        } catch (TranslatorNotConfigured $e) {
+        } catch (TranslatorNotConfigured|TranslationRefused $e) {
             $this->setStatus($this->notSavedBecause($e));
 
             return;
@@ -356,7 +357,7 @@ final class LegalTextEditor extends Component
      * quote the HTML parser. The status line is for the person who has to act on it, on the screen or
      * through a screen reader.
      */
-    private function notSavedBecause(TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable $refusal): string
+    private function notSavedBecause(TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable|TranslationRefused $refusal): string
     {
         return (string) __('legal-consent::ui.admin_status_not_saved', [
             'reason' => (string) __(DraftRefusal::of($refusal)->label(), DraftRefusal::valuesOf($refusal)),

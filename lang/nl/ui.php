@@ -204,4 +204,6 @@ return [
     'draft_refused_no_translator' => 'voor deze applicatie is geen machinevertaling ingesteld; vertaal de tekst met de hand of vraag een ontwikkelaar om een vertaler aan te sluiten',
     'draft_refused_too_large' => 'de tekst is :size KB, en een juridische tekst mag hoogstens :limit KB zijn',
     'draft_refused_unparsable' => 'de tekst kon niet tot het einde worden gelezen en zou zijn afgekapt; meestal is zeer diep geneste opmaak de oorzaak',
+    'draft_refused_translation_truncated' => 'het antwoord van de vertaler is bij een van zijn grenzen afgekapt, en een vertaling die midden in een clausule stopt wordt niet bewaard; splits of verkort de tekst en probeer het opnieuw, of vertaal hem met de hand',
+    'draft_refused_translation_declined' => 'de vertaler heeft deze tekst geweigerd; probeer het opnieuw of vertaal hem met de hand',
 ];

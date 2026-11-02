@@ -204,4 +204,6 @@ return [
     'draft_refused_no_translator' => 'per questa applicazione non è configurata alcuna traduzione automatica; traduci il testo a mano o chiedi a uno sviluppatore di collegare un traduttore',
     'draft_refused_too_large' => 'il testo è di :size KB, e un testo legale può essere al massimo di :limit KB',
     'draft_refused_unparsable' => 'non è stato possibile leggere il testo fino alla fine e sarebbe stato troncato; la causa abituale è un markup annidato molto in profondità',
+    'draft_refused_translation_truncated' => 'la risposta del traduttore è stata troncata a uno dei suoi limiti, e una traduzione che si ferma a metà di una clausola non viene conservata; dividi o accorcia il testo e riprova, oppure traducilo a mano',
+    'draft_refused_translation_declined' => 'il traduttore ha rifiutato questo testo; riprova oppure traducilo a mano',
 ];

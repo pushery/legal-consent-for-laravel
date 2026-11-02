@@ -18,6 +18,7 @@ use Pushery\LegalConsent\Contracts\LegalTextTranslator;
 use Pushery\LegalConsent\Enums\DraftRefusal;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\LegalDocumentUnparsable;
+use Pushery\LegalConsent\Exceptions\TranslationRefused;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\LegalDraftSet;
@@ -155,7 +156,7 @@ final class TranslateLegalDraft implements ShouldQueue
      * The record keeps the refusal's case and values rather than its message, an English sentence for
      * a log: the worker knows no reader, so the sentence is worded when a screen reads the record.
      */
-    public static function markRefused(string $key, string $locale, TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable $refusal, string $tenant = ''): void
+    public static function markRefused(string $key, string $locale, TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable|TranslationRefused $refusal, string $tenant = ''): void
     {
         Cache::put(self::markerFor($key, $locale, $tenant), [
             'failed' => '',
@@ -255,8 +256,8 @@ final class TranslateLegalDraft implements ShouldQueue
             );
 
             app(LegalDraftWriter::class)->applyTranslation($this->key, $this->locale, $translated, $source->content_hash, $this->actor);
-        } catch (TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable $e) {
-            // The same three the inline path answers for, and they are not re-raised here for a
+        } catch (TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable|TranslationRefused $e) {
+            // The refusals the inline path answers for, and they are not re-raised here for a
             // reason rather than out of tidiness: putting "your translator is not configured" in
             // `failed_jobs` is right for a defect and wrong for a state somebody can fix on the
             // screen they are already looking at. The refusal travels to that screen instead.
