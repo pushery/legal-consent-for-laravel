@@ -76,7 +76,7 @@
 
                                     {{-- An echo, not `@js()`, and the busy state bound with its argument:
                                          see the withdraw button of the settings view for why. --}}
-                                    <x-wirekit::button intent="danger" wire:click="object({{ \Illuminate\Support\Js::from($item['key']) }})" :loading-target="'object('.\Illuminate\Support\Js::from($item['key']).')'" :disable-on-loading="false">
+                                    <x-wirekit::button intent="danger" wire:click="object({{ \Pushery\WireKit\Support\AlpinePayload::from($item['key']) }})" :loading-target="'object('.\Pushery\WireKit\Support\AlpinePayload::from($item['key']).')'" :disable-on-loading="false">
                                         {{ __('legal-consent::ui.object') }}
                                     </x-wirekit::button>
                                 </x-wirekit::alert-dialog.actions>
@@ -104,7 +104,7 @@
                                         {{ __('legal-consent::ui.cancel') }}
                                     </x-wirekit::alert-dialog.cancel>
 
-                                    <x-wirekit::button intent="danger" wire:click="terminate({{ \Illuminate\Support\Js::from($item['key']) }})" :loading-target="'terminate('.\Illuminate\Support\Js::from($item['key']).')'" :disable-on-loading="false">
+                                    <x-wirekit::button intent="danger" wire:click="terminate({{ \Pushery\WireKit\Support\AlpinePayload::from($item['key']) }})" :loading-target="'terminate('.\Pushery\WireKit\Support\AlpinePayload::from($item['key']).')'" :disable-on-loading="false">
                                         {{ __('legal-consent::ui.terminate') }}
                                     </x-wirekit::button>
                                 </x-wirekit::alert-dialog.actions>

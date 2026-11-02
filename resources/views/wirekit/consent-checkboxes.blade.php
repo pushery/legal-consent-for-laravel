@@ -297,7 +297,7 @@
                          it would work. The logic lives in the published script now, where none of
                          those limits apply, and an expression reduced to a call parses under both
                          builds — one template, either policy. --}}
-                    <div x-data="legalConsentDialog(@js($deferred['name']), @js($deferred['dialog']))"
+                    <div x-data="legalConsentDialog({{ \Pushery\WireKit\Support\AlpinePayload::from($deferred['name']) }}, {{ \Pushery\WireKit\Support\AlpinePayload::from($deferred['dialog']) }})"
                          x-on:wirekit-modal-show.window="load($event)"
                          @if ($deferred['lang'] !== null) lang="{{ $deferred['lang'] }}" @endif>
                         <div x-show="state === 'ready'" x-ref="body"></div>
