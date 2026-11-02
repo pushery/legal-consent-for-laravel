@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.52.0 → 0.52.1
+
+**Nothing is required of you**, unless you published the views.
+
+**Publish the views again if you published them.** Eleven controls in seven views wrote their argument with `Js::from()` or `@js()`, which `wirekit:csp-audit` refuses in a directive attribute from WireKit 2.70.0, and a published copy keeps that form until it is replaced: `php artisan vendor:publish --tag=legal-consent-views --force` for the plain views and `php artisan vendor:publish --tag=legal-consent-wirekit --force` for the themed ones.
+
 ## 0.51.0 → 0.52.0
 
 **Nothing is required of you**, unless you published the re-consent views.

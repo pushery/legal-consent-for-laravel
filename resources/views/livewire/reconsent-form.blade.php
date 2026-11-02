@@ -40,12 +40,12 @@
                             <span>{{ __('legal-consent::notifications.deemed.termination', ['effective' => $item['effective_date']]) }}</span>
                         @endif
                         @if ($item['objectable'])
-                            <button type="button" aria-label="{{ __('legal-consent::ui.object_for', ['title' => $item['title']]) }}" wire:click="object(@js($item['key']))" wire:confirm="{{ __('legal-consent::ui.object_confirm_body', ['title' => $item['title']]) }}" wire:loading.attr="aria-busy" wire:target="object(@js($item['key']))">
+                            <button type="button" aria-label="{{ __('legal-consent::ui.object_for', ['title' => $item['title']]) }}" wire:click="object({{ json_encode($item['key'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }})" wire:confirm="{{ __('legal-consent::ui.object_confirm_body', ['title' => $item['title']]) }}" wire:loading.attr="aria-busy" wire:target="object({{ json_encode($item['key'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }})">
                                 {{ __('legal-consent::ui.object') }}
                             </button>
                         @endif
                         @if ($item['terminable'])
-                            <button type="button" aria-label="{{ __('legal-consent::ui.terminate_for', ['title' => $item['title']]) }}" wire:click="terminate(@js($item['key']))" wire:confirm="{{ __('legal-consent::ui.terminate_confirm_body', ['title' => $item['title']]) }}" wire:loading.attr="aria-busy" wire:target="terminate(@js($item['key']))">
+                            <button type="button" aria-label="{{ __('legal-consent::ui.terminate_for', ['title' => $item['title']]) }}" wire:click="terminate({{ json_encode($item['key'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }})" wire:confirm="{{ __('legal-consent::ui.terminate_confirm_body', ['title' => $item['title']]) }}" wire:loading.attr="aria-busy" wire:target="terminate({{ json_encode($item['key'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }})">
                                 {{ __('legal-consent::ui.terminate') }}
                             </button>
                         @endif

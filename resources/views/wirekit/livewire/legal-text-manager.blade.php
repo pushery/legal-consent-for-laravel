@@ -195,15 +195,16 @@
                                              has run, `wire:click` included. The caller's button goes into the
                                              slot as it is, so the release keeps its look rather than the
                                              confirm's destructive one. --}}
-                                        {{-- `{{ Js::from() }}`, NOT `@js()`. A Blade directive inside
-                                             a component tag attribute is never compiled: the tag
-                                             compiler lifts the attribute out as a literal before the
-                                             directive compiler sees it, so the text `@js($key)` is
-                                             what reaches the browser — for every key, with no error
-                                             anywhere, and the release simply never fires. An echo is
-                                             compiled in that position and emits exactly what `@js()`
-                                             emits on a plain element. The plain stub, whose button is
-                                             a real `<button>`, uses the directive. --}}
+                                        {{-- An echo of `AlpinePayload::from()`, NOT `@js()`. A Blade
+                                             directive inside a component tag attribute is never
+                                             compiled: the tag compiler lifts the attribute out as a
+                                             literal before the directive compiler sees it, so the
+                                             text `@js($key)` is what reaches the browser — for every
+                                             key, with no error anywhere, and the release simply never
+                                             fires. An echo is compiled in that position, and
+                                             `AlpinePayload::from()` writes the key as a literal
+                                             Alpine's CSP evaluator reads. The plain stub, whose button
+                                             is a real `<button>`, encodes it with `json_encode()`. --}}
                                         {{-- No busy state here, unlike every other action in these stubs:
                                              the dialog closes right after the click, and this button leaves
                                              the page with it before the response arrives. An `aria-busy` on
@@ -211,7 +212,7 @@
                                              reported by the status region the close reveals. The plain
                                              twin's release button is not in a dialog, stays put, and does
                                              carry the pair. --}}
-                                        <x-wirekit::alert-dialog.confirm wire:click="releaseAll({{ \Illuminate\Support\Js::from($key) }})">
+                                        <x-wirekit::alert-dialog.confirm wire:click="releaseAll({{ \Pushery\WireKit\Support\AlpinePayload::from($key) }})">
                                             <x-wirekit::button>{{ __('legal-consent::ui.admin_release_all') }}</x-wirekit::button>
                                         </x-wirekit::alert-dialog.confirm>
                                     </x-wirekit::alert-dialog.actions>

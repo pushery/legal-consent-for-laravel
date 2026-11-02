@@ -4,6 +4,14 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.1] - 2026-11-01
+
+### Fixed
+
+- **The views pass `wirekit:csp-audit` from WireKit 2.70.0.** Eleven directive attributes in seven views wrote their argument with `Js::from()` or `@js()`, the encoder for a `<script>` block, which the audit of WireKit 2.70.0 refuses in an attribute: the withdraw, grant, objection and termination buttons, the release of a document's texts, and the dialog of a deferred consent. The WireKit views now encode the value with `AlpinePayload::from()`, which writes it as a literal Alpine's CSP evaluator reads, and the plain views, which render without WireKit, with `json_encode()`. A document key reaches its control as before; only its quoting changes, from `'terms'` to `"terms"`.
+
+  **Upgrade:** an application that published the views publishes them again, with `php artisan vendor:publish --tag=legal-consent-views --force` for the plain ones and `--tag=legal-consent-wirekit --force` for the themed ones.
+
 ## [0.52.0] - 2026-10-27
 
 ### Added
@@ -3268,7 +3276,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.1...HEAD
+[0.52.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.0...v0.52.1
 [0.52.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.49.0...v0.50.0
