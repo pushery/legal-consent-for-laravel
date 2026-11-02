@@ -4,6 +4,20 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.53.0] - 2026-11-02
+
+### Added
+
+- **A translator can refuse a text with a reason.** A `LegalTextTranslator` throws `Pushery\LegalConsent\Exceptions\TranslationRefused`, as `truncated()` for an answer cut off at one of its limits or `declined()` for a text it declined, and the editor words it with the next step, inline and from the queue. A queued translation records the refusal for the editor rather than failing its job, so none of them lands in `failed_jobs`. Any other exception still fails the job.
+
+### Changed
+
+- **The re-consent form renders its documents through `consent-checkboxes`.** The title inside the wording links the full text, as at registration, instead of a separate link to read it beside the sentence, and in the WireKit views the text opens in a dialog where `legal-consent.ui.wording_dialog` is on. A host that shows its documents that way can now use the bundled form, objection and termination included. The controls keep the id `legal_{key}` and bind to `accept.{key}` as before. `consent-checkboxes` takes an optional `model` per entry, the key the control binds to under `bind`, and under a binding it keys each entry by its document.
+
+### Fixed
+
+- **The alert-dialogs of the WireKit views render where an application closes every dialog on confirm.** Since WireKit 2.70.0 an alert-dialog refuses `close-on-confirm` without a confirm control, and a dialog that declares nothing takes the application's default. Five of the six dialogs here declared nothing, so under `wirekit.components.alert-dialog.close-on-confirm` set to `true` they threw on the console and fell back with a warning in a request. Each of them closes with its own re-render or form, and now declares `:close-on-confirm="false"`. A published copy of these views keeps its old tags: publish them again, or add the attribute there.
+
 ## [0.52.1] - 2026-11-01
 
 ### Fixed
@@ -3276,7 +3290,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.1...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.53.0...HEAD
+[0.53.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.1...v0.53.0
 [0.52.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.0...v0.52.1
 [0.52.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.50.0...v0.51.0

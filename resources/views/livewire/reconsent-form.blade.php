@@ -62,45 +62,28 @@
         @endif
     @else
         <form wire:submit="submit">
-            @foreach ($pending as $document)
-                {{-- The wording can be in a language this page is not in: the resolver falls back
-                     to `fallback_locale` and then `default_locale`, so a mandatory document a
-                     visitor's language does not have appears in its own. Without `lang` a screen
-                     reader speaks it with the page's phonetics — on the one screen the subject
-                     cannot leave without agreeing (Art. 7(1)/(2), WCAG 3.1.2). See
-                     ContentLanguage; null when it matches the page, and nothing is emitted. --}}
-                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document->locale))
-                {{-- `wire:key` on the one loop that shrinks and carries state: `pending` goes
-                     [marketing, privacy, terms] → [privacy, terms] after a submit, so the node
-                     at index 0 changes identity from `legal_marketing` to `legal_privacy`. And the
-                     server renders no `checked` attribute — a ticked box lives only as a DOM
-                     property, so there is nothing in the markup for a keyless morph to reset it
-                     with. A box that stayed ticked across that swap is a pre-ticked checkbox the
-                     subject did not tick in this round, which is the Planet49 condition (C-673/17)
-                     this file's own header cites.
-                     Keyed on the document, not on the index — the index is precisely what moves. --}}
-                <div class="legal-consent-field" wire:key="lc-pending-{{ $document->key }}"@if ($lang !== null) lang="{{ $lang }}"@endif>
-                    <label for="legal_{{ $document->key }}">
-                        <input
-                            type="checkbox"
-                            id="legal_{{ $document->key }}"
-                            wire:model="accept.{{ $document->key }}"
-                            value="1"
-                        >
-                        <span>{{ $document->ui_wording }}</span>
-                    </label>
-
-                    {{-- The subject cannot leave this screen without agreeing, so they must be able
-                         to read what they are agreeing to (Art. 7(2), recital 42). The link appears
-                         only when the host configured `legal-consent.document_url`; without it the
-                         wording renders alone, exactly as before. --}}
-                    @if (isset($urls[$document->key]))
-                        <a href="{{ $urls[$document->key] }}" target="_blank" rel="noopener noreferrer">
-                            {{ __('legal-consent::ui.read_document', ['title' => $document->title]) }}
-                        </a>
-                    @endif
-                </div>
-            @endforeach
+            {{-- The documents go through consent-checkboxes, the registration's own view, so what a
+                 host relies on there holds here too: the title inside the wording links the full text
+                 (the WireKit views open it in a dialog where `legal-consent.ui.wording_dialog` is on).
+                 `wording` is the snapshotted `ui_wording`, the sentence the ledger records, and renders
+                 verbatim. `field` keeps the id and the name `legal_{key}`, and `model` binds each box to
+                 `accept.{key}`, the property ReConsentForm reads. Under that binding the view keys each
+                 entry by its document, which this list needs because a submit shrinks it. No box is
+                 pre-ticked: `accept` starts empty (Planet49, C-673/17). Included by the package's name,
+                 so a host's published consent-checkboxes renders here as it does at registration. --}}
+            @include('legal-consent::consent-checkboxes', [
+                'documents' => $pending->map(static fn ($document): array => [
+                    'key' => $document->key,
+                    'title' => $document->title,
+                    'wording' => $document->ui_wording,
+                    'url' => $urls[$document->key] ?? null,
+                    'locale' => $document->locale,
+                    'required' => false,
+                    'field' => 'legal_'.$document->key,
+                    'model' => $document->key,
+                ])->values()->all(),
+                'bind' => 'accept',
+            ])
 
             {{-- `aria-busy`, not `disabled`, and the focus is why. `wire:loading.attr="disabled"` is the
                  common idiom, but it blurs the very button the subject just activated, so focus falls to

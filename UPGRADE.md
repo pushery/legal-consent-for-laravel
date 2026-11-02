@@ -4,6 +4,14 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.52.1 → 0.53.0
+
+**Nothing is required of you**, unless you published the views or wrote your own translator.
+
+**Publish the views again if you published them.** The re-consent form now renders the documents it asks for through `consent-checkboxes`, so the title inside the wording links the full text as it does at registration, and `consent-checkboxes` binds an entry to the key its `model` names and keys it by its document under a binding. In the WireKit views every alert-dialog now declares how it closes, so an application that sets `close-on-confirm` to `true` for every dialog no longer makes them throw. A published copy keeps the old form until it is replaced: `php artisan vendor:publish --tag=legal-consent-views --force` for the plain views and `php artisan vendor:publish --tag=legal-consent-wirekit --force` for the themed ones.
+
+**A translator of your own may refuse a text.** Throw `Pushery\LegalConsent\Exceptions\TranslationRefused` from your `LegalTextTranslator` where the answer was cut off or the model declined, and the editor shows the reason instead of a failed job. A translator that never throws it works as before.
+
 ## 0.52.0 → 0.52.1
 
 **Nothing is required of you**, unless you published the views.

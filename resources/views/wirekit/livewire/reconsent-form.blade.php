@@ -54,7 +54,8 @@
 
                     <x-wirekit::row wrap gap="sm">
                         @if ($item['objectable'])
-                            <x-wirekit::alert-dialog :name="'lc-object-'.$item['key']">
+                            {{-- It closes with the re-render its action causes, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
+                            <x-wirekit::alert-dialog :name="'lc-object-'.$item['key']" :close-on-confirm="false">
                                 <x-slot:trigger>
                                     <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.object_for', ['title' => $item['title']])">
                                         {{ __('legal-consent::ui.object') }}
@@ -84,7 +85,8 @@
                         @endif
 
                         @if ($item['terminable'])
-                            <x-wirekit::alert-dialog :name="'lc-terminate-'.$item['key']">
+                            {{-- It closes with the re-render its action causes, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
+                            <x-wirekit::alert-dialog :name="'lc-terminate-'.$item['key']" :close-on-confirm="false">
                                 <x-slot:trigger>
                                     <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.terminate_for', ['title' => $item['title']])">
                                         {{ __('legal-consent::ui.terminate') }}
@@ -126,33 +128,28 @@
     @else
         <form wire:submit="submit">
             <x-wirekit::stack gap="md">
-                @foreach ($pending as $document)
-                    {{-- `lang` on the field, because the wording reaches the checkbox as a prop and
-                         everything inside is that document's text anyway. See the plain gate. --}}
-                    @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document->locale))
-                    {{-- `wire:key` for the same reason as the plain gate: this loop shrinks, so a
-                         keyless morph reuses the node at index 0 for a different document, and a
-                         ticked box lives only as a DOM property because no `checked` attribute is
-                         rendered. Keyed on the document, not the index. --}}
-                    <x-wirekit::stack gap="xs" wire:key="lc-pending-{{ $document->key }}" :lang="$lang">
-                        <x-wirekit::checkbox
-                            :name="'legal_'.$document->key"
-                            :id="'legal_'.$document->key"
-                            wire:model="accept.{{ $document->key }}"
-                            value="1"
-                            :label="$document->ui_wording"
-                        />
-
-                        {{-- The subject cannot leave this screen without agreeing, so they must be
-                             able to read what they are agreeing to (Art. 7(2), recital 42). Rendered
-                             only when the host configured `legal-consent.document_url`. --}}
-                        @if (isset($urls[$document->key]))
-                            <x-wirekit::link :href="$urls[$document->key]" external>
-                                {{ __('legal-consent::ui.read_document', ['title' => $document->title]) }}
-                            </x-wirekit::link>
-                        @endif
-                    </x-wirekit::stack>
-                @endforeach
+                {{-- The documents go through consent-checkboxes, the registration's own view, so what a
+                     host relies on there holds here too: the title inside the wording links the full text,
+                     and with `legal-consent.ui.wording_dialog` the text opens in a dialog. `wording` is the
+                     snapshotted `ui_wording`, the sentence the ledger records, and renders verbatim. `field`
+                     keeps the id and the name `legal_{key}`, `model` binds each box to `accept.{key}`, the
+                     property ReConsentForm reads, and under that binding the view keys each entry by its
+                     document, which this list needs because a submit shrinks it. No box is pre-ticked:
+                     `accept` starts empty (Planet49, C-673/17). Included by the package's name, so a host's
+                     published consent-checkboxes renders here as it does at registration. --}}
+                @include('legal-consent::consent-checkboxes', [
+                    'documents' => $pending->map(static fn ($document): array => [
+                        'key' => $document->key,
+                        'title' => $document->title,
+                        'wording' => $document->ui_wording,
+                        'url' => $urls[$document->key] ?? null,
+                        'locale' => $document->locale,
+                        'required' => false,
+                        'field' => 'legal_'.$document->key,
+                        'model' => $document->key,
+                    ])->values()->all(),
+                    'bind' => 'accept',
+                ])
 
                 {{-- This button has no Livewire action of its own: the <form> carries `wire:submit`. On
                      such a button x-wirekit::button reads `loading`, which `loading-target` implies, as a

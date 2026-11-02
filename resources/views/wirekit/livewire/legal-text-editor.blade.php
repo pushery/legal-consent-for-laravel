@@ -144,7 +144,8 @@
                  confirm: the same reasoning the withdrawal on the settings screen writes down, and
                  the same reason it is not a plain button. Discarding is not undoable from here. --}}
             @if (! $isSource && $reviewState !== null)
-                <x-wirekit::alert-dialog name="lc-editor-discard">
+                {{-- It closes with the re-render its action causes, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
+                <x-wirekit::alert-dialog name="lc-editor-discard" :close-on-confirm="false">
                     <x-slot:trigger>
                         <x-wirekit::button intent="danger" surface="outline">{{ __('legal-consent::ui.admin_discard') }}</x-wirekit::button>
                     </x-slot:trigger>

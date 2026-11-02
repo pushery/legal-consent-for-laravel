@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Contracts;
 
+use Pushery\LegalConsent\Exceptions\TranslationRefused;
 use Pushery\LegalConsent\Support\LegalDraftWriter;
 
 /**
@@ -30,10 +31,18 @@ interface LegalTextTranslator
      * jurisdiction. This is a translation, not legal drafting: a model that "improves" a contract
      * clause produces a different contract.
      *
+     * An answer that leaves nothing to store is thrown rather than returned, as a {@see TranslationRefused}:
+     * `TranslationRefused::truncated()` for an answer cut off at one of the translator's limits, of its length or
+     * of its time, and `TranslationRefused::declined()` for a text it declined. The editor says why and what to do
+     * next, and a queued translation records it for the editor rather than failing its job. A translation that
+     * stops in the middle of a clause must never be returned. Any other exception is a defect and fails as one.
+     *
      * @param  string  $html  the source text, already sanitized
      * @param  string  $sourceLocale  the locale $html is written in
      * @param  string  $targetLocale  the locale to translate into
      * @return string an HTML fragment; the caller re-sanitizes before storage
+     *
+     * @throws TranslationRefused
      */
     public function translate(string $html, string $sourceLocale, string $targetLocale): string;
 }

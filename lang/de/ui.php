@@ -204,4 +204,6 @@ return [
     'draft_refused_no_translator' => 'für diese Anwendung ist keine maschinelle Übersetzung eingerichtet; übersetze den Text von Hand oder bitte die Entwicklung, einen Übersetzer anzubinden',
     'draft_refused_too_large' => 'der Text hat :size KB, und ein Rechtstext darf höchstens :limit KB haben',
     'draft_refused_unparsable' => 'der Text konnte nicht bis zum Ende gelesen werden und wäre abgeschnitten worden; meist ist sehr tief verschachteltes Markup die Ursache',
+    'draft_refused_translation_truncated' => 'die Antwort des Übersetzers wurde an einer seiner Grenzen abgeschnitten, und eine Übersetzung, die mitten in einer Klausel endet, wird nicht übernommen; teile oder kürze den Text und versuche es noch einmal, oder übersetze ihn von Hand',
+    'draft_refused_translation_declined' => 'der Übersetzer hat diesen Text abgelehnt; versuche es noch einmal oder übersetze ihn von Hand',
 ];

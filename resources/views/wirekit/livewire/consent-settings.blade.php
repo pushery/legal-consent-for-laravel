@@ -135,7 +135,8 @@
                             {{-- A withdrawal is irreversible: it appends a Withdrawn row to an
                                  append-only ledger. That earns a real confirmation — an
                                  alert-dialog, never the unstyled native browser confirm. --}}
-                            <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']">
+                            {{-- It closes with the re-render its action causes, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
+                            <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']" :close-on-confirm="false">
                                 <x-slot:trigger>
                                     <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
                                         @if (filled($icons['withdraw']))

@@ -146,7 +146,8 @@
                              append-only ledger and cannot be taken back. That earns a real
                              confirmation — an alert-dialog, never the native browser confirm, which
                              renders unstyled and outside the design system. --}}
-                        <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']">
+                        {{-- It closes with the form it submits, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
+                        <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']" :close-on-confirm="false">
                             <x-slot:trigger>
                                 <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
                                     {{ __('legal-consent::ui.withdraw') }}

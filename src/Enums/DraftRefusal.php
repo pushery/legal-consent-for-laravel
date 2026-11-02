@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Enums;
 
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\LegalDocumentUnparsable;
+use Pushery\LegalConsent\Exceptions\TranslationRefused;
 use Pushery\LegalConsent\Exceptions\TranslatorNotConfigured;
 
 /**
@@ -27,11 +28,18 @@ enum DraftRefusal: string
     /** The HTML parser stopped before the end of the text, so the result would be a fragment. */
     case Unparsable = 'unparsable';
 
-    public static function of(TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable $refusal): self
+    /** The translator's answer reached one of its limits before the text ended, so no part of it is kept. */
+    case TranslationTruncated = 'translation_truncated';
+
+    /** The translator declined the text. */
+    case TranslationDeclined = 'translation_declined';
+
+    public static function of(TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable|TranslationRefused $refusal): self
     {
         return match (true) {
             $refusal instanceof TranslatorNotConfigured => self::NoTranslator,
             $refusal instanceof LegalDocumentTooLarge => self::TooLarge,
+            $refusal instanceof TranslationRefused => $refusal->truncated ? self::TranslationTruncated : self::TranslationDeclined,
             default => self::Unparsable,
         };
     }
@@ -44,7 +52,7 @@ enum DraftRefusal: string
      *
      * @return array<string, int>
      */
-    public static function valuesOf(TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable $refusal): array
+    public static function valuesOf(TranslatorNotConfigured|LegalDocumentTooLarge|LegalDocumentUnparsable|TranslationRefused $refusal): array
     {
         if (! $refusal instanceof LegalDocumentTooLarge) {
             return [];

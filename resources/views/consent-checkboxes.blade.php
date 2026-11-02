@@ -35,6 +35,13 @@
       - The accept-time hash below is inert under a binding: Livewire submits no form, so a
         hidden input is never sent. A bound host carries the fingerprint in its own state and
         hands it to the recorder itself.
+      - An entry may name `model`, the key it binds to under `$bind`, and `field` then stays the
+        id and the name. The re-consent form uses it: ReConsentForm keys `accept` by document,
+        while its controls keep the id `legal_{key}`.
+      - Under a binding each entry carries a `wire:key` after its document. A list that a
+        submit shrinks, as the re-consent form's does, would otherwise let Livewire's morph
+        hand a ticked box to the document that moves into its place, and that is a box the
+        subject did not tick (Planet49).
 
     `field` is the input name, and it comes from the item rather than from this template. A
     checklist item's `->toArray()` carries it, and RegistrationRules validates exactly that name.
@@ -207,7 +214,7 @@
 
          The admin editor stub carries the same note. Here there is one touch target per document,
          on the first view an installation usually publishes. --}}
-    <div class="legal-consent-field">
+    <div class="legal-consent-field"@if ($bindTo !== null) wire:key="lc-field-{{ $document['key'] }}"@endif>
         <label for="{{ $field }}">
             <input
                 type="checkbox"
@@ -226,7 +233,7 @@
                      Dropped entirely when `$bind` names a Livewire property: there `old()` is
                      empty across a commit anyway, and the attribute would re-assert a stale
                      value against the bound one on every render. --}}
-                @if ($bindTo === null)@checked(old($field))@else wire:model="{{ $bindTo }}.{{ $field }}"@endif
+                @if ($bindTo === null)@checked(old($field))@else wire:model="{{ $bindTo }}.{{ $document['model'] ?? $field }}"@endif
                 @if ($document['required']) required @endif
                 @if ($hasError) aria-invalid="true" @endif
                 @if ($describedByIds !== '') aria-describedby="{{ $describedByIds }}" @endif

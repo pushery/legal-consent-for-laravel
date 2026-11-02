@@ -209,4 +209,6 @@ return [
     'draft_refused_no_translator' => 'no machine translation is set up for this application; translate the text by hand, or ask a developer to connect a translator',
     'draft_refused_too_large' => 'the text has :size KB, and a legal text can have at most :limit KB',
     'draft_refused_unparsable' => 'the text could not be read to its end and would have been cut short; markup nested very deeply is the usual cause',
+    'draft_refused_translation_truncated' => 'the answer of the translator was cut off at one of its limits, and a translation that stops in the middle of a clause is not kept; split or shorten the text and try again, or translate it by hand',
+    'draft_refused_translation_declined' => 'the translator declined this text; try again, or translate it by hand',
 ];

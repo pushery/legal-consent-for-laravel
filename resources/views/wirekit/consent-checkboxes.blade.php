@@ -23,7 +23,9 @@
     $bind (optional): the name of a Livewire property holding one entry per field. Given, each
     control binds to `{$bind}.{$field}` and the `old()` restore is dropped. Keyed by field rather
     than by key, the Planet49 invariant moves to the host's initial value, and the accept-time
-    hash goes inert — the plain stub carries the full reasoning for all three.
+    hash goes inert — the plain stub carries the full reasoning for all three. An entry may name
+    `model` for the key it binds to under `$bind`, and under a binding each entry carries a
+    `wire:key` after its document; the plain stub says why for both.
 
     `field` is the input name and comes from the item, never from this template — see the plain
     stub for why building it as `legal_{key}` broke the age attestation.
@@ -67,7 +69,7 @@
              `:attributes` is the form that regex rewrites to, so it is the same thing said
              directly. An empty bag renders nothing. --}}
         @php($binding = new \Illuminate\View\ComponentAttributeBag(
-            $bindTo !== null ? ['wire:model' => $bindTo.'.'.$field] : []
+            $bindTo !== null ? ['wire:model' => $bindTo.'.'.($document['model'] ?? $field)] : []
         ))
         {{-- Same resolution as the plain stub, and it has to happen here for the same reason: the
              shape this field takes decides whether `aria-describedby` may point at the link. Where
@@ -161,7 +163,9 @@
              trimmed — the parts are joined with a separator whether or not they are there, so an
              absent one leaves a double space inside the value. --}}
         @php($describedByIds = (string) preg_replace('/\\s+/', ' ', trim(($cut === null && ($document['url'] ?? null) !== null && $wordingLink === null ? $field.'_link' : '').' '.($cut === null ? '' : implode(' ', array_map(static fn (array $member): string => $memberLinkId($member), array_filter($cut->unlinked, static fn (array $member): bool => ($member['url'] ?? null) !== null)))).' '.trim((string) ($describedBy ?? '')))))
-        <x-wirekit::stack gap="xs" class="legal-consent-field" :lang="$lang">
+        {{-- The key under a binding, as a bag for the reason the binding above is one. --}}
+        @php($fieldKey = new \Illuminate\View\ComponentAttributeBag($bindTo !== null ? ['wire:key' => 'lc-field-'.$document['key']] : []))
+        <x-wirekit::stack gap="xs" class="legal-consent-field" :lang="$lang" :attributes="$fieldKey">
             {{-- The wording is the snapshotted consent text — it is what gets recorded in the
                  ledger as what the subject agreed to, so it renders verbatim as the label. --}}
             <x-wirekit::checkbox
