@@ -48,6 +48,9 @@ enum PublishRefusal: string
     /** A change class longer than the column it is frozen into. */
     case ChangeClassTooLong = 'change_class_too_long';
 
+    /** A heading that would be nothing but the document's key, because nothing names it in that language. */
+    case TitleIsTheKey = 'title_is_the_key';
+
     /**
      * The translation key of the sentence that words this refusal for a person.
      *

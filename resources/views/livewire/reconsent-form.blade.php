@@ -85,6 +85,15 @@
                 'bind' => 'accept',
             ])
 
+            {{-- A submit with nothing ticked, as an error between the boxes and the button, announced
+                 on its own and keyed by the error nonce so a second one is heard again. The boxes
+                 still unticked carry the error of their own field. Read as consent-checkboxes reads
+                 its errors: a view rendered outside a request has no `$errors` at all. --}}
+            @php($lcIncomplete = (string) (($errors ?? null)?->first('accept') ?? ''))
+            @if ($lcIncomplete !== '')
+                <p role="alert" class="legal-consent-error" wire:key="lc-reconsent-incomplete-{{ $errorNonce }}">{{ $lcIncomplete }}</p>
+            @endif
+
             {{-- `aria-busy`, not `disabled`, and the focus is why. `wire:loading.attr="disabled"` is the
                  common idiom, but it blurs the very button the subject just activated, so focus falls to
                  <body> for the whole in-flight window — the same WCAG 2.4.3 failure the status region's

@@ -31,6 +31,8 @@ use Pushery\LegalConsent\Console\PruneExpiredConsentRecordsCommand;
 use Pushery\LegalConsent\Console\PublishDocumentCommand;
 use Pushery\LegalConsent\Console\RenotifyVersionCommand;
 use Pushery\LegalConsent\Console\RerenderCommand;
+use Pushery\LegalConsent\Console\ReviewCommand;
+use Pushery\LegalConsent\Console\StatusCommand;
 use Pushery\LegalConsent\Console\VerifyDocumentsCommand;
 use Pushery\LegalConsent\Console\VerifyLedgerCommand;
 use Pushery\LegalConsent\Content\LegalHtmlSanitizer;
@@ -438,6 +440,8 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 VerifyDocumentsCommand::class,
                 VerifyLedgerCommand::class,
                 DoctorCommand::class,
+                StatusCommand::class,
+                ReviewCommand::class,
             ]);
         }
     }

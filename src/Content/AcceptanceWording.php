@@ -24,10 +24,44 @@ final class AcceptanceWording
 {
     public static function for(string $documentKey, string $locale): ?string
     {
+        return self::first(["legal-consent::wording.{$documentKey}", 'legal-consent::wording.default'], $locale);
+    }
+
+    /**
+     * The document's own sentence, without the generic `default` one, or null when the translations
+     * hold none for it in this language.
+     */
+    public static function own(string $documentKey, string $locale): ?string
+    {
+        return self::first(["legal-consent::wording.{$documentKey}"], $locale);
+    }
+
+    /**
+     * Whether `$sentence` is the generic one, asked for because the document has no sentence of its
+     * own in this language.
+     *
+     * A document the package does not ship starts out that way: it has no line until the application
+     * writes one. The generic sentence names no document, and frozen into a version it is what every
+     * consent under that version records, so the commands that show a release name it.
+     */
+    public static function isGeneric(string $documentKey, string $locale, ?string $sentence): bool
+    {
+        return $sentence !== null
+            && self::own($documentKey, $locale) === null
+            && $sentence === self::first(['legal-consent::wording.default'], $locale);
+    }
+
+    /**
+     * The first of `$lines` the translations hold in the locale or its language, in that order.
+     *
+     * @param  list<string>  $lines
+     */
+    private static function first(array $lines, string $locale): ?string
+    {
         $translator = app('translator');
 
         foreach (self::languages($locale) as $candidate) {
-            foreach (["legal-consent::wording.{$documentKey}", 'legal-consent::wording.default'] as $line) {
+            foreach ($lines as $line) {
                 $translated = $translator->get($line, [], $candidate, false);
 
                 if (is_string($translated) && $translated !== $line && trim($translated) !== '') {

@@ -23,6 +23,7 @@ use Pushery\LegalConsent\Livewire\Concerns\WordsPublishRefusals;
 use Pushery\LegalConsent\Livewire\Concerns\WordsReleaseStatus;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\DocumentMatrix;
+use Pushery\LegalConsent\Support\DocumentTitle;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDraftSet;
 
@@ -201,6 +202,9 @@ final class LegalTextManager extends Component
                 // The languages a release leaves out keep the version they already have live. The
                 // screen names them beside the button, so the release is a decision somebody saw.
                 'left_out' => array_values(array_diff($this->locales(), $covered)),
+                // The heading each language's version would freeze, so a key standing in for a title
+                // is seen before the click rather than in the refusal after it.
+                'headings' => array_combine($covered, array_map(static fn (string $locale): string => DocumentTitle::for($key, $locale), $covered)),
             ];
         }
 

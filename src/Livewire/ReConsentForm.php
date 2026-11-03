@@ -57,6 +57,13 @@ final class ReConsentForm extends Component
     public array $accept = [];
 
     /**
+     * A render nonce for the error of a submit with nothing ticked, so a second such submit is
+     * announced again: the alert is keyed by it, and a new key is a new element. Unlocked for the
+     * reason `$statusNonce` is: a client that bumps it only re-announces what the server said.
+     */
+    public int $errorNonce = 0;
+
+    /**
      * The content hash of each shown document, captured at render and persisted across the Livewire
      * request. Passed at submit so acceptance is guarded against a version released mid-session
      * (accept-time TOCTOU).
@@ -179,6 +186,10 @@ final class ReConsentForm extends Component
 
     public function submit(): void
     {
+        // The marks of an earlier empty submit belong to that submit: a box ticked since then is
+        // not unticked any more, and every outcome below says what this one found.
+        $this->resetErrorBag();
+
         $subject = $this->subject();
 
         if (! $subject instanceof Model) {
@@ -265,9 +276,18 @@ final class ReConsentForm extends Component
                 $this->redirect($target);
             }
         } else {
-            // Nothing was ticked: with no status the submit reads as a dead no-op. Announce a prompt
-            // so the subject learns their click registered and that a box still needs ticking.
-            $this->setStatus(__('legal-consent::ui.reconsent_none_selected'));
+            // Nothing was ticked: with no answer the submit reads as a dead no-op. It is answered as
+            // the error it is, in the view's alert between the boxes and the button, and every box
+            // still unticked is marked by the error filed under its field, which the checkbox turns
+            // into its error state and `aria-invalid`. The alert announces itself, so the status
+            // region is emptied rather than set, and the focus stays on the button just pressed.
+            foreach ($this->pendingFor($subject) as $document) {
+                $this->addError('legal_'.$document->key, __('legal-consent::ui.reconsent_box_unticked'));
+            }
+
+            $this->addError('accept', __('legal-consent::ui.reconsent_none_selected'));
+            $this->status = '';
+            $this->errorNonce++;
         }
     }
 
