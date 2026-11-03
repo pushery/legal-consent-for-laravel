@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Exceptions;
 
+use Pushery\LegalConsent\Enums\BlockingReason;
 use RuntimeException;
 
 /**
@@ -28,6 +29,28 @@ final class LegalDocumentNotFound extends RuntimeException
 
         $exception = new self("No legal document found for type '{$type}' and locale '{$locale}'{$where}.");
         $exception->reference = $reference;
+
+        return $exception;
+    }
+
+    /**
+     * The draft store's refusal of one language, with its reason and the command that moves it on.
+     *
+     * The plain sentence of {@see forSource()} read like a missing text where the text was there and
+     * waited for a sign-off, and an operator on a server could not tell which. It stays the opening
+     * of this message, so whatever matched it before still does.
+     */
+    public static function inTheDraftStore(string $type, string $locale, BlockingReason $reason): self
+    {
+        $next = match ($reason) {
+            BlockingReason::NoDraft => "Write it in the editor, or fill the store from the source files with php artisan legal-consent:draft-from-source {$type}.",
+            BlockingReason::NotReviewed => "Sign it off in the editor, or with php artisan legal-consent:review {$type} --locales={$locale} --by=<who reviewed it>.",
+            BlockingReason::StaleTranslation => "Review it again against the changed source, in the editor or with php artisan legal-consent:review {$type} --locales={$locale} --by=<who reviewed it>.",
+            default => '',
+        };
+
+        $exception = new self(rtrim("No legal document found for type '{$type}' and locale '{$locale}' at [legal_drafts]: {$reason->value}. {$next}"));
+        $exception->reference = 'legal_drafts';
 
         return $exception;
     }

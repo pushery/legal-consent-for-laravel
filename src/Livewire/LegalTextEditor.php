@@ -9,12 +9,15 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
+use Pushery\LegalConsent\Content\AcceptanceWording;
 use Pushery\LegalConsent\Contracts\LegalTextTranslator;
 use Pushery\LegalConsent\Contracts\NamesLegalTexts;
 use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\DraftRefusal;
+use Pushery\LegalConsent\Enums\LeadTimeBasis;
 use Pushery\LegalConsent\Enums\NoticeMode;
+use Pushery\LegalConsent\Enums\ReviewState;
 use Pushery\LegalConsent\Exceptions\LeadTimeTooShortException;
 use Pushery\LegalConsent\Exceptions\LegalDocumentTooLarge;
 use Pushery\LegalConsent\Exceptions\LegalDocumentUnparsable;
@@ -32,9 +35,13 @@ use Pushery\LegalConsent\Livewire\Concerns\AuthorizesLegalAdmin;
 use Pushery\LegalConsent\Livewire\Concerns\NamesChangedSentences;
 use Pushery\LegalConsent\Livewire\Concerns\WordsPublishRefusals;
 use Pushery\LegalConsent\Livewire\Concerns\WordsReleaseStatus;
+use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Models\LegalDraft;
 use Pushery\LegalConsent\Support\CalendarDate;
 use Pushery\LegalConsent\Support\DocumentMatrix;
+use Pushery\LegalConsent\Support\DocumentTitle;
+use Pushery\LegalConsent\Support\LeadTime;
+use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\LegalDocumentReleaser;
 use Pushery\LegalConsent\Support\LegalDraftSet;
 use Pushery\LegalConsent\Support\LegalDraftWriter;
@@ -85,6 +92,11 @@ final class LegalTextEditor extends Component
      * grid action is the wrong amount of friction for that.
      *
      * Empty strings rather than nulls because they are bound to date inputs, which submit "".
+     *
+     * For a contract the form opens on a window that already holds: announced today, the objection
+     * deadline on the first day the publisher accepts for the regime, effective the day after
+     * ({@see fillWindow()}). The later two follow the announcement and the regime until somebody
+     * sets them by hand.
      */
     public string $announceAt = '';
 
@@ -99,6 +111,37 @@ final class LegalTextEditor extends Component
 
     /** Whether the unmodified version stays on offer to whoever objects. */
     public bool $keepsUnmodified = false;
+
+    /**
+     * Whether the dialog of "save and publish" is open. A view state bound to the modal; the
+     * confirmation derives everything it releases itself, so a client that opens it changes nothing.
+     */
+    public bool $releaseDialog = false;
+
+    /** The scope of the WireKit view's unsaved hint around the text, counted as saved by a save. */
+    public const string UNSAVED_TEXT = 'legal-text';
+
+    /** The scope of the unsaved hint around the release form, counted as saved by a release. */
+    public const string UNSAVED_RELEASE = 'legal-release';
+
+    /**
+     * The mode the dialog releases in, a NoticeMode value. Chosen by the operator; confirmRelease()
+     * takes only a mode the document's type allows, and the publisher refuses any other.
+     */
+    public string $releaseMode = '';
+
+    /**
+     * Whether somebody set the objection deadline by hand, so the window no longer moves it.
+     *
+     * Locked, because only the hook that hears the field writes it: a client that set it would only
+     * stop its own form from following the announcement.
+     */
+    #[Locked]
+    public bool $deadlineChosen = false;
+
+    /** Whether somebody set the effective date by hand. Locked for the reason above. */
+    #[Locked]
+    public bool $enforceChosen = false;
 
     /**
      * Which legal regime the change is being made under — one of the publisher's own.
@@ -234,9 +277,112 @@ final class LegalTextEditor extends Component
         $draft = LegalDraftSet::for($documentKey)->draft($locale);
         $this->heldRevision = $this->revisionOf($draft);
         $this->replaceBody($draft instanceof LegalDraft ? $draft->body : '');
+
+        // A contract opens its objection window on dates that already hold. A contract's terms under
+        // German law are German standard terms, so the regime starts there and stays a choice.
+        if ($this->documentType()->allowsDeemedConsent()) {
+            $this->regime = 'bgb_agb';
+            $this->announceAt = CarbonImmutable::today()->toDateString();
+            $this->fillWindow();
+        }
+    }
+
+    /** The announcement moved, so the dates nobody set by hand move with it. */
+    public function updatedAnnounceAt(): void
+    {
+        $this->fillWindow();
+    }
+
+    /** The regime decides the minimum, so the dates nobody set by hand follow it. */
+    public function updatedRegime(): void
+    {
+        $this->fillWindow();
+    }
+
+    /** A deadline set by hand stays, and the effective date follows it until it is set too. */
+    public function updatedObjectionDeadline(): void
+    {
+        $this->deadlineChosen = true;
+        $this->fillWindow();
+    }
+
+    /** An effective date set by hand stays. */
+    public function updatedEnforceAt(): void
+    {
+        $this->enforceChosen = true;
     }
 
     public function save(): void
+    {
+        // A status message after a save — WCAG 4.1.3: an action that changes the record announces
+        // its result. A refused save has said why already, and saveAndRelease() announces the dialog
+        // it opens instead.
+        if ($this->saveDraft()) {
+            $this->setStatus(__('legal-consent::ui.admin_status_saved'));
+        }
+    }
+
+    /**
+     * Save the draft and open the dialog that shows what a release of it would do: the languages,
+     * the version it becomes, the mode with its consequence, the dates and the regime. The release
+     * itself waits for the confirmation in the dialog ({@see confirmRelease()}).
+     *
+     * For the standard update that is made again and again: saving, signing off each language and
+     * releasing from the overview were three screens, and what the release would set in motion was
+     * shown on none of them before the press.
+     */
+    public function saveAndRelease(): void
+    {
+        if (! $this->saveDraft()) {
+            return;
+        }
+
+        $offered = array_map(static fn (NoticeMode $mode): string => $mode->value, $this->releaseModes());
+
+        if (! in_array($this->releaseMode, $offered, true)) {
+            $this->releaseMode = $offered[0] ?? '';
+        }
+
+        $this->releaseDialog = true;
+        $this->setStatus(__('legal-consent::ui.admin_status_release_dialog_open'));
+    }
+
+    /**
+     * Release in the mode the dialog shows, after signing this language off.
+     *
+     * The person who confirms is the reviewer of the text in front of them, so the sign-off is part
+     * of the confirmation, for the revision this page holds. A change with an objection window goes
+     * through releaseDeemed(), with the dates of its form; every other mode is released at once.
+     */
+    public function confirmRelease(): void
+    {
+        $mode = NoticeMode::tryFrom($this->releaseMode);
+
+        if (! $mode instanceof NoticeMode || ! in_array($mode, $this->releaseModes(), true)) {
+            $this->setStatus(__('legal-consent::ui.admin_status_mode_not_offered'));
+
+            return;
+        }
+
+        if (! $this->signOff()) {
+            return;
+        }
+
+        $this->releaseDialog = false;
+
+        if ($mode === NoticeMode::DeemedConsent) {
+            $this->releaseDeemed();
+
+            return;
+        }
+
+        $this->releaseIn($mode);
+    }
+
+    /**
+     * Save the draft through the writer, and say on the status line why it was refused.
+     */
+    private function saveDraft(): bool
     {
         try {
             $draft = app(LegalDraftWriter::class)->save($this->key, $this->locale, $this->body, $this->actor());
@@ -247,15 +393,88 @@ final class LegalTextEditor extends Component
             // freezing a hash over the fragment.
             $this->setStatus($this->notSavedBecause($e));
 
-            return;
+            return false;
         }
 
         // This page's own write is not the translation it may be waiting on.
         $this->heldRevision = $this->revisionOf($draft);
 
-        // A status message after a save, and after the two acts below — WCAG 4.1.3: an action that
-        // changes the record must announce its result, not leave a screen reader in silence.
-        $this->setStatus(__('legal-consent::ui.admin_status_saved'));
+        // The text is stored: the WireKit view's unsaved hint stops counting it, and leaving the page
+        // asks nothing. Any other request sends the deferred text along without storing it, which is
+        // why the view counts a save only by this event.
+        $this->dispatch('wirekit:saved', scope: self::UNSAVED_TEXT);
+
+        return true;
+    }
+
+    /**
+     * Sign this language off for the revision the page holds, unless it is reviewed already. The
+     * refusals are the ones markReviewed() words, on the status line.
+     */
+    private function signOff(): bool
+    {
+        $draft = LegalDraftSet::for($this->key)->draft($this->locale);
+
+        if ($draft instanceof LegalDraft && $draft->review_state === ReviewState::Reviewed) {
+            return true;
+        }
+
+        try {
+            $draft = app(LegalDraftWriter::class)->markReviewed($this->key, $this->locale, $this->actor(), $this->heldRevision);
+        } catch (LegalDraftNotFound) {
+            $this->setStatus(__('legal-consent::ui.admin_status_no_draft_to_review'));
+
+            return false;
+        } catch (LegalDraftChanged) {
+            $this->setStatus(__('legal-consent::ui.admin_status_changed_before_review'));
+
+            return false;
+        }
+
+        $this->heldRevision = $this->revisionOf($draft);
+
+        return true;
+    }
+
+    /**
+     * Release every ready language at once in `$mode`, worded on the status line as the overview
+     * words its release.
+     */
+    private function releaseIn(NoticeMode $mode): void
+    {
+        $sentencesBefore = app(LegalDocumentReleaser::class)->sentencesBefore($this->key);
+
+        try {
+            $released = app(LegalDocumentReleaser::class)->release(
+                $this->key,
+                $mode,
+                LegalDraftSet::for($this->key)->releaseLocales($this->locales()),
+            );
+        } catch (LegalReleaseNotReady $e) {
+            $names = app(NamesLegalTexts::class);
+
+            $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
+                'key' => $names->document($this->key),
+                'reasons' => implode('; ', array_map(
+                    static fn (string $locale, BlockingReason $reason): string => $names->language($locale).' ('.__($reason->label()).')',
+                    array_keys($e->blocking),
+                    $e->blocking,
+                )),
+            ]));
+
+            return;
+        } catch (LegalPublishRefused $e) {
+            $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
+                'key' => app(NamesLegalTexts::class)->document($this->key),
+                'reasons' => $this->publishRefusalReason($e),
+            ]));
+
+            return;
+        }
+
+        // The choices of the release form went out with it.
+        $this->dispatch('wirekit:saved', scope: self::UNSAVED_RELEASE);
+        $this->setStatus($this->releasedStatus($this->key, $released).$this->sentenceChangeNotice(app(LegalDocumentReleaser::class)->sentenceChangedIn($sentencesBefore, $released)));
     }
 
     public function translate(): void
@@ -518,6 +737,8 @@ final class LegalTextEditor extends Component
         // into the rich editor behind `wire:ignore` — without it the field would still hold the old
         // bytes and the next save would write them straight back.
         $this->replaceBody('');
+        // Nothing of the discarded text is unsaved any more.
+        $this->dispatch('wirekit:saved', scope: self::UNSAVED_TEXT);
         $this->setStatus(__('legal-consent::ui.admin_status_draft_discarded'));
     }
 
@@ -545,6 +766,81 @@ final class LegalTextEditor extends Component
         // The sign-off writes the row as well, and it is not the translation either.
         $this->heldRevision = $this->revisionOf($draft);
         $this->setStatus(__('legal-consent::ui.admin_status_reviewed'));
+    }
+
+    /**
+     * Publish this language where it has never been published while another language of the same
+     * text holds a version in force: the same version, in the mode that version went out in.
+     *
+     * It changes nothing about the contract and only adds the language. A consent is held across
+     * languages (ConsentGate::holds()), so whoever accepted the version in another language holds it
+     * in this one as well, and a re-consent version owes its notice only to those who hold an older
+     * major. "Release all" would release every reviewed language as a new version instead.
+     *
+     * Offered only where that holds ({@see versionToTranslate()}); anywhere else this is refused with
+     * a sentence and the language goes out with the next change.
+     */
+    public function publishTranslation(): void
+    {
+        $active = $this->versionToTranslate();
+
+        if (! $active instanceof LegalDocument || ! $active->notice_mode instanceof NoticeMode) {
+            $this->setStatus(__('legal-consent::ui.admin_status_translation_not_offered'));
+
+            return;
+        }
+
+        try {
+            app(LegalDocumentReleaser::class)->release($this->key, $active->notice_mode, [$this->locale]);
+        } catch (LegalReleaseNotReady $e) {
+            $names = app(NamesLegalTexts::class);
+
+            $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
+                'key' => $names->document($this->key),
+                'reasons' => implode('; ', array_map(
+                    static fn (string $locale, BlockingReason $reason): string => $names->language($locale).' ('.__($reason->label()).')',
+                    array_keys($e->blocking),
+                    $e->blocking,
+                )),
+            ]));
+
+            return;
+        } catch (LegalPublishRefused $e) {
+            $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
+                'key' => app(NamesLegalTexts::class)->document($this->key),
+                'reasons' => $this->publishRefusalReason($e),
+            ]));
+
+            return;
+        }
+
+        $this->setStatus(__('legal-consent::ui.admin_status_translation_published', [
+            'language' => app(NamesLegalTexts::class)->language($this->locale),
+            'version' => $active->version,
+        ]));
+    }
+
+    /**
+     * Publish a text that has never been published, at once and in the mode of its type.
+     *
+     * A first version has nothing anybody could object to, so no objection window and no lead time
+     * apply to it: a contract asks for its first acceptance, a privacy notice is announced, an
+     * informational page goes out silently. The overview's "release all" does the same, and the
+     * editor used to offer only the objection window, which demanded a period for a text nobody
+     * had seen yet.
+     *
+     * A text that has been published before is refused here with a sentence: its change is a legal
+     * call the release form beneath makes, not this button.
+     */
+    public function publishFirst(): void
+    {
+        if ($this->hasPublishedVersion()) {
+            $this->setStatus(__('legal-consent::ui.admin_status_already_published'));
+
+            return;
+        }
+
+        $this->releaseIn($this->documentType()->materialChangeMode());
     }
 
     /**
@@ -658,6 +954,8 @@ final class LegalTextEditor extends Component
             return;
         }
 
+        // The choices of the release form went out with it.
+        $this->dispatch('wirekit:saved', scope: self::UNSAVED_RELEASE);
         $this->setStatus($this->releasedStatus($this->key, $released).$this->sentenceChangeNotice(app(LegalDocumentReleaser::class)->sentenceChangedIn($sentencesBefore, $released)));
     }
 
@@ -706,7 +1004,232 @@ final class LegalTextEditor extends Component
             // type, so the block could only fail there. It was offered wherever a document asks
             // anything, which left it on a privacy notice and a consent as well.
             'offersDeemedRelease' => $this->documentType()->allowsDeemedConsent(),
+            // A text never published is published at once, in the mode of its type, and the
+            // objection window is not offered for it (publishFirst()).
+            'firstPublication' => ! $this->hasPublishedVersion(),
+            // The version this language can be added under without changing the contract, or null.
+            'translationVersion' => $this->versionToTranslate()?->version,
+            // The modes "save and publish" offers, the type's own first, and what the open dialog
+            // shows a release in the chosen one would do.
+            'releaseModes' => array_map(static fn (NoticeMode $mode): string => $mode->value, $this->releaseModes()),
+            'releaseSummary' => $this->releaseDialog ? $this->releaseSummary() : null,
+            'firstPublicationMode' => $this->documentType()->materialChangeMode()->value,
+            // The first day each date can take, and the sentence that says why. The publisher
+            // refuses the same window, so these hold the form to it before the press, and the
+            // refusal stays the last line.
+            'window' => $this->documentType()->allowsDeemedConsent() ? $this->windowLimits() : null,
         ]);
+    }
+
+    /**
+     * Fill the dates of the window that nobody set by hand: the objection deadline on the first day
+     * the publisher accepts for the announcement and the regime, the effective date the day after
+     * it. A date that cannot be read leaves the others as they are.
+     */
+    private function fillWindow(): void
+    {
+        $announce = CalendarDate::parse($this->announceAt);
+
+        if (! $announce instanceof CarbonImmutable) {
+            return;
+        }
+
+        if (! $this->deadlineChosen) {
+            $this->objectionDeadline = app(LegalDocumentPublisher::class)
+                ->earliestObjectionDeadline($this->key, $this->knownRegime(), $announce)
+                ->toDateString();
+        }
+
+        $deadline = CalendarDate::parse($this->objectionDeadline);
+
+        if (! $this->enforceChosen && $deadline instanceof CarbonImmutable) {
+            $this->enforceAt = $deadline->addDay()->toDateString();
+        }
+    }
+
+    /**
+     * The first day each date of the window can take, and the sentence that names the minimum.
+     *
+     * @return array{announce: string, deadline: string, enforce: string, lead: string}
+     */
+    private function windowLimits(): array
+    {
+        $publisher = app(LegalDocumentPublisher::class);
+        $today = CarbonImmutable::today();
+        $announce = CalendarDate::parse($this->announceAt);
+        $from = $announce instanceof CarbonImmutable && $announce->greaterThan($today) ? $announce : $today;
+        $deadline = $publisher->earliestObjectionDeadline($this->key, $this->knownRegime(), $from);
+        $chosen = CalendarDate::parse($this->objectionDeadline);
+        $effective = $chosen instanceof CarbonImmutable && $chosen->greaterThan($deadline) ? $chosen : $deadline;
+
+        return [
+            'announce' => $today->toDateString(),
+            'deadline' => $deadline->toDateString(),
+            'enforce' => $effective->addDay()->toDateString(),
+            'lead' => $this->leadSentence($publisher->deemedLeadTime($this->key, $this->knownRegime())),
+        ];
+    }
+
+    /**
+     * The minimum in words, with the rule that sets it: the benchmark of § 308 Nr. 5 BGB, the
+     * statute of the regime, or the setting the number comes from.
+     */
+    private function leadSentence(LeadTime $lead): string
+    {
+        if ($lead->days === 0) {
+            return (string) __('legal-consent::ui.admin_deemed_lead_none');
+        }
+
+        if ($lead->basis === LeadTimeBasis::Statute) {
+            $source = (string) __('legal-consent::ui.admin_deemed_lead_sources.'.$lead->regime);
+
+            return $lead->months !== null
+                ? trans_choice('legal-consent::ui.admin_deemed_lead_statute_months', $lead->months, ['days' => $lead->days, 'source' => $source])
+                : trans_choice('legal-consent::ui.admin_deemed_lead_statute', $lead->days, ['source' => $source]);
+        }
+
+        return match ($lead->basis) {
+            LeadTimeBasis::RegimeSetting => trans_choice('legal-consent::ui.admin_deemed_lead_regime_setting', $lead->days),
+            LeadTimeBasis::DocumentSetting => trans_choice('legal-consent::ui.admin_deemed_lead_document', $lead->days),
+            default => trans_choice('legal-consent::ui.admin_deemed_lead_mode', $lead->days),
+        };
+    }
+
+    /** The regime the form holds, or null where it holds none the publisher knows. */
+    private function knownRegime(): ?string
+    {
+        return in_array($this->regime, LegalDocumentPublisher::REGIMES, true) ? $this->regime : null;
+    }
+
+    /**
+     * The version this language can be published under silently, or null where it cannot: it has
+     * been published before, no other language holds a version in force, that version went out with
+     * an objection window or as an announcement every party is owed, or the source has moved on to
+     * another version, so a release would no longer carry the one the other languages hold.
+     */
+    private function versionToTranslate(): ?LegalDocument
+    {
+        if (LegalDocument::model()::query()->where('key', $this->key)->where('locale', $this->locale)->exists()) {
+            return null;
+        }
+
+        $active = LegalDocument::model()::query()
+            ->where('key', $this->key)
+            ->where('is_active', true)
+            ->orderByDesc('major_version')
+            ->orderByDesc('minor_version')
+            ->orderByDesc('patch_version')
+            ->first();
+
+        if (! $active instanceof LegalDocument
+            || ! in_array($active->notice_mode, [NoticeMode::ActiveReconsent, NoticeMode::SilentEditorial], true)
+            || ($active->enforce_from instanceof CarbonImmutable && $active->enforce_from->greaterThan(CarbonImmutable::now()))
+            || LegalDraftSet::for($this->key)->version() !== $active->version) {
+            return null;
+        }
+
+        return $active;
+    }
+
+    /**
+     * The modes a release of this document can take, the mode of its type first: a first version
+     * only in that mode, an informational page only silently, a deemed consent only for a contract,
+     * and an active re-consent for anything but a privacy notice, as the publisher allows them.
+     *
+     * @return list<NoticeMode>
+     */
+    private function releaseModes(): array
+    {
+        $type = $this->documentType();
+        $material = $type->materialChangeMode();
+
+        if (! $this->hasPublishedVersion()) {
+            return [$material];
+        }
+
+        // From the mode that asks the most of a reader to the one that asks nothing.
+        $order = [NoticeMode::ActiveReconsent, NoticeMode::DeemedConsent, NoticeMode::InfoPush, NoticeMode::SilentEditorial];
+
+        $modes = array_values(array_filter($order, static fn (NoticeMode $mode): bool => match (true) {
+            ! $type->isConsentBearing() => $mode === NoticeMode::SilentEditorial,
+            $mode === NoticeMode::DeemedConsent => $type->allowsDeemedConsent(),
+            $mode === NoticeMode::ActiveReconsent => $type !== DocumentType::PrivacyNotice,
+            default => true,
+        }));
+
+        // The mode of the type first, the one the overview releases in; the rest keep their order.
+        usort($modes, static fn (NoticeMode $a, NoticeMode $b): int => ($b === $material) <=> ($a === $material));
+
+        return $modes;
+    }
+
+    /**
+     * What a release in the dialog's mode would do, for the dialog to show before the confirmation:
+     * the languages it takes, those it leaves out and why, the version, the consequence of the mode,
+     * the dates and the regime. The languages count this one as signed off, as the confirmation
+     * signs it off.
+     *
+     * The heading and the acceptance sentence are the ones this language's version would freeze, and a
+     * sentence asked for only because the document has none of its own says so.
+     *
+     * @return array{languages: list<string>, left_out: list<string>, version: string, mode: string, dates: string, regime: ?string, heading: string, sentence: ?string, generic: bool}
+     */
+    private function releaseSummary(): array
+    {
+        $mode = NoticeMode::tryFrom($this->releaseMode) ?? ($this->releaseModes()[0] ?? $this->documentType()->materialChangeMode());
+        $names = app(NamesLegalTexts::class);
+        $set = LegalDraftSet::for($this->key);
+        $configured = $this->locales();
+        $ready = $set->releaseLocales($configured);
+
+        if ($set->draft($this->locale) instanceof LegalDraft) {
+            $ready[] = $this->locale;
+        }
+
+        $included = array_values(array_filter($configured, static fn (string $locale): bool => in_array($locale, $ready, true)));
+        $blocking = $set->blockingLocales(array_values(array_diff($configured, $included)));
+        $sentence = $this->documentType()->isConsentBearing() ? AcceptanceWording::for($this->key, $this->locale) : null;
+
+        return [
+            'languages' => array_map($names->language(...), $included),
+            'left_out' => array_map(
+                static fn (string $locale, BlockingReason $reason): string => $names->language($locale).' ('.__($reason->label()).')',
+                array_keys($blocking),
+                array_values($blocking),
+            ),
+            'version' => $this->releaseVersion($mode),
+            'mode' => (string) __('legal-consent::ui.admin_release_modes.'.$mode->value.'.consequence'),
+            'dates' => $mode === NoticeMode::DeemedConsent
+                ? (string) __('legal-consent::ui.admin_release_dialog_window', ['announce' => $this->announceAt, 'deadline' => $this->objectionDeadline, 'enforce' => $this->enforceAt])
+                : (string) __('legal-consent::ui.admin_release_dialog_now'),
+            'regime' => $mode === NoticeMode::DeemedConsent && $this->knownRegime() !== null
+                ? (string) __('legal-consent::ui.admin_regimes.'.$this->knownRegime().'.name')
+                : null,
+            'heading' => DocumentTitle::for($this->key, $this->locale),
+            'sentence' => $sentence,
+            'generic' => AcceptanceWording::isGeneric($this->key, $this->locale, $sentence),
+        ];
+    }
+
+    /**
+     * The version a release in `$mode` would carry: the one stamped on the source while nothing has
+     * been published under it, otherwise the next one the releaser derives for the mode.
+     */
+    private function releaseVersion(NoticeMode $mode): string
+    {
+        $stamped = LegalDraftSet::for($this->key)->version();
+
+        if (is_string($stamped) && $stamped !== '' && ! LegalDocument::model()::query()->where('key', $this->key)->where('version', $stamped)->exists()) {
+            return $stamped;
+        }
+
+        return app(LegalDocumentReleaser::class)->nextVersionFor($this->key, $mode);
+    }
+
+    /** Whether any version of this document has been published, in any language, for this tenant. */
+    private function hasPublishedVersion(): bool
+    {
+        return LegalDocument::model()::query()->where('key', $this->key)->exists();
     }
 
     /** The document type this key is registered under, from the documents registry. */

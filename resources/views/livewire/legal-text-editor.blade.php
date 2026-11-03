@@ -47,6 +47,9 @@
 
         <div>
             <button type="button" wire:click="save" wire:loading.attr="aria-busy" wire:target="save">{{ __('legal-consent::ui.admin_save') }}</button>
+            @if (($releaseModes ?? []) !== [])
+                <button type="button" wire:click="saveAndRelease" wire:loading.attr="aria-busy" wire:target="saveAndRelease">{{ __('legal-consent::ui.admin_save_and_release') }}</button>
+            @endif
 
             {{-- Disabled while a translation of this draft runs, and it names the wait: a second press
                  would pay a per-call translator again for the same text. A press that arrives inside
@@ -79,7 +82,68 @@
         {{-- Only where silence can bind: an informational page binds nobody, and the publisher
              refuses every mode for it but the silent one. A caller that passes no such value
              keeps the form, as before. --}}
-        @if ($offersDeemedRelease ?? true)
+        {{-- What a release in the chosen mode would do, shown before it happens. --}}
+        @if (($releaseDialog ?? false) && is_array($releaseSummary ?? null))
+            <div role="dialog" aria-labelledby="legal-release-title">
+                <h2 id="legal-release-title">{{ __('legal-consent::ui.admin_release_dialog_title', ['document' => $documentName ?? $key]) }}</h2>
+                <fieldset>
+                    <legend>{{ __('legal-consent::ui.admin_release_dialog_mode') }}</legend>
+                    @foreach ($releaseModes as $available)
+                        <label>
+                            <input type="radio" name="releaseMode" value="{{ $available }}" wire:model.live="releaseMode">
+                            {{ __('legal-consent::ui.admin_release_modes.'.$available.'.label') }}
+                        </label>
+                        <p>{{ __('legal-consent::ui.admin_release_modes.'.$available.'.consequence') }}</p>
+                    @endforeach
+                </fieldset>
+                <dl>
+                    <dt>{{ __('legal-consent::ui.admin_release_dialog_languages') }}</dt>
+                    <dd>{{ implode(', ', $releaseSummary['languages']) }}</dd>
+                    @if ($releaseSummary['left_out'] !== [])
+                        <dt>{{ __('legal-consent::ui.admin_release_dialog_left_out') }}</dt>
+                        <dd>{{ implode('; ', $releaseSummary['left_out']) }}</dd>
+                    @endif
+                    <dt>{{ __('legal-consent::ui.admin_release_dialog_version') }}</dt>
+                    <dd>{{ $releaseSummary['version'] }}</dd>
+                    <dt>{{ __('legal-consent::ui.admin_release_dialog_heading') }}</dt>
+                    <dd>{{ $releaseSummary['heading'] }}</dd>
+                    @if ($releaseSummary['sentence'] !== null)
+                        <dt>{{ __('legal-consent::ui.admin_release_dialog_sentence') }}</dt>
+                        <dd>
+                            {{ $releaseSummary['sentence'] }}
+                            @if ($releaseSummary['generic'])
+                                <small>{{ __('legal-consent::ui.admin_release_dialog_generic_sentence', ['locale' => $locale]) }}</small>
+                            @endif
+                        </dd>
+                    @endif
+                    <dt>{{ __('legal-consent::ui.admin_release_dialog_dates') }}</dt>
+                    <dd>{{ $releaseSummary['dates'] }}</dd>
+                    @if ($releaseSummary['regime'] !== null)
+                        <dt>{{ __('legal-consent::ui.admin_release_dialog_regime') }}</dt>
+                        <dd>{{ $releaseSummary['regime'] }}</dd>
+                    @endif
+                </dl>
+                <p>{{ __('legal-consent::ui.admin_release_dialog_reviewer', ['language' => $languageName ?? $locale]) }}</p>
+                <button type="button" wire:click="$set('releaseDialog', false)">{{ __('legal-consent::ui.cancel') }}</button>
+                <button type="button" wire:click="confirmRelease" wire:loading.attr="aria-busy" wire:target="confirmRelease">{{ __('legal-consent::ui.admin_release_dialog_confirm') }}</button>
+            </div>
+        @endif
+
+        {{-- A language never published while another holds a version in force goes out under that version. --}}
+        @if (($translationVersion ?? null) !== null)
+            <h2>{{ __('legal-consent::ui.admin_translation_heading', ['language' => $languageName ?? $locale]) }}</h2>
+            <p>{{ __('legal-consent::ui.admin_translation_explainer', ['language' => $languageName ?? $locale, 'version' => $translationVersion]) }}</p>
+            <button type="button" wire:click="publishTranslation" wire:loading.attr="aria-busy" wire:target="publishTranslation">{{ __('legal-consent::ui.admin_translation_submit') }}</button>
+        @endif
+
+        {{-- A text never published goes out at once, in the mode of its type; the objection window is not offered for it. --}}
+        @if ($firstPublication ?? false)
+            <h2>{{ __('legal-consent::ui.admin_first_publication_heading') }}</h2>
+            <p>{{ __('legal-consent::ui.admin_first_publication_explainer.'.($firstPublicationMode ?? 'active_reconsent')) }}</p>
+            <button type="button" wire:click="publishFirst" wire:loading.attr="aria-busy" wire:target="publishFirst">{{ __('legal-consent::ui.admin_first_publication_submit') }}</button>
+        @endif
+
+        @if (($offersDeemedRelease ?? true) && ! ($firstPublication ?? false))
         {{-- Release with an objection window, a deemed-consent change (§ 308 Nr. 5 BGB).
              It lives here and not on the manager grid: a release that binds people by their
              silence is a per-change legal call, not a one-click action on an overview. The same
@@ -96,13 +160,18 @@
 
         <div>
             <label for="legal-deemed-announce">{{ __('legal-consent::ui.admin_deemed_announce') }}</label>
-            <input id="legal-deemed-announce" type="date" wire:model="announceAt" aria-required="true">
+            <input id="legal-deemed-announce" type="date" wire:model.live="announceAt" aria-required="true" @if (isset($window['announce'])) min="{{ $window['announce'] }}" @endif>
 
             <label for="legal-deemed-deadline">{{ __('legal-consent::ui.admin_deemed_deadline') }}</label>
-            <input id="legal-deemed-deadline" type="date" wire:model="objectionDeadline" aria-required="true">
+            <input id="legal-deemed-deadline" type="date" wire:model.live="objectionDeadline" aria-required="true" @if (isset($window['deadline'])) min="{{ $window['deadline'] }}" @endif>
 
             <label for="legal-deemed-enforce">{{ __('legal-consent::ui.admin_deemed_enforce') }}</label>
-            <input id="legal-deemed-enforce" type="date" wire:model="enforceAt" aria-required="true">
+            <input id="legal-deemed-enforce" type="date" wire:model.live="enforceAt" aria-required="true" @if (isset($window['enforce'])) min="{{ $window['enforce'] }}" @endif>
+
+            {{-- The minimum the dates are held to, with the rule that sets it. --}}
+            @if (($window['lead'] ?? '') !== '')
+                <p id="legal-deemed-lead">{{ $window['lead'] }}</p>
+            @endif
 
             {{-- The classification, and it sits with the dates rather than apart from them because
                  one release carries both. The five controls around it schedule the change; these
@@ -111,7 +180,7 @@
                  know, and free text for the class because the publisher takes any and the command
                  line already calls it a tag. --}}
             <label for="legal-deemed-regime">{{ __('legal-consent::ui.admin_deemed_regime') }}</label>
-            <select id="legal-deemed-regime" wire:model="regime" aria-required="true">
+            <select id="legal-deemed-regime" wire:model.live="regime" aria-required="true" aria-describedby="legal-deemed-regime-hint">
                 <option value="">{{ __('legal-consent::ui.admin_deemed_regime_none') }}</option>
                 {{-- The publisher's own list, read from it rather than written out here: it
                      refuses a regime it does not know, so a second vocabulary on this screen would
@@ -123,23 +192,26 @@
                      an application puts it: rendered directly, `$this->regimes()` fails with
                      "Using $this when not in object context". --}}
                 @foreach (\Pushery\LegalConsent\Support\LegalDocumentPublisher::REGIMES as $available)
-                    <option value="{{ $available }}">{{ $available }}</option>
+                    <option value="{{ $available }}">{{ __('legal-consent::ui.admin_regimes.'.$available.'.name') }}</option>
                 @endforeach
             </select>
+            <p id="legal-deemed-regime-hint">@if (in_array($regime ?? '', \Pushery\LegalConsent\Support\LegalDocumentPublisher::REGIMES, true)){{ __('legal-consent::ui.admin_regimes.'.$regime.'.description') }}@endif</p>
 
             <label for="legal-deemed-change-class">{{ __('legal-consent::ui.admin_deemed_change_class') }}</label>
             <input id="legal-deemed-change-class" type="text" wire:model="changeClass" maxlength="{{ \Pushery\LegalConsent\Support\LegalDocumentPublisher::CHANGE_CLASS_MAX_LENGTH }}" aria-describedby="legal-deemed-change-class-hint">
             <p id="legal-deemed-change-class-hint">{{ __('legal-consent::ui.admin_deemed_change_class_hint') }}</p>
 
             <label for="legal-deemed-termination">
-                <input id="legal-deemed-termination" type="checkbox" wire:model="offersTermination">
+                <input id="legal-deemed-termination" type="checkbox" wire:model="offersTermination" aria-describedby="legal-deemed-termination-hint">
                 {{ __('legal-consent::ui.admin_deemed_offers_termination') }}
             </label>
+            <p id="legal-deemed-termination-hint">{{ __('legal-consent::ui.admin_deemed_offers_termination_hint') }}</p>
 
             <label for="legal-deemed-keeps">
-                <input id="legal-deemed-keeps" type="checkbox" wire:model="keepsUnmodified">
+                <input id="legal-deemed-keeps" type="checkbox" wire:model="keepsUnmodified" aria-describedby="legal-deemed-keeps-hint">
                 {{ __('legal-consent::ui.admin_deemed_keeps_unmodified') }}
             </label>
+            <p id="legal-deemed-keeps-hint">{{ __('legal-consent::ui.admin_deemed_keeps_unmodified_hint') }}</p>
 
             <button type="button" wire:click="releaseDeemed" wire:loading.attr="aria-busy" wire:target="releaseDeemed">{{ __('legal-consent::ui.admin_deemed_submit') }}</button>
         </div>
@@ -153,6 +225,11 @@
              technology discard the label, and `admin_preview_label` reached nobody in any of the
              seven locales it is translated into. The preview is a block of rendered legal HTML
              with headings of its own; without a landmark there is nothing to say where it starts. --}}
-        <div role="region" aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">{!! $preview !!}</div>
+        {{-- Folded by default, so a long text does not push the release form off the screen.
+             `wire:ignore.self` keeps a reader's `open` across a save, which a morph would reset. --}}
+        <details wire:ignore.self>
+            <summary>{{ __('legal-consent::ui.admin_preview_show') }}</summary>
+            <div role="region" aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">{!! $preview !!}</div>
+        </details>
     </section>
 </div>

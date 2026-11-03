@@ -131,6 +131,8 @@ php artisan legal-consent:publish --all --editorial      # the whole matrix, ide
 php artisan legal-consent:publish --all --only-missing --editorial   # gap-fill only — use THIS in a deploy script
 php artisan legal-consent:publish --all --dry-run --editorial        # what would a run do? writes nothing
 php artisan legal-consent:publish privacy --locales=de,en --info     # every language together: how a version changes its mode
+php artisan legal-consent:status                         # every document by language, how far it is, and the command that publishes it
+php artisan legal-consent:review terms --locales=de,en --by="Jane Doe"   # the drafts store: sign drafts off from the shell
 php artisan legal-consent:check-drift                    # source changed since it was published?
 php artisan legal-consent:verify-documents --placeholders-fail   # before a launch: fails on a placeholder text or a 0.0.0 version
 php artisan legal-consent:publish terms de --active --tenant=acme   # tenancy on: the console resolves no tenant, so name it

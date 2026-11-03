@@ -4,6 +4,18 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.53.0 → 0.54.0
+
+**Nothing is required of you**, unless you registered a document of your own, published the re-consent or editor views, or a test reads `status` after an empty submit.
+
+**Give every document of your own a title before its next release.** The publisher refuses a version whose heading would be the document's key, which is what a document the package does not ship gets when nothing names it. On the drafts store the title goes into `lang/vendor/legal-consent/<locale>/titles.php`, as `'dpa' => 'Data Processing Agreement'`, and in a Markdown source into `title:` in the front matter of its file. Give it its own acceptance sentence in `wording.php` beside it, or it asks for the generic one. `php artisan legal-consent:doctor` names every document that lacks either, per language.
+
+**Publish the editor views again if you published them**, for **Save and publish** and its dialog, and for the heading the overview's release names: `php artisan vendor:publish --tag=legal-consent-views --force` for the plain ones, `php artisan vendor:publish --tag=legal-consent-wirekit --force` for the WireKit ones.
+
+**Publish the re-consent views again if you published them.** A re-consent submit with nothing ticked is now answered as an error between the documents and the button, and every box still unticked is marked. `status` is no longer set for it, so a published copy shows nothing at all. `php artisan vendor:publish --tag=legal-consent-views --force` brings the plain one, `php artisan vendor:publish --tag=legal-consent-wirekit --force` the WireKit one.
+
+**A test that read `status` after an empty submit reads the error under `accept` instead**, for example with `assertHasErrors('accept')`.
+
 ## 0.52.1 → 0.53.0
 
 **Nothing is required of you**, unless you published the views or wrote your own translator.

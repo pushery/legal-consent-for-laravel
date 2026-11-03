@@ -81,6 +81,12 @@
              Only a person's edit reaches `body`. From 2.56.0, below the floor of these views, the editor
              no longer reports its own serialization of the text as input when it loads, so a save
              without an edit stores the bytes the draft was opened with. --}}
+        {{-- The text and the buttons that store it, one scope of WireKit's unsaved hint: the text counts
+             as unsaved until a save, the hint beside Save says so, and leaving the page asks, a
+             wire:navigate link in the kit's dialog and a reload or a closed tab in the browser's own.
+             `until-saved`, because every request sends the deferred text along without storing it; the
+             component dispatches wirekit:saved for this scope once a save or a discard went through. --}}
+        <div x-wk-unsaved.until-saved.confirm="{{ \Pushery\LegalConsent\Livewire\LegalTextEditor::UNSAVED_TEXT }}">
         <div wire:ignore wire:key="lc-editor-body-{{ $bodyNonce ?? 0 }}">
             {{-- The current draft body seeds the editor via :value (the component reads the `value`
                  prop, never a slot — a slot here would silently render nothing on edit). Content
@@ -117,7 +123,15 @@
              viewport. `row`'s own prop documents this case — "the per-page cure has been to add
              `wrap`" — so this uses WireKit's vocabulary rather than a class of its own. --}}
         <x-wirekit::row wrap gap="sm">
+            {{-- Says beside Save that the text holds what the draft does not have yet. --}}
+            <x-wirekit::unsaved-hint />
             <x-wirekit::button wire:click="save" loading-target="save" :disable-on-loading="false">{{ __('legal-consent::ui.admin_save') }}</x-wirekit::button>
+
+            {{-- Save, then a short dialog of every setting the release takes, and the release on
+                 its confirmation. --}}
+            @if (($releaseModes ?? []) !== [])
+                <x-wirekit::button surface="outline" wire:click="saveAndRelease" loading-target="saveAndRelease" :disable-on-loading="false">{{ __('legal-consent::ui.admin_save_and_release') }}</x-wirekit::button>
+            @endif
 
             {{-- Disabled while a translation of this draft runs, and it names the wait: a second press
                  would pay a per-call translator again for the same text. A press that arrives inside
@@ -183,11 +197,90 @@
                 @endif
             </div>
         </x-wirekit::row>
+        </div>
+
+        {{-- What a release in the chosen mode would do, shown before it happens. Bound to the
+             component, so the confirmation closes it with the render it causes. --}}
+        @if (($releaseModes ?? []) !== [])
+            <x-wirekit::modal name="lc-editor-release" wire:model="releaseDialog" size="lg">
+                <x-wirekit::modal.header>{{ __('legal-consent::ui.admin_release_dialog_title', ['document' => $documentName ?? $key]) }}</x-wirekit::modal.header>
+                <x-wirekit::modal.body>
+                    @if (is_array($releaseSummary ?? null))
+                        <x-wirekit::stack gap="md">
+                            <fieldset>
+                                <legend>{{ __('legal-consent::ui.admin_release_dialog_mode') }}</legend>
+                                <x-wirekit::stack gap="sm">
+                                    @foreach ($releaseModes as $available)
+                                        <x-wirekit::radio name="releaseMode" :value="$available" wire:model.live="releaseMode" :label="__('legal-consent::ui.admin_release_modes.'.$available.'.label')" :hint="__('legal-consent::ui.admin_release_modes.'.$available.'.consequence')" />
+                                    @endforeach
+                                </x-wirekit::stack>
+                            </fieldset>
+
+                            <dl>
+                                <dt>{{ __('legal-consent::ui.admin_release_dialog_languages') }}</dt>
+                                <dd>{{ implode(', ', $releaseSummary['languages']) }}</dd>
+                                @if ($releaseSummary['left_out'] !== [])
+                                    <dt>{{ __('legal-consent::ui.admin_release_dialog_left_out') }}</dt>
+                                    <dd>{{ implode('; ', $releaseSummary['left_out']) }}</dd>
+                                @endif
+                                <dt>{{ __('legal-consent::ui.admin_release_dialog_version') }}</dt>
+                                <dd>{{ $releaseSummary['version'] }}</dd>
+                                <dt>{{ __('legal-consent::ui.admin_release_dialog_heading') }}</dt>
+                                <dd>{{ $releaseSummary['heading'] }}</dd>
+                                @if ($releaseSummary['sentence'] !== null)
+                                    <dt>{{ __('legal-consent::ui.admin_release_dialog_sentence') }}</dt>
+                                    <dd>
+                                        {{ $releaseSummary['sentence'] }}
+                                        @if ($releaseSummary['generic'])
+                                            <x-wirekit::text size="sm">{{ __('legal-consent::ui.admin_release_dialog_generic_sentence', ['locale' => $locale]) }}</x-wirekit::text>
+                                        @endif
+                                    </dd>
+                                @endif
+                                <dt>{{ __('legal-consent::ui.admin_release_dialog_dates') }}</dt>
+                                <dd>{{ $releaseSummary['dates'] }}</dd>
+                                @if ($releaseSummary['regime'] !== null)
+                                    <dt>{{ __('legal-consent::ui.admin_release_dialog_regime') }}</dt>
+                                    <dd>{{ $releaseSummary['regime'] }}</dd>
+                                @endif
+                            </dl>
+
+                            <x-wirekit::text>{{ __('legal-consent::ui.admin_release_dialog_reviewer', ['language' => $languageName ?? $locale]) }}</x-wirekit::text>
+                        </x-wirekit::stack>
+                    @endif
+                </x-wirekit::modal.body>
+                <x-wirekit::modal.footer>
+                    <x-wirekit::modal.close>
+                        <x-wirekit::button intent="neutral" surface="ghost">{{ __('legal-consent::ui.cancel') }}</x-wirekit::button>
+                    </x-wirekit::modal.close>
+                    <x-wirekit::button wire:click="confirmRelease" loading-target="confirmRelease" :disable-on-loading="false" data-wk-dialog-primary>{{ __('legal-consent::ui.admin_release_dialog_confirm') }}</x-wirekit::button>
+                </x-wirekit::modal.footer>
+            </x-wirekit::modal>
+        @endif
+
+        {{-- A language never published while another holds a version in force: it goes out under
+             that version and changes nothing about the contract. --}}
+        @if (($translationVersion ?? null) !== null)
+            <x-wirekit::heading :level="2">{{ __('legal-consent::ui.admin_translation_heading', ['language' => $languageName ?? $locale]) }}</x-wirekit::heading>
+            <x-wirekit::text>{{ __('legal-consent::ui.admin_translation_explainer', ['language' => $languageName ?? $locale, 'version' => $translationVersion]) }}</x-wirekit::text>
+            <div>
+                <x-wirekit::button wire:click="publishTranslation" loading-target="publishTranslation" :disable-on-loading="false">{{ __('legal-consent::ui.admin_translation_submit') }}</x-wirekit::button>
+            </div>
+        @endif
+
+        {{-- A text never published goes out at once, in the mode of its type: a first version has
+             nothing anybody could object to, so the objection window below is not offered for it. --}}
+        @if ($firstPublication ?? false)
+            <x-wirekit::heading :level="2">{{ __('legal-consent::ui.admin_first_publication_heading') }}</x-wirekit::heading>
+            <x-wirekit::text>{{ __('legal-consent::ui.admin_first_publication_explainer.'.($firstPublicationMode ?? 'active_reconsent')) }}</x-wirekit::text>
+            <div>
+                <x-wirekit::button wire:click="publishFirst" loading-target="publishFirst" :disable-on-loading="false">{{ __('legal-consent::ui.admin_first_publication_submit') }}</x-wirekit::button>
+            </div>
+        @endif
 
         {{-- Only where silence can bind: an informational page binds nobody, and the publisher
              refuses every mode for it but the silent one. A caller that passes no such value
              keeps the form, as before. --}}
-        @if ($offersDeemedRelease ?? true)
+        @if (($offersDeemedRelease ?? true) && ! ($firstPublication ?? false))
         {{-- Release with an objection window — the WireKit twin of the plain stub's form.
              Same placement decision and the same reason: a deemed-consent release binds people by
              their silence (§ 308 Nr. 5 BGB), so it belongs where somebody has actually read the
@@ -197,10 +290,25 @@
         <x-wirekit::heading :level="2">{{ __('legal-consent::ui.admin_deemed_heading') }}</x-wirekit::heading>
         <x-wirekit::text>{{ __('legal-consent::ui.admin_deemed_explainer') }}</x-wirekit::text>
 
-        <x-wirekit::stack gap="sm">
-            <x-wirekit::date-picker wire:model="announceAt" name="announceAt" required :label="__('legal-consent::ui.admin_deemed_announce')" />
-            <x-wirekit::date-picker wire:model="objectionDeadline" name="objectionDeadline" required :label="__('legal-consent::ui.admin_deemed_deadline')" />
-            <x-wirekit::date-picker wire:model="enforceAt" name="enforceAt" required :label="__('legal-consent::ui.admin_deemed_enforce')" />
+        {{-- Its own scope of the unsaved hint: the class and the two switches count as unsaved until
+             the release went through. The dates and the regime are live, so their values are on the
+             server already and the hint does not count them. --}}
+        <x-wirekit::stack gap="sm" x-wk-unsaved.until-saved.confirm="{{ \Pushery\LegalConsent\Livewire\LegalTextEditor::UNSAVED_RELEASE }}">
+            {{-- Each date starts on the first day it can take, from the component's window: a
+                 window that falls short would only be refused after the press. `live`, so a moved
+                 announcement moves the dates nobody set by hand while the form is open.
+
+                 Side by side where there is room, each label, control and message on one line with
+                 the others even where one carries a hint; under each other on a phone. --}}
+            <x-wirekit::row gap="sm" align-fields wrap>
+                <x-wirekit::date-picker wire:model.live="announceAt" name="announceAt" required :min="$window['announce'] ?? null" :label="__('legal-consent::ui.admin_deemed_announce')" />
+                <x-wirekit::date-picker wire:model.live="objectionDeadline" name="objectionDeadline" required :min="$window['deadline'] ?? null" :label="__('legal-consent::ui.admin_deemed_deadline')" />
+                <x-wirekit::date-picker wire:model.live="enforceAt" name="enforceAt" required :min="$window['enforce'] ?? null" :label="__('legal-consent::ui.admin_deemed_enforce')" />
+            </x-wirekit::row>
+
+            @if (($window['lead'] ?? '') !== '')
+                <x-wirekit::text>{{ $window['lead'] }}</x-wirekit::text>
+            @endif
 
             {{-- The classification, beside the dates rather than apart from them: one release
                  carries both, and without the regime and the class a release from this screen would
@@ -209,7 +317,8 @@
                  The regime is a select over the publisher's own list, because it refuses one it
                  does not know; the class is free text, because it takes any and the command line
                  calls it a tag. --}}
-            <x-wirekit::select wire:model="regime" name="regime" required :label="__('legal-consent::ui.admin_deemed_regime')">
+            <x-wirekit::row gap="sm" align-fields wrap>
+                <x-wirekit::select wire:model.live="regime" name="regime" required :label="__('legal-consent::ui.admin_deemed_regime')" :hint="in_array($regime ?? '', \Pushery\LegalConsent\Support\LegalDocumentPublisher::REGIMES, true) ? __('legal-consent::ui.admin_regimes.'.$regime.'.description') : null">
                 <option value="">{{ __('legal-consent::ui.admin_deemed_regime_none') }}</option>
                 {{-- The publisher's own list, read from it rather than written out here: it
                      refuses a regime it does not know, so a second vocabulary on this screen would
@@ -221,16 +330,21 @@
                      an application puts it: rendered directly, `$this->regimes()` fails with
                      "Using $this when not in object context". --}}
                 @foreach (\Pushery\LegalConsent\Support\LegalDocumentPublisher::REGIMES as $available)
-                    <option value="{{ $available }}">{{ $available }}</option>
+                    <option value="{{ $available }}">{{ __('legal-consent::ui.admin_regimes.'.$available.'.name') }}</option>
                 @endforeach
             </x-wirekit::select>
 
-            <x-wirekit::input wire:model="changeClass" name="changeClass" :maxlength="\Pushery\LegalConsent\Support\LegalDocumentPublisher::CHANGE_CLASS_MAX_LENGTH" :label="__('legal-consent::ui.admin_deemed_change_class')" :hint="__('legal-consent::ui.admin_deemed_change_class_hint')" />
+                <x-wirekit::input wire:model="changeClass" name="changeClass" :maxlength="\Pushery\LegalConsent\Support\LegalDocumentPublisher::CHANGE_CLASS_MAX_LENGTH" :label="__('legal-consent::ui.admin_deemed_change_class')" :hint="__('legal-consent::ui.admin_deemed_change_class_hint')" />
+            </x-wirekit::row>
 
-            <x-wirekit::toggle wire:model="offersTermination" :label="__('legal-consent::ui.admin_deemed_offers_termination')" />
-            <x-wirekit::toggle wire:model="keepsUnmodified" :label="__('legal-consent::ui.admin_deemed_keeps_unmodified')" />
+            <x-wirekit::toggle wire:model="offersTermination" :label="__('legal-consent::ui.admin_deemed_offers_termination')" :hint="__('legal-consent::ui.admin_deemed_offers_termination_hint')" />
+            <x-wirekit::toggle wire:model="keepsUnmodified" :label="__('legal-consent::ui.admin_deemed_keeps_unmodified')" :hint="__('legal-consent::ui.admin_deemed_keeps_unmodified_hint')" />
 
-            <x-wirekit::button wire:click="releaseDeemed" loading-target="releaseDeemed" :disable-on-loading="false">{{ __('legal-consent::ui.admin_deemed_submit') }}</x-wirekit::button>
+            {{-- At its own width, with the hint of the form beside it. --}}
+            <x-wirekit::row gap="sm" align="center" wrap>
+                <x-wirekit::unsaved-hint />
+                <x-wirekit::button wire:click="releaseDeemed" loading-target="releaseDeemed" :disable-on-loading="false">{{ __('legal-consent::ui.admin_deemed_submit') }}</x-wirekit::button>
+            </x-wirekit::row>
         </x-wirekit::stack>
         @endif
 
@@ -241,14 +355,19 @@
              generic element, so the label would be discarded. The label key is the one the plain
              twin uses rather than `admin_preview`, the heading's own text, which would announce the
              same words as the heading right above it. --}}
-        <x-wirekit::card as="section" aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">
-            {{-- Through `card.body` and `prose`, because a preview that does not look like its
-                 subject invites somebody to "correct" spacing that was never wrong: the published
-                 page sets its text as prose, and headings, lists and tables render differently
-                 without it. --}}
-            <x-wirekit::card.body>
-                <x-wirekit::prose>{!! $preview !!}</x-wirekit::prose>
-            </x-wirekit::card.body>
-        </x-wirekit::card>
+        {{-- Folded by default: on a long text the preview pushed the release form and its button
+             off the screen. The collapsible keeps its state across a save, so a reader who opened
+             it sees the stored text replace the old one. --}}
+        <x-wirekit::collapsible :trigger="__('legal-consent::ui.admin_preview_show')">
+            <x-wirekit::card as="section" aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">
+                {{-- Through `card.body` and `prose`, because a preview that does not look like its
+                     subject invites somebody to "correct" spacing that was never wrong: the published
+                     page sets its text as prose, and headings, lists and tables render differently
+                     without it. --}}
+                <x-wirekit::card.body>
+                    <x-wirekit::prose>{!! $preview !!}</x-wirekit::prose>
+                </x-wirekit::card.body>
+            </x-wirekit::card>
+        </x-wirekit::collapsible>
     </x-wirekit::stack>
 </div>

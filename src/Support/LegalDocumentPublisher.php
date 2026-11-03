@@ -7,10 +7,12 @@ namespace Pushery\LegalConsent\Support;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Content\Document;
+use Pushery\LegalConsent\Content\Drivers\MarkdownFilesDriver;
 use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Enums\DocumentType;
+use Pushery\LegalConsent\Enums\LeadTimeBasis;
 use Pushery\LegalConsent\Enums\LeadTimeSpan;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Enums\PublishRefusal;
@@ -468,6 +470,35 @@ final readonly class LegalDocumentPublisher
         $this->assertModeAllowedForType($mode, $type, $key);
         $this->assertModeConsistentAcrossLocales($mode, $key, $locale, $rendered, $releasedTogether);
         $this->assertNotDowngrade($key, $locale, $rendered);
+        $this->assertTitled($key, $locale, $rendered);
+    }
+
+    /**
+     * Refuse a version whose heading would be nothing but its key.
+     *
+     * The heading is frozen into the version with its text and shown above it. A source names a
+     * document by its key where nothing else names it: the drafts store when the titles catalog has
+     * no line for it, a Markdown file without `title:` in its front matter. A document the
+     * application registers itself starts out that way, and published like that a data processing
+     * agreement would be headed "dpa" for as long as the version is in force, in every language. A
+     * key the titles catalog names as the heading itself is taken as meant.
+     */
+    private function assertTitled(string $key, string $locale, Document $rendered): void
+    {
+        if ($rendered->title !== $key || DocumentTitle::declared($key, $locale) !== null) {
+            return;
+        }
+
+        $catalog = "lang/vendor/legal-consent/{$locale}/titles.php";
+        $where = $this->sourceFor($key) instanceof MarkdownFilesDriver
+            ? 'Give it one as `title:` in the front matter of its Markdown file'.(is_string($rendered->sourceRef) ? " ({$rendered->sourceRef})" : '')
+            : "Give it one in {$catalog}: '{$key}' => '…'";
+
+        throw LegalPublishRefused::because(
+            PublishRefusal::TitleIsTheKey,
+            "'{$key}' has no title in '{$locale}', so it would be published with its key as its heading, and the heading is frozen into the version. {$where}.",
+            ['language' => $locale, 'key' => $key, 'path' => $catalog],
+        );
     }
 
     /**
@@ -969,6 +1000,45 @@ final readonly class LegalDocumentPublisher
      */
     private function minLeadDays(NoticeMode $mode, ?string $regime, string $key): int
     {
+        return $this->leadTime($mode, $regime, $key)->days;
+    }
+
+    /**
+     * The shortest objection window a deemed-consent change to `$key` can have under `$regime`, and
+     * the rule that sets it, for a screen that has to say so before anybody picks a date. The same
+     * resolution the publish runs ({@see minLeadDays()}), so the two cannot name different numbers.
+     */
+    public function deemedLeadTime(string $key, ?string $regime): LeadTime
+    {
+        return $this->leadTime(NoticeMode::DeemedConsent, $regime, $key);
+    }
+
+    /**
+     * The first objection deadline a deemed-consent change announced on `$announce` can have: the
+     * first day the publish stops refusing, measured the way the publish measures it. An
+     * announcement before today counts from today, and a regime that counts in calendar months is
+     * held to them as well as to its days.
+     */
+    public function earliestObjectionDeadline(string $key, ?string $regime, CarbonImmutable $announce): CarbonImmutable
+    {
+        $today = CarbonImmutable::now()->startOfDay();
+        $start = $announce->startOfDay()->lessThan($today) ? $today : $announce->startOfDay();
+        $deadline = $start->addDays($this->minLeadDays(NoticeMode::DeemedConsent, $regime, $key));
+
+        // Two calendar months are 59 to 62 days, so the day count can fall short of the months by up
+        // to three days; the loop takes them one at a time and ends there.
+        while ($this->calendarShortfall($regime, $start, $deadline) !== null) {
+            $deadline = $deadline->addDay();
+        }
+
+        return $deadline;
+    }
+
+    /**
+     * The minimum advance period for a mode, a regime and a document, with the rule that set it.
+     */
+    private function leadTime(NoticeMode $mode, ?string $regime, string $key): LeadTime
+    {
         $periods = config('legal-consent.notice_periods');
         $periods = is_array($periods) ? $periods : [];
 
@@ -991,18 +1061,35 @@ final readonly class LegalDocumentPublisher
         // No input path may undercut a floor the law fixes.
         $floor = $regime === null ? 0 : (self::STATUTORY_FLOORS[$regime] ?? 0);
         $resolved = max($modeMinimum, $regimeMinimum, $floor);
+        $months = $regime === null ? null : (self::STATUTORY_MONTHS[$regime] ?? null);
+
+        // Which of the three set the number. The statute where it is as long as the others, because
+        // it is the one rule no setting can talk down; then the regime's own setting where it is
+        // longer than the mode's benchmark; then the benchmark.
+        $basis = match (true) {
+            $resolved === 0 => LeadTimeBasis::None,
+            $floor > 0 && $floor >= $resolved => LeadTimeBasis::Statute,
+            $regimeMinimum > $modeMinimum => LeadTimeBasis::RegimeSetting,
+            default => LeadTimeBasis::ModeBenchmark,
+        };
 
         $override = IntegerSetting::from($this->documents[$key]['min_lead_days'] ?? null);
 
         if ($override === null) {
-            return $resolved;
+            return new LeadTime($resolved, $basis === LeadTimeBasis::Statute ? $months : null, $basis, $regime);
         }
 
         // A statutory period may only be lengthened by an override. A regime without a legal floor
         // — and a change with no regime at all — may be tuned down, which is the point of the knob,
         // down to no period at all: below zero, a deemed-consent window could close before its own
         // announcement, and a configured period below zero already counts as zero.
-        return $floor > 0 ? max($override, $resolved) : max(0, $override);
+        $days = $floor > 0 ? max($override, $resolved) : max(0, $override);
+
+        if ($days === $resolved) {
+            return new LeadTime($resolved, $basis === LeadTimeBasis::Statute ? $months : null, $basis, $regime);
+        }
+
+        return new LeadTime($days, null, $days === 0 ? LeadTimeBasis::None : LeadTimeBasis::DocumentSetting, $regime);
     }
 
     /**

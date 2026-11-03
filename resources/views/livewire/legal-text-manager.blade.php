@@ -151,6 +151,9 @@
                                      button list (WCAG 2.4.6) — the same rule this package already
                                      enforces for the withdraw control. --}}
                                 <button type="button" aria-label="{{ __('legal-consent::ui.admin_release_all').' — '.($documentNames[$key] ?? $key) }}" wire:click="releaseAll({{ json_encode($key, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }})" wire:loading.attr="aria-busy" wire:target="releaseAll({{ json_encode($key, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }})">{{ __('legal-consent::ui.admin_release_all') }}</button>
+                                @if (($rows[$key]['_release']['headings'] ?? []) !== [])
+                                    <p id="headings-{{ $key }}">{{ __('legal-consent::ui.admin_release_headings', ['headings' => implode(', ', array_map(fn (string $locale, string $heading): string => ($languageNames[$locale] ?? $locale).' „'.$heading.'“', array_keys($rows[$key]['_release']['headings'] ?? []), array_values($rows[$key]['_release']['headings'] ?? [])))]) }}</p>
+                                @endif
                                 {{-- Visible before the click: the languages this release leaves out keep the
                                      version they already have live, so leaving them out is a decision
                                      somebody saw. --}}

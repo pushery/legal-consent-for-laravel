@@ -129,4 +129,17 @@ enum ConsentAction: string
     {
         return in_array($this, self::accepting(), true);
     }
+
+    /**
+     * The name of the action in the reader's language, for a screen that shows a ledger entry.
+     *
+     * A host showing what an account did with a legal text wrote `__($action->value)`, and no
+     * catalog carries `granted` or `re_accepted`, so every language showed the raw value. The words
+     * live in the package's catalogs, under `ui.actions`, so every host shows the same ones and a
+     * host that wants others overrides them there.
+     */
+    public function label(): string
+    {
+        return (string) __('legal-consent::ui.actions.'.$this->value);
+    }
 }

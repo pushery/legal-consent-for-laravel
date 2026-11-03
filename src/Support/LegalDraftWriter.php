@@ -203,6 +203,17 @@ readonly class LegalDraftWriter
     }
 
     /**
+     * Whether `$body` is the text `$draft` holds, after the normalization a save would store it with.
+     *
+     * A save of the same bytes is no change and keeps the sign-off, so a caller that reports what it
+     * replaced asks this first rather than counting a save that wrote nothing.
+     */
+    public function sameText(string $key, string $locale, LegalDraft $draft, string $body): bool
+    {
+        return $this->pipeline->hashOf($this->normalize($key, $locale, $body)) === $draft->content_hash;
+    }
+
+    /**
      * A stored draft state: its row and its revision, the pair every write moves. '' for no draft.
      *
      * The row is part of it because a draft that was discarded and written again starts over at

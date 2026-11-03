@@ -9,7 +9,9 @@ use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Content\ContentFormat;
 use Pushery\LegalConsent\Content\LegalDocumentSource;
 use Pushery\LegalConsent\Content\RawDocument;
+use Pushery\LegalConsent\Enums\BlockingReason;
 use Pushery\LegalConsent\Enums\DocumentType;
+use Pushery\LegalConsent\Enums\ReviewState;
 use Pushery\LegalConsent\Exceptions\LegalDocumentNotFound;
 use Pushery\LegalConsent\Exceptions\MissingAcceptanceWording;
 use Pushery\LegalConsent\Models\LegalDraft;
@@ -56,7 +58,13 @@ final readonly class DraftDocumentSource implements AwaitsAuthoring, LegalDocume
         // so this single check is what makes "a machine draft can never be published" true on
         // every path — the admin button and the CLI alike.
         if (! $draft instanceof LegalDraft || ! $set->isPublishable($draft)) {
-            throw LegalDocumentNotFound::forSource($type, $locale, 'legal_drafts');
+            // The reason in the order the overview names it: no draft, then no sign-off, then a
+            // translation whose source changed after it was signed off.
+            throw LegalDocumentNotFound::inTheDraftStore($type, $locale, match (true) {
+                ! $draft instanceof LegalDraft => BlockingReason::NoDraft,
+                $draft->review_state !== ReviewState::Reviewed => BlockingReason::NotReviewed,
+                default => BlockingReason::StaleTranslation,
+            });
         }
 
         return new RawDocument(

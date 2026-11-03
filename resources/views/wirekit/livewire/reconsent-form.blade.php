@@ -151,6 +151,17 @@
                     'bind' => 'accept',
                 ])
 
+                {{-- A submit with nothing ticked, said as the error it is: WireKit's danger alert, which
+                     is `role="alert"` and announces itself, between the boxes it is about and the
+                     button that is pressed again. Keyed by the error nonce, so a second empty submit
+                     inserts a new element and is heard again. The boxes still unticked carry the error
+                     state of their own field. Read as consent-checkboxes reads its errors: a view
+                     rendered outside a request has no `$errors` at all. --}}
+                @php($lcIncomplete = (string) (($errors ?? null)?->first('accept') ?? ''))
+                @if ($lcIncomplete !== '')
+                    <x-wirekit::alert intent="danger" wire:key="lc-reconsent-incomplete-{{ $errorNonce }}">{{ $lcIncomplete }}</x-wirekit::alert>
+                @endif
+
                 {{-- This button has no Livewire action of its own: the <form> carries `wire:submit`. On
                      such a button x-wirekit::button reads `loading`, which `loading-target` implies, as a
                      declarative state that nothing on the tag can switch off. It would render a spinner

@@ -4,6 +4,54 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.0] - 2026-11-03
+
+### Added
+
+- **The editor asks before unsaved changes are left.** In the WireKit views a changed text shows WireKit's unsaved hint beside **Save**, and leaving the page asks first, in WireKit's dialog for a link inside the application and in the browser's own question for a reload or a closed tab. Only a save or a discard counts the text as saved, so another button's request, which sends the text along without storing it, does not. The release form with an objection window counts its class and its two switches until the release went through.
+
+  **Upgrade:** a host that published the WireKit editor view publishes it again.
+
+- **`legal-consent:status` and `legal-consent:review` put a release together on the command line.** `status` lists every document by language with its heading, its kind, how far its text is and the version in force, and under each document the publish command for the languages that are ready, in the mode of its kind, with the reason and the next command for every other. `review` signs drafts off as reviewed, the editor's button for the shell, after a question that names the document, the languages and the version; `--by=` names who reviewed them and `--force` skips the question. A publish that meets an unreviewed draft says so, with the command to run, rather than reporting no document found.
+
+- **`legal-consent:draft-from-source --refresh` carries a change in the repository over to the drafts.** An application that goes on writing its texts as Markdown and reviews, translates and releases them in the admin area had no way to bring a changed file into the editor: the import keeps every draft it finds, and the draft of the source language cannot be discarded. `--refresh` replaces a draft with the text of the source when the draft still says what its published version says, a difference in rendering alone included, and keeps and names one that was edited in the admin area. A replaced text waits for a review again and nothing is published. `--dry-run` names what a run would draft and replace, and writes nothing.
+
+- **What a release freezes is named before it runs.** `legal-consent:doctor` names every registered document whose heading would be its key or comes from another language, and every one that would ask for the generic acceptance sentence or has none at all, per language. `legal-consent:publish --dry-run` names the heading and the sentence of each version, and the dry run and the real run warn when a version asks for the generic sentence. The editor's release dialog names the heading and the sentence, the overview's release the heading of each language, and `legal-consent:draft-from-source` prints the title and the sentence a Markdown source carries in its front matter as lines for the translation files, which the drafts store reads instead.
+
+- **`ConsentAction::label()` names a ledger action in the reader's language.** A screen that showed what an account did with a legal text had only the raw value, `re_accepted` in every language, because no catalog carried a word for it. The names of all eleven actions are in the seven catalogs under `ui.actions`.
+
+### Changed
+
+- **The release form with an objection window lays its fields side by side.** The three dates stand on one line and the regime and the change class on the next, each label, control and message aligned with the others, and under each other on a phone. The release button keeps its own width.
+
+- **A document is never published with its key as its heading.** The publisher refuses a version whose heading would be the document's key: on the drafts store a document the titles catalog has no line for, in a Markdown source a file without `title:` in its front matter. A document an application registers itself, such as a data processing agreement under `dpa`, used to be published headed "dpa", frozen into the version in every language, and nothing said so beforehand. The refusal holds for `legal-consent:publish` and its `--dry-run`, the overview and the editor, and the screens word it in their language. A key the titles catalog names as its own heading is taken as meant.
+
+  **Upgrade:** an application gives every document of its own a title in `lang/vendor/legal-consent/<locale>/titles.php`, or `title:` in the front matter of its Markdown file, before its next release. `legal-consent:doctor` names each one.
+
+- **Save and publish in one go.** The editor's **Save and publish** saves the draft and opens a short dialog of every setting the release takes: the languages it releases and those it leaves out with their reason, the version it becomes, the way it is released and what that means for the people it concerns, the dates and the regime. It offers only the ways the document's type can be released in, and confirming signs the language off as reviewed by the person who confirms and releases. A standard update used to take three screens, and what it would set in motion was shown on none of them.
+
+  **Upgrade:** a host that published the editor views publishes them again for the button and the dialog.
+
+- **A translation that was never published can be added on its own.** Where one language of a text holds a version in force and another was never published, the editor of the missing language offers **Publish the language**: it goes out under the version the others hold, in its mode, and nobody has to accept anything again, because a consent counts across languages. The overview's release would have released every reviewed language as a new version.
+
+  **Upgrade:** a host that published the editor views publishes them again for the button.
+
+- **The editor publishes a text that was never published at once, without an objection window.** It offered only the window, so a first publication was asked for a period, although a first version has nothing anybody could object to. A text with no published version now gets **Publish now**, which releases every ready language in the mode of the document's type, as the overview's release does: a contract asks for its first acceptance, a privacy notice is announced, an informational page goes out silently. The window comes back for the next change.
+
+  **Upgrade:** a host that published the editor views publishes them again for the button.
+
+- **The editor's release with an objection window opens on a window that already holds.** It opened with all three dates on today and said only after the press that the window falls short of the statutory lead time. It now opens announced today, with the objection deadline on the first day the publisher accepts for the document and its regime and the effective date the day after, and it moves both along with the announcement and the regime until somebody sets them by hand. No date field offers an earlier day, the minimum stands under the dates in days with its source, such as § 308 Nr. 5 BGB or § 675g Abs. 1 BGB, the regime is preselected as German standard terms for a contract and every option is named and explained, the change class reads as optional, the two switches say when they are needed, and the preview opens folded. `LegalDocumentPublisher::earliestObjectionDeadline()` and `deemedLeadTime()` give an application's own screen the same numbers.
+
+  **Upgrade:** a host that published the editor views publishes them again for the new form.
+
+- **A re-consent submit with nothing ticked is answered as an error, between the boxes and the button.** `ReConsentForm` used to put its prompt into the status region above the form. It now files the message under `accept`, which the WireKit view shows as a danger alert and the plain view as a `role="alert"` paragraph, both between the documents and the submit button, and it files a short mark under the field of every box still unticked, so each takes its error state and `aria-invalid`. The status region stays empty for it, and the focus stays on the button.
+
+  **Upgrade:** a copy of the re-consent views published before shows nothing for an empty submit, because `status` is no longer set for it. `php artisan vendor:publish --tag=legal-consent-views --force` brings the plain one, `php artisan vendor:publish --tag=legal-consent-wirekit --force` the WireKit one. A test that read `status` after an empty submit reads the error under `accept` instead.
+
+### Fixed
+
+- **A regional locale is headed in its language.** `DocumentTitle::for()` answered a locale such as `de_AT` from the application's fallback language rather than from German, so a version published in it carried an English heading. It reads the language's own line first now, as the acceptance sentence always did.
+
 ## [0.53.0] - 2026-11-02
 
 ### Added
@@ -3290,7 +3338,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.53.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.54.0...HEAD
+[0.54.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.1...v0.53.0
 [0.52.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.0...v0.52.1
 [0.52.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.51.0...v0.52.0

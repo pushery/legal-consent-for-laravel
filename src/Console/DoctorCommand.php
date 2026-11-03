@@ -14,7 +14,12 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+use Pushery\LegalConsent\Content\AcceptanceWording;
 use Pushery\LegalConsent\Content\AwaitsAuthoring;
+use Pushery\LegalConsent\Content\Drivers\DraftDocumentSource;
+use Pushery\LegalConsent\Content\Drivers\MarkdownFilesDriver;
+use Pushery\LegalConsent\Content\RawDocument;
+use Pushery\LegalConsent\Content\SourceFactory;
 use Pushery\LegalConsent\Enums\DocumentType;
 use Pushery\LegalConsent\Enums\NoticeMode;
 use Pushery\LegalConsent\Http\Middleware\EnsureLegalConsent;
@@ -25,6 +30,7 @@ use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\ConcludingParty;
 use Pushery\LegalConsent\Support\ConfirmationWindow;
 use Pushery\LegalConsent\Support\DocumentMatrix;
+use Pushery\LegalConsent\Support\DocumentTitle;
 use Pushery\LegalConsent\Support\IntegerSetting;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
@@ -992,6 +998,82 @@ final class DoctorCommand extends Command
         }
     }
 
+    /**
+     * The headings and acceptance sentences a release would freeze that nobody gave the document,
+     * per registered document and configured language.
+     *
+     * The drafts store takes both from the translations and a Markdown source from the front matter
+     * of its file; a source of the application's own names its documents itself and is left alone. A
+     * heading that would be the key and a sentence that is not there at all stop a publish. A heading
+     * lent by another language and the generic sentence do not, and are named so that somebody
+     * decides them before they are frozen.
+     *
+     * @return list<array{0: string, 1: string, 2: bool, 3: string}> key, locale, whether a publish is
+     *                                                               refused over it, the finding
+     */
+    private function unnamedDocuments(): array
+    {
+        $findings = [];
+
+        foreach (DocumentMatrix::keys() as $key) {
+            try {
+                $source = app(SourceFactory::class)->for($key);
+            } catch (Throwable) {
+                continue;
+            }
+
+            if (! $source instanceof DraftDocumentSource && ! $source instanceof MarkdownFilesDriver) {
+                continue;
+            }
+
+            try {
+                $asks = DocumentType::fromLegalBasis(DocumentMatrix::legalBasis($key))->isConsentBearing();
+            } catch (ValueError) {
+                // A basis nobody can name is reported where the registry is read; this check reads
+                // only documents it can tell are asking or not.
+                continue;
+            }
+
+            foreach (DocumentMatrix::locales() as $locale) {
+                $file = null;
+
+                if ($source instanceof MarkdownFilesDriver) {
+                    try {
+                        $file = $source->resolve($key, $locale);
+                    } catch (Throwable) {
+                        // No file in this language yet, or one the publish command reports on.
+                        continue;
+                    }
+                }
+
+                $declared = DocumentTitle::declared($key, $locale);
+                $title = $file instanceof RawDocument ? $file->title : DocumentTitle::for($key, $locale);
+
+                if ($title === $key && $declared === null) {
+                    $findings[] = [$key, $locale, true, $file instanceof RawDocument
+                        ? "no `title:` in its front matter, so its heading would be its key, \"{$key}\""
+                        : "no title, so its heading would be its key, \"{$key}\""];
+                } elseif (! $file instanceof RawDocument && $declared === null) {
+                    $findings[] = [$key, $locale, false, "no title in this language, so its heading would be \"{$title}\" from another one"];
+                }
+
+                if (! $asks || ($file instanceof RawDocument && $file->uiWording !== null && trim($file->uiWording) !== '')) {
+                    continue;
+                }
+
+                $sentence = AcceptanceWording::for($key, $locale);
+
+                if ($sentence === null) {
+                    $findings[] = [$key, $locale, true, 'no acceptance sentence at all, so it cannot be published'];
+                } elseif (AcceptanceWording::own($key, $locale) === null) {
+                    $findings[] = [$key, $locale, false, "no acceptance sentence of its own, so it would ask for the generic one, \"{$sentence}\""];
+                }
+            }
+        }
+
+        return $findings;
+    }
+
     public function handle(): int
     {
         $variantFinding = $this->uiVariantFinding();
@@ -1009,6 +1091,8 @@ final class DoctorCommand extends Command
         $unconcludable = $this->unconcludableDocuments();
         $unknownRightsRoutes = $this->unknownRightsRoutes();
         $rightsUndeclared = $this->gateWithoutRightsRoutes();
+        $unnamed = $this->unnamedDocuments();
+        $unnamedRefused = array_filter($unnamed, static fn (array $finding): bool => $finding[2]) !== [];
 
         $database = $this->databaseFindings();
 
@@ -1245,6 +1329,30 @@ final class DoctorCommand extends Command
             $this->newLine();
         }
 
+        if ($unnamed !== []) {
+            $headline = 'These documents would be published with a heading or an acceptance sentence nobody gave them:';
+
+            $this->newLine();
+            $unnamedRefused ? $this->error($headline) : $this->warn($headline);
+
+            foreach ($unnamed as [$key, $locale, $refused, $finding]) {
+                $this->line($refused ? "  <fg=red>x</> {$key} in {$locale}: {$finding}" : "  <fg=yellow>?</> {$key} in {$locale}: {$finding}");
+            }
+
+            $this->newLine();
+            $this->line('  Both are frozen into the version when it is published, and the sentence into every');
+            $this->line('  consent given under it. The drafts store takes them from the translations, which');
+            $this->line('  Laravel lays over the ones this package ships:');
+            $this->newLine();
+            $this->line("      lang/vendor/legal-consent/<locale>/titles.php     '<key>' => '…',");
+            $this->line("      lang/vendor/legal-consent/<locale>/wording.php    '<key>' => '…',");
+            $this->newLine();
+            $this->line('  A Markdown source takes them from `title:` and `ui_wording:` in the front matter of its');
+            $this->line('  file. `legal-consent:publish` refuses a heading that is only the key, and a document');
+            $this->line('  that asks for consent without a sentence.');
+            $this->newLine();
+        }
+
         if ($unconcludable !== []) {
             $this->newLine();
             $this->error('`concluded_by` names no model a change notice can reach:');
@@ -1278,7 +1386,7 @@ final class DoctorCommand extends Command
         // returns each restating the rule is how the legal contradiction fell out of the exit code
         // on the third one: the same deemed-consent-without-proof installation ended 1 or 0
         // depending on whether the published config happened to carry an unrelated stale key.
-        $failed = $incoherent || $refusedFallbacks !== [] || $unconcludable !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null || $documentRetentionProblems !== [] || $confirmWindowProblem !== null || $zoneShift !== null;
+        $failed = $incoherent || $refusedFallbacks !== [] || $unnamedRefused || $unconcludable !== [] || $unknownRightsRoutes !== [] || $retentionProblem !== null || $documentRetentionProblems !== [] || $confirmWindowProblem !== null || $zoneShift !== null;
 
         // $this->laravel->configPath() rather than the config_path() helper, as the provider does
         // when it publishes: the path is the application's, so it is asked of the application this

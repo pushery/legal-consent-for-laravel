@@ -8,6 +8,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Pushery\LegalConsent\Console\Concerns\RunsPerTenant;
+use Pushery\LegalConsent\Content\AcceptanceWording;
 use Pushery\LegalConsent\Content\AwaitsAuthoring;
 use Pushery\LegalConsent\Content\Document;
 use Pushery\LegalConsent\Enums\DocumentType;
@@ -197,6 +198,7 @@ final class PublishDocumentCommand extends Command
 
         if ($document->wasRecentlyCreated) {
             $this->reportWordingChange($key, $locale, $before, $document->ui_wording);
+            $this->reportGenericWording($key, $locale, $document->ui_wording);
         }
 
         return self::SUCCESS;
@@ -281,6 +283,7 @@ final class PublishDocumentCommand extends Command
                     $published++;
                     $this->info("Published {$key} ({$locale}) v{$document->version} — {$document->noticeMode()->value}.");
                     $this->reportWordingChange($key, $locale, $before, $document->ui_wording);
+                    $this->reportGenericWording($key, $locale, $document->ui_wording);
                 } else {
                     $unchanged++;
                 }
@@ -411,6 +414,7 @@ final class PublishDocumentCommand extends Command
                 $this->info($active instanceof LegalDocument
                     ? "  + {$key} ({$locale}) — would publish v{$rendered->version}, replacing active v{$active->version} (source has drifted)."
                     : "  + {$key} ({$locale}) — would publish v{$rendered->version} (first version).");
+                $this->reportNames($key, $locale, $rendered);
                 $this->reportWordingChange($key, $locale, $active, $rendered->uiWording, preview: true);
             }
         }
@@ -525,6 +529,7 @@ final class PublishDocumentCommand extends Command
 
             if ($document->wasRecentlyCreated) {
                 $this->reportWordingChange($key, $document->locale, $before[$document->locale] ?? null, $document->ui_wording);
+                $this->reportGenericWording($key, $document->locale, $document->ui_wording);
             }
         }
 
@@ -553,18 +558,19 @@ final class PublishDocumentCommand extends Command
 
             $unchanged = $this->unchanged($active, $rendered);
 
-            $lines[] = [$locale, $rendered->uiWording, $active, $unchanged, match (true) {
+            $lines[] = [$locale, $rendered, $active, $unchanged, match (true) {
                 $unchanged => "Dry run: {$key} ({$locale}) v{$rendered->version} is already the active version, unchanged.",
                 $active instanceof LegalDocument => "Dry run: {$key} ({$locale}) would publish v{$rendered->version} as {$mode->value}, replacing active v{$active->version}.",
                 default => "Dry run: {$key} ({$locale}) would publish v{$rendered->version} as {$mode->value}, the first version.",
             }];
         }
 
-        foreach ($lines as [$locale, $wording, $active, $unchanged, $line]) {
+        foreach ($lines as [$locale, $rendered, $active, $unchanged, $line]) {
             $this->info($line);
 
             if (! $unchanged) {
-                $this->reportWordingChange($key, $locale, $active, $wording, preview: true);
+                $this->reportNames($key, $locale, $rendered);
+                $this->reportWordingChange($key, $locale, $active, $rendered->uiWording, preview: true);
             }
         }
 
@@ -618,6 +624,7 @@ final class PublishDocumentCommand extends Command
             ? "Dry run: {$key} ({$locale}) would publish v{$rendered->version}, replacing active v{$active->version}. Nothing was written."
             : "Dry run: {$key} ({$locale}) would publish v{$rendered->version} as the first version. Nothing was written.");
 
+        $this->reportNames($key, $locale, $rendered);
         $this->reportWordingChange($key, $locale, $active, $rendered->uiWording, preview: true);
 
         return self::SUCCESS;
@@ -663,6 +670,39 @@ final class PublishDocumentCommand extends Command
             ->where('locale', $locale)
             ->where('is_active', true)
             ->first();
+    }
+
+    /**
+     * Name the heading and the acceptance sentence a version would freeze, before anything is written.
+     *
+     * Both are frozen into the version, and the sentence into every consent given under it, so a dry
+     * run shows them rather than leaving them to be read off the published row afterwards.
+     */
+    private function reportNames(string $key, string $locale, Document $rendered): void
+    {
+        $this->line($rendered->uiWording === null
+            ? "  Heading \"{$rendered->title}\", and no acceptance sentence: the document asks nobody to accept it."
+            : "  Heading \"{$rendered->title}\", acceptance sentence \"{$rendered->uiWording}\".");
+
+        $this->reportGenericWording($key, $locale, $rendered->uiWording);
+    }
+
+    /**
+     * Say so when a version asks for the generic acceptance sentence because the document has none of
+     * its own.
+     *
+     * A document the application registers itself starts out that way, and the generic sentence names
+     * no document. It is a warning rather than a refusal: the generic sentence is a lawful one. What
+     * is not meant is freezing it without noticing.
+     */
+    private function reportGenericWording(string $key, string $locale, ?string $sentence): void
+    {
+        if (! AcceptanceWording::isGeneric($key, $locale, $sentence)) {
+            return;
+        }
+
+        $this->warn("{$key} ({$locale}) asks for the generic acceptance sentence \"{$sentence}\", because it has none of its own.");
+        $this->line("  Give it one in lang/vendor/legal-consent/{$locale}/wording.php, as '{$key}' => '…', or as `ui_wording:` in a Markdown source.");
     }
 
     /**

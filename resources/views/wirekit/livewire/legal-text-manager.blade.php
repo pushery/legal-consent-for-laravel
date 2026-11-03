@@ -177,6 +177,9 @@
 
                                     <x-wirekit::alert-dialog.description>
                                         {{ __('legal-consent::ui.admin_release_confirm_body') }}
+                                        @if (($rows[$key]['_release']['headings'] ?? []) !== [])
+                                            {{ __('legal-consent::ui.admin_release_headings', ['headings' => implode(', ', array_map(fn (string $locale, string $heading): string => ($languageNames[$locale] ?? $locale).' „'.$heading.'“', array_keys($rows[$key]['_release']['headings'] ?? []), array_values($rows[$key]['_release']['headings'] ?? [])))]) }}
+                                        @endif
                                         @if ($rows[$key]['_release']['left_out'] !== [])
                                             {{ __('legal-consent::ui.admin_release_leaves_out', ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}
                                         @endif
