@@ -151,6 +151,7 @@ return [
     'admin_body_label' => 'Testo (HTML sanificato)',
     'admin_preview_label' => 'Anteprima del testo pubblicato',
     'admin_edit_for_state' => 'Modifica :key (:locale) — :state',
+    'admin_cell_name' => ':shown — :name',
     'admin_status_saved' => 'Salvato. Prima della pubblicazione è necessaria una revisione.',
     'admin_status_not_saved' => 'Non salvato — :reason',
     'admin_status_source_not_translated' => 'La lingua di origine viene redatta, non tradotta.',

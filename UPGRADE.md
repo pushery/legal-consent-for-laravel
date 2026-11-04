@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.54.0 → 0.55.0
+
+**Nothing is required of you**, unless a published legal text holds a numbered list that goes on after a table, a paragraph or a quote.
+
+**Freeze such a text again after the update.** The renderer now keeps the number such a list starts at, so the fingerprint of the rendered text moves: `php artisan legal-consent:check-drift` reports the text as a change of presentation only, and `php artisan legal-consent:rerender <key> <locale>` freezes it again without a materiality decision. A text without such a list renders as before and is not reported.
+
 ## 0.53.0 → 0.54.0
 
 **Nothing is required of you**, unless you registered a document of your own, published the re-consent or editor views, or a test reads `status` after an empty submit.

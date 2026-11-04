@@ -45,6 +45,7 @@ final class LegalHtmlSanitizer
     private const array ALLOWED_ATTRIBUTES = [
         'a' => ['href', 'title'],
         'abbr' => ['title'],
+        'ol' => ['start'],
     ];
 
     /**
@@ -83,8 +84,9 @@ final class LegalHtmlSanitizer
     }
 
     /**
-     * The attributes a kept element may carry, by element. An element missing here keeps none, and
-     * an `href` is kept only when its scheme is safe (relative, `http`, `https` or `mailto`).
+     * The attributes a kept element may carry, by element. An element missing here keeps none, an
+     * `href` is kept only when its scheme is safe (relative, `http`, `https` or `mailto`), and a
+     * `start` only when it is a whole number of at most nine digits.
      *
      * @return array<string, list<string>>
      */
@@ -245,6 +247,13 @@ final class LegalHtmlSanitizer
             }
 
             if ($name === 'href' && ! $this->isSafeUrl($attribute->nodeValue ?? '')) {
+                $element->removeAttribute($attribute->nodeName);
+            }
+
+            // The number a list starts at, as CommonMark writes it for a list that goes on after a
+            // table, a paragraph or a quote. Nine digits are the most CommonMark reads as a list
+            // marker; any other value is stripped, and the list counts from 1.
+            if ($name === 'start' && preg_match('/^(?:0|[1-9]\d{0,8})$/', $attribute->nodeValue ?? '') !== 1) {
                 $element->removeAttribute($attribute->nodeName);
             }
         }

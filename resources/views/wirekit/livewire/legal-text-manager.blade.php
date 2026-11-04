@@ -124,7 +124,9 @@
 
                                      The accessible name repeats the states on purpose. An `aria-label`
                                      replaces the content it sits on, so a link announcing only "Edit
-                                     Terms (de)" would hide the one fact the cell exists to state.
+                                     Terms (de)" would hide the one fact the cell exists to state. It
+                                     begins with the short forms the badges show, so the text a reader
+                                     sees is part of the name a voice command matches (WCAG 2.5.3).
 
                                      The badges are rendered once into `$badges` and then either wrapped
                                      in the link or echoed as they are. Blade pairs a component's opening

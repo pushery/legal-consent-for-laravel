@@ -151,6 +151,7 @@ return [
     'admin_body_label' => 'Text (bereinigtes HTML)',
     'admin_preview_label' => 'Vorschau des veröffentlichten Texts',
     'admin_edit_for_state' => ':key bearbeiten (:locale) — :state',
+    'admin_cell_name' => ':shown — :name',
     'admin_status_saved' => 'Gespeichert. Vor der Veröffentlichung ist eine Prüfung erforderlich.',
     'admin_status_not_saved' => 'Nicht gespeichert — :reason',
     'admin_status_source_not_translated' => 'Die Quellsprache wird verfasst, nicht übersetzt.',
