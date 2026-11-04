@@ -151,6 +151,7 @@ return [
     'admin_body_label' => 'Tekst (opgeschoonde HTML)',
     'admin_preview_label' => 'Voorbeeld van de gepubliceerde tekst',
     'admin_edit_for_state' => ':key bewerken (:locale) — :state',
+    'admin_cell_name' => ':shown — :name',
     'admin_status_saved' => 'Opgeslagen. Voor publicatie is een controle vereist.',
     'admin_status_not_saved' => 'Niet opgeslagen — :reason',
     'admin_status_source_not_translated' => 'De brontaal wordt geschreven, niet vertaald.',

@@ -151,6 +151,7 @@ return [
     'admin_body_label' => 'Texte (HTML assaini)',
     'admin_preview_label' => 'Aperçu du texte publié',
     'admin_edit_for_state' => 'Modifier :key (:locale) — :state',
+    'admin_cell_name' => ':shown — :name',
     'admin_status_saved' => 'Enregistré. Une relecture est nécessaire avant de pouvoir publier ce texte.',
     'admin_status_not_saved' => 'Non enregistré — :reason',
     'admin_status_source_not_translated' => 'La langue source est rédigée, pas traduite.',

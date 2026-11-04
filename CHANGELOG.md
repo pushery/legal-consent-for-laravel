@@ -4,6 +4,16 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.55.0] - 2026-11-04
+
+### Fixed
+
+- **A numbered list that goes on after a table, a paragraph or a quote keeps its number.** CommonMark writes such a list as `<ol start="3">`, and the sanitizer kept no attribute on `ol`, so the list started again at 1. `start` is now kept on `ol` when it is a whole number of at most nine digits, the most CommonMark reads as a list marker, and stripped otherwise. `LegalHtmlSanitizer::allowedAttributes()` names it.
+
+  **Upgrade:** the renderer's fingerprint moves with the allowlist. `legal-consent:check-drift` reports a published text that holds such a list as a change of presentation only, and `php artisan legal-consent:rerender <key> <locale>` freezes it again without a materiality decision. A text without one renders as before and is not reported.
+
+- **A linked cell of the legal text overview carries the text it shows in its name.** With `admin.editor_route` set, each cell is a link, and its `aria-label` named the document, the language and the states in their long form, while the link reads the short form: a cell showing "None" was named "Edit Terms of Use (English) — Not written". That breaks WCAG 2.5.3 (label in name), and axe-core reports it as `label-content-name-mismatch` from 4.14 on. The name now begins with the short forms the cell shows, in their order, followed by the sentence as before, in both views. The new key `ui.admin_cell_name` (`:shown — :name`) holds the punctuation between the two; published translations without it fall back to the package's line.
+
 ## [0.54.0] - 2026-11-03
 
 ### Added
@@ -3338,7 +3348,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.54.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.55.0...HEAD
+[0.55.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.1...v0.53.0
 [0.52.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.0...v0.52.1

@@ -247,12 +247,18 @@ final class LegalTextManager extends Component
     }
 
     /**
-     * The accessible name of a linked cell — document, locale, and the states the badges show.
+     * The accessible name of a linked cell — the states it shows, then document, locale, and the
+     * same states in words.
      *
      * The states are repeated here rather than left to the badges because an `aria-label` replaces
      * the content it sits on: a link wrapping "None" that announces only "Edit Terms (de)" hides
      * the one fact the cell exists to state. The words are the long ones, for the same reason the
      * badges carry them as a `title` — "Stale" is a column heading, "Needs update" is a sentence.
+     *
+     * The name begins with the short forms the cell shows, in the order it shows them, because the
+     * visible text of a control has to be part of its name (WCAG 2.5.3, label in name): someone who
+     * operates the screen by voice says what they read, "None", and a link named only "Edit Terms
+     * (de) — Not written" does not answer to it.
      *
      * Both names arrive already resolved. The binding may answer either of them from the database —
      * the shipped one does for a document — so calling it from inside the cell loop is how a render
@@ -263,30 +269,40 @@ final class LegalTextManager extends Component
      */
     private function cellName(string $documentName, string $languageName, array $cell): string
     {
+        $shown = [];
         $states = [];
 
         if ($cell['written'] !== true) {
+            $shown[] = (string) __('legal-consent::ui.admin_not_written_short');
             $states[] = (string) __('legal-consent::ui.admin_not_written');
         } else {
-            $states[] = (string) __(is_string($cell['review_state_label']) ? $cell['review_state_label'] : '');
+            $label = is_string($cell['review_state_label']) ? $cell['review_state_label'] : '';
+            $shown[] = (string) __($label.'_short');
+            $states[] = (string) __($label);
 
             if ($cell['machine'] === true) {
+                $shown[] = (string) __('legal-consent::ui.admin_machine_short');
                 $states[] = (string) __('legal-consent::ui.admin_machine');
             }
 
             if ($cell['stale'] === true) {
+                $shown[] = (string) __('legal-consent::ui.admin_needs_update_short');
                 $states[] = (string) __('legal-consent::ui.admin_needs_update');
             } elseif ($cell['unpublished_changes'] === true) {
+                $shown[] = (string) __('legal-consent::ui.admin_unpublished_short');
                 $states[] = (string) __('legal-consent::ui.admin_unpublished');
             }
         }
 
         // The outer punctuation lives in the translation, because it is punctuation: a language
         // that separates an apposition differently gets to say so without a change here.
-        return (string) __('legal-consent::ui.admin_edit_for_state', [
-            'key' => $documentName,
-            'locale' => $languageName,
-            'state' => implode(' · ', $states),
+        return (string) __('legal-consent::ui.admin_cell_name', [
+            'shown' => implode(' · ', $shown),
+            'name' => (string) __('legal-consent::ui.admin_edit_for_state', [
+                'key' => $documentName,
+                'locale' => $languageName,
+                'state' => implode(' · ', $states),
+            ]),
         ]);
     }
 

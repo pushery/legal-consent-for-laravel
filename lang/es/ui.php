@@ -151,6 +151,7 @@ return [
     'admin_body_label' => 'Texto (HTML saneado)',
     'admin_preview_label' => 'Vista previa del texto publicado',
     'admin_edit_for_state' => 'Editar :key (:locale) — :state',
+    'admin_cell_name' => ':shown — :name',
     'admin_status_saved' => 'Guardado. Se requiere una revisión antes de poder publicar este texto.',
     'admin_status_not_saved' => 'No se ha guardado — :reason',
     'admin_status_source_not_translated' => 'El idioma de origen se redacta, no se traduce.',

@@ -156,6 +156,7 @@ return [
     'admin_body_label' => 'Text (sanitized HTML)',
     'admin_preview_label' => 'Preview of the published text',
     'admin_edit_for_state' => 'Edit :key (:locale) — :state',
+    'admin_cell_name' => ':shown — :name',
     'admin_status_saved' => 'Saved. Review is required before this text can be published.',
     'admin_status_not_saved' => 'Not saved — :reason',
     'admin_status_source_not_translated' => 'The source locale is authored, not translated.',
