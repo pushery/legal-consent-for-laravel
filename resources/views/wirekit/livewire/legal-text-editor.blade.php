@@ -216,33 +216,26 @@
                                 </x-wirekit::stack>
                             </fieldset>
 
-                            <dl>
-                                <dt>{{ __('legal-consent::ui.admin_release_dialog_languages') }}</dt>
-                                <dd>{{ implode(', ', $releaseSummary['languages']) }}</dd>
+                            <x-wirekit::data-list layout="detail">
+                                <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_languages')" :value="implode(', ', $releaseSummary['languages'])" />
                                 @if ($releaseSummary['left_out'] !== [])
-                                    <dt>{{ __('legal-consent::ui.admin_release_dialog_left_out') }}</dt>
-                                    <dd>{{ implode('; ', $releaseSummary['left_out']) }}</dd>
+                                    <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_left_out')" :value="implode('; ', $releaseSummary['left_out'])" />
                                 @endif
-                                <dt>{{ __('legal-consent::ui.admin_release_dialog_version') }}</dt>
-                                <dd>{{ $releaseSummary['version'] }}</dd>
-                                <dt>{{ __('legal-consent::ui.admin_release_dialog_heading') }}</dt>
-                                <dd>{{ $releaseSummary['heading'] }}</dd>
+                                <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_version')" :value="$releaseSummary['version']" />
+                                <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_heading')" :value="$releaseSummary['heading']" />
                                 @if ($releaseSummary['sentence'] !== null)
-                                    <dt>{{ __('legal-consent::ui.admin_release_dialog_sentence') }}</dt>
-                                    <dd>
+                                    <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_sentence')">
                                         {{ $releaseSummary['sentence'] }}
                                         @if ($releaseSummary['generic'])
                                             <x-wirekit::text size="sm">{{ __('legal-consent::ui.admin_release_dialog_generic_sentence', ['locale' => $locale]) }}</x-wirekit::text>
                                         @endif
-                                    </dd>
+                                    </x-wirekit::data-list.item>
                                 @endif
-                                <dt>{{ __('legal-consent::ui.admin_release_dialog_dates') }}</dt>
-                                <dd>{{ $releaseSummary['dates'] }}</dd>
+                                <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_dates')" :value="$releaseSummary['dates']" />
                                 @if ($releaseSummary['regime'] !== null)
-                                    <dt>{{ __('legal-consent::ui.admin_release_dialog_regime') }}</dt>
-                                    <dd>{{ $releaseSummary['regime'] }}</dd>
+                                    <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_regime')" :value="$releaseSummary['regime']" />
                                 @endif
-                            </dl>
+                            </x-wirekit::data-list>
 
                             <x-wirekit::text>{{ __('legal-consent::ui.admin_release_dialog_reviewer', ['language' => $languageName ?? $locale]) }}</x-wirekit::text>
                         </x-wirekit::stack>

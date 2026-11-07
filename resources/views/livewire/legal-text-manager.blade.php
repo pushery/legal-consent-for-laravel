@@ -40,7 +40,9 @@
         {{-- The grid has Document + one column per locale + Release, so it can exceed a narrow
              viewport. A keyboard-focusable horizontal-scroll region keeps it reachable without
              forcing whole-page horizontal scrolling (WCAG 1.4.10 Reflow). --}}
-        <div role="region" aria-label="{{ __('legal-consent::ui.admin_heading') }}" tabindex="0" style="overflow-x: auto;">
+        {{-- A size container as well, so the release row below can hold its control in the part of
+             the grid a reader sees: `100cqi` there is this region's visible width. --}}
+        <div role="region" aria-label="{{ __('legal-consent::ui.admin_heading') }}" tabindex="0" style="overflow-x: auto; container-type: inline-size;">
         {{-- The legend. This matrix carries one column per locale, so the widest state word
              decides the table's width -- and the words are sentences. The cell carries the short
              form, its `title` the long one, and this line explains the six once for a reader who
@@ -140,11 +142,20 @@
                          `colspan` counts the locale columns plus the document column. With no release
                          column of its own, the grid stays as narrow as its locales allow.
 
-                         A `position: sticky` hold does not help here: at fourteen locales, scrolled to
-                         the far end, the control ends up outside the visible table with or without
-                         it. --}}
+                         The cell spans the whole grid, so on a phone with many locales it is far wider
+                         than the visible part, and a reader who scrolls sideways to the last locale
+                         scrolls the control away. Its content is held at the visible left edge: sticky,
+                         and no wider than the scrolling region (`100cqi`). As wide as the cell, a sticky
+                         hold has no room to move, which is why one on the cell's content alone changed
+                         nothing at fourteen locales.
+
+                         The cell's inline padding moves into the hold. A sticky box cannot leave its
+                         cell's content box, and scrolled to the far end that box stops one padding short
+                         of the visible edge, so a hold as wide as the region would be pushed back by
+                         exactly that much. --}}
                     <tr wire:key="release-{{ $key }}">
-                        <td colspan="{{ count($locales) + 1 }}">
+                        <td colspan="{{ count($locales) + 1 }}" style="padding-inline: 0;">
+                            <div style="position: sticky; inset-inline-start: 0; box-sizing: border-box; max-inline-size: 100cqi; padding-inline: var(--padding-wk-x-md, 0.75rem);">
                             @if ($rows[$key]['_release']['ready'])
                                 {{-- Per-document accessible name: with N rows, N buttons all reading
                                      "Release all locales" are indistinguishable in a screen reader's
@@ -178,6 +189,7 @@
                                     @endforeach
                                 </ul>
                             @endif
+                            </div>
                         </td>
                     </tr>
                 @endforeach

@@ -161,7 +161,12 @@
                          moved it: at 390 px the control sat 200 px past the right edge of the table's
                          visible area, and it is the only control this screen has. --}}
                     <x-wirekit::table.row wire:key="release-{{ $key }}">
-                        <x-wirekit::table.td :colspan="count($locales) + 1">
+                        <x-wirekit::table.td :colspan="count($locales) + 1" style="padding-inline: 0;">
+                            {{-- Held at the visible left edge while the grid scrolls sideways, and no wider
+                                 than the table's frame, the container `100cqi` measures. The cell's inline
+                                 padding moves into the hold, which a sticky box needs: it cannot leave its
+                                 cell's content box. See the plain twin. --}}
+                            <div style="position: sticky; inset-inline-start: 0; box-sizing: border-box; max-inline-size: 100cqi; padding-inline: var(--padding-wk-x-md, 0.75rem);">
                             @if ($rows[$key]['_release']['ready'])
                                 {{-- The installed alert-dialog exposes a `trigger` slot
                                      plus a default-slot panel body built from alert-dialog.title /
@@ -250,6 +255,7 @@
                                     @endforeach
                                 </x-wirekit::stack>
                             @endif
+                            </div>
                         </x-wirekit::table.td>
                     </x-wirekit::table.row>
                 @endforeach
