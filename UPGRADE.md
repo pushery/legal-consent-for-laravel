@@ -4,6 +4,10 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.55.0 → 0.56.0
+
+**Nothing is required of you.** `php artisan legal-consent:draft-from-source` gains `--replace-unchecked`, which replaces the draft of a text nothing is published of when whoever runs the command declares that nobody edited it. Without the option the command keeps every such draft, as before.
+
 ## 0.54.0 → 0.55.0
 
 **Nothing is required of you**, unless a published legal text holds a numbered list that goes on after a table, a paragraph or a quote.

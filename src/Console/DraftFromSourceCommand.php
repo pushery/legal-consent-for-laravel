@@ -51,6 +51,11 @@ use Throwable;
  * editor. A draft whose text differs from the published version was edited in the admin area and is
  * kept and named, a draft of a text nothing is published of is kept as before, and a replaced text
  * is never marked reviewed. `--dry-run` names what a run would write and writes nothing.
+ *
+ * `--replace-unchecked` does what `--refresh` does and also replaces a draft of a text nothing is
+ * published of. Without a published version nothing tells an edit from the import, so the option is
+ * the word of whoever runs the command that nobody edited those drafts. Each draft it replaces that
+ * way is named, and a draft that differs from its published version is kept all the same.
  */
 #[AsCommand(name: 'legal-consent:draft-from-source')]
 final class DraftFromSourceCommand extends Command
@@ -63,11 +68,15 @@ final class DraftFromSourceCommand extends Command
     /** The version of a text nobody has written yet, as the render pipeline and verify-documents read it. */
     private const string UNWRITTEN = '0.0.0';
 
+    /** What `keptOnRefresh()` answers for a draft `--replace-unchecked` replaces with nothing published to compare it with. */
+    private const string UNCHECKED = 'unchecked';
+
     protected $signature = 'legal-consent:draft-from-source
         {key? : Only this document key; every document on the draft store by default}
         {--from=markdown : The configured source to read the texts from}
         {--reviewed : Mark what is written as reviewed, for texts reviewed where they were written}
         {--refresh : Replace a draft that still matches its published version with the text of the source}
+        {--replace-unchecked : As --refresh, and also replace a draft of a text nothing is published of, on your word that nobody edited it}
         {--dry-run : Name what a run would draft and replace, and write nothing}
         {--tenant= : With tenancy on, write into this tenant rather than the shared bucket}';
 
@@ -122,7 +131,7 @@ final class DraftFromSourceCommand extends Command
         // The source locale first, whatever position the configured list gives it: a translation is
         // measured against the source text, so the source has to be in the store before it.
         $locales = array_values(array_unique([$sourceLocale, ...DocumentMatrix::locales()]));
-        $tally = ['drafted' => 0, 'replaced' => 0, 'edited' => []];
+        $tally = ['drafted' => 0, 'replaced' => 0, 'edited' => [], 'unchecked' => []];
 
         foreach ($keys as $key) {
             $this->draftDocument($key, $locales, $sourceLocale, $source, $pipeline, $writer, $tally);
@@ -251,7 +260,7 @@ final class DraftFromSourceCommand extends Command
      * Draft one document in every locale, the source locale first, and count what was written.
      *
      * @param  list<string>  $locales
-     * @param  array{drafted: int, replaced: int, edited: list<string>}  $tally
+     * @param  array{drafted: int, replaced: int, edited: list<string>, unchecked: list<string>}  $tally
      */
     private function draftDocument(string $key, array $locales, string $sourceLocale, LegalDocumentSource $source, RenderPipeline $pipeline, LegalDraftWriter $writer, array &$tally): void
     {
@@ -263,7 +272,7 @@ final class DraftFromSourceCommand extends Command
             $label = "{$key} ({$locale})";
             $draft = $set->draft($locale);
 
-            if ($draft instanceof LegalDraft && $this->option('refresh') !== true) {
+            if ($draft instanceof LegalDraft && ! $this->refreshes()) {
                 $this->components->twoColumnDetail($label, 'kept, it has a draft');
 
                 continue;
@@ -290,7 +299,7 @@ final class DraftFromSourceCommand extends Command
             if ($draft instanceof LegalDraft) {
                 $kept = $this->keptOnRefresh($key, $locale, $draft, $html, $pipeline, $writer);
 
-                if ($kept !== null) {
+                if (is_array($kept)) {
                     [$reason, $edited] = $kept;
 
                     if ($edited) {
@@ -302,10 +311,17 @@ final class DraftFromSourceCommand extends Command
                     continue;
                 }
 
+                $unchecked = $kept === self::UNCHECKED;
                 $tally['replaced']++;
 
+                if ($unchecked) {
+                    $tally['unchecked'][] = $label;
+                }
+
                 if ($dryRun) {
-                    $this->components->twoColumnDetail($label, 'would be replaced by the text of the source');
+                    $this->components->twoColumnDetail($label, $unchecked
+                        ? 'would be replaced, unchecked'
+                        : 'would be replaced by the text of the source');
 
                     continue;
                 }
@@ -319,7 +335,9 @@ final class DraftFromSourceCommand extends Command
                     $writer->setVersion($key, $version);
                 }
 
-                $this->components->twoColumnDetail($label, 'replaced by the text of the source, not reviewed');
+                $this->components->twoColumnDetail($label, $unchecked
+                    ? 'replaced unchecked, not reviewed'
+                    : 'replaced by the text of the source, not reviewed');
 
                 continue;
             }
@@ -344,17 +362,18 @@ final class DraftFromSourceCommand extends Command
     }
 
     /**
-     * Why `--refresh` keeps a draft and whether somebody edited it, or null when the source text
-     * replaces it.
+     * Why `--refresh` keeps a draft and whether somebody edited it, null when the source text replaces
+     * it, or `unchecked` when `--replace-unchecked` replaces it with nothing published to compare.
      *
      * A draft is replaced only while it says what its published version says. Its text is compared,
      * not its rendering: the same text rendered by a newer renderer carries another content hash and
      * the same source hash, and that is no edit. A draft of a text nothing is published of is kept, as
-     * without `--refresh`, because there is no published version to tell an edit from the import by.
+     * without `--refresh`, because there is no published version to tell an edit from the import by,
+     * unless `--replace-unchecked` declares that nobody edited it.
      *
-     * @return array{0: string, 1: bool}|null
+     * @return array{0: string, 1: bool}|'unchecked'|null
      */
-    private function keptOnRefresh(string $key, string $locale, LegalDraft $draft, string $html, RenderPipeline $pipeline, LegalDraftWriter $writer): ?array
+    private function keptOnRefresh(string $key, string $locale, LegalDraft $draft, string $html, RenderPipeline $pipeline, LegalDraftWriter $writer): array|string|null
     {
         if ($writer->sameText($key, $locale, $draft, $html)) {
             return ['kept, it holds the text of the source already', false];
@@ -368,7 +387,9 @@ final class DraftFromSourceCommand extends Command
             ->first();
 
         if (! $active instanceof LegalDocument) {
-            return ['kept, nothing is published of it to compare the draft with', false];
+            return $this->option('replace-unchecked') === true
+                ? self::UNCHECKED
+                : ['kept, nothing is published of it to compare the draft with', false];
         }
 
         $matches = $active->content_hash === $draft->content_hash
@@ -378,9 +399,10 @@ final class DraftFromSourceCommand extends Command
     }
 
     /**
-     * What the run wrote, and the drafts `--refresh` kept because somebody edited them.
+     * What the run wrote, the drafts `--refresh` kept because somebody edited them, and the drafts
+     * `--replace-unchecked` replaced with nothing published to compare them with.
      *
-     * @param  array{drafted: int, replaced: int, edited: list<string>}  $tally
+     * @param  array{drafted: int, replaced: int, edited: list<string>, unchecked: list<string>}  $tally
      */
     private function summarize(array $tally): void
     {
@@ -407,6 +429,17 @@ final class DraftFromSourceCommand extends Command
             $this->warn('These drafts were edited in the admin area since their published version, so they were kept: '.implode(', ', $tally['edited']).'.');
             $this->line('  Carry the change from the source over in the editor, or discard the draft there first.');
         }
+
+        if ($tally['unchecked'] !== []) {
+            $this->warn(($dryRun ? 'These drafts would be replaced' : 'These drafts were replaced')
+                .' with nothing published to compare them with, on --replace-unchecked: '.implode(', ', $tally['unchecked']).'.');
+        }
+    }
+
+    /** Whether a draft may be replaced at all: `--replace-unchecked` widens `--refresh` and implies it. */
+    private function refreshes(): bool
+    {
+        return $this->option('refresh') === true || $this->option('replace-unchecked') === true;
     }
 
     /**

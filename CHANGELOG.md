@@ -4,6 +4,22 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.56.0] - 2026-11-07
+
+### Added
+
+- **`legal-consent:draft-from-source --replace-unchecked` replaces the draft of a text nothing is published of.** `--refresh` keeps such a draft, because without a published version nothing tells an edit from the import, so a change to the source of a text still waiting for its first release reached no draft. With the option, whoever runs the command declares that nobody edited those drafts: each is replaced with the text of the source, not marked reviewed, and named at the end of the run. A draft that differs from its published version is kept as with `--refresh`, and `--dry-run` names what the option would replace.
+
+### Fixed
+
+- **The release control of the admin grid stays in view when the grid is scrolled sideways.** On a phone with many locales the release row spans a grid far wider than the screen, and a reader who scrolled to the last locale scrolled the control away. The row now holds its content at the visible edge, in the plain and in the WireKit view.
+
+  **Upgrade:** a host that published either admin view publishes it again.
+
+- **The release dialog of the WireKit editor sets each label apart from its value.** The summary under the modes was a bare description list, so under Tailwind's reset its labels and values stood at one size and one weight, one under the other, and the part that says what a release does read as a single column of words. It is WireKit's data list now: the label small and muted, the value beside it, and space between two entries, on a phone as on a desktop. The plain views stay unstyled, as they are throughout.
+
+  **Upgrade:** a host that published the WireKit editor view publishes it again.
+
 ## [0.55.0] - 2026-11-04
 
 ### Fixed
@@ -3348,7 +3364,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.55.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.0...HEAD
+[0.56.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.52.1...v0.53.0
