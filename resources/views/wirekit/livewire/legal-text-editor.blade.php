@@ -85,8 +85,11 @@
              as unsaved until a save, the hint beside Save says so, and leaving the page asks, a
              wire:navigate link in the kit's dialog and a reload or a closed tab in the browser's own.
              `until-saved`, because every request sends the deferred text along without storing it; the
-             component dispatches wirekit:saved for this scope once a save or a discard went through. --}}
-        <div x-wk-unsaved.until-saved.confirm="{{ \Pushery\LegalConsent\Livewire\LegalTextEditor::UNSAVED_TEXT }}">
+             component dispatches wirekit:saved for this scope once a save or a discard went through.
+
+             A stack rather than a plain element, so the buttons stand apart from the editor: the outer
+             stack's gap reaches only its own children, and this scope is one of them. --}}
+        <x-wirekit::stack gap="sm" x-wk-unsaved.until-saved.confirm="{{ \Pushery\LegalConsent\Livewire\LegalTextEditor::UNSAVED_TEXT }}">
         <div wire:ignore wire:key="lc-editor-body-{{ $bodyNonce ?? 0 }}">
             {{-- The current draft body seeds the editor via :value (the component reads the `value`
                  prop, never a slot — a slot here would silently render nothing on edit). Content
@@ -197,7 +200,7 @@
                 @endif
             </div>
         </x-wirekit::row>
-        </div>
+        </x-wirekit::stack>
 
         {{-- What a release in the chosen mode would do, shown before it happens. Bound to the
              component, so the confirmation closes it with the render it causes. --}}
@@ -343,24 +346,31 @@
 
         <x-wirekit::heading :level="2">{{ __('legal-consent::ui.admin_preview') }}</x-wirekit::heading>
         {{-- The already-sanitized stored bytes — a true fixpoint of what a publish will freeze. --}}
-        {{-- `as="section"` for the same reason as the plain twin: `x-wirekit::card` renders a
-             `<div>` by default, a div with no role maps to `generic`, and ARIA forbids naming a
-             generic element, so the label would be discarded. The label key is the one the plain
-             twin uses rather than `admin_preview`, the heading's own text, which would announce the
-             same words as the heading right above it. --}}
         {{-- Folded by default: on a long text the preview pushed the release form and its button
-             off the screen. The collapsible keeps its state across a save, so a reader who opened
-             it sees the stored text replace the old one. --}}
-        <x-wirekit::collapsible :trigger="__('legal-consent::ui.admin_preview_show')">
-            <x-wirekit::card as="section" aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">
-                {{-- Through `card.body` and `prose`, because a preview that does not look like its
-                     subject invites somebody to "correct" spacing that was never wrong: the published
-                     page sets its text as prose, and headings, lists and tables render differently
-                     without it. --}}
-                <x-wirekit::card.body>
+             off the screen. An accordion rather than a bare disclosure, because its bordered card and
+             its trigger row are how the kit marks something that opens; a trigger line with its
+             chevron at the far edge of the page did not read as one. The trigger is a heading one
+             level under the `h2` above.
+
+             The item carries a fixed id. The accordion keeps which items are open by their ids, and
+             a derived id is counted per request, so a render of this component alone could number it
+             differently from the full page, and a save would fold a preview the reader had opened.
+             With the id fixed it stays open, and the stored text replaces the old one in view. --}}
+        <x-wirekit::accordion :level="3">
+            <x-wirekit::accordion.item id="lc-editor-preview" :title="__('legal-consent::ui.admin_preview_show')">
+                {{-- `as="section"` for the same reason as the plain twin: a div with no role maps to
+                     `generic`, and ARIA forbids naming a generic element, so the label would be
+                     discarded. The label key is the one the plain twin uses rather than
+                     `admin_preview`, the heading's own text, which would announce the same words as
+                     the heading above.
+
+                     Through `prose`, because a preview that does not look like its subject invites
+                     somebody to "correct" spacing that was never wrong: the published page sets its
+                     text as prose, and headings, lists and tables render differently without it. --}}
+                <x-wirekit::stack as="section" gap="none" aria-label="{{ __('legal-consent::ui.admin_preview_label') }}">
                     <x-wirekit::prose>{!! $preview !!}</x-wirekit::prose>
-                </x-wirekit::card.body>
-            </x-wirekit::card>
-        </x-wirekit::collapsible>
+                </x-wirekit::stack>
+            </x-wirekit::accordion.item>
+        </x-wirekit::accordion>
     </x-wirekit::stack>
 </div>

@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.56.0 → 0.56.1
+
+**Nothing is required of you**, unless you published the WireKit editor view.
+
+**Publish the WireKit editor view again if you published it**, for the space between the editor and its buttons and for the preview in its accordion: `php artisan vendor:publish --tag=legal-consent-wirekit --force`.
+
 ## 0.55.0 → 0.56.0
 
 **Nothing is required of you.** `php artisan legal-consent:draft-from-source` gains `--replace-unchecked`, which replaces the draft of a text nothing is published of when whoever runs the command declares that nobody edited it. Without the option the command keeps every such draft, as before.
