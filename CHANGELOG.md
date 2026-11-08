@@ -4,6 +4,14 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.56.1] - 2026-11-08
+
+### Fixed
+
+- **The buttons of the WireKit editor stand apart from the editor, and the preview reads as something that opens.** The buttons under the editor sat directly on its lower edge, because the element that holds both set no gap between them; it is a stack now. The folded preview was a line of text with its chevron at the far edge of the page. It is an accordion now, in the kit's frame, and a preview the reader opened stays open across a save.
+
+  **Upgrade:** a host that published the WireKit editor view publishes it again.
+
 ## [0.56.0] - 2026-11-07
 
 ### Added
@@ -3364,7 +3372,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.1...HEAD
+[0.56.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.0...v0.56.1
 [0.56.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.53.0...v0.54.0
