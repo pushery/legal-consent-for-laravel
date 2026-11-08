@@ -34,7 +34,7 @@ class ReconsentRequired extends ChangeNotification
 
         $mail = (new MailMessage)
             ->subject($this->line('subject', ['title' => $this->document->title]))
-            ->line($this->line('intro', ['title' => $this->document->title]));
+            ->line($this->withText($this->line('intro'), ['title' => $this->document->title]));
 
         // Before the CTA: this notice asks for agreement, and asking before saying what changed is
         // the form § 305 Abs. 2 BGB exists to prevent.
