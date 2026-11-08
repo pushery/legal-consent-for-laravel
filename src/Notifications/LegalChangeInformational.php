@@ -29,7 +29,7 @@ class LegalChangeInformational extends ChangeNotification
 
         $mail = (new MailMessage)
             ->subject($this->line('subject', ['title' => $this->document->title]))
-            ->line($this->line('intro', ['title' => $this->document->title]));
+            ->line($this->withText($this->line('intro'), ['title' => $this->document->title]));
 
         // What changed, before the call to action — a reader decides whether to click on the
         // strength of the delta, not the other way round.

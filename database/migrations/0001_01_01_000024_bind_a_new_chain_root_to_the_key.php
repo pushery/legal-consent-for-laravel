@@ -107,6 +107,23 @@ return new class extends Migration
 
     public function down(): void
     {
+        // The markers and the root proofs are what the chains are verified against, and neither can
+        // be rebuilt: a marker's proof needs the key, and a root proof belongs to the first row of a
+        // chain as it was written. up() leaves both standing where they already existed, so the
+        // rollback refuses while either holds anything; an empty table and unproven rows go.
+        $markers = TableLookup::exists('legal_ledger_markers') ? DB::table('legal_ledger_markers')->count() : 0;
+        $proofs = Schema::hasColumn(TableLookup::qualified('legal_consents'), 'root_proof')
+            ? DB::table('legal_consents')->whereNotNull('root_proof')->count()
+            : 0;
+
+        if ($markers > 0 || $proofs > 0) {
+            throw new RuntimeException(sprintf(
+                'Refusing to roll back the chain root: it would delete %d row(s) of legal_ledger_markers and the root_proof of %d consent(s), which the ledger is verified against and which cannot be rebuilt without the key and the ledger as it was written. Export the ledger and remove them by hand if they have to go.',
+                $markers,
+                $proofs,
+            ));
+        }
+
         Schema::dropIfExists('legal_ledger_markers');
 
         if (Schema::hasColumn(TableLookup::qualified('legal_consents'), 'root_proof')) {

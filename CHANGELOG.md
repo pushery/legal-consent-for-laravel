@@ -4,6 +4,24 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.57.0] - 2026-11-08
+
+### Fixed
+
+- **A rollback no longer deletes the evidence the consent ledger is verified against.** Three migrations add a column or a table only where it is missing, and their `down()` dropped it unconditionally, so `migrate:rollback` could take with it what an earlier install had already filled: the chain's markers and root proofs (`0001_01_01_000024`), the record MACs and their boundary (`0001_01_01_000031`), and the record of when a subject was erased (`0001_01_01_000019`). None of it can be rebuilt without the key and the ledger as it was written. Each `down()` now refuses with a `RuntimeException` that names what it would delete, while any of it holds data, and rolls back as before over empty tables.
+
+  **Upgrade:** nothing to do. A rollback that has to remove that evidence is done by hand after exporting the ledger.
+
+### Security
+
+- **A document title somebody typed reaches the change notices as text.** The notices are Markdown mails, and a title written as `[Terms](https://…)` arrived as a real link in every line that names the title: the introduction of the deemed-consent notice, and any line of a published catalog that uses `:title`. The title is now set as text: its Markdown stays characters, and a web address in it is written so that a mail program does not link it. A line that names no title is sent and recorded exactly as before.
+
+  **Upgrade:** nothing to do. A line that names the title is now an `HtmlString` on the `MailMessage`, and the delivery proof records it as the HTML the mail carries, as it already did for every `Htmlable` line.
+
+- **What the operator typed into a change description, and the declarant a notice names, reach the change notices as text.** The headline, the impact and every field of an entry (the subject, the detail, and the party's name, location, purpose and contact) are typed by the operator, and the declarant's line comes from the configuration or, through `ResolvesNoticeIdentity`, from a tenant. The notices are Markdown mails, so a value written as `[Support](https://…)` arrived as a real link, and a contact address was linked by the mail program. Each value is now set as text, the way the title is: its Markdown stays characters, and an address stays unlinked.
+
+  **Upgrade:** nothing to do, unless a change description relied on Markdown, such as bold text or a link: it now reaches the notice as the characters it was typed with. A test that reads the lines of a change notice meets an `HtmlString` on every line of the description and on the declarant's line.
+
 ## [0.56.1] - 2026-11-08
 
 ### Fixed
@@ -3372,7 +3390,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.1...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.57.0...HEAD
+[0.57.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.1...v0.57.0
 [0.56.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.0...v0.56.1
 [0.56.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.54.0...v0.55.0

@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Notifications;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -19,6 +20,7 @@ use Pushery\LegalConsent\Contracts\SendsNoticeMail;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
 use Pushery\LegalConsent\Support\ConsentGate;
+use Pushery\LegalConsent\Support\MarkdownText;
 use Pushery\LegalConsent\Support\NoticeMailConfig;
 use Pushery\LegalConsent\Support\TenantContext;
 
@@ -157,7 +159,10 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         $identity = app(ResolvesNoticeIdentity::class)->forDocument($this->document);
 
         if ($identity->isDeclared()) {
-            $mail->line(trans('legal-consent::notifications.common.issuer', ['declarant' => $identity->declarationLine()]));
+            // The declarant is whatever the configuration or a tenant typed about itself, so it is set into the line
+            // as text, like the title.
+            $issuer = trans('legal-consent::notifications.common.issuer');
+            $mail->line($this->withText(is_string($issuer) ? $issuer : '', ['declarant' => $identity->declarationLine()]));
         }
 
         $from = NoticeMailConfig::from();
@@ -335,5 +340,27 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         $translated = trans($transKey, $replace);
 
         return is_string($translated) && $translated !== $transKey ? $translated : '';
+    }
+
+    /**
+     * A line with the values somebody typed set into it as text, or the line as it is when it names none.
+     *
+     * The mail is Markdown, and a document's title is typed by whoever adds a version, so a title written
+     * as a Markdown link would reach every recipient as one, and a web address in it would be linked by a
+     * mail program. MarkdownText sets each value as text and escapes the line the way `{{ }}` would. A line
+     * that names none of the values stays the string it was, so a notice without them records the body it
+     * always recorded.
+     *
+     * @param  array<string, string>  $typed
+     */
+    protected function withText(string $line, array $typed): Htmlable|string
+    {
+        foreach (array_keys($typed) as $key) {
+            if (stripos($line, ':'.$key) !== false) {
+                return MarkdownText::interpolate($line, $typed);
+            }
+        }
+
+        return $line;
     }
 }

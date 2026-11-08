@@ -98,7 +98,20 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::table('legal_ledger_markers')->where('name', LedgerRecordMacs::BOUNDARY_MARKER)->delete();
+        // The record MACs and their boundary witness the rows of the ledger, and neither can be
+        // rebuilt without the key and the rows as they were written. up() leaves the table standing
+        // where it already existed, so the rollback refuses while a MAC or the marker is there.
+        $macs = TableLookup::exists(LedgerRecordMacs::TABLE) ? DB::table(LedgerRecordMacs::TABLE)->count() : 0;
+        $marker = TableLookup::exists('legal_ledger_markers')
+            && DB::table('legal_ledger_markers')->where('name', LedgerRecordMacs::BOUNDARY_MARKER)->exists();
+
+        if ($macs > 0 || $marker) {
+            throw new RuntimeException(sprintf(
+                'Refusing to roll back the record MACs: it would delete %d record MAC(s)%s, which the ledger is verified against and which cannot be rebuilt without the key and the rows as they were written. Export the ledger and remove them by hand if they have to go.',
+                $macs,
+                $marker ? ' and their boundary marker' : '',
+            ));
+        }
 
         Schema::dropIfExists(LedgerRecordMacs::TABLE);
     }

@@ -51,27 +51,28 @@ class DeemedConsentNotice extends ChangeNotification
         $objectBy = $this->document->objection_deadline;
         $effective = $this->document->enforce_from;
 
-        $replace = [
-            'title' => $this->document->title,
+        // The dates are the package's own, the title is typed: it goes into the Markdown lines as text.
+        $dates = [
             'deadline' => $this->readableDate($objectBy),
             'effective' => $this->readableDate($effective),
         ];
+        $typed = ['title' => $this->document->title];
 
         $mail = (new MailMessage)
-            ->subject($this->line('subject', $replace))
-            ->line($this->line('intro', $replace));
+            ->subject($this->line('subject', [...$typed, ...$dates]))
+            ->line($this->withText($this->line('intro', $dates), $typed));
 
         $this->addChangeItems($mail, $this->document);
 
-        $mail->line($this->line('warning', $replace)) // § 308 Nr. 5 lit. b — silence = consent by :deadline
-            ->action($this->line('cta', $replace), $this->ctaUrl());
+        $mail->line($this->withText($this->line('warning', $dates), $typed)) // § 308 Nr. 5 lit. b — silence = consent by :deadline
+            ->action($this->line('cta', [...$typed, ...$dates]), $this->ctaUrl());
 
         // Only where the version offers termination or an adverse entry owes it, the condition the
         // certification below reads. Sent to every recipient of a version that offers none, the line
         // was a promise on a durable medium that the operator never made and every other surface
         // contradicted.
         if ($this->terminationOwed()) {
-            $mail->line($this->line('termination', $replace));
+            $mail->line($this->withText($this->line('termination', $dates), $typed));
         }
 
         return $this->envelope($mail);

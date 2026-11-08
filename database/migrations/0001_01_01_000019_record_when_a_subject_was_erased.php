@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Pushery\LegalConsent\Support\TableLookup;
 
@@ -46,6 +47,24 @@ return new class extends Migration
 
     public function down(): void
     {
+        // subject_erased_at is the record of when a subject was erased, kept so an erasure can be
+        // shown later. up() leaves the column standing where it already existed, so the rollback
+        // refuses while any row carries it rather than deleting that record.
+        $erased = 0;
+
+        foreach (self::TABLES as $table) {
+            if (Schema::hasColumn(TableLookup::qualified($table), 'subject_erased_at')) {
+                $erased += DB::table($table)->whereNotNull('subject_erased_at')->count();
+            }
+        }
+
+        if ($erased > 0) {
+            throw new RuntimeException(sprintf(
+                'Refusing to roll back the erasure record: %d row(s) record when their subject was erased, and dropping subject_erased_at would delete that record. Export the rows and remove the column by hand if it has to go.',
+                $erased,
+            ));
+        }
+
         foreach (self::TABLES as $table) {
             if (! Schema::hasColumn(TableLookup::qualified($table), 'subject_erased_at')) {
                 continue;

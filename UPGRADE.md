@@ -4,6 +4,16 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.56.1 → 0.57.0
+
+**Nothing is required of you**, unless a deployment rolls back migrations of this package, a test reads the lines of a change notice, or a change description relies on Markdown.
+
+**A rollback of `0001_01_01_000019`, `0001_01_01_000024` or `0001_01_01_000031` refuses while the ledger holds what it would delete**: the record of when a subject was erased, the chain's markers and root proofs, and the record MACs with their boundary marker. None of it can be rebuilt without the key and the ledger as it was written. The refusal names what it would delete. Export the ledger and remove those rows or values by hand if they have to go; over empty tables the rollback runs as before.
+
+**A test that reads the lines of a change notice compares the line that names the title with an `HtmlString`.** The title is set into that line as text, its ASCII punctuation as numeric references, so `introLines` holds an `HtmlString` there, for example `new HtmlString('We are updating our contract (“Terms of use”).')`. Every line that names no title is the string it was.
+
+**A change description reaches a notice as text, and the declarant's line does too.** The headline, the impact and every field of an entry are set into the notice as text, so bold text or a link written into a description arrives as the characters it was typed with. A test that reads those lines compares each of them, and the declarant's line, with an `HtmlString`.
+
 ## 0.56.0 → 0.56.1
 
 **Nothing is required of you**, unless you published the WireKit editor view.
