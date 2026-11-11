@@ -4,6 +4,14 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.57.0 → 0.58.0
+
+**Nothing is required of you**, unless the package renders its WireKit views in your application.
+
+**Update `pushery/wirekit` to 2.70.0 or later if the package renders its WireKit views**: `composer require pushery/wirekit:^2.70`. The two countdowns of the consent banner, to a re-consent and to the end of an objection window, stand still now, and WireKit's countdown can stand still from 2.70.0 on. Below that release, `ui.variant` on `auto` serves the plain views instead.
+
+**Add `static` to both countdowns of `consent-banner.blade.php` if you published the WireKit views**, or publish them again: `php artisan vendor:publish --tag=legal-consent-wirekit --force`.
+
 ## 0.56.1 → 0.57.0
 
 **Nothing is required of you**, unless a deployment rolls back migrations of this package, a test reads the lines of a change notice, or a change description relies on Markdown.

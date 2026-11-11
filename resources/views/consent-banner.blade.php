@@ -27,7 +27,7 @@
 @if (! empty($pending) || ! empty($informational) || ! empty($deemed))
     <div class="legal-consent-banner" role="region" aria-label="{{ __('legal-consent::ui.banner_label') }}">
         @if (! empty($pending))
-            <ul class="legal-consent-banner__list legal-consent-banner__list--reconsent">
+            <ul class="legal-consent-banner__list legal-consent-banner__list--reconsent" role="list">
                 @foreach ($pending as $item)
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>
@@ -41,7 +41,7 @@
         @endif
 
         @if (! empty($informational))
-            <ul class="legal-consent-banner__list legal-consent-banner__list--info">
+            <ul class="legal-consent-banner__list legal-consent-banner__list--info" role="list">
                 @foreach ($informational as $item)
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>
@@ -56,7 +56,7 @@
         @endif
 
         @if (! empty($deemed))
-            <ul class="legal-consent-banner__list legal-consent-banner__list--deemed">
+            <ul class="legal-consent-banner__list legal-consent-banner__list--deemed" role="list">
                 @foreach ($deemed as $item)
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>

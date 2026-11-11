@@ -183,7 +183,7 @@
                                      per-locale lines made a blocked row 210 px tall at seven locales, and
                                      nothing about the column was ever too narrow. Every locale still
                                      appears, beside the reason it shares. --}}
-                                <ul id="blocking-{{ $key }}">
+                                <ul id="blocking-{{ $key }}" role="list">
                                     @foreach (\Pushery\LegalConsent\Support\BlockingReasonGroups::of($rows[$key]['_release']['blocking']) as $reason => $blockedLocales)
                                         <li>{{ $reason }}: {{ implode(', ', $blockedLocales) }}</li>
                                     @endforeach
