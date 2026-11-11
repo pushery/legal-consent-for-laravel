@@ -4,6 +4,18 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.0] - 2026-11-11
+
+### Documentation
+
+- **The documentation shows the screens and the notice it describes.** The page on recording consent shows the registration checklist, the page on change descriptions shows the notice mail with its lines, the worked example of an active re-consent shows the banner during the grace period and the form the gate redirects to after it, and the page on the user interface shows the settings with a consent to withdraw. Each image is rendered from the package itself, nothing in it drawn by hand.
+
+### Fixed
+
+- **The lists of the plain views are announced as lists.** An application stylesheet such as Tailwind's Preflight takes the markers off every list, and VoiceOver on iPhone and iPad reads a list without markers as plain text, saying neither that its entries form a list nor how many there are. The eleven lists of the banner, both settings screens, the re-consent form and the text manager carry `role="list"` now. The WireKit views build the same places without a list.
+- **An e-mail address in a value somebody typed keeps its characters in the notice mails, such as the contact of a party a change item names.** The notice mails set the headline and the impact of a change and every typed value as text, the contact of a party included, and they wrote the dot of a domain with a look-alike character so that no mail program would link it. An e-mail address came out with that look-alike too, so a mail program did not offer it as an address and a copy of it was not the address that was typed. An address now stays as typed; a web address and a network path are still broken as before.
+- **The two countdowns of the WireKit consent banner stand still.** The countdown to a re-consent and to the end of an objection window updated themselves every 30 seconds beside the page a reader was reading, with no way to stop them (WCAG 2.2.2). Both are `static` now: the time is worked out once as the page loads, and each still turns to its expired text at the deadline. **Upgrade:** the WireKit views need `pushery/wirekit` 2.70.0 or newer, the release whose countdown can stand still. Below it, `ui.variant` on `auto` serves the plain views. An application that published the WireKit views adds `static` to both countdowns of `consent-banner.blade.php`, or publishes them again.
+
 ## [0.57.0] - 2026-11-08
 
 ### Fixed
@@ -3390,7 +3402,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.57.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.58.0...HEAD
+[0.58.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.57.0...v0.58.0
 [0.57.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.1...v0.57.0
 [0.56.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.0...v0.56.1
 [0.56.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.55.0...v0.56.0

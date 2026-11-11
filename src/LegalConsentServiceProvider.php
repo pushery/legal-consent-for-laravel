@@ -132,13 +132,15 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * The first-shipped versions were read off the tags themselves rather than from a changelog.
      * Raised 2.56.0 -> 2.67.0 when the development constraint moved to `^2.67.0`, and 2.67.0 -> 2.68.0
      * when it moved to `^2.68.0`: no older release has been installed to prove the views against since
-     * then, and the floor names the oldest one.
+     * then, and the floor names the oldest one. Raised 2.68.0 -> 2.70.0 when the two countdowns of the
+     * consent banner began to stand still through `static`, so the banner no longer updates itself
+     * beside the page a reader is reading (WCAG 2.2.2, first shipped in 2.70.0).
      *
      * A consumer below the floor therefore receives the plain views instead of the WireKit variant,
      * which is this constant working rather than failing: the alternative is a Blade tag compiling
      * against a component that is not there, or a dialog that does not close after its action.
      */
-    public const string WIREKIT_MINIMUM = '2.68.0';
+    public const string WIREKIT_MINIMUM = '2.70.0';
 
     /**
      * Whether the bundled migrations are registered automatically. Disable with

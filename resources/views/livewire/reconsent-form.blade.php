@@ -23,7 +23,7 @@
     @if ($deemed !== [])
         <section class="legal-consent-objections" aria-labelledby="lc-objections-heading" wire:key="lc-objections">
             <h2 id="lc-objections-heading">{{ __('legal-consent::ui.upcoming_changes_heading') }}</h2>
-            <ul>
+            <ul role="list">
                 @foreach ($deemed as $item)
                     @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale']))
                     <li wire:key="lc-deemed-{{ $item['key'] }}">

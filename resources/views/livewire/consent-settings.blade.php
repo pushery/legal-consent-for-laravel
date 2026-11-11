@@ -37,7 +37,7 @@
     @if (! $hideEmpty || count($contracts) > 0)
     <section aria-labelledby="lc-contracts">
         <h{{ $groupLevel }} id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h{{ $groupLevel }}>
-        <ul>
+        <ul role="list">
             @forelse ($contracts as $item)
                 {{-- The title's own language, declared only where it differs from the page: a
                      document published only in the default locale still binds, and a retired row is
@@ -63,7 +63,7 @@
     @if (! $hideEmpty || count($acknowledgements) > 0)
     <section aria-labelledby="lc-acknowledgements">
         <h{{ $groupLevel }} id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</h{{ $groupLevel }}>
-        <ul>
+        <ul role="list">
             @forelse ($acknowledgements as $item)
                 {{-- The title's own language, declared only where it differs from the page: a
                      document published only in the default locale still binds, and a retired row is
@@ -89,7 +89,7 @@
     @if (! $hideEmpty || count($consents) > 0)
     <section aria-labelledby="lc-consents">
         <h{{ $groupLevel }} id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</h{{ $groupLevel }}>
-        <ul>
+        <ul role="list">
             @forelse ($consents as $item)
                 {{-- The title's own language, declared only where it differs from the page: a
                      document published only in the default locale still binds, and a retired row is

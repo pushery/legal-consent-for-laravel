@@ -55,7 +55,7 @@
 
     <section aria-labelledby="lc-contracts">
         <h3 id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</h3>
-        <ul>
+        <ul role="list">
             @forelse ($contracts as $contract)
                 {{-- The title can be in a language this page is not in: a mandatory document
                      published only in the default locale still binds, and a retired row is shown in
@@ -80,7 +80,7 @@
 
     <section aria-labelledby="lc-acknowledgements">
         <h3 id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</h3>
-        <ul>
+        <ul role="list">
             @forelse ($acknowledgements as $acknowledgement)
                 {{-- The title can be in a language this page is not in: a mandatory document
                      published only in the default locale still binds, and a retired row is shown in
@@ -105,7 +105,7 @@
 
     <section aria-labelledby="lc-consents">
         <h3 id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</h3>
-        <ul>
+        <ul role="list">
             @forelse ($consents as $consent)
                 {{-- The title can be in a language this page is not in: a mandatory document
                      published only in the default locale still binds, and a retired row is shown in
