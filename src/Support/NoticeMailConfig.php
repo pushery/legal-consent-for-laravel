@@ -19,9 +19,10 @@ use Pushery\LegalConsent\Notifications\ReconsentRequired;
  * now, so a key a later release adds inside a block arrives with its default; where a key lives no
  * longer decides whether it arrives.
  *
- * Every seam here is inert by default except `view`, the package's own Markdown shell. That is not
- * politeness: the notice body is hashed into an append-only proof row, so a value that changed the
- * mail without being asked for would move the bytes of a document nobody can correct afterwards.
+ * Every seam here is inert by default except `view`, the package's own Markdown shell, and `theme`,
+ * its stylesheet, and neither of the two writes a line. That is not politeness: the notice body is
+ * hashed into an append-only proof row, so a value that changed the mail's lines without being asked
+ * for would move the bytes of a document nobody can correct afterwards.
  */
 final readonly class NoticeMailConfig
 {

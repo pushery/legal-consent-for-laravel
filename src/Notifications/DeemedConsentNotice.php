@@ -58,13 +58,16 @@ class DeemedConsentNotice extends ChangeNotification
         ];
         $typed = ['title' => $this->document->title];
 
-        $mail = (new MailMessage)
-            ->subject($this->line('subject', [...$typed, ...$dates]))
-            ->line($this->withText($this->line('intro', $dates), $typed));
+        $mail = $this->withHeading(
+            (new MailMessage)->subject($this->line('subject', [...$typed, ...$dates])),
+            $this->line('heading'),
+        )->line($this->withText($this->line('intro', $dates), $typed));
 
         $this->addChangeItems($mail, $this->document);
 
-        $mail->line($this->withText($this->line('warning', $dates), $typed)) // § 308 Nr. 5 lit. b — silence = consent by :deadline
+        // § 308 Nr. 5 lit. b: silence counts as consent by :deadline. In bold right above the button,
+        // because the warning is the sentence this notice exists to deliver.
+        $mail->line($this->emphasized($this->withText($this->line('warning', $dates), $typed)))
             ->action($this->line('cta', [...$typed, ...$dates]), $this->ctaUrl());
 
         // Only where the version offers termination or an adverse entry owes it, the condition the

@@ -133,14 +133,14 @@
             {{-- Save, then a short dialog of every setting the release takes, and the release on
                  its confirmation. --}}
             @if (($releaseModes ?? []) !== [])
-                <x-wirekit::button surface="outline" wire:click="saveAndRelease" loading-target="saveAndRelease" :disable-on-loading="false">{{ __('legal-consent::ui.admin_save_and_release') }}</x-wirekit::button>
+                <x-wirekit::button intent="neutral" wire:click="saveAndRelease" loading-target="saveAndRelease" :disable-on-loading="false">{{ __('legal-consent::ui.admin_save_and_release') }}</x-wirekit::button>
             @endif
 
             {{-- Disabled while a translation of this draft runs, and it names the wait: a second press
                  would pay a per-call translator again for the same text. A press that arrives inside
                  the round trip is answered by the component instead. --}}
             @unless ($isSource)
-                <x-wirekit::button surface="outline" wire:click="translate" loading-target="translate" :disable-on-loading="false" :disabled="$translating ?? false">{{ ($translating ?? false) ? __('legal-consent::ui.admin_translate_running') : __('legal-consent::ui.admin_translate', ['locale' => $sourceLanguage]) }}</x-wirekit::button>
+                <x-wirekit::button intent="neutral" wire:click="translate" loading-target="translate" :disable-on-loading="false" :disabled="$translating ?? false">{{ ($translating ?? false) ? __('legal-consent::ui.admin_translate_running') : __('legal-consent::ui.admin_translate', ['locale' => $sourceLanguage]) }}</x-wirekit::button>
             @endunless
 
             {{-- Only while there is something to stamp. Offered on an already-reviewed draft it
@@ -150,7 +150,7 @@
                  It comes back on its own: every write to a draft's body resets the state to Draft,
                  so a save puts the button back with the work it applies to. --}}
             @if ($reviewState !== null && $reviewState !== 'reviewed' && ! ($translating ?? false))
-                <x-wirekit::button surface="outline" wire:click="markReviewed" loading-target="markReviewed" :disable-on-loading="false">{{ __('legal-consent::ui.admin_mark_reviewed') }}</x-wirekit::button>
+                <x-wirekit::button intent="neutral" wire:click="markReviewed" loading-target="markReviewed" :disable-on-loading="false">{{ __('legal-consent::ui.admin_mark_reviewed') }}</x-wirekit::button>
             @endif
 
             {{-- Offered only where it can do something: a translation that has a draft. The source
@@ -164,7 +164,7 @@
                 {{-- It closes with the re-render its action causes, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
                 <x-wirekit::alert-dialog name="lc-editor-discard" :close-on-confirm="false">
                     <x-slot:trigger>
-                        <x-wirekit::button intent="danger" surface="outline">{{ __('legal-consent::ui.admin_discard') }}</x-wirekit::button>
+                        <x-wirekit::button intent="danger">{{ __('legal-consent::ui.admin_discard') }}</x-wirekit::button>
                     </x-slot:trigger>
 
                     <x-wirekit::alert-dialog.title>{{ __('legal-consent::ui.admin_discard_confirm_title') }}</x-wirekit::alert-dialog.title>
@@ -246,7 +246,7 @@
                 </x-wirekit::modal.body>
                 <x-wirekit::modal.footer>
                     <x-wirekit::modal.close>
-                        <x-wirekit::button intent="neutral" surface="ghost">{{ __('legal-consent::ui.cancel') }}</x-wirekit::button>
+                        <x-wirekit::button intent="neutral">{{ __('legal-consent::ui.cancel') }}</x-wirekit::button>
                     </x-wirekit::modal.close>
                     <x-wirekit::button wire:click="confirmRelease" loading-target="confirmRelease" :disable-on-loading="false" data-wk-dialog-primary>{{ __('legal-consent::ui.admin_release_dialog_confirm') }}</x-wirekit::button>
                 </x-wirekit::modal.footer>

@@ -316,3 +316,9 @@
         @endif
     </div>
 @endforeach
+
+@if (collect($documents)->contains(static fn (array $document): bool => (bool) ($document['required'] ?? false)))
+    {{-- What the asterisk on a required box means, for the eye; hidden from a screen reader, which hears
+         "required" from the box itself. --}}
+    <p class="legal-consent-required-legend" aria-hidden="true">* {{ __('legal-consent::ui.required_legend') }}</p>
+@endif

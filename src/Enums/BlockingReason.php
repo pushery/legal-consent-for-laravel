@@ -47,6 +47,15 @@ enum BlockingReason: string
     case StaleChangeDescription = 'the legal text changed after this change description was written';
 
     /**
+     * Every language of the release is live as it is drafted, so a release would publish nothing new.
+     *
+     * Reported by the admin overview, which turns its release button off for it, and by the overview's
+     * release action, which refuses. The releaser and the editor still re-publish an unchanged text under
+     * the version it already has, which changes nothing that is live.
+     */
+    case NothingToRelease = 'unchanged since its last release';
+
+    /**
      * The translation key for a screen a person reads.
      *
      * Written case by case rather than derived from the name. A derivation would hand a new case
@@ -64,6 +73,7 @@ enum BlockingReason: string
             self::NoChangeDescription => 'legal-consent::ui.blocking_no_change_description',
             self::IncompleteChangeDescription => 'legal-consent::ui.blocking_incomplete_change_description',
             self::StaleChangeDescription => 'legal-consent::ui.blocking_stale_change_description',
+            self::NothingToRelease => 'legal-consent::ui.blocking_nothing_to_release',
         };
     }
 }

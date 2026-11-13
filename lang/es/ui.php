@@ -46,6 +46,7 @@ return [
     // reader's link list (WCAG 2.4.4) — the title is what makes each one nameable.
     'read_document' => 'Leer :title',
     'review' => 'Revisar ahora',
+    'required_legend' => 'Obligatorio',
     // Accessible name for the banner region (it is a `complementary`/`region` landmark,
     // not a live region — a live region present at page load never announces anyway).
     'banner_label' => 'Avisos legales',
@@ -108,6 +109,7 @@ return [
     'blocking_no_change_description' => 'todavía no se ha escrito ninguna descripción del cambio',
     'blocking_incomplete_change_description' => 'a la descripción del cambio le falta el titular o el impacto',
     'blocking_stale_change_description' => 'el texto legal cambió después de escribir esta descripción del cambio',
+    'blocking_nothing_to_release' => 'sin cambios desde la última publicación',
     'admin_machine' => 'Borrador automático',
     'admin_machine_short' => 'Automático',
     'admin_needs_update' => 'Necesita actualización',

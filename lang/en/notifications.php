@@ -23,6 +23,7 @@ return [
     ],
     'contract' => [
         'subject' => 'Important: updated terms of use',
+        'heading' => 'Our terms of use are changing',
         'intro' => 'We have updated our terms of use and need your renewed agreement.',
         'cta' => 'Review and agree now',
         'consequence' => 'Please agree by :deadline — otherwise continued use will be restricted from that date.',
@@ -31,6 +32,7 @@ return [
     'informational' => [
         'contract' => [
             'subject' => 'Changes to our contract',
+            'heading' => 'Our contract is changing',
             'intro' => 'We have updated our contract. No action is required on your part.',
             'cta' => 'Review the changes',
             'effective' => 'The changes take effect on :deadline.',
@@ -38,6 +40,7 @@ return [
         ],
         'acknowledgement' => [
             'subject' => 'Updated privacy policy',
+            'heading' => 'Our privacy policy is changing',
             'intro' => 'We have updated our privacy policy. Please take note of the new version — no action is required.',
             'cta' => 'View the new version',
             'effective' => 'The updated version applies from :deadline.',
@@ -49,6 +52,7 @@ return [
     // courtesy copy. Contract only (silence never binds a privacy notice or a real consent).
     'deemed' => [
         'subject' => 'A change to our contract',
+        'heading' => 'Our contract is changing',
         'intro' => 'We are updating our contract (“:title”).',
         'warning' => 'If you do not object by :deadline, this will be treated as your agreement to the changes.',
         'cta' => 'Review the changes and object if you wish',

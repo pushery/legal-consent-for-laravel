@@ -6,7 +6,8 @@
     having trouble clicking" — all resolved from the consuming application's translations, so a
     notice in one language arrived wrapped in another. There is no greeting and no salutation here
     on purpose: a mandatory communication is not correspondence, and a first-name greeting is
-    exactly the framing that makes it read as marketing.
+    exactly the framing that makes it read as marketing. The notice opens with its heading instead,
+    the first of its lines, which names what changes and addresses nobody.
 
     What is in the mail and what is in the proof are not the same set, and that difference is why
     this file may be edited freely. `$introLines`, `$actionText` and `$outroLines` are the notice

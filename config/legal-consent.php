@@ -538,18 +538,22 @@ return [
     | would strand the value in every published copy that carries them at the top. How the
     | merge works today is described at the top of this file.
     |
-    | Every seam is inert by default except `view`. That matters more here than elsewhere:
-    | the notice body is hashed into an append-only proof row, so a seam that changed the
-    | mail without being asked for would move the bytes of a document nobody can correct
-    | afterwards.
+    | Every seam is inert by default except `view` and `theme`, and neither of the two writes a
+    | line. That matters more here than elsewhere: the notice body is hashed into an
+    | append-only proof row, so a seam that changed the mail's lines without being asked for
+    | would move the bytes of a document nobody can correct afterwards.
     |
-    | `view` — the package's own Markdown shell, and the one default that is not inert.
+    | `view` — the package's own Markdown shell, one of the two defaults that are not inert.
     | Before it, a German § 126b declaration went out inside Laravel's global template with
     | "Hello!", "Regards," and "If you're having trouble clicking", resolved from your
     | application's translations. Set it to null to go back to that template. It must stay a
     | markdown view: a plain `->view()` renders only its own template, which need not print the
     | notice's lines, while the proof row is still built from them and would certify lines the
     | subject may never have seen.
+    |
+    | `theme` — the package's theme, the other one: your application's own mail theme, with the
+    | notice's text a shade darker and the note on why it arrived smaller and lighter. Set it to
+    | null to render the notices with your theme alone.
     |
     | `identity` — § 126b BGB wants "eine lesbare Erklärung, in der die Person des
     | Erklärenden genannt ist". Name yours and it is appended to the notice and therefore to
@@ -565,10 +569,11 @@ return [
     */
     'notice_mail' => [
         'view' => 'legal-consent::mail.notice',
-        // A plain name resolves against Laravel's own themes; a `::`-namespaced one is a view.
-        // The package ships `legal-consent::mail.theme` — publish `legal-consent-mail` and
-        // point this at it to take the styling over.
-        'theme' => null,
+        // The package's theme: your application's mail theme, with the notice set apart from the
+        // note under it. Null renders with your theme alone; a plain name resolves against
+        // Laravel's themes, a `::`-namespaced one is a view. Publish `legal-consent-mail` to take
+        // the styling over.
+        'theme' => 'legal-consent::mail.theme',
         'from' => ['address' => null, 'name' => null],
         'reply_to' => null,
         'subject_prefix' => null,

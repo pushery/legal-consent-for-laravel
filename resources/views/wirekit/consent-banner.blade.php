@@ -64,7 +64,7 @@
                     @endif
 
                     @if ($consentUrl !== null)
-                        <x-wirekit::link :href="$consentUrl">{{ __('legal-consent::ui.review') }}</x-wirekit::link>
+                        <x-wirekit::button :href="$consentUrl" size="sm" class="self-start">{{ __('legal-consent::ui.review') }}</x-wirekit::button>
                     @endif
                 </x-wirekit::stack>
             @endforeach
@@ -126,7 +126,7 @@
                     @endif
 
                     @if ($consentUrl !== null)
-                        <x-wirekit::link :href="$consentUrl">{{ __('legal-consent::ui.object_review') }}</x-wirekit::link>
+                        <x-wirekit::button :href="$consentUrl" size="sm" class="self-start">{{ __('legal-consent::ui.object_review') }}</x-wirekit::button>
                     @endif
                 </x-wirekit::stack>
             @endforeach

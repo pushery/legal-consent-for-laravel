@@ -23,6 +23,7 @@ return [
     ],
     'contract' => [
         'subject' => 'Belangrijk: bijgewerkte gebruiksvoorwaarden',
+        'heading' => 'Onze gebruiksvoorwaarden veranderen',
         'intro' => 'We hebben onze gebruiksvoorwaarden bijgewerkt en vragen je om opnieuw akkoord te gaan.',
         'cta' => 'Nu bekijken en akkoord gaan',
         'consequence' => 'Ga vóór :deadline akkoord — anders wordt het verdere gebruik vanaf die datum beperkt.',
@@ -31,6 +32,7 @@ return [
     'informational' => [
         'contract' => [
             'subject' => 'Wijzigingen in ons contract',
+            'heading' => 'Ons contract verandert',
             'intro' => 'We hebben ons contract aangepast. Er is geen actie van jouw kant nodig.',
             'cta' => 'Wijzigingen bekijken',
             'effective' => 'De wijzigingen gaan in op :deadline.',
@@ -38,6 +40,7 @@ return [
         ],
         'acknowledgement' => [
             'subject' => 'Bijgewerkte privacyverklaring',
+            'heading' => 'Onze privacyverklaring verandert',
             'intro' => 'We hebben onze privacyverklaring bijgewerkt. Neem kennis van de nieuwe versie — er is geen actie nodig.',
             'cta' => 'Nieuwe versie bekijken',
             'effective' => 'De bijgewerkte versie geldt vanaf :deadline.',
@@ -46,6 +49,7 @@ return [
     ],
     'deemed' => [
         'subject' => 'Een wijziging van ons contract',
+        'heading' => 'Ons contract verandert',
         'intro' => 'We werken ons contract bij (‘:title’).',
         'warning' => 'Als je vóór :deadline geen bezwaar maakt, geldt dit als jouw akkoord met de wijzigingen.',
         'cta' => 'Wijzigingen bekijken en zo nodig bezwaar maken',

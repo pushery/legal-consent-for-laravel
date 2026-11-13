@@ -32,16 +32,18 @@ class ReconsentRequired extends ChangeNotification
         $enforceAt = $this->document->enforce_from;
         $deadline = $this->readableDate($enforceAt);
 
-        $mail = (new MailMessage)
-            ->subject($this->line('subject', ['title' => $this->document->title]))
-            ->line($this->withText($this->line('intro'), ['title' => $this->document->title]));
+        $mail = $this->withHeading(
+            (new MailMessage)->subject($this->line('subject', ['title' => $this->document->title])),
+            $this->line('heading'),
+        )->line($this->withText($this->line('intro'), ['title' => $this->document->title]));
 
         // Before the CTA: this notice asks for agreement, and asking before saying what changed is
         // the form § 305 Abs. 2 BGB exists to prevent.
         $this->addChangeItems($mail, $this->document);
 
-        $mail->action($this->line('cta'), $this->ctaUrl())
-            ->line($this->line($this->consequenceKey(), ['deadline' => $deadline]));
+        // The date to agree by, in bold right above the button that agrees.
+        $mail->line($this->emphasized($this->line($this->consequenceKey(), ['deadline' => $deadline])))
+            ->action($this->line('cta'), $this->ctaUrl());
 
         return $this->envelope($mail);
     }
@@ -124,6 +126,7 @@ class ReconsentRequired extends ChangeNotification
         // carries, so the empty fallback for an unknown key is never taken.
         $line = [
             'subject' => 'Wichtig: aktualisierte Nutzungsbedingungen',
+            'heading' => 'Unsere Nutzungsbedingungen ändern sich',
             'intro' => 'Wir haben unsere Nutzungsbedingungen aktualisiert und bitten dich um deine erneute Zustimmung.',
             'cta' => 'Jetzt ansehen und zustimmen',
             'consequence' => 'Bitte stimme bis zum :deadline zu — andernfalls ist die weitere Nutzung ab diesem Tag eingeschränkt.',

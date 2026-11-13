@@ -55,8 +55,16 @@ trait RendersChangeItems
             $mail->line(MarkdownText::text($headline));
         }
 
+        // The entries as one list, so they read as one block rather than a paragraph each. One line of
+        // the mail: an HtmlString keeps its line breaks, where MailMessage joins those of a string.
+        $entries = [];
+
         foreach ($set->items as $item) {
-            $mail->line($this->renderItem($item));
+            $entries[] = $this->renderItem($item)->toHtml();
+        }
+
+        if ($entries !== []) {
+            $mail->line(new HtmlString(implode("\n", $entries)));
         }
 
         // Impact after the list. § 327r Abs. 2 Satz 2 Nr. 1 BGB wants the characteristics of the
@@ -90,7 +98,8 @@ trait RendersChangeItems
     }
 
     /**
-     * One line per entry: a translated label for what happened, the subject, then the detail.
+     * One entry of the list: a translated label for what happened, in bold, the subject, then the
+     * detail.
      *
      * A third party gets its EDPB Opinion 22/2024 Rz. 22 facets appended in parentheses, because a
      * name on its own does not tell a reader whether their data left the country. Its name leads
@@ -104,7 +113,7 @@ trait RendersChangeItems
         $label = trans('legal-consent::changes.types.'.$item->type->value);
         $label = is_string($label) && ! str_contains($label, 'legal-consent::') ? $label : $item->type->value;
 
-        $line = $label.': :subject';
+        $line = '- **'.$label.':** :subject';
         $typed = ['subject' => $item->subject];
 
         if (($item->detail ?? '') !== '') {

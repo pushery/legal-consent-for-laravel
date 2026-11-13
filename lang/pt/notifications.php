@@ -23,6 +23,7 @@ return [
     ],
     'contract' => [
         'subject' => 'Importante: termos de utilização atualizados',
+        'heading' => 'Os nossos termos de utilização vão mudar',
         'intro' => 'Atualizámos os nossos termos de utilização e pedimos-te que os aceites novamente.',
         'cta' => 'Rever e aceitar agora',
         'consequence' => 'Aceita até :deadline — caso contrário, a utilização ficará restrita a partir dessa data.',
@@ -31,6 +32,7 @@ return [
     'informational' => [
         'contract' => [
             'subject' => 'Alterações ao nosso contrato',
+            'heading' => 'O nosso contrato vai mudar',
             'intro' => 'Atualizámos o nosso contrato. Não é necessária qualquer ação da tua parte.',
             'cta' => 'Ver as alterações',
             'effective' => 'As alterações entram em vigor a :deadline.',
@@ -38,6 +40,7 @@ return [
         ],
         'acknowledgement' => [
             'subject' => 'Política de privacidade atualizada',
+            'heading' => 'A nossa política de privacidade vai mudar',
             'intro' => 'Atualizámos a nossa política de privacidade. Toma conhecimento da nova versão — não é necessária qualquer ação.',
             'cta' => 'Ver a nova versão',
             'effective' => 'A versão atualizada aplica-se a partir de :deadline.',
@@ -46,6 +49,7 @@ return [
     ],
     'deemed' => [
         'subject' => 'Uma alteração ao nosso contrato',
+        'heading' => 'O nosso contrato vai mudar',
         'intro' => 'Vamos atualizar o nosso contrato («:title»).',
         'warning' => 'Se não te opuseres até :deadline, tal será considerado a tua aceitação das alterações.',
         'cta' => 'Ver as alterações e opor-te, se quiseres',
