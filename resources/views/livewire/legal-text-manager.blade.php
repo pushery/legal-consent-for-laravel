@@ -155,7 +155,7 @@
                          exactly that much. --}}
                     <tr wire:key="release-{{ $key }}">
                         <td colspan="{{ count($locales) + 1 }}" style="padding-inline: 0;">
-                            <div style="position: sticky; inset-inline-start: 0; box-sizing: border-box; max-inline-size: 100cqi; padding-inline: var(--padding-wk-x-md, 0.75rem);">
+                            <div style="position: sticky; inset-inline-start: 0; box-sizing: border-box; max-inline-size: 100cqi; padding-inline: var(--padding-wk-x-md, 0.75rem); display: flex; flex-direction: column; align-items: flex-end; gap: var(--gap-wk-xs, 0.25rem); text-align: end;">
                             @if ($rows[$key]['_release']['ready'])
                                 {{-- Per-document accessible name: with N rows, N buttons all reading
                                      "Release all locales" are indistinguishable in a screen reader's

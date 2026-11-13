@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\HtmlString;
 use Override;
 use Pushery\LegalConsent\Content\RenderPipeline;
 use Pushery\LegalConsent\Contracts\ResolvesNoticeIdentity;
@@ -36,20 +37,24 @@ use Pushery\LegalConsent\Support\TenantContext;
  * The three:
  *  - {@see translationGroup()} — where this notice's lines live under `notifications.*`;
  *  - `toMail()` — the ORDER of the lines, which is legal substance and not shared. The § 308
- *    Nr. 5 lit. b warning has to precede the call to action; a re-consent notice states its
- *    consequence after it. A base class that assembled the mail would be deciding that.
+ *    Nr. 5 lit. b warning has to precede the call to action, a re-consent notice names the date
+ *    to agree by there as well, and what follows the button differs per mode. A base class that
+ *    assembled the mail would be deciding that.
  *  - `mandatoryContentPresent()` — what this mode's regime actually demands.
  *
- * Every seam is inert by default, with one exception: the package's own Markdown shell. Laravel's
- * global template greets with "Hello!", closes with "Regards," and explains "If you're having
- * trouble clicking", all resolved from the application's translations, so a German § 126b
- * declaration would arrive wrapped in another language. `notice_mail.view` set to null opts back
- * out.
+ * Every seam is inert by default, with two exceptions: the package's own Markdown shell and its
+ * theme. Laravel's global template greets with "Hello!", closes with "Regards," and explains "If
+ * you're having trouble clicking", all resolved from the application's translations, so a German
+ * § 126b declaration would arrive wrapped in another language. `notice_mail.view` set to null opts
+ * back out. The theme starts from the application's own and sets the notice apart from the note
+ * under it; `notice_mail.theme` set to null leaves the application's theme alone. Neither of the
+ * two writes a line.
  *
  * Inert matters more here than elsewhere: the notice body is hashed into an append-only proof row,
  * so a seam that changed the mail without being asked for would move the bytes of a document
  * nobody can correct afterwards. Only two things ever reach that body — the lines a subclass
- * writes, and the declarant footer, which appears only once someone has configured a declarant.
+ * writes, its heading among them, and the declarant footer, which appears only once someone has
+ * configured a declarant.
  */
 abstract class ChangeNotification extends Notification implements SendsNoticeMail, ShouldQueue
 {
@@ -362,5 +367,38 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
         }
 
         return $line;
+    }
+
+    /**
+     * The mail with its heading as its first line: a Markdown heading that names what changes and
+     * addresses nobody.
+     *
+     * A line rather than the greeting of the mail. Every view that renders the notice prints its
+     * lines, a copy of the shell published before the heading existed included, and the proof row is
+     * built from them, so the heading is in the record because it is in the mail. Laravel's own
+     * template, where an application chose it, still greets above it. A heading that does not
+     * resolve is left out rather than printed empty.
+     */
+    protected function withHeading(MailMessage $mail, string $heading): MailMessage
+    {
+        $heading = trim($heading);
+
+        return $heading === '' ? $mail : $mail->line('# '.$heading);
+    }
+
+    /**
+     * A line in bold: the sentence of a notice its reader must not miss, the date by which to act or
+     * from which the change applies. A line that did not resolve stays as it is rather than becoming
+     * a pair of asterisks.
+     */
+    protected function emphasized(Htmlable|string $line): Htmlable|string
+    {
+        $text = trim($line instanceof Htmlable ? $line->toHtml() : $line);
+
+        if ($text === '') {
+            return $line;
+        }
+
+        return $line instanceof Htmlable ? new HtmlString('**'.$text.'**') : '**'.$text.'**';
     }
 }

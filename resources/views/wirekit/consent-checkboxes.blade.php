@@ -266,6 +266,12 @@
             @endif
         @endforeach
     @endforeach
+
+    @if (collect($documents)->contains(static fn (array $document): bool => (bool) ($document['required'] ?? false)))
+        {{-- What the asterisk on a required box means, for the eye. A screen reader hears "required"
+             from the box itself, so the line is hidden from it. --}}
+        <x-wirekit::text size="sm" intent="muted" aria-hidden="true" class="legal-consent-required-legend"><span class="text-[color:var(--color-wk-danger-text)]">*</span> {{ __('legal-consent::ui.required_legend') }}</x-wirekit::text>
+    @endif
 </x-wirekit::stack>
 
     {{-- The dialogs, outside every gapped container. See the collector above for what each one
@@ -323,9 +329,9 @@
                          its text. It is still an anchor: the kit renders a button with an `href` as
                          one, and with `target="_blank"` it adds `rel="noopener noreferrer"` and the
                          announcement of the new tab. --}}
-                    <x-wirekit::button :href="$deferred['url']" :hreflang="$deferred['locale']" target="_blank" size="sm" surface="outline">{{ __('legal-consent::ui.dialog_open_page') }}</x-wirekit::button>
+                    <x-wirekit::button :href="$deferred['url']" :hreflang="$deferred['locale']" target="_blank" size="sm" intent="neutral">{{ __('legal-consent::ui.dialog_open_page') }}</x-wirekit::button>
                     <x-wirekit::modal.close>
-                        <x-wirekit::button size="sm" surface="soft">{{ __('legal-consent::ui.dialog_close') }}</x-wirekit::button>
+                        <x-wirekit::button size="sm" intent="neutral">{{ __('legal-consent::ui.dialog_close') }}</x-wirekit::button>
                     </x-wirekit::modal.close>
                 </x-wirekit::modal.footer>
             </x-wirekit::modal>

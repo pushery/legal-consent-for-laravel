@@ -109,8 +109,10 @@
                 {{-- Same as the two blocks above: the title's own language, declared only where it
                      differs from the page. See ContentLanguage. --}}
                 @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
-                <x-wirekit::stack gap="sm" :wrap="true" class="legal-consent-settings__consent">
-                    <x-wirekit::text>
+                {{-- The title and its action on one line, the action at the row's end: the title takes the room
+                     that is left and wraps inside it. --}}
+                <x-wirekit::row gap="sm" class="legal-consent-settings__consent">
+                    <x-wirekit::text class="min-w-0 flex-1">
                         @if (($item['url'] ?? null) !== null)
                             <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
                         @else
@@ -149,7 +151,7 @@
                         {{-- It closes with the form it submits, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
                         <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']" :close-on-confirm="false">
                             <x-slot:trigger>
-                                <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
+                                <x-wirekit::button intent="danger" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
                                     {{ __('legal-consent::ui.withdraw') }}
                                 </x-wirekit::button>
                             </x-slot:trigger>
@@ -173,7 +175,7 @@
                             </x-wirekit::alert-dialog.actions>
                         </x-wirekit::alert-dialog>
                     @endif
-                </x-wirekit::stack>
+                </x-wirekit::row>
             @empty
                 <x-wirekit::text intent="muted">{{ __('legal-consent::ui.consents_empty') }}</x-wirekit::text>
             @endforelse

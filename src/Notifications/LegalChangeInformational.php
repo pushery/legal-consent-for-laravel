@@ -27,16 +27,18 @@ class LegalChangeInformational extends ChangeNotification
         $enforceAt = $this->document->enforce_from;
         $deadline = $this->readableDate($enforceAt);
 
-        $mail = (new MailMessage)
-            ->subject($this->line('subject', ['title' => $this->document->title]))
-            ->line($this->withText($this->line('intro'), ['title' => $this->document->title]));
+        $mail = $this->withHeading(
+            (new MailMessage)->subject($this->line('subject', ['title' => $this->document->title])),
+            $this->line('heading'),
+        )->line($this->withText($this->line('intro'), ['title' => $this->document->title]));
 
         // What changed, before the call to action — a reader decides whether to click on the
         // strength of the delta, not the other way round.
         $this->addChangeItems($mail, $this->document);
 
-        $mail->action($this->line('cta'), $this->ctaUrl())
-            ->line($this->line('effective', ['deadline' => $deadline]));
+        // The date it applies from, in bold right above the button.
+        $mail->line($this->emphasized($this->line('effective', ['deadline' => $deadline])))
+            ->action($this->line('cta'), $this->ctaUrl());
 
         // A privacy notice always carries the Art. 21 right to object; a contract carries a
         // free-termination line only when one was offered (§ 675g / § 327r). A pure

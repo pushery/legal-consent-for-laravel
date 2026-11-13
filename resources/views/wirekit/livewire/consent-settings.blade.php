@@ -72,7 +72,9 @@
                         @else
                             <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                         @endif
-                        <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                        {{-- The version as quiet text rather than a badge: a badge on this screen is a state, and a
+                             version in the same shape made the consent's "Given" read as one more version. --}}
+                        <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                     </x-wirekit::text>
                 @empty
                     <x-wirekit::text intent="muted">{{ __('legal-consent::ui.contracts_empty') }}</x-wirekit::text>
@@ -97,7 +99,9 @@
                         @else
                             <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                         @endif
-                        <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                        {{-- The version as quiet text rather than a badge: a badge on this screen is a state, and a
+                             version in the same shape made the consent's "Given" read as one more version. --}}
+                        <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
                     </x-wirekit::text>
                 @empty
                     <x-wirekit::text intent="muted">{{ __('legal-consent::ui.acknowledgements_empty') }}</x-wirekit::text>
@@ -117,8 +121,10 @@
                 @forelse ($consents as $item)
                     {{-- Same rule as the two blocks above. See ContentLanguage. --}}
                     @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
-                    <x-wirekit::stack gap="sm" :wrap="true" class="legal-consent-settings__consent">
-                        <x-wirekit::text>
+                    {{-- The title and its action on one line, the action at the row's end: the title takes the room
+                         that is left and wraps inside it. --}}
+                    <x-wirekit::row gap="sm" class="legal-consent-settings__consent">
+                        <x-wirekit::text class="min-w-0 flex-1">
                             @if (($item['url'] ?? null) !== null)
                                 <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
                             @else
@@ -138,7 +144,7 @@
                             {{-- It closes with the re-render its action causes, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
                             <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']" :close-on-confirm="false">
                                 <x-slot:trigger>
-                                    <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
+                                    <x-wirekit::button intent="danger" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
                                         @if (filled($icons['withdraw']))
                                             <x-slot:iconLeft><x-wirekit::icon :name="$icons['withdraw']" /></x-slot:iconLeft>
                                         @endif
@@ -206,14 +212,14 @@
                             {{-- An echo, not `@js()` — see the withdraw button above for why the
                                  directive never compiles in a component tag attribute, and why
                                  the busy state is bound with its argument. --}}
-                            <x-wirekit::button surface="outline" wire:click="grant({{ \Pushery\WireKit\Support\AlpinePayload::from($item['key']) }})" :loading-target="'grant('.\Pushery\WireKit\Support\AlpinePayload::from($item['key']).')'" :disable-on-loading="false" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
+                            <x-wirekit::button intent="neutral" wire:click="grant({{ \Pushery\WireKit\Support\AlpinePayload::from($item['key']) }})" :loading-target="'grant('.\Pushery\WireKit\Support\AlpinePayload::from($item['key']).')'" :disable-on-loading="false" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
                                 @if (filled($icons['grant']))
                                     <x-slot:iconLeft><x-wirekit::icon :name="$icons['grant']" /></x-slot:iconLeft>
                                 @endif
                                 {{ __('legal-consent::ui.grant') }}
                             </x-wirekit::button>
                         @endif
-                    </x-wirekit::stack>
+                    </x-wirekit::row>
                 @empty
                     <x-wirekit::text intent="muted">{{ __('legal-consent::ui.consents_empty') }}</x-wirekit::text>
                 @endforelse

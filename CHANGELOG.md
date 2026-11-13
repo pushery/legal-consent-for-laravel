@@ -4,6 +4,28 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.59.0] - 2026-11-13
+
+### Added
+
+- **A line under the consent checkboxes says what the asterisk means.** As soon as one listed document is required, "* Required" stands under the boxes, in both views and in every language of the package (`legal-consent::ui.required_legend`). A screen reader hears "required" from the box itself, so the line is hidden from it.
+
+### Changed
+
+- **A change notice opens with a heading, lists what changed, and sets its date in bold above the button.** Every line of the notice stood as a paragraph of the same size, the entries of a change description among them, and the re-consent and the information-only notice named their date below the button. The notice opens with a heading now that names what changes, "Our terms of use are changing" in the re-consent notice, lists the entries with what happened to each in bold, and sets the date to agree by, to object by or from which the change applies in bold right above the button. The proof row records these lines as the mail shows them, so a notice sent from this release on has a different `notice_body` and hash than one sent before, and a row already written keeps its own. Each notice has a new `heading` line in its catalog, which a catalog published before this release takes from the package.
+- **The change notices render with the package's theme by default.** It starts from the application's own mail theme and sets the notice's text a shade darker than the note under it on why the mail arrived, which is smaller and lighter. `notice_mail.theme` set to null renders with the application's theme alone, and a published configuration keeps the null it carries until `legal-consent::mail.theme` is set there.
+- **The WireKit views draw their secondary actions as filled buttons.** Ten actions of the consent checkboxes, the consent settings, the legal text editor and the re-consent form had an outlined surface, a border without a fill. They are filled now, in the neutral intent where they named none, so they do not draw as dark as the primary action beside them. "Cancel" in the dialog that releases a legal text had no surface at all and is filled as well.
+- **The WireKit views leave the surface of their buttons to WireKit.** No button sets `surface` any more: WireKit fills a button by default, and an application that sets `wirekit.components.button.surface` gets its own surface on these buttons as well. The rank of an action comes from its `intent`, and the dialog's "Close" names the neutral one.
+- **The banner's actions are buttons.** "Review now" and "Review or object" in the WireKit banner were text links. They are filled buttons now; the link that opens an informational document stays a link.
+
+### Fixed
+
+- **The theme `legal-consent::mail.theme` adds to the application's mail theme instead of replacing it.** Laravel inlines one stylesheet into a mail, and a theme named on a message takes the place of the application's. The theme carried a handful of rules and nothing else, so a notice sent with it went without the spacing and the button styles of Laravel's theme. It starts from the theme `mail.markdown.theme` names now. A copy published before this release is still that stylesheet alone, and the package's takes its place once the copy is deleted.
+- **In the WireKit settings a version is quiet text, and a badge is a state.** The version of each contract and acknowledgment stood in a badge of the same shape as the consent's "Given" and "Not given", so the state read as one more version. The version is small muted text beside its title now, and the badges on the screen are states only. The plain views already wrote the version as text.
+- **"Release all locales" is off while every language is live as drafted.** The button stayed armed after a release, and pressing it again re-published every language under the version it already had and reported that as a release. The overview turns it off and names the reason below it, and the release action refuses the same state, also when it is asked for from a page loaded before the last release. The reason is the new case `BlockingReason::NothingToRelease`, translated in every language of the package; a `match` over the enum without a default arm needs it.
+- **"Release all locales" stands at the end of its row in the legal text manager.** The control has a row of its own below its document, because on a phone it stood past the visible edge of the grid, and in that row it stood at the start. It stands at the end now, in both views, and on a phone at the right edge of what is visible of the grid.
+- **A consent's action stands at the end of its row in the WireKit consent settings.** "Withdraw", "Give" and the badges that take their place stood under the consent's title, because the row was a vertical stack. The title and its action share one line now, and a long title wraps beside the action.
+
 ## [0.58.0] - 2026-11-11
 
 ### Documentation
@@ -3402,7 +3424,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.58.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.59.0...HEAD
+[0.59.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.58.0...v0.59.0
 [0.58.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.57.0...v0.58.0
 [0.57.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.1...v0.57.0
 [0.56.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.0...v0.56.1

@@ -23,6 +23,7 @@ return [
     ],
     'contract' => [
         'subject' => 'Wichtig: aktualisierte Nutzungsbedingungen',
+        'heading' => 'Unsere Nutzungsbedingungen ändern sich',
         'intro' => 'Wir haben unsere Nutzungsbedingungen aktualisiert und bitten dich um deine erneute Zustimmung.',
         'cta' => 'Jetzt ansehen und zustimmen',
         'consequence' => 'Bitte stimme bis zum :deadline zu — andernfalls ist die weitere Nutzung ab diesem Tag eingeschränkt.',
@@ -31,6 +32,7 @@ return [
     'informational' => [
         'contract' => [
             'subject' => 'Änderungen an unserem Vertrag',
+            'heading' => 'Unser Vertrag ändert sich',
             'intro' => 'Wir haben unseren Vertrag angepasst. Von deiner Seite ist keine Aktion erforderlich.',
             'cta' => 'Änderungen ansehen',
             'effective' => 'Die Änderungen treten zum :deadline in Kraft.',
@@ -38,6 +40,7 @@ return [
         ],
         'acknowledgement' => [
             'subject' => 'Aktualisierte Datenschutzerklärung',
+            'heading' => 'Unsere Datenschutzerklärung ändert sich',
             'intro' => 'Wir haben unsere Datenschutzerklärung aktualisiert. Bitte nimm die neue Fassung zur Kenntnis — es ist keine Aktion erforderlich.',
             'cta' => 'Neue Fassung ansehen',
             'effective' => 'Die aktualisierte Fassung gilt ab dem :deadline.',
@@ -49,6 +52,7 @@ return [
     // courtesy copy. Contract only (silence never binds a privacy notice or a real consent).
     'deemed' => [
         'subject' => 'Änderung unseres Vertrags',
+        'heading' => 'Unser Vertrag ändert sich',
         'intro' => 'Wir passen unseren Vertrag („:title“) an.',
         'warning' => 'Wenn du nicht bis zum :deadline widersprichst, gilt dies als deine Zustimmung zu den Änderungen.',
         'cta' => 'Änderungen ansehen und ggf. widersprechen',

@@ -165,8 +165,10 @@
                             {{-- Held at the visible left edge while the grid scrolls sideways, and no wider
                                  than the table's frame, the container `100cqi` measures. The cell's inline
                                  padding moves into the hold, which a sticky box needs: it cannot leave its
-                                 cell's content box. See the plain twin. --}}
-                            <div style="position: sticky; inset-inline-start: 0; box-sizing: border-box; max-inline-size: 100cqi; padding-inline: var(--padding-wk-x-md, 0.75rem);">
+                                 cell's content box. See the plain twin. Its content stands at the end of the
+                                 row, where a row's actions stand, so on a phone at the right edge of what is
+                                 visible of the grid. --}}
+                            <div style="position: sticky; inset-inline-start: 0; box-sizing: border-box; max-inline-size: 100cqi; padding-inline: var(--padding-wk-x-md, 0.75rem); display: flex; flex-direction: column; align-items: flex-end; gap: var(--gap-wk-xs, 0.25rem); text-align: end;">
                             @if ($rows[$key]['_release']['ready'])
                                 {{-- The installed alert-dialog exposes a `trigger` slot
                                      plus a default-slot panel body built from alert-dialog.title /

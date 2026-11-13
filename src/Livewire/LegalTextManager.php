@@ -72,6 +72,21 @@ final class LegalTextManager extends Component
         // package: a key this instance does not have is one that does not exist here.
         abort_unless(in_array($key, $this->documentKeys(), true), 404);
 
+        // A release that would publish nothing new is refused here, as the overview's button is off for
+        // it. Passed on, a second press or a tab opened before the last release would re-publish every
+        // language under the version it already has and report that as a release.
+        $set = LegalDraftSet::for($key);
+        $covered = $this->releaseLocalesFor($key);
+
+        if ($set->blockingLocales($covered) === [] && $set->nothingToRelease($covered)) {
+            $this->setStatus(__('legal-consent::ui.admin_status_release_blocked', [
+                'key' => app(NamesLegalTexts::class)->document($key),
+                'reasons' => __(BlockingReason::NothingToRelease->label()),
+            ]));
+
+            return;
+        }
+
         // The manager releases a material change in the mode its document type takes: an active
         // re-consent for a contract or a real consent, info-only for a privacy notice, silent for an
         // informational page; the publisher refuses an active re-consent for a privacy notice. The
@@ -88,7 +103,7 @@ final class LegalTextManager extends Component
         $sentencesBefore = app(LegalDocumentReleaser::class)->sentencesBefore($key);
 
         try {
-            $released = app(LegalDocumentReleaser::class)->release($key, $this->modeFor($key), $this->releaseLocalesFor($key));
+            $released = app(LegalDocumentReleaser::class)->release($key, $this->modeFor($key), $covered);
         } catch (LegalReleaseNotReady $e) {
             // A polite live-region message — never a fatal — so a screen reader hears why the
             // release did not happen (WCAG 4.1.3), and nothing was written.
@@ -173,6 +188,12 @@ final class LegalTextManager extends Component
             // six documents in seven languages cost 42 of them on a component that re-renders on
             // every filter click.
             $unpublished = $set->unpublishedChanges($this->locales());
+
+            // Every language of the release live as drafted: the button is off and names the reason
+            // below it, where the others stand, and the release action refuses the same state.
+            if ($blocking === [] && $set->nothingToRelease($covered, $unpublished)) {
+                $blocking = array_fill_keys($covered, BlockingReason::NothingToRelease);
+            }
 
             foreach ($this->locales() as $locale) {
                 $draft = $set->draft($locale);

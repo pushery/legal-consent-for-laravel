@@ -4,6 +4,22 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.58.0 → 0.59.0
+
+**Nothing is required of you**, unless you published the package's views, its translations or its mail theme, or a test of yours reads the lines of a change notice.
+
+**Publish the views again if you published them**, for the buttons that leave their surface to WireKit, the banner's actions as buttons, the line under the consent checkboxes that explains the asterisk, a consent's action at the end of its row in the settings and "Release all locales" at the end of its row: `php artisan vendor:publish --tag=legal-consent-wirekit --force` for the WireKit views, `php artisan vendor:publish --tag=legal-consent-views --force` for the plain ones.
+
+**Add `required_legend` and `blocking_nothing_to_release` to each published `ui.php` if you published the translations.** The line under the consent checkboxes reads the first, the overview of the legal texts the second, and the package's own files carry both in every language they ship.
+
+**Give a `match` over `BlockingReason` an arm for `NothingToRelease` if it has no default.** The overview reports the new case while every language of a document is live as drafted.
+
+**A test that reads the lines of a change notice finds the heading first and the date above the button.** Each notice opens with its heading as its first line, `# Our terms of use are changing` in the re-consent notice, the entries of a change description arrive as one line that is a Markdown list with each kind in bold, and the date to agree by, to object by or from which the change applies is set in bold and stands before the call to action. The re-consent and the information-only notice therefore carry it in `introLines` rather than `outroLines`. The proof row records the same lines, so a notice sent from this release on hashes differently from one sent before.
+
+**Add `heading` to each notice of a published `notifications.php` to word the heading yourself.** Without it the notice takes the package's line in the same language.
+
+**Delete a published `mail/theme.css` if you published the mail theme.** The package's theme is a Blade view now that starts from your application's mail theme, and the old stylesheet in `resources/views/vendor/legal-consent/mail/` would still take its place. A published configuration keeps `notice_mail.theme` at `null`; set it to `legal-consent::mail.theme` for the notice's own theme.
+
 ## 0.57.0 → 0.58.0
 
 **Nothing is required of you**, unless the package renders its WireKit views in your application.

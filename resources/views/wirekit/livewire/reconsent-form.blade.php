@@ -57,7 +57,7 @@
                             {{-- It closes with the re-render its action causes, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
                             <x-wirekit::alert-dialog :name="'lc-object-'.$item['key']" :close-on-confirm="false">
                                 <x-slot:trigger>
-                                    <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.object_for', ['title' => $item['title']])">
+                                    <x-wirekit::button intent="danger" :aria-label="__('legal-consent::ui.object_for', ['title' => $item['title']])">
                                         {{ __('legal-consent::ui.object') }}
                                     </x-wirekit::button>
                                 </x-slot:trigger>
@@ -88,7 +88,7 @@
                             {{-- It closes with the re-render its action causes, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
                             <x-wirekit::alert-dialog :name="'lc-terminate-'.$item['key']" :close-on-confirm="false">
                                 <x-slot:trigger>
-                                    <x-wirekit::button intent="danger" surface="outline" :aria-label="__('legal-consent::ui.terminate_for', ['title' => $item['title']])">
+                                    <x-wirekit::button intent="danger" :aria-label="__('legal-consent::ui.terminate_for', ['title' => $item['title']])">
                                         {{ __('legal-consent::ui.terminate') }}
                                     </x-wirekit::button>
                                 </x-slot:trigger>

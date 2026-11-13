@@ -258,6 +258,40 @@ final readonly class LegalDraftSet
         return $answer;
     }
 
+    /**
+     * Whether a release over these languages would publish nothing new: none of them has a draft that
+     * differs from its live text, and their live versions carry the type the registry gives the document.
+     * An empty list answers false, because a release that covers no language is refused for that reason
+     * rather than this one.
+     *
+     * @param  list<string>  $locales
+     * @param  array<string, bool>|null  $unpublished  {@see unpublishedChanges()} over at least these
+     *                                                 languages, when the caller asked it already
+     */
+    public function nothingToRelease(array $locales, ?array $unpublished = null): bool
+    {
+        if ($locales === []) {
+            return false;
+        }
+
+        $unpublished ??= $this->unpublishedChanges($locales);
+
+        foreach ($locales as $locale) {
+            if ($unpublished[$locale] ?? false) {
+                return false;
+            }
+        }
+
+        // The texts are live as drafted, but the registry may have given the document another type since.
+        // A release would carry that type, so it is not nothing, and the publisher says whether it may.
+        return ! LegalDocument::model()::query()
+            ->where('key', $this->key)
+            ->whereIn('locale', $locales)
+            ->where('is_active', true)
+            ->where('type', '!=', $this->type()->value)
+            ->exists();
+    }
+
     /** Approved text that is not live: the draft differs from the active published row. */
     public function hasUnpublishedChanges(LegalDraft $draft): bool
     {
