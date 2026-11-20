@@ -20,6 +20,7 @@ use Pushery\LegalConsent\Contracts\ResolvesNoticeIdentity;
 use Pushery\LegalConsent\Contracts\SendsNoticeMail;
 use Pushery\LegalConsent\Models\LegalDocument;
 use Pushery\LegalConsent\Notifications\Concerns\RendersChangeItems;
+use Pushery\LegalConsent\Support\CalendarDate;
 use Pushery\LegalConsent\Support\ConsentGate;
 use Pushery\LegalConsent\Support\MarkdownText;
 use Pushery\LegalConsent\Support\NoticeMailConfig;
@@ -313,22 +314,12 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
      * notice (§ 308 Nr. 5 lit. b BGB), and it has to read as a date in the sentence around it. The
      * `toArray()` payloads keep the ISO form, because a program reads those.
      *
-     * A language Carbon has no long date format (`LL`) for gets the ISO date instead, which reads
-     * the same everywhere. Carbon is asked for that format itself, with an empty string standing for
-     * none, because the output of `isoFormat('LL')` cannot tell a missing format from a date: it is
-     * an empty string from Carbon 3.14.2 on and the bare letter "L" before it.
+     * The admin screens write a date the same way, through {@see CalendarDate::readable()}, which
+     * also says what a language without a long date format gets.
      */
     protected function readableDate(?CarbonImmutable $date): string
     {
-        if (! $date instanceof CarbonImmutable) {
-            return '';
-        }
-
-        $localized = $date->settings(['locale' => app()->getLocale()]);
-
-        return $localized->getTranslationMessage('formats.LL', default: '') !== ''
-            ? $localized->isoFormat('LL')
-            : $date->toDateString();
+        return $date instanceof CarbonImmutable ? CalendarDate::readable($date, app()->getLocale()) : '';
     }
 
     /**
@@ -379,11 +370,15 @@ abstract class ChangeNotification extends Notification implements SendsNoticeMai
      * template, where an application chose it, still greets above it. A heading that does not
      * resolve is left out rather than printed empty.
      */
-    protected function withHeading(MailMessage $mail, string $heading): MailMessage
+    protected function withHeading(MailMessage $mail, Htmlable|string $heading): MailMessage
     {
-        $heading = trim($heading);
+        $text = trim($heading instanceof Htmlable ? $heading->toHtml() : $heading);
 
-        return $heading === '' ? $mail : $mail->line('# '.$heading);
+        if ($text === '') {
+            return $mail;
+        }
+
+        return $mail->line($heading instanceof Htmlable ? new HtmlString('# '.$text) : '# '.$text);
     }
 
     /**

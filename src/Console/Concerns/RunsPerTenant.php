@@ -68,10 +68,20 @@ trait RunsPerTenant
         }
 
         return array_values($tenants->push($context->current())
-            ->map(static fn (mixed $tenant): string => is_scalar($tenant) ? (string) $tenant : '')
+            ->map($this->tenantKey(...))
             ->unique()
             ->sort()
             ->all());
+    }
+
+    /**
+     * A tenant as the key the commands group by: its id as text, and the empty string for none.
+     *
+     * @param  mixed  $tenant  a tenant id as the tables return it, of whatever type the column has
+     */
+    private function tenantKey(mixed $tenant): string
+    {
+        return is_scalar($tenant) ? (string) $tenant : '';
     }
 
     /**
@@ -103,7 +113,9 @@ trait RunsPerTenant
      * @template TReturn
      *
      * @param  Closure(): TReturn  $callback
-     * @return TReturn
+     * @return mixed what `$callback` returns, whatever its type
+     *
+     * @phpstan-return TReturn
      */
     private function inTenant(?string $tenant, Closure $callback): mixed
     {

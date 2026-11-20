@@ -26,6 +26,9 @@ final class CheckboxAnswer implements ValidationRule
     /** What Laravel's `declined` rule takes: the box was submitted unticked. */
     public const array UNTICKED = ['no', 'off', '0', 0, false, 'false'];
 
+    /**
+     * @param  mixed  $value  the submitted answer, as the request carries it, which may be any value a client sends
+     */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (in_array($value, self::TICKED, true) || in_array($value, self::UNTICKED, true)) {

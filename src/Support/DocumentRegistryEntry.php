@@ -42,6 +42,8 @@ final readonly class DocumentRegistryEntry
 
     /**
      * One option off that entry, or null when the key names no document or carries no such option.
+     *
+     * @return mixed the option as the document's registry entry holds it, which a host may have set to any type
      */
     public static function option(string $key, string $option): mixed
     {

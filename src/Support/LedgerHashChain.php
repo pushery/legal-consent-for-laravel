@@ -410,6 +410,8 @@ final class LedgerHashChain
     /**
      * One field, self-delimiting.
      *
+     * @param  mixed  $value  a field of the row the chain hashes, as the driver returns it
+     *
      * @throws UnhashableProofFieldException when the value has no lossless string form
      */
     private function encode(string $field, mixed $value): string

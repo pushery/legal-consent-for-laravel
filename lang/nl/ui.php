@@ -66,6 +66,8 @@ return [
     'retired' => 'Niet langer aangeboden',
     'consent_given' => 'Gegeven',
     'consent_not_given' => 'Niet gegeven',
+    'held_since' => 'sinds :date',
+    'held_version_since' => 'sinds :date (v:version)',
 
     // Grace-period remaining time (trans_choice): pluralization + effective-today case.
     'days_left' => '{0}Vandaag van kracht|{1}Nog :count dag|[2,*]Nog :count dagen',
@@ -92,6 +94,7 @@ return [
 
     // Admin screens (LegalTextManager / LegalTextEditor).
     'admin_heading' => 'Juridische teksten',
+    'admin_grid_label' => 'Status van elke tekst per taal',
     'admin_policy' => 'Teksten worden per taal bewerkt, door een mens gecontroleerd en dan in alle talen tegelijk vrijgegeven. Een machinevertaling kan nooit worden gepubliceerd voordat iemand haar heeft gecontroleerd, en de acceptatiezin is vaste tekst — die wordt nooit machinaal vertaald.',
     'admin_document' => 'Document',
     'admin_not_written' => 'Niet geschreven',
@@ -119,7 +122,7 @@ return [
     'admin_release_all' => 'Alle talen vrijgeven',
     'admin_release_confirm_title' => 'Alle talen vrijgeven?',
     'admin_release_confirm_body' => 'Alle talen van deze tekst worden samen als één versie gepubliceerd. Dit kan niet ongedaan worden gemaakt — een wijziging is een nieuwe, hogere versie.',
-    'admin_release_leaves_out' => 'Deze publicatie laat :languages buiten beschouwing. Die talen houden de al gepubliceerde versie, als die er is, tot hun eigen vertaling is vrijgegeven.',
+    'admin_release_leaves_out' => '{1} Deze publicatie laat :languages buiten beschouwing. Die taal houdt de al gepubliceerde versie, als die er is, tot haar eigen vertaling is vrijgegeven.|[2,*] Deze publicatie laat :languages buiten beschouwing. Die talen houden de al gepubliceerde versie, als die er is, tot hun eigen vertaling is vrijgegeven.',
     'admin_release_headings' => 'Koppen: :headings',
     'admin_stale' => 'De brontekst is veranderd nadat deze vertaling was gecontroleerd — controleer haar opnieuw voor vrijgave.',
     'admin_stale_unconfirmed' => 'Deze vertaling is nooit tegen de brontekst bevestigd — controleer haar voor vrijgave.',

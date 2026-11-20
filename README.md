@@ -11,13 +11,13 @@
 [![Laravel Versions](https://badge.laravel.cloud/badge/pushery/legal-consent-for-laravel?style=flat)](https://packagist.org/packages/pushery/legal-consent-for-laravel)
 [![License](https://img.shields.io/packagist/l/pushery/legal-consent-for-laravel.svg)](LICENSE)
 
-[![Tests](https://img.shields.io/badge/tests-Pest%205-8BC34A.svg)](https://pestphp.com)
-![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)
-![Type Coverage](https://img.shields.io/badge/types-100%25-brightgreen.svg)
-[![PHPStan](https://img.shields.io/badge/PHPStan-max-blue.svg)](https://phpstan.org)
-[![Code Style](https://img.shields.io/badge/code%20style-pint-orange.svg)](https://laravel.com/docs/pint)
-![Databases](https://img.shields.io/badge/tested%20on-PostgreSQL%20%2B%20MySQL-336791.svg)
-![Mutation](https://img.shields.io/badge/mutation-%E2%89%A580%25-blueviolet.svg)
+[![Tests: Pest 5](https://img.shields.io/badge/tests-Pest%205-8BC34A.svg)](https://pestphp.com)
+![Coverage: 100%](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)
+![Type coverage: 100%](https://img.shields.io/badge/types-100%25-brightgreen.svg)
+[![PHPStan: level 10](https://img.shields.io/badge/PHPStan-10-blue.svg)](https://phpstan.org)
+[![Code style: Pint](https://img.shields.io/badge/code%20style-pint-orange.svg)](https://laravel.com/docs/pint)
+![Tested on: PostgreSQL + MySQL](https://img.shields.io/badge/tested%20on-PostgreSQL%20%2B%20MySQL-336791.svg)
+![Mutation: ≥80%](https://img.shields.io/badge/mutation-%E2%89%A580%25-blueviolet.svg)
 
 Versioned legal consent for Laravel, recorded with the exact text each person accepted. It is a
 **document-acceptance ledger**: the package **renders and proves** your legal texts — it does not
@@ -77,7 +77,7 @@ tested against a real PostgreSQL and a real MySQL, not just SQLite.
 
 ## Quality bar
 
-Every change is held to Laravel Pint, Larastan at `max`, Rector, and a test suite at 100% line
+Every change is held to Laravel Pint, Larastan at level 10, Rector, and a test suite at 100% line
 and type coverage, plus a real-browser end-to-end suite and cross-engine tests against a real
 PostgreSQL and MySQL 8.4, the engines it runs on in production, before it is released.
 

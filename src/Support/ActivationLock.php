@@ -79,7 +79,9 @@ final class ActivationLock
      * @template TReturn
      *
      * @param  Closure(): TReturn  $work
-     * @return TReturn
+     * @return mixed what `$work` returns, whatever its type
+     *
+     * @phpstan-return TReturn
      */
     public static function serializeUnlessOwned(string $key, string $subject, Closure $work): mixed
     {
@@ -103,7 +105,9 @@ final class ActivationLock
      * @template TReturn
      *
      * @param  Closure(): TReturn  $work
-     * @return TReturn
+     * @return mixed what `$work` returns, whatever its type
+     *
+     * @phpstan-return TReturn
      */
     public static function serialize(string $key, string $subject, Closure $work): mixed
     {

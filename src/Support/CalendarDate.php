@@ -8,7 +8,8 @@ use Carbon\CarbonImmutable;
 use Carbon\Exceptions\InvalidFormatException;
 
 /**
- * Reads a calendar date written as YYYY-MM-DD, and nothing else.
+ * Reads a calendar date written as YYYY-MM-DD, and nothing else, and writes a date back the way a reader
+ * of a language writes one.
  *
  * The dates read this way are legal deadlines: when subjects are told about a new version, when it
  * binds, and when silence starts to count as consent. Each is frozen into an append-only row once
@@ -41,5 +42,23 @@ final class CalendarDate
         }
 
         return $date;
+    }
+
+    /**
+     * The date as a reader of the language writes one, "March 25, 2027" in English and "25. März 2027"
+     * in German, never in the ISO form a machine reads.
+     *
+     * A language Carbon has no long date format (`LL`) for gets the ISO date instead, which reads the
+     * same everywhere. Carbon is asked for that format itself, with an empty string standing for none,
+     * because the output of `isoFormat('LL')` cannot tell a missing format from a date: it is an empty
+     * string from Carbon 3.14.2 on and the bare letter "L" before it.
+     */
+    public static function readable(CarbonImmutable $date, string $locale): string
+    {
+        $localized = $date->settings(['locale' => $locale]);
+
+        return $localized->getTranslationMessage('formats.LL', default: '') !== ''
+            ? $localized->isoFormat('LL')
+            : $date->toDateString();
     }
 }

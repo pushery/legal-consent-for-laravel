@@ -48,7 +48,14 @@
         <div>
             <button type="button" wire:click="save" wire:loading.attr="aria-busy" wire:target="save">{{ __('legal-consent::ui.admin_save') }}</button>
             @if (($releaseModes ?? []) !== [])
-                <button type="button" wire:click="saveAndRelease" wire:loading.attr="aria-busy" wire:target="saveAndRelease">{{ __('legal-consent::ui.admin_save_and_release') }}</button>
+                {{-- The focus comes back here when the dialog this button opens closes, by its Cancel or
+                     by the release it confirms, as the WireKit twin's modal hands it back to its trigger.
+                     The dialog leaves the page with the render that closes it, and the focus inside it
+                     would fall to <body>. The button remembers that the dialog was open and takes the
+                     focus once it no longer is, so a page that never opened the dialog keeps its focus
+                     where it is. --}}
+                <button type="button" wire:click="saveAndRelease" wire:loading.attr="aria-busy" wire:target="saveAndRelease"
+                    x-data="{ dialogWasOpen: false }" x-effect="$wire.releaseDialog ? dialogWasOpen = true : dialogWasOpen && $el.focus()">{{ __('legal-consent::ui.admin_save_and_release') }}</button>
             @endif
 
             {{-- Disabled while a translation of this draft runs, and it names the wait: a second press
@@ -82,9 +89,15 @@
         {{-- Only where silence can bind: an informational page binds nobody, and the publisher
              refuses every mode for it but the silent one. A caller that passes no such value
              keeps the form, as before. --}}
-        {{-- What a release in the chosen mode would do, shown before it happens. --}}
+        {{-- What a release in the chosen mode would do, shown before it happens.
+
+             The focus moves into the dialog when it opens, as the WireKit twin's modal moves it into
+             itself: otherwise it stays on the button that was pressed, and a keyboard or screen reader
+             user is not told that a dialog opened below it. `x-init` rather than `x-effect`, because
+             the dialog is inserted anew each time it opens, so the move happens once per opening and
+             not again when a choice inside the dialog renders the screen anew. --}}
         @if (($releaseDialog ?? false) && is_array($releaseSummary ?? null))
-            <div role="dialog" aria-labelledby="legal-release-title">
+            <div role="dialog" aria-labelledby="legal-release-title" tabindex="-1" x-init="$el.focus()">
                 <h2 id="legal-release-title">{{ __('legal-consent::ui.admin_release_dialog_title', ['document' => $documentName ?? $key]) }}</h2>
                 <fieldset>
                     <legend>{{ __('legal-consent::ui.admin_release_dialog_mode') }}</legend>
@@ -154,18 +167,20 @@
 
              The three dates and the regime are required, and they say so through `aria-required`
              rather than `required`: there is no form here for a browser to hold back, and the
-             component names every empty field itself when the button is pressed. --}}
+             component names every empty field itself when the button is pressed. Each label carries
+             the asterisk of a required field for the eye, as the WireKit twin's labels do, hidden
+             from a screen reader, which hears "required" from the control. --}}
         <h2>{{ __('legal-consent::ui.admin_deemed_heading') }}</h2>
         <p>{{ __('legal-consent::ui.admin_deemed_explainer') }}</p>
 
         <div>
-            <label for="legal-deemed-announce">{{ __('legal-consent::ui.admin_deemed_announce') }}</label>
+            <label for="legal-deemed-announce">{{ __('legal-consent::ui.admin_deemed_announce') }}<span class="legal-consent-required-mark" aria-hidden="true">*</span></label>
             <input id="legal-deemed-announce" type="date" wire:model.live="announceAt" aria-required="true" @if (isset($window['announce'])) min="{{ $window['announce'] }}" @endif>
 
-            <label for="legal-deemed-deadline">{{ __('legal-consent::ui.admin_deemed_deadline') }}</label>
+            <label for="legal-deemed-deadline">{{ __('legal-consent::ui.admin_deemed_deadline') }}<span class="legal-consent-required-mark" aria-hidden="true">*</span></label>
             <input id="legal-deemed-deadline" type="date" wire:model.live="objectionDeadline" aria-required="true" @if (isset($window['deadline'])) min="{{ $window['deadline'] }}" @endif>
 
-            <label for="legal-deemed-enforce">{{ __('legal-consent::ui.admin_deemed_enforce') }}</label>
+            <label for="legal-deemed-enforce">{{ __('legal-consent::ui.admin_deemed_enforce') }}<span class="legal-consent-required-mark" aria-hidden="true">*</span></label>
             <input id="legal-deemed-enforce" type="date" wire:model.live="enforceAt" aria-required="true" @if (isset($window['enforce'])) min="{{ $window['enforce'] }}" @endif>
 
             {{-- The minimum the dates are held to, with the rule that sets it. --}}
@@ -179,7 +194,7 @@
                  from. A `<select>` for the regime because the publisher refuses one it does not
                  know, and free text for the class because the publisher takes any and the command
                  line already calls it a tag. --}}
-            <label for="legal-deemed-regime">{{ __('legal-consent::ui.admin_deemed_regime') }}</label>
+            <label for="legal-deemed-regime">{{ __('legal-consent::ui.admin_deemed_regime') }}<span class="legal-consent-required-mark" aria-hidden="true">*</span></label>
             <select id="legal-deemed-regime" wire:model.live="regime" aria-required="true" aria-describedby="legal-deemed-regime-hint">
                 <option value="">{{ __('legal-consent::ui.admin_deemed_regime_none') }}</option>
                 {{-- The publisher's own list, read from it rather than written out here: it

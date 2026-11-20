@@ -84,6 +84,18 @@ use Throwable;
 final class LegalConsentServiceProvider extends ServiceProvider
 {
     /**
+     * The sections of the config that are catalogs, as dotted paths from the config key: maps whose
+     * keys the host chooses, one entry per plan, per document or per signing key. A key that a
+     * published catalog leaves out was removed by the host rather than added by a later release, so
+     * the merge takes a published catalog as it stands. A catalog the host never published arrives
+     * whole from the default. A package lists such a section here, for example
+     * 'legal-consent.plans'.
+     *
+     * @var list<string>
+     */
+    private const array CATALOG_SECTIONS = [];
+
+    /**
      * Top-level config blocks a publishing host owns whole, never merged into.
      *
      * The test for this list is not "is it a map" — the merge already answers that — but whether
@@ -100,6 +112,9 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * with nothing erroring on the way.
      *
      * Adding a key here is therefore a decision about ownership, not about merge convenience.
+     *
+     * A registry here is no catalog of CATALOG_SECTIONS. A catalog stands as the host published it,
+     * while each entry the host keeps in a registry still takes the fields a later release adds.
      *
      * Public because a second reader needs the same answer: `legal-consent:doctor` reports keys the
      * published file does not name, and for a block on this list a missing key is the host's
@@ -134,13 +149,15 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * when it moved to `^2.68.0`: no older release has been installed to prove the views against since
      * then, and the floor names the oldest one. Raised 2.68.0 -> 2.70.0 when the two countdowns of the
      * consent banner began to stand still through `static`, so the banner no longer updates itself
-     * beside the page a reader is reading (WCAG 2.2.2, first shipped in 2.70.0).
+     * beside the page a reader is reading (WCAG 2.2.2, first shipped in 2.70.0). Raised 2.70.0 -> 2.73.0 when the
+     * development constraint moved to `^2.73.0`: no older release has been installed to prove the views against since
+     * then, and the floor names the oldest one.
      *
      * A consumer below the floor therefore receives the plain views instead of the WireKit variant,
      * which is this constant working rather than failing: the alternative is a Blade tag compiling
      * against a component that is not there, or a dialog that does not close after its action.
      */
-    public const string WIREKIT_MINIMUM = '2.70.0';
+    public const string WIREKIT_MINIMUM = '2.73.0';
 
     /**
      * Whether the bundled migrations are registered automatically. Disable with
@@ -521,7 +538,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
             return true;
         }
 
-        $release = (string) preg_replace('/\.x-dev$/', '.'.PHP_INT_MAX, ltrim($version, 'vV'));
+        $release = (string) preg_replace('/\.x-dev$/D', '.'.PHP_INT_MAX, ltrim($version, 'vV'));
 
         return version_compare($release, self::WIREKIT_MINIMUM, '>=');
     }
@@ -852,6 +869,10 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * a document nobody meant to serve, which is a worse failure than a missing default.
      * {@see HOST_OWNED_REGISTRIES}.
      *
+     * Recursion stops at a catalog as well, a section named in CATALOG_SECTIONS. Its keys are the
+     * host's, so a key missing from the published catalog is one the host removed, and laying the
+     * default under it would hand that entry back.
+     *
      * The early return bounds what this can rescue. A cached configuration was merged when it was
      * built: `config:cache` boots a fresh application without the cache, so this method runs there,
      * and the result is what gets cached. A boot that reads the cache skips the merge, so after a
@@ -876,17 +897,21 @@ final class LegalConsentServiceProvider extends ServiceProvider
         $repository->set($key, $this->mergeConfigSections(
             is_array($shipped) ? $shipped : [],
             is_array($existing) ? $existing : [],
-            self::HOST_OWNED_REGISTRIES,
+            $key.'.',
+            self::CATALOG_SECTIONS,
+            array_map(static fn (string $registry): string => $key.'.'.$registry, self::HOST_OWNED_REGISTRIES),
         ));
     }
 
     /**
      * @param  array<array-key, mixed>  $shipped
      * @param  array<array-key, mixed>  $published
-     * @param  list<string>  $hostOwned  top-level blocks the host owns whole; empty below the top
+     * @param  string  $path  the dotted path of the two maps, so a catalog is recognized at any depth
+     * @param  list<string>  $catalogs  the dotted paths of the catalogs, which the merge takes as published
+     * @param  list<string>  $registries  the dotted paths of the registries the host owns whole, whose entries still merge
      * @return array<array-key, mixed>
      */
-    private function mergeConfigSections(array $shipped, array $published, array $hostOwned = []): array
+    private function mergeConfigSections(array $shipped, array $published, string $path = '', array $catalogs = [], array $registries = []): array
     {
         foreach ($shipped as $key => $value) {
             if (! array_key_exists($key, $published)) {
@@ -909,11 +934,10 @@ final class LegalConsentServiceProvider extends ServiceProvider
             // Flattening the registry entirely restores the pre-0.34.0 behavior and is therefore
             // not a regression, but it is not the best available answer either.
             //
-            // Checked here rather than by name inside the recursion, and the default empty list is
-            // what makes that true: neither call below passes anything, so `documents` nested
-            // somewhere else still merges normally. A name-anywhere rule would be a different,
-            // wider promise than the one being made.
-            if (in_array($key, $hostOwned, true)) {
+            // Checked by the full dotted path rather than by name, so `documents` nested somewhere
+            // else still merges normally. A name-anywhere rule would be a different, wider promise
+            // than the one being made.
+            if (in_array($path.$key, $registries, true)) {
                 $published[$key] = $this->mergeRegistryEntries(
                     is_array($value) ? $value : [],
                     is_array($published[$key]) ? $published[$key] : [],
@@ -922,12 +946,12 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 continue;
             }
 
-            // Recurse only where both sides are maps. If either is a list, or the published value
-            // is a scalar or an explicit null, what the host wrote stands. An explicit null is a
-            // value like any other here, which keeps "write => null to switch this off" working
-            // exactly as the shipped config file describes it.
-            if (is_array($value) && is_array($published[$key]) && ! array_is_list($value) && ! array_is_list($published[$key])) {
-                $published[$key] = $this->mergeConfigSections($value, $published[$key]);
+            // Recurse only where both sides are maps and the section is no catalog. If either is a
+            // list, or the published value is a scalar or an explicit null, what the host wrote
+            // stands. An explicit null is a value like any other here, which keeps "write => null
+            // to switch this off" working exactly as a shipped config file describes it.
+            if (is_array($value) && is_array($published[$key]) && ! array_is_list($value) && ! array_is_list($published[$key]) && ! in_array($path.$key, $catalogs, true)) {
+                $published[$key] = $this->mergeConfigSections($value, $published[$key], $path.$key.'.', $catalogs, $registries);
             }
         }
 

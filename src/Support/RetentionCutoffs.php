@@ -24,7 +24,7 @@ use Pushery\LegalConsent\Models\LegalNotice;
 final readonly class RetentionCutoffs
 {
     /**
-     * @param  array<string, array{retention: string, cutoff: CarbonImmutable}>  $documents
+     * @param  array<array-key, array{retention: string, cutoff: CarbonImmutable}>  $documents
      */
     private function __construct(
         public string $retention,
@@ -35,6 +35,9 @@ final readonly class RetentionCutoffs
     /**
      * Every period read from the configuration, each checked before anything is deleted.
      *
+     * @param  mixed  $default  a value of the package's config, which a host may have set to any type
+     * @param  mixed  $byDocument  a value of the package's config, which a host may have set to any type
+     *
      * @throws InvalidRetentionPeriod when a period gives no cutoff at least a day before now
      */
     public static function configured(mixed $default, mixed $byDocument, CarbonImmutable $now): self
@@ -42,7 +45,8 @@ final readonly class RetentionCutoffs
         $retention = RetentionPeriod::configured($default);
         $documents = [];
 
-        foreach (self::entries($byDocument) as $document => $value) {
+        foreach (self::entries($byDocument) as $key => $value) {
+            $document = (string) $key;
             $period = self::period($document, $value);
 
             $documents[$document] = [
@@ -58,13 +62,16 @@ final readonly class RetentionCutoffs
      * Why the period of a document's own gives no cutoff, keyed by document, or nothing when every
      * one gives one.
      *
-     * @return array<string, string>
+     * @param  mixed  $byDocument  a value of the package's config, which a host may have set to any type
+     * @return array<array-key, string>
      */
     public static function problems(mixed $byDocument, CarbonImmutable $now): array
     {
         $problems = [];
 
-        foreach (self::entries($byDocument) as $document => $value) {
+        foreach (self::entries($byDocument) as $key => $value) {
+            $document = (string) $key;
+
             try {
                 RetentionPeriod::cutoff(self::period($document, $value), $now, self::key($document));
             } catch (InvalidRetentionPeriod $refusal) {
@@ -89,10 +96,10 @@ final readonly class RetentionCutoffs
     {
         return $query->where(function (Builder $expired) use ($timestamp): void {
             foreach ($this->documents as $document => $own) {
-                $expired->orWhere(fn (Builder $record): Builder => $record->where('document_key', $document)->where($timestamp, '<', $own['cutoff']));
+                $expired->orWhere(fn (Builder $record): Builder => $record->where('document_key', (string) $document)->where($timestamp, '<', $own['cutoff']));
             }
 
-            $expired->orWhere(fn (Builder $record): Builder => $record->whereNotIn('document_key', array_keys($this->documents))->where($timestamp, '<', $this->cutoff));
+            $expired->orWhere(fn (Builder $record): Builder => $record->whereNotIn('document_key', $this->documentKeys())->where($timestamp, '<', $this->cutoff));
         });
     }
 
@@ -107,11 +114,22 @@ final readonly class RetentionCutoffs
     {
         return $query->where(function (QueryBuilder $expired) use ($timestamp, $documentKey): void {
             foreach ($this->documents as $document => $own) {
-                $expired->orWhere(fn (QueryBuilder $record): QueryBuilder => $record->where($documentKey, $document)->where($timestamp, '<', $own['cutoff']));
+                $expired->orWhere(fn (QueryBuilder $record): QueryBuilder => $record->where($documentKey, (string) $document)->where($timestamp, '<', $own['cutoff']));
             }
 
-            $expired->orWhere(fn (QueryBuilder $record): QueryBuilder => $record->whereNotIn($documentKey, array_keys($this->documents))->where($timestamp, '<', $this->cutoff));
+            $expired->orWhere(fn (QueryBuilder $record): QueryBuilder => $record->whereNotIn($documentKey, $this->documentKeys())->where($timestamp, '<', $this->cutoff));
         });
+    }
+
+    /**
+     * The keys of the documents with a period of their own, as the strings the ledgers hold. A key made of
+     * digits is an int key of the array, and bound as an int it would compare a text column with a number.
+     *
+     * @return list<string>
+     */
+    private function documentKeys(): array
+    {
+        return array_map(strval(...), array_keys($this->documents));
     }
 
     /** The periods for the sweep's report: `3 years`, or `3 years, or older than 10 years for partner_terms`. */
@@ -128,16 +146,18 @@ final readonly class RetentionCutoffs
 
     /**
      * The documents given a period of their own, with the value as configured. An empty value is no
-     * period of its own, so that document keeps the default.
+     * period of its own, so that document keeps the default. A document key made of digits is an int
+     * key, the way PHP stores it, and a document all the same.
      *
-     * @return array<string, mixed>
+     * @param  mixed  $byDocument  a value of the package's config, which a host may have set to any type
+     * @return array<array-key, mixed>
      */
     private static function entries(mixed $byDocument): array
     {
         $entries = [];
 
         foreach (is_array($byDocument) ? $byDocument : [] as $document => $value) {
-            if (is_string($document) && $document !== '' && $value !== null && $value !== '') {
+            if ($document !== '' && $value !== null && $value !== '') {
                 $entries[$document] = $value;
             }
         }
@@ -148,6 +168,8 @@ final readonly class RetentionCutoffs
     /**
      * A period of a document's own, refused when it is not a string. Read as the default instead, a
      * mistyped period would delete that document's proof sooner than the setting asked for.
+     *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      *
      * @throws InvalidRetentionPeriod for a value that is not a string
      */

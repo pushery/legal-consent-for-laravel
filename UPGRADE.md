@@ -4,6 +4,20 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.59.0 → 0.60.0
+
+**Nothing is required of you**, unless you published the package's views or its translations.
+
+**Publish the views of the overview again if you published them.** The sentence on the languages a release leaves out has a form for one language and one for several, and the overview reads it with `trans_choice()` now: a view published before this release reads it with `__()` and prints both forms. The WireKit overview also hides its empty status region. `php artisan vendor:publish --tag=legal-consent-wirekit --force` for the WireKit views, `php artisan vendor:publish --tag=legal-consent-views --force` for the plain ones.
+
+**Give `admin_release_leaves_out` both forms in each published `ui.php` if you published the translations**, `{1} …|[2,*] …` as the package's own files write them. A published line with one form reads the same for any number of languages.
+
+**Publish the banner and the settings views again if you published them.** The re-consent banner says what changed and the date to agree by, the deemed-consent banner writes its deadline as the notice does, and each settings row says since when it is held. A view published before this release shows none of it, and the WireKit banner of such a view still draws a version as a badge. The same two commands as above publish them.
+
+**Take `:title` into the three lines of `notifications.contract` in each published `notifications.php` if you published the translations.** The package's own `subject`, `heading` and `intro` name the document now, and `heading` receives `:title` as well. A published file keeps its own three lines, so a notice for a second contract goes on calling it what those lines say. Its `common.no_reply` also still speaks of a link where the notice shows a button.
+
+**Add `held_since` and `held_version_since` to each published `ui.php` if you published the translations.** The settings rows read them; without them a row shows the key instead of the date.
+
 ## 0.58.0 → 0.59.0
 
 **Nothing is required of you**, unless you published the package's views, its translations or its mail theme, or a test of yours reads the lines of a change notice.

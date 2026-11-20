@@ -66,6 +66,8 @@ return [
     'retired' => 'Nicht mehr angeboten',
     'consent_given' => 'Erteilt',
     'consent_not_given' => 'Nicht erteilt',
+    'held_since' => 'seit dem :date',
+    'held_version_since' => 'seit dem :date (v:version)',
 
     // Grace-period remaining time (trans_choice): pluralization + effective-today case.
     'days_left' => '{0}Ab heute wirksam|{1}Noch :count Tag|[2,*]Noch :count Tage',
@@ -92,6 +94,7 @@ return [
 
     // Admin screens (LegalTextManager / LegalTextEditor).
     'admin_heading' => 'Rechtstexte',
+    'admin_grid_label' => 'Stand der Texte je Sprache',
     'admin_policy' => 'Texte werden je Sprache bearbeitet, von einem Menschen geprüft und dann über alle Sprachen zugleich freigegeben. Eine maschinelle Übersetzung kann nie publiziert werden, bevor sie jemand geprüft hat, und der Zustimmungssatz ist feste Copy — er wird nie maschinell übersetzt.',
     'admin_document' => 'Dokument',
     'admin_not_written' => 'Nicht geschrieben',
@@ -119,7 +122,7 @@ return [
     'admin_release_all' => 'Alle Sprachen freigeben',
     'admin_release_confirm_title' => 'Alle Sprachen freigeben?',
     'admin_release_confirm_body' => 'Alle Sprachen dieses Textes werden gemeinsam als eine Version publiziert. Das lässt sich nicht rückgängig machen — eine Änderung ist eine neue, höhere Version.',
-    'admin_release_leaves_out' => 'Diese Freigabe lässt :languages aus. Sie behalten die dort schon veröffentlichte Fassung, falls es eine gibt, bis ihre eigene Übersetzung freigegeben ist.',
+    'admin_release_leaves_out' => '{1} Diese Freigabe lässt :languages aus. Diese Sprache behält die dort schon veröffentlichte Fassung, falls es eine gibt, bis ihre eigene Übersetzung freigegeben ist.|[2,*] Diese Freigabe lässt :languages aus. Sie behalten die dort schon veröffentlichte Fassung, falls es eine gibt, bis ihre eigene Übersetzung freigegeben ist.',
     'admin_release_headings' => 'Überschriften: :headings',
     'admin_stale' => 'Der Quelltext hat sich geändert, nachdem diese Übersetzung geprüft wurde — prüfe sie vor der Freigabe erneut.',
     'admin_stale_unconfirmed' => 'Diese Übersetzung wurde nie gegen den Quelltext bestätigt — prüfe sie vor der Freigabe.',

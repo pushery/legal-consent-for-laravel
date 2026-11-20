@@ -252,8 +252,9 @@ final class LegalHtmlSanitizer
 
             // The number a list starts at, as CommonMark writes it for a list that goes on after a
             // table, a paragraph or a quote. Nine digits are the most CommonMark reads as a list
-            // marker; any other value is stripped, and the list counts from 1.
-            if ($name === 'start' && preg_match('/^(?:0|[1-9]\d{0,8})$/', $attribute->nodeValue ?? '') !== 1) {
+            // marker; any other value is stripped, a line break after the digits included, and the
+            // list counts from 1.
+            if ($name === 'start' && preg_match('/^(?:0|[1-9]\d{0,8})\z/', $attribute->nodeValue ?? '') !== 1) {
                 $element->removeAttribute($attribute->nodeName);
             }
         }

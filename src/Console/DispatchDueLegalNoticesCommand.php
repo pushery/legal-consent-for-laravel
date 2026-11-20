@@ -92,6 +92,14 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
     protected $description = 'Notify subjects of a now-announced legal change with the notification matching its notice mode.';
 
     /**
+     * A second run while one is under way ends at once, also where nobody passed --isolated: Laravel takes the
+     * isolation lock only where the option is set, and a host's own schedule line or a run by hand sets nothing.
+     *
+     * @var bool
+     */
+    protected $isolated = true;
+
+    /**
      * The minutes a run holds its lock: the scheduler's overlap lock and the `--isolated` lock alike,
      * inside the hour this sweep runs on, so a run that dies holding one does not cost the next sweep.
      */

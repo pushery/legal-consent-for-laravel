@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\LegalConsent\Support;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
 use Pushery\LegalConsent\Models\LegalDocument;
@@ -23,7 +24,8 @@ final readonly class ConsentPresenter
      * legally distinct blocks. `held` is withdrawal-aware (the latest action, not a max).
      *
      * Each entry additionally carries `url` — where the document is readable, from the host's
-     * configured resolver, or null when none is configured.
+     * configured resolver, or null when none is configured — and `held_since`, the date the holding
+     * began in the words of the screen, or null for anything not held.
      *
      * @return array{contracts: list<array<string, mixed>>, acknowledgements: list<array<string, mixed>>, consents: list<array<string, mixed>>}
      */
@@ -121,6 +123,9 @@ final readonly class ConsentPresenter
                 && $document->type->isWithdrawable()
                 && isset($held[$document->key]);
 
+            // The time of the row the holding came from; empty for a key the subject holds nothing of.
+            $heldAt = $standing['at'][$document->key] ?? '';
+
             $entry = [
                 'key' => $document->key,
                 'title' => $document->title,
@@ -166,6 +171,14 @@ final readonly class ConsentPresenter
                 // no route lets the stub render no form at all, which is the honest state.
                 'pending_confirmation' => in_array($document->key, $pendingConfirmation, true),
                 'withdraw_url' => $offersWithdrawal ? $withdrawUrl : null,
+                // When the holding began, from the same fold row the holding came from: an ending action
+                // clears it with the holding, so a withdrawn consent never shows a date it is no longer
+                // held since. The version it began with is named where it is not the one on screen,
+                // because a later version within the same major binds without a new acceptance, and the
+                // text agreed to on that date is then not the text this row shows.
+                'held_since' => $heldAt !== '' && ConsentGate::holds($held, $document->key, $document->major_version)
+                    ? $this->heldSince($heldAt, $standing['version'][$document->key] ?? null, $document->version, $locale)
+                    : null,
             ];
 
             // The type boundary is the query above, not this match. The catch-all reads like one,
@@ -183,5 +196,18 @@ final readonly class ConsentPresenter
         }
 
         return $groups;
+    }
+
+    /**
+     * "since March 25, 2027" in the language of the screen, with the version where it differs from the
+     * one on screen. The caller asks only for a holding whose row carries a time.
+     */
+    private function heldSince(string $at, ?string $acceptedVersion, string $version, string $locale): string
+    {
+        $date = CalendarDate::readable(CarbonImmutable::parse($at), $locale);
+
+        return $acceptedVersion !== null && $acceptedVersion !== $version
+            ? (string) __('legal-consent::ui.held_version_since', ['date' => $date, 'version' => $acceptedVersion], $locale)
+            : (string) __('legal-consent::ui.held_since', ['date' => $date], $locale);
     }
 }

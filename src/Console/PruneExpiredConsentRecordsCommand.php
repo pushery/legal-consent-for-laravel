@@ -100,6 +100,14 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
     protected $description = 'Delete consent and notice records older than the configured retention period.';
 
     /**
+     * A second run while one is under way ends at once, also where nobody passed --isolated: Laravel takes the
+     * isolation lock only where the option is set, and a host's own schedule line or a run by hand sets nothing.
+     *
+     * @var bool
+     */
+    protected $isolated = true;
+
+    /**
      * The minutes a run holds its lock: the scheduler's overlap lock and the `--isolated` lock alike.
      * Well inside the day this sweep runs on, and longer than Laravel's hour for `--isolated`, so a
      * long prune keeps its lock while it deletes and a second run cannot start beside it.

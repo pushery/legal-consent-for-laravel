@@ -136,9 +136,11 @@ final class NoticeAttempts
         $now = CarbonImmutable::now();
 
         if (DB::table(self::TABLE)->where($key)->increment('failures', 1, ['failed_at' => $now]) === 0) {
-            // A notice sent outside the sweep, by a consumer or a re-run, has no row yet.
+            // A notice sent outside the sweep, by a consumer or a re-run, has no row yet. The insert
+            // runs in a transaction of its own, a savepoint inside the host's: on PostgreSQL a unique
+            // violation aborts the transaction it happens in, and the increment below would fail with it.
             try {
-                DB::table(self::TABLE)->insert([...$key, 'queued_at' => $now, 'failures' => 1, 'failed_at' => $now]);
+                DB::transaction(static fn (): bool => DB::table(self::TABLE)->insert([...$key, 'queued_at' => $now, 'failures' => 1, 'failed_at' => $now]));
             } catch (UniqueConstraintViolationException) {
                 DB::table(self::TABLE)->where($key)->increment('failures', 1, ['failed_at' => $now]);
             }

@@ -52,6 +52,7 @@
                         <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $item['title'] }}</span>
                     @endif
                     (v{{ $item['version'] }}) @if (($item['outstanding'] ?? false)) <strong class="legal-consent-action-required">{{ __('legal-consent::ui.action_required') }}</strong> @endif
+                    @if (($item['held_since'] ?? null) !== null) <span class="legal-consent-since">· {{ $item['held_since'] }}</span> @endif
                 </li>
             @empty
                 <li class="legal-consent-empty">{{ __('legal-consent::ui.contracts_empty') }}</li>
@@ -78,6 +79,7 @@
                         <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $item['title'] }}</span>
                     @endif
                     (v{{ $item['version'] }}) @if (($item['outstanding'] ?? false)) <strong class="legal-consent-action-required">{{ __('legal-consent::ui.action_required') }}</strong> @endif
+                    @if (($item['held_since'] ?? null) !== null) <span class="legal-consent-since">· {{ $item['held_since'] }}</span> @endif
                 </li>
             @empty
                 <li class="legal-consent-empty">{{ __('legal-consent::ui.acknowledgements_empty') }}</li>
@@ -106,6 +108,7 @@
                     {{-- The state in words, independent of the action beside it: without it a screen that
                          offers no Give button shows a consent that is not given as a bare title. --}}
                     <span class="legal-consent-state">{{ $item['held'] ? __('legal-consent::ui.consent_given') : __('legal-consent::ui.consent_not_given') }}</span>
+                    @if (($item['held_since'] ?? null) !== null) <span class="legal-consent-since">· {{ $item['held_since'] }}</span> @endif
                     @if ($item['held'] && $item['withdrawable'])
                         <button type="button" aria-label="{{ __('legal-consent::ui.withdraw_for', ['title' => $item['title']]) }}" wire:click="withdraw({{ json_encode($item['key'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }})" wire:loading.attr="aria-busy" wire:target="withdraw({{ json_encode($item['key'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }})">
                             {{ __('legal-consent::ui.withdraw') }}

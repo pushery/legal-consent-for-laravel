@@ -61,6 +61,45 @@ final readonly class ChangeItemsAuthor
     }
 
     /**
+     * The headline of each published description among these documents, keyed by document id, in one
+     * query: the first line of a notice, which the banners repeat to say what changed. A document whose
+     * version was published without a description, or with an empty headline, has no entry.
+     *
+     * Matched on the document id for the reason {@see published()} gives, and without the tenant scope
+     * for the same reason: the ids already name one tenant's rows.
+     *
+     * @param  list<int>  $documentIds
+     * @return array<int, string>
+     */
+    public function headlines(array $documentIds): array
+    {
+        if ($documentIds === []) {
+            return [];
+        }
+
+        $headlines = [];
+
+        $sets = LegalChangeSet::model()::query()
+            ->withoutGlobalScope(TenantScope::class)
+            ->whereIn('document_id', $documentIds)
+            ->where('state', ChangeSetState::Published->value)
+            ->get(['document_id', 'headline']);
+
+        foreach ($sets as $set) {
+            $headline = trim((string) $set->headline);
+            // The column has no cast, and a driver that hands integers back as strings would otherwise
+            // drop every headline here without a word.
+            $id = filter_var($set->document_id, FILTER_VALIDATE_INT);
+
+            if ($headline !== '' && is_int($id)) {
+                $headlines[$id] = $headline;
+            }
+        }
+
+        return $headlines;
+    }
+
+    /**
      * Discard the working draft. Published sets are frozen and refuse deletion, so this can only
      * ever throw away work in progress.
      */

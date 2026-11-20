@@ -48,6 +48,8 @@ final class ReopenVersionOnNoticeFailure
      *
      * Also called for a mail the channel skipped without an error, which fires `NotificationSent`
      * rather than `NotificationFailed` ({@see WriteNoticeDeliveryProof}).
+     *
+     * @param  mixed  $notifiable  the notifiable of the failed notice, which Laravel hands over as any value
      */
     public function record(object $notification, mixed $notifiable): void
     {

@@ -18,6 +18,9 @@ namespace Pushery\LegalConsent\Support;
  */
 final class IntegerSetting
 {
+    /**
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
+     */
     public static function from(mixed $value): ?int
     {
         if (is_int($value)) {

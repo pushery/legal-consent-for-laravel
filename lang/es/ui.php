@@ -66,6 +66,8 @@ return [
     'retired' => 'Ya no se ofrece',
     'consent_given' => 'Otorgado',
     'consent_not_given' => 'No otorgado',
+    'held_since' => 'desde el :date',
+    'held_version_since' => 'desde el :date (v:version)',
 
     // Grace-period remaining time (trans_choice): pluralization + effective-today case.
     'days_left' => '{0}En vigor hoy|{1}Queda :count día|[2,*]Quedan :count días',
@@ -92,6 +94,7 @@ return [
 
     // Admin screens (LegalTextManager / LegalTextEditor).
     'admin_heading' => 'Textos legales',
+    'admin_grid_label' => 'Estado de cada texto por idioma',
     'admin_policy' => 'Los textos se editan por idioma, los revisa una persona y luego se publican en todos los idiomas a la vez. Una traducción automática nunca puede publicarse hasta que alguien la revise, y la frase de aceptación es texto fijo: nunca se traduce automáticamente.',
     'admin_document' => 'Documento',
     'admin_not_written' => 'Sin redactar',
@@ -119,7 +122,7 @@ return [
     'admin_release_all' => 'Publicar todos los idiomas',
     'admin_release_confirm_title' => '¿Publicar todos los idiomas?',
     'admin_release_confirm_body' => 'Todos los idiomas de este texto se publican juntos como una versión. Esto no se puede deshacer: un cambio es una versión nueva y superior.',
-    'admin_release_leaves_out' => 'Esta publicación deja fuera :languages. Conservan la versión ya publicada en ellos, si la hay, hasta que se publique su propia traducción.',
+    'admin_release_leaves_out' => '{1} Esta publicación deja fuera :languages. Ese idioma conserva la versión ya publicada en él, si la hay, hasta que se publique su propia traducción.|[2,*] Esta publicación deja fuera :languages. Conservan la versión ya publicada en ellos, si la hay, hasta que se publique su propia traducción.',
     'admin_release_headings' => 'Encabezados: :headings',
     'admin_stale' => 'El texto de origen cambió después de revisar esta traducción: revísala de nuevo antes de publicar.',
     'admin_stale_unconfirmed' => 'Esta traducción nunca se ha confirmado con el texto de origen: revísala antes de publicar.',

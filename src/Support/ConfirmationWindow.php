@@ -39,6 +39,8 @@ final class ConfirmationWindow
 
     /**
      * Why the configured value gives no window, or null when it gives one or sets none.
+     *
+     * @param  mixed  $window  a value of the package's config, which a host may have set to any type
      */
     public static function problem(mixed $window): ?string
     {

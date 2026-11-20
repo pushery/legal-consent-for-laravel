@@ -54,6 +54,13 @@ silently turns `ui.variant => 'auto'` into plain, unstyled consent screens. Noth
 `php artisan vendor:publish --tag=legal-consent-wirekit --force` to pull the WireKit twins over
 the published copies (`--force` is required; the files exist).
 
+The migrations run from the package with `php artisan migrate`. `legal-consent-migrations` copies
+them into `database/migrations` under their own file names, so `migrate` reads the copy and the
+package's file as one migration and runs it once. To keep them in the application alone, call
+`\Pushery\LegalConsent\LegalConsentServiceProvider::ignoreMigrations()` in the `register` method of
+one of the application's service providers before publishing them; the package then stops
+registering its own.
+
 The document dialog needs its script on the page. Publish it on its own with
 `php artisan vendor:publish --tag=legal-consent-assets` and load it before Alpine:
 
@@ -105,7 +112,7 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   call on a host of its own (`api.<domain>`) sets `routes.api_domain`, or
   `LEGAL_CONSENT_API_DOMAIN`, and the API answers on that host only.
 - `ui.variant` — `auto` by default: the WireKit-native views are served when `pushery/wirekit`
-  ≥ 2.70.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
+  ≥ 2.73.0 is installed, the plain ones otherwise. Pin `plain` or `wirekit` to decide it yourself.
 - `notice_mail` — the change-notice mail. `identity.declarant` names the declaring legal person
   (§ 126b BGB) and is appended to the notice AND to its append-only proof row; leave it null and
   the notice is byte-for-byte what it was. Multi-tenant apps bind `ResolvesNoticeIdentity` instead
@@ -113,6 +120,15 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
 - `retention_after_end` + `schedule.prune` — retention is a statement until the sweep is switched on.
   `LEGAL_CONSENT_RETENTION_AFTER_END` sets it without publishing the config, as
   `LEGAL_CONSENT_DOUBLE_OPT_IN_CONFIRM_WITHIN` sets `double_opt_in.confirm_within`.
+- `translation.queue` — off by default. On, the editor's Translate action queues the call to the
+  bound translator and polls until the draft appears, which needs a queue worker. A marker in the
+  default cache store stands for the running translation for up to an hour: it disables the button,
+  so a second press queues no second job that a translator billing per call is paid for, and it
+  carries the reason of a failed run to the editor. A store that evicts it, a `cache:clear` or
+  `optimize:clear` that flushes it, or a restart without persistence loses it, and the editor then
+  offers Translate again while the first job still runs. So choose a default store that keeps its
+  entries: the database store, or Redis with `maxmemory-policy noeviction` and `appendonly yes`, and
+  Memcached only with `-M`. A Redis under `noeviction` that fills up refuses writes instead.
 
 ### 3. Apply the package
 
@@ -277,13 +293,13 @@ acceptance in an interstitial shown after authentication and before first use, a
 ```
 
 **Drop in the optional UI** (needs `livewire/livewire`. The WireKit-native views are served
-automatically when `pushery/wirekit` ≥ 2.70.0 is installed — `legal-consent.ui.variant` defaults to
+automatically when `pushery/wirekit` ≥ 2.73.0 is installed — `legal-consent.ui.variant` defaults to
 `auto`; publish `legal-consent-wirekit` only to customize them. The floor is part of the automatic
 choice rather than advice because the views name components that must exist: WireKit's own localized
 screen-reader strings landed in 2.26.0, the busy-state props these stubs use landed in 2.47.0, and
 the release dialog's close on confirm landed in 2.49.0, and the quiet new-tab link and the editor
 that reports only a person's edit landed in 2.56.0; 2.70.0 is the release whose countdown can
-stand still, as both countdowns of the banner do):
+stand still, as both countdowns of the banner do; 2.73.0 is the oldest release they are proven against):
 
 ```blade
 <livewire:legal-consent.reconsent-form />

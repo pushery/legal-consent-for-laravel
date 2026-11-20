@@ -4,6 +4,54 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.60.0] - 2026-11-20
+
+### Added
+
+- **The re-consent banner says what changed and by when.** It repeats the headline of the version's change description and states the date to agree by in the sentence the notice uses, "Please agree by July 26, 2026 — otherwise continued use will be restricted from that date." Both come from the server, so the WireKit banner names the date where the countdown beside it does not run. The deemed-consent banner writes its objection deadline the way its notice does, and the info-only banner repeats the headline as well. `ConsentBanner` hands its views `headline` on every row, `agree_by` on a re-consent row and `object_by` on a deemed-consent row; `objection_date` keeps its ISO date for a program that reads it.
+- **The settings say since when a document is held.** Each held row reads "since March 25, 2026" in the language of the screen, and names the version it was accepted at where a later version of the same major is on screen, "since March 25, 2026 (v2.0.0)". A withdrawn consent shows no date. `ConsentPresenter::settingsFor()` hands the line to the views as `held_since`.
+
+  **Upgrade:** a view published before this release shows neither line; publish the views again. A published `ui.php` needs `held_since` and `held_version_since`.
+
+### Changed
+
+- **The banner shows a version as quiet text, as the settings do.** On these screens a badge is a state, and a version drawn the same way read as one more. The WireKit settings view rendered without Livewire draws its versions that way now too, as its Livewire twin already did.
+- **The WireKit views are chosen from WireKit 2.73.0 on.** The automatic choice took them from 2.70.0, while the development constraint, and with it the lane with the lowest dependencies, had moved to 2.73.0, so 2.70 to 2.72 were never proven. A host on such a release gets the plain views until it updates WireKit, and the suggestion names 2.73.0.
+
+### Documentation
+
+- **A call the pages write with arguments runs as written.** A few pages named an instance method in the form `Class::method($argument)`, which PHP refuses as a static call. They write it through the container now: `app(Class::class)->method($argument)`.
+- **The descriptions of the documentation pages fit a search result.** Each page that described itself in more than about 160 characters says first what it answers, within that length, so a search result shows the description whole.
+- **The page on managing legal texts says where the marker of a queued translation lives and what loses it.** The marker that disables Translate while a queued translation runs, and that carries the reason of a failed run to the editor, stands in the default cache store for up to an hour. A store that evicts it, a `cache:clear` or `optimize:clear` that flushes it, or a restart without persistence loses it, and the editor then offers Translate again while the first job still runs, so a translator that bills per call is paid twice. The page and the Boost skill name the stores that keep it: the database store, or Redis with `maxmemory-policy noeviction` and `appendonly yes`, and Memcached only with `-M`.
+- **The installation page names the engines every database path is tested against, and promises nothing beyond them.** It closed on the claim that the package therefore runs on Laravel Cloud without further setup, a platform it has never been verified on. It says now that PostgreSQL and MySQL 8.4 are the engines Laravel Cloud runs, and the page on the user interface names the bundled locales without the same stock phrase.
+- **The Boost skill says how the migrations reach the application.** It named the tag that publishes them and left out that the package goes on loading its own files. It says now that the copies keep their file names, so `migrate` runs each migration once, and that `ignoreMigrations()` in a service provider leaves them to the application alone.
+- **An example that imports classes imports every class it names.** Three examples on the pages on recording consent and on testing carried `use` lines and still named `User`, `Validator`, `CreatesNewUsers` or `Model` without one, so the example pasted into a file of the application asked for that class in the file's own namespace. They import each class now.
+
+### Fixed
+
+- **A failed notice is counted without ending the transaction of the application on PostgreSQL.** When two attempts to record the first failure of the same notice met, the second insert ran into the unique key, and on PostgreSQL that aborted the transaction the application had open, so its next statement failed. The insert now runs behind a savepoint, and the second attempt adds its failure to the row the first one wrote.
+- **A notice asking for renewed agreement names its document.** Its subject, its heading and its first sentence said "terms of use" for every document, so the notice for a second contract, a data processing agreement for instance, called it the terms of use, in the mail and in the proof of the notice. The three lines of `notifications.contract` name the document's title now, in every language of the package, and `heading` takes `:title` as the subject and the first sentence already did.
+- **Every notice calls its button a button.** Under the reason a notice arrived, the mail said "Use the link above if you want to act", while the action above it is a button. `common.no_reply` says so now, in every language of the package.
+- **The dialog of "Save and publish" writes the dates of an objection window as a reader writes them.** It wrote them as ISO dates, and at the width of the dialog the last one broke at its hyphen, "2027-" on one line and "03-25" on the next. Each date reads the way the notices write it now, "March 25, 2027" on an English screen and "25. März 2027" on a German one, and stays on one line, in both views. A language without a long date format keeps the ISO date, as the notices do.
+- **The WireKit overview of the legal texts opens without a double gap under its heading.** Its status region stays in the page so that a release is announced, and while it held nothing it still took a gap of the stack, so the space under "Legal texts" was twice as tall as the others. It is visually hidden while empty now, as the regions of the editor and of the consent settings are, and in view again with a status in it.
+- **The sentence on the languages a release leaves out has a form for one language.** "This release leaves out de. They keep the version already published in them" spoke of one language as of several. The line has a form for one language and one for several now, in every language of the package, and the overview picks it by the number of languages it leaves out.
+
+  **Upgrade:** a view of the overview published before this release prints the line with `__()` and shows both forms; publish the views again. A published `ui.php` keeps its single sentence for any number until it is given both forms.
+- **The three scheduled commands run once at a time also where nobody passed `--isolated`.** Laravel takes a command's isolation lock only where the option is set. The package's own schedule passes it, but a host that schedules `legal-consent:close-objection-windows`, `legal-consent:dispatch-notices` or `legal-consent:prune` on a line of its own, or starts one by hand, could start a second run beside one under way, and two runs of the notices could notify a subject twice. Each command sets the option itself now, and a second run ends at once with the line Laravel prints for it.
+- **A tenant id longer than 64 characters is refused by name.** The package keeps the tenant in a 64-character `tenant_id` column, while an application's tenant table may hold its key wider. Such an id reached the first write unchecked: PostgreSQL and MySQL refused it with a driver error naming a column, and SQLite kept it. The tenant context now refuses it where it is resolved, with `Pushery\LegalConsent\Exceptions\TenantIdTooLong`, which names the resolver and the length.
+- **A document whose key is made of digits keeps the retention period of its own.** PHP stores a key such as `2024` as an integer, and `legal-consent.retention_by_document` was read under string keys only, so such a document fell back to `retention_after_end`, and `legal-consent:prune` could delete its proof before its own period ended. The prune also binds the document keys as text now, which a PostgreSQL ledger needs for a key made of digits.
+- **The plain consent checkboxes draw the asterisk their line explains.** The line under the boxes, "* Required", stood in both views, while the asterisk on a required box came from WireKit's checkbox alone, so the plain view explained a mark none of its boxes carried. A required box carries the asterisk in the plain view now as well, hidden from a screen reader, which hears "required" from the box itself.
+- **The plain editor marks the required fields of a release with an objection window, and its release dialog takes the focus.** The three dates and the regime said "required" to a screen reader alone, while the WireKit view draws the asterisk of a required field beside each label; each label of the plain form carries it now. The dialog "Save and publish" opens took no focus in the plain view, so the focus stayed on the button that was pressed and nothing said that a dialog had opened below it. It moves into the dialog now, as WireKit's modal moves it.
+
+  **Upgrade:** a published `consent-checkboxes` or `livewire/legal-text-editor` view keeps the old markup; publish the views again.
+- **The overview of the legal texts names its grid apart from the screen.** The scroll region of the grid carried the words of the screen's heading, as the section around it does, so a screen reader's list of landmarks held two regions under one name, in both views. The region is named for what it holds now, "State of each text per locale", from the new line `admin_grid_label` in every language of the package. The WireKit view also no longer puts an `aria-label` on a state badge: a badge is an element without a role, which ARIA does not let anybody name. The badge says its state in its text, with the long form in its `title`, as the plain view does.
+
+  **Upgrade:** a published `livewire/legal-text-manager` view keeps the old names; publish the views again.
+- **The plain editor hands the focus back to "Save and publish" when its release dialog closes.** The dialog leaves the page with the render that closes it, by its Cancel or by the release it confirms, and the focus inside it fell to the page's `<body>`, so a keyboard user had to find the place again. The button takes the focus back once the dialog it opened is gone, as WireKit's modal hands it back to the element that opened it.
+
+  **Upgrade:** a published `livewire/legal-text-editor` view keeps the old markup; publish the views again.
+- **An ordered list whose `start` ends in a line break counts from 1.** The sanitizer kept such a value, digits followed by a line feed as a document written in HTML can carry them, as if it were a whole number. It holds the value to the digits alone now, as it holds every other value that is no whole number.
+
 ## [0.59.0] - 2026-11-13
 
 ### Added
@@ -3424,7 +3472,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.59.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.0...HEAD
+[0.60.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.59.0...v0.60.0
 [0.59.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.58.0...v0.59.0
 [0.58.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.57.0...v0.58.0
 [0.57.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.56.1...v0.57.0

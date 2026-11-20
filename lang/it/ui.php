@@ -66,6 +66,8 @@ return [
     'retired' => 'Non più offerto',
     'consent_given' => 'Concesso',
     'consent_not_given' => 'Non concesso',
+    'held_since' => 'dal :date',
+    'held_version_since' => 'dal :date (v:version)',
 
     // Grace-period remaining time (trans_choice): pluralization + effective-today case.
     'days_left' => '{0}In vigore da oggi|{1}Ancora :count giorno|[2,*]Ancora :count giorni',
@@ -92,6 +94,7 @@ return [
 
     // Admin screens (LegalTextManager / LegalTextEditor).
     'admin_heading' => 'Testi legali',
+    'admin_grid_label' => 'Stato di ogni testo per lingua',
     'admin_policy' => 'I testi si modificano per lingua, li rivede una persona e poi si pubblicano in tutte le lingue insieme. Una traduzione automatica non può mai essere pubblicata finché qualcuno non la rivede, e la frase di accettazione è testo fisso: non viene mai tradotta automaticamente.',
     'admin_document' => 'Documento',
     'admin_not_written' => 'Non scritto',
@@ -119,7 +122,7 @@ return [
     'admin_release_all' => 'Pubblica tutte le lingue',
     'admin_release_confirm_title' => 'Pubblicare tutte le lingue?',
     'admin_release_confirm_body' => 'Tutte le lingue di questo testo vengono pubblicate insieme come una versione. Non è reversibile: una modifica è una nuova versione superiore.',
-    'admin_release_leaves_out' => 'Questa pubblicazione esclude :languages. Queste lingue mantengono la versione già pubblicata, se esiste, finché non viene pubblicata la loro traduzione.',
+    'admin_release_leaves_out' => '{1} Questa pubblicazione esclude :languages. Questa lingua mantiene la versione già pubblicata, se esiste, finché non viene pubblicata la sua traduzione.|[2,*] Questa pubblicazione esclude :languages. Queste lingue mantengono la versione già pubblicata, se esiste, finché non viene pubblicata la loro traduzione.',
     'admin_release_headings' => 'Intestazioni: :headings',
     'admin_stale' => 'Il testo di origine è cambiato dopo la revisione di questa traduzione — rivedila prima di pubblicare.',
     'admin_stale_unconfirmed' => 'Questa traduzione non è mai stata confermata rispetto al testo di origine — rivedila prima di pubblicare.',

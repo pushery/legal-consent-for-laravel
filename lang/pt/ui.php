@@ -66,6 +66,8 @@ return [
     'retired' => 'Já não é oferecido',
     'consent_given' => 'Dado',
     'consent_not_given' => 'Não dado',
+    'held_since' => 'desde :date',
+    'held_version_since' => 'desde :date (v:version)',
 
     // Grace-period remaining time (trans_choice): pluralization + effective-today case.
     'days_left' => '{0}Em vigor hoje|{1}Falta :count dia|[2,*]Faltam :count dias',
@@ -92,6 +94,7 @@ return [
 
     // Admin screens (LegalTextManager / LegalTextEditor).
     'admin_heading' => 'Textos legais',
+    'admin_grid_label' => 'Estado de cada texto por idioma',
     'admin_policy' => 'Os textos são editados por idioma, revistos por uma pessoa e depois publicados em todos os idiomas ao mesmo tempo. Uma tradução automática nunca pode ser publicada até alguém a rever, e a frase de aceitação é texto fixo — nunca é traduzida automaticamente.',
     'admin_document' => 'Documento',
     'admin_not_written' => 'Por escrever',
@@ -119,7 +122,7 @@ return [
     'admin_release_all' => 'Publicar todos os idiomas',
     'admin_release_confirm_title' => 'Publicar todos os idiomas?',
     'admin_release_confirm_body' => 'Todos os idiomas deste texto são publicados juntos como uma versão. Isto não pode ser revertido — uma alteração é uma versão nova e superior.',
-    'admin_release_leaves_out' => 'Esta publicação deixa de fora :languages. Esses idiomas mantêm a versão já publicada, se houver, até que a sua própria tradução seja publicada.',
+    'admin_release_leaves_out' => '{1} Esta publicação deixa de fora :languages. Esse idioma mantém a versão já publicada, se houver, até que a sua própria tradução seja publicada.|[2,*] Esta publicação deixa de fora :languages. Esses idiomas mantêm a versão já publicada, se houver, até que a sua própria tradução seja publicada.',
     'admin_release_headings' => 'Títulos: :headings',
     'admin_stale' => 'O texto de origem mudou depois de esta tradução ser revista — revê-a de novo antes de publicar.',
     'admin_stale_unconfirmed' => 'Esta tradução nunca foi confirmada face ao texto de origem — revê-a antes de publicar.',

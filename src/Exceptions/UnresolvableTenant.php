@@ -17,6 +17,9 @@ use RuntimeException;
  */
 final class UnresolvableTenant extends RuntimeException
 {
+    /**
+     * @param  mixed  $answer  what the host's tenant resolver answered, which may be any value
+     */
     public static function from(mixed $answer, string $resolver): self
     {
         return new self(sprintf(

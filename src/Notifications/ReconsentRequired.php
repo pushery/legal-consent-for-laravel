@@ -32,10 +32,14 @@ class ReconsentRequired extends ChangeNotification
         $enforceAt = $this->document->enforce_from;
         $deadline = $this->readableDate($enforceAt);
 
+        // The subject, the heading and the first sentence name the document, so the notice for a second
+        // contract does not call it the first one, in the mail and in the proof built from it.
+        $title = ['title' => $this->document->title];
+
         $mail = $this->withHeading(
-            (new MailMessage)->subject($this->line('subject', ['title' => $this->document->title])),
-            $this->line('heading'),
-        )->line($this->withText($this->line('intro'), ['title' => $this->document->title]));
+            (new MailMessage)->subject($this->line('subject', $title)),
+            $this->withText($this->line('heading'), $title),
+        )->line($this->withText($this->line('intro'), $title));
 
         // Before the CTA: this notice asks for agreement, and asking before saying what changed is
         // the form § 305 Abs. 2 BGB exists to prevent.
@@ -125,9 +129,9 @@ class ReconsentRequired extends ChangeNotification
         // The `?? ''` below is never taken: toMail() asks only for keys this map
         // carries, so the empty fallback for an unknown key is never taken.
         $line = [
-            'subject' => 'Wichtig: aktualisierte Nutzungsbedingungen',
-            'heading' => 'Unsere Nutzungsbedingungen ändern sich',
-            'intro' => 'Wir haben unsere Nutzungsbedingungen aktualisiert und bitten dich um deine erneute Zustimmung.',
+            'subject' => 'Wichtig: neue Fassung von „:title“',
+            'heading' => 'Neue Fassung: :title',
+            'intro' => 'Wir haben „:title“ aktualisiert und bitten dich um deine erneute Zustimmung.',
             'cta' => 'Jetzt ansehen und zustimmen',
             'consequence' => 'Bitte stimme bis zum :deadline zu — andernfalls ist die weitere Nutzung ab diesem Tag eingeschränkt.',
             'consequence_undated' => 'Bitte stimme rechtzeitig zu — andernfalls ist die weitere Nutzung ab dem Stichtag eingeschränkt.',

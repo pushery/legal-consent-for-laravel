@@ -246,7 +246,7 @@ final class VerifyDocumentsCommand extends Command
 
         // An empty marker would be found in every text, so it is never one.
         return is_array($markers)
-            ? array_values(array_filter($markers, static fn (mixed $marker): bool => is_string($marker) && $marker !== ''))
+            ? array_values(array_filter(array_filter($markers, is_string(...)), static fn (string $marker): bool => $marker !== ''))
             : [];
     }
 

@@ -71,7 +71,8 @@
                     @else
                         <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $contract['title'] }}</span>
                     @endif
-                    (v{{ $contract['version'] }}) @if (($contract['outstanding'] ?? false)) <strong>{{ __('legal-consent::ui.action_required') }}</strong> @endif</li>
+                    (v{{ $contract['version'] }}) @if (($contract['outstanding'] ?? false)) <strong>{{ __('legal-consent::ui.action_required') }}</strong> @endif
+                    @if (($contract['held_since'] ?? null) !== null) <span class="legal-consent-since">· {{ $contract['held_since'] }}</span> @endif</li>
             @empty
                 <li class="legal-consent-empty">{{ __('legal-consent::ui.contracts_empty') }}</li>
             @endforelse
@@ -96,7 +97,8 @@
                     @else
                         <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $acknowledgement['title'] }}</span>
                     @endif
-                    (v{{ $acknowledgement['version'] }}) @if (($acknowledgement['outstanding'] ?? false)) <strong>{{ __('legal-consent::ui.action_required') }}</strong> @endif</li>
+                    (v{{ $acknowledgement['version'] }}) @if (($acknowledgement['outstanding'] ?? false)) <strong>{{ __('legal-consent::ui.action_required') }}</strong> @endif
+                    @if (($acknowledgement['held_since'] ?? null) !== null) <span class="legal-consent-since">· {{ $acknowledgement['held_since'] }}</span> @endif</li>
             @empty
                 <li class="legal-consent-empty">{{ __('legal-consent::ui.acknowledgements_empty') }}</li>
             @endforelse
@@ -121,6 +123,7 @@
                     @else
                         <span @if ($lang !== null) lang="{{ $lang }}"@endif>{{ $consent['title'] }}</span>
                     @endif
+                    @if (($consent['held_since'] ?? null) !== null) <span class="legal-consent-since">· {{ $consent['held_since'] }}</span> @endif
                     {{-- The double opt-in's middle state: entered but not yet confirmed reads as
                          never entered otherwise, and the screen would say nothing at all. --}}
                     @if ($consent['pending_confirmation'] ?? false)

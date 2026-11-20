@@ -22,7 +22,11 @@ final class RetentionPeriod
 {
     public const string DEFAULT = '3 years';
 
-    /** The configured value: a non-empty string, or the default for anything else. */
+    /**
+     * The configured value: a non-empty string, or the default for anything else.
+     *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
+     */
     public static function configured(mixed $value): string
     {
         return is_string($value) && $value !== '' ? $value : self::DEFAULT;

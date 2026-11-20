@@ -31,16 +31,20 @@ final readonly class ConsentBanner
      * Pending material changes the subject has not yet accepted, currently within their
      * grace window.
      *
+     * `headline` is the first line of the version's published change description, `agree_by` the date to
+     * agree by as the re-consent notice writes it, in the language of the banner.
+     *
      * @param  array<string, int>|null  $accepted  the subject's current holdings — a presence map, see
      *                                             ConsentGate::currentHoldings() — for at least the keys
      *                                             this banner asks about; read here, for those keys only,
      *                                             when null
-     * @return list<array{key: string, version: string, title: string, announce_from: ?string, enforce_from: ?string, days_left: int}>
+     * @return list<array{key: string, version: string, title: string, headline: ?string, announce_from: ?string, enforce_from: ?string, agree_by: ?string, days_left: int}>
      */
     public function pendingFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array $accepted = null): array
     {
         $now ??= CarbonImmutable::now();
-        $upcoming = $this->upcomingReconsentFor($subject, $locale ?? $this->defaultLocale, $now);
+        $locale ??= $this->defaultLocale;
+        $upcoming = $this->upcomingReconsentFor($subject, $locale, $now);
 
         if ($upcoming->isEmpty()) {
             return [];
@@ -49,6 +53,7 @@ final readonly class ConsentBanner
         // Only the keys this banner asks about, as the gate reads them: the ledger grows for the life
         // of the account, and the rows of every other document would be folded only to be dropped.
         $accepted ??= $this->gate->currentHoldings($subject, $this->keysOf($upcoming));
+        $headlines = $this->headlinesOf($upcoming);
         $pending = [];
 
         foreach ($upcoming as $document) {
@@ -75,8 +80,10 @@ final readonly class ConsentBanner
                 'key' => $document->key,
                 'version' => $document->version,
                 'title' => $document->title,
+                'headline' => $this->headlineOf($headlines, $document),
                 'announce_from' => $document->announce_from?->toIso8601String(),
                 'enforce_from' => $enforce?->toIso8601String(),
+                'agree_by' => $enforce instanceof CarbonImmutable ? CalendarDate::readable($enforce, $locale) : null,
                 'days_left' => $enforce instanceof CarbonImmutable ? max(0, (int) $now->diffInDays($enforce)) : 0,
             ];
         }
@@ -90,7 +97,7 @@ final readonly class ConsentBanner
      * countdown grace banner. Info-only applies to everyone equally, so it is not
      * per-subject: it takes effect regardless of the subject's reaction.
      *
-     * @return list<array{key: string, version: string, title: string, effective_from: ?string, offers_termination: bool}>
+     * @return list<array{key: string, version: string, title: string, headline: ?string, effective_from: ?string, offers_termination: bool}>
      */
     public function informationalFor(?string $locale = null, ?CarbonImmutable $now = null): array
     {
@@ -118,12 +125,14 @@ final readonly class ConsentBanner
             );
 
         $informational = [];
+        $headlines = $this->headlinesOf($active);
 
         foreach ($active as $document) {
             $informational[] = [
                 'key' => $document->key,
                 'version' => $document->version,
                 'title' => $document->title,
+                'headline' => $this->headlineOf($headlines, $document),
                 'effective_from' => $document->enforce_from?->toIso8601String(),
                 'offers_termination' => (bool) $document->offers_termination,
             ];
@@ -140,30 +149,37 @@ final readonly class ConsentBanner
      * binds the parties and nobody else, so nobody else is offered an objection. `days_left`
      * counts down to the objection deadline, not the effective date.
      *
+     * `object_by` is the objection deadline as the notice writes it, in the language of the banner;
+     * `objection_date` keeps the ISO date for a program that reads the payload.
+     *
      * @param  array<string, int>|null  $accepted  the subject's current holdings — a presence map, see
      *                                             ConsentGate::currentHoldings() — for at least the keys
      *                                             this banner asks about; read here, for those keys only,
      *                                             when null. A key present in it is a contract the
      *                                             subject is a party to
-     * @return list<array{key: string, version: string, title: string, objection_deadline: ?string, objection_date: ?string, enforce_from: ?string, days_left: int}>
+     * @return list<array{key: string, version: string, title: string, headline: ?string, objection_deadline: ?string, objection_date: ?string, object_by: ?string, enforce_from: ?string, days_left: int}>
      */
     public function deemedFor(Model $subject, ?string $locale = null, ?CarbonImmutable $now = null, ?array $accepted = null): array
     {
         $now ??= CarbonImmutable::now();
         $deemed = [];
+        $documents = $this->deemedDocumentsFor($subject, $locale, $now, $accepted);
+        $headlines = $this->headlinesOf($documents);
 
-        foreach ($this->deemedDocumentsFor($subject, $locale, $now, $accepted) as $document) {
+        foreach ($documents as $document) {
             $deadline = $document->objection_deadline;
 
             $deemed[] = [
                 'key' => $document->key,
                 'version' => $document->version,
                 'title' => $document->title,
+                'headline' => $this->headlineOf($headlines, $document),
                 'objection_deadline' => $deadline?->toIso8601String(),
-                // The calendar date the § 308 Nr. 5 lit. b warning names, in the format the durable
-                // notice prints it in, so the banner repeats the notice's sentence rather than a second
-                // rendering of the same instant.
+                // The calendar date the § 308 Nr. 5 lit. b warning names, twice: as an ISO date for a
+                // program that reads the payload, and in `object_by` as the notice writes it, so the
+                // banner repeats the notice's sentence rather than a second rendering of the same instant.
                 'objection_date' => $deadline?->toDateString(),
+                'object_by' => $deadline instanceof CarbonImmutable ? CalendarDate::readable($deadline, $locale ?? $this->defaultLocale) : null,
                 'enforce_from' => $document->enforce_from?->toIso8601String(),
                 'days_left' => $deadline instanceof CarbonImmutable ? max(0, (int) $now->diffInDays($deadline)) : 0,
             ];
@@ -376,6 +392,37 @@ final readonly class ConsentBanner
                     && $document->objection_deadline instanceof CarbonImmutable
                     && $document->objection_deadline->greaterThan($now)
             );
+    }
+
+    /**
+     * The headline of each document's published change description, keyed by document id.
+     *
+     * @param  iterable<LegalDocument>  $documents
+     * @return array<int, string>
+     */
+    private function headlinesOf(iterable $documents): array
+    {
+        $ids = [];
+
+        foreach ($documents as $document) {
+            $id = $document->getKey();
+
+            if (is_int($id)) {
+                $ids[] = $id;
+            }
+        }
+
+        return app(ChangeItemsAuthor::class)->headlines($ids);
+    }
+
+    /**
+     * @param  array<int, string>  $headlines
+     */
+    private function headlineOf(array $headlines, LegalDocument $document): ?string
+    {
+        $id = $document->getKey();
+
+        return is_int($id) ? ($headlines[$id] ?? null) : null;
     }
 
     /**

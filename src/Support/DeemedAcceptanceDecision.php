@@ -104,6 +104,7 @@ final class DeemedAcceptanceDecision
             ->where('locale', $version->locale)
             ->orderByDesc('accepted_at')
             ->orderByDesc('id')
+            // One subject's history of one document in one locale: a few rows, which a buffered cursor holds.
             ->cursor();
 
         foreach ($rows as $row) {

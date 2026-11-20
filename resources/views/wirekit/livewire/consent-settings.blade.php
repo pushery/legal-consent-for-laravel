@@ -75,6 +75,7 @@
                         {{-- The version as quiet text rather than a badge: a badge on this screen is a state, and a
                              version in the same shape made the consent's "Given" read as one more version. --}}
                         <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                        @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
                     </x-wirekit::text>
                 @empty
                     <x-wirekit::text intent="muted">{{ __('legal-consent::ui.contracts_empty') }}</x-wirekit::text>
@@ -102,6 +103,7 @@
                         {{-- The version as quiet text rather than a badge: a badge on this screen is a state, and a
                              version in the same shape made the consent's "Given" read as one more version. --}}
                         <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                        @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
                     </x-wirekit::text>
                 @empty
                     <x-wirekit::text intent="muted">{{ __('legal-consent::ui.acknowledgements_empty') }}</x-wirekit::text>
@@ -135,6 +137,7 @@
                                  bare title, and one that is given only through the Withdraw button beside it.
                                  Neutral for both: the screen reports a position, it does not steer one. --}}
                             <x-wirekit::badge intent="neutral" size="sm" class="legal-consent-settings__state">{{ $item['held'] ? __('legal-consent::ui.consent_given') : __('legal-consent::ui.consent_not_given') }}</x-wirekit::badge>
+                            @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
                         </x-wirekit::text>
 
                         @if ($item['held'] && $item['withdrawable'])

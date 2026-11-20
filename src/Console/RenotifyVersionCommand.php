@@ -52,7 +52,7 @@ final class RenotifyVersionCommand extends Command
         $tenants = $this->matching()
             ->orderBy(TenantContext::COLUMN)
             ->pluck(TenantContext::COLUMN)
-            ->map(static fn (mixed $tenant): string => is_string($tenant) || is_int($tenant) ? (string) $tenant : '')
+            ->map($this->tenantKey(...))
             ->all();
 
         if (count($tenants) > 1) {
@@ -102,6 +102,16 @@ final class RenotifyVersionCommand extends Command
         $this->line('Run `legal-consent:dispatch-notices --dry-run` to see the audience before the next sweep sends anything.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * A tenant as the key the commands group by: its id as text, and the empty string for none.
+     *
+     * @param  mixed  $tenant  a tenant id as the tables return it, of whatever type the column has
+     */
+    private function tenantKey(mixed $tenant): string
+    {
+        return is_string($tenant) || is_int($tenant) ? (string) $tenant : '';
     }
 
     /**
