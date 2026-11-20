@@ -66,6 +66,8 @@ final class ConcludingParty
     /**
      * Whether a configured `concluded_by` names a party. An absent or empty value does not, so an
      * entry built from an unset environment variable behaves like one without the key.
+     *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      */
     public static function names(mixed $value): bool
     {
@@ -75,6 +77,8 @@ final class ConcludingParty
     /**
      * What keeps a configured `concluded_by` from working, or null when it names a model a change
      * notice can reach.
+     *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      */
     public static function problem(mixed $value): ?string
     {

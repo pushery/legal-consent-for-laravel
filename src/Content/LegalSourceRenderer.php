@@ -130,6 +130,8 @@ final readonly class LegalSourceRenderer
      * sense that matters here: it may have been written by another version of this package, and a
      * silent coercion would hand back a Document whose contentHash is the string "0" instead of
      * re-rendering the real one.
+     *
+     * @param  mixed  $row  what the cache returned under the key, which another writer may have stored as any value
      */
     private function fromRow(mixed $row): ?Document
     {

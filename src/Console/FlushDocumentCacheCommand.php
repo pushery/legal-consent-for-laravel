@@ -57,6 +57,9 @@ final class FlushDocumentCacheCommand extends Command
 
     /**
      * Flush one tenant's entries, the tenant being pinned by the caller, and count the documents.
+     *
+     * @param  mixed  $key  a document key as the tables or the config hand it over, of any type
+     * @param  mixed  $locale  a locale as the tables or the config hand it over, of any type
      */
     private function flushTenant(LegalSourceRenderer $manager, EnforceableDocumentCache $enforceable, mixed $key, mixed $locale): int
     {
@@ -128,10 +131,20 @@ final class FlushDocumentCacheCommand extends Command
         }
 
         return array_values($found
-            ->map(static fn (mixed $tenant): string => is_string($tenant) || is_int($tenant) ? (string) $tenant : '')
+            ->map($this->tenantKey(...))
             ->push('')
             ->unique()
             ->sort()
             ->all());
+    }
+
+    /**
+     * A tenant as the key the commands group by: its id as text, and the empty string for none.
+     *
+     * @param  mixed  $tenant  a tenant id as the tables return it, of whatever type the column has
+     */
+    private function tenantKey(mixed $tenant): string
+    {
+        return is_string($tenant) || is_int($tenant) ? (string) $tenant : '';
     }
 }

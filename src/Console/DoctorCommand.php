@@ -346,8 +346,18 @@ final class DoctorCommand extends Command
 
         return array_values(array_filter(
             $names,
-            static fn (mixed $name): bool => ! is_string($name) || ! Route::has($name),
+            $this->routeIsUnknown(...),
         ));
+    }
+
+    /**
+     * Whether a configured rights route is no name of a route this application registers.
+     *
+     * @param  mixed  $name  a value of the package's config, which a host may have set to any type
+     */
+    private function routeIsUnknown(mixed $name): bool
+    {
+        return ! is_string($name) || ! Route::has($name);
     }
 
     /**
@@ -438,6 +448,7 @@ final class DoctorCommand extends Command
      * the screen that would have asked them renders "everything current".
      *
      * @param  list<string>  $mandatoryKeys
+     * @param  mixed  $firstUseSetting  a value of the package's config, which a host may have set to any type
      * @return array{0: string, 1: list<string>}|null
      */
     public static function describeFirstUseGate(array $mandatoryKeys, mixed $firstUseSetting): ?array
@@ -495,6 +506,7 @@ final class DoctorCommand extends Command
      * A deliberate `plain` with WireKit installed is not reported: that is a decision, and a doctor
      * that argues with decisions gets ignored on the finding that matters.
      *
+     * @param  mixed  $variant  a value of the package's config, which a host may have set to any type
      * @param  bool  $servesWireKit  what the variant resolved to, which for `auto` also carries the
      *                               version floor
      * @return array{0: string, 1: list<string>}|null
@@ -1730,6 +1742,9 @@ final class DoctorCommand extends Command
         return strlen($key);
     }
 
+    /**
+     * @param  mixed  $value  a value of the config the doctor names, which a host may have set to any type
+     */
     private function describe(mixed $value): string
     {
         return match (true) {

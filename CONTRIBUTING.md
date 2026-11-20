@@ -37,7 +37,7 @@ than about Pest. Upgrade the patch version; nothing else is wrong.
 
 ## Quality bar
 
-This package holds itself to a strict quality bar — Laravel Pint, Larastan at `max`,
+This package holds itself to a strict quality bar — Laravel Pint, Larastan at level 10,
 Rector, and a test suite at 100% line and type coverage, plus a real-browser end-to-end
 suite and cross-engine tests against real PostgreSQL and MySQL 8.4 (the engines it runs
 on in production). Every change passes it before it is released. Mutation testing runs on

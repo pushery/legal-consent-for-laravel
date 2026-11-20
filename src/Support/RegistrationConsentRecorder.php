@@ -399,6 +399,9 @@ final readonly class RegistrationConsentRecorder
         }
     }
 
+    /**
+     * @param  mixed  $value  a checkbox of the registration form, as the request carries it
+     */
     private function wasGiven(mixed $value): bool
     {
         return filter_var($value, FILTER_VALIDATE_BOOLEAN);

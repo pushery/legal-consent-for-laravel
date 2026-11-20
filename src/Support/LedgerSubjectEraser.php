@@ -163,7 +163,7 @@ final readonly class LedgerSubjectEraser
                 ->lockForUpdate()
                 ->get();
 
-            $tokens = $named->pluck('subject_token')->filter(static fn (mixed $token): bool => is_string($token))->unique()->values()->all();
+            $tokens = array_values(array_unique(array_filter($named->pluck('subject_token')->all(), is_string(...))));
 
             if ($tokens === []) {
                 return array_values($named->all());

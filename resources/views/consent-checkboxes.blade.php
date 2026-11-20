@@ -254,6 +254,11 @@
                  item carries no locale: `lang=""` is itself a claim. --}}
             @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($document['locale'] ?? null))
             <span @if ($lang !== null) lang="{{ $lang }}"@endif>{!! $label !!}</span>
+            {{-- The asterisk of a required box, the one the line under the boxes explains. The WireKit
+                 twin gets it from the kit's checkbox; this stub draws it itself. Hidden from a screen
+                 reader, which hears "required" from the box, and so outside the accessible name, which
+                 stays the sentence the consent rests on. --}}
+            @if ($document['required'])<span class="legal-consent-required-mark" aria-hidden="true">*</span>@endif
         </label>
 
         @if ($hasError)

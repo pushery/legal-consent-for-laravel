@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Livewire;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Pushery\LegalConsent\Content\AcceptanceWording;
@@ -1172,7 +1173,9 @@ final class LegalTextEditor extends Component
      * The heading and the acceptance sentence are the ones this language's version would freeze, and a
      * sentence asked for only because the document has none of its own says so.
      *
-     * @return array{languages: list<string>, left_out: list<string>, version: string, mode: string, dates: string, regime: ?string, heading: string, sentence: ?string, generic: bool}
+     * The dates come as markup, so that each one stays on one line ({@see windowInWords()}).
+     *
+     * @return array{languages: list<string>, left_out: list<string>, version: string, mode: string, dates: HtmlString, regime: ?string, heading: string, sentence: ?string, generic: bool}
      */
     private function releaseSummary(): array
     {
@@ -1200,8 +1203,8 @@ final class LegalTextEditor extends Component
             'version' => $this->releaseVersion($mode),
             'mode' => (string) __('legal-consent::ui.admin_release_modes.'.$mode->value.'.consequence'),
             'dates' => $mode === NoticeMode::DeemedConsent
-                ? (string) __('legal-consent::ui.admin_release_dialog_window', ['announce' => $this->announceAt, 'deadline' => $this->objectionDeadline, 'enforce' => $this->enforceAt])
-                : (string) __('legal-consent::ui.admin_release_dialog_now'),
+                ? $this->windowInWords()
+                : new HtmlString(e((string) __('legal-consent::ui.admin_release_dialog_now'))),
             'regime' => $mode === NoticeMode::DeemedConsent && $this->knownRegime() !== null
                 ? (string) __('legal-consent::ui.admin_regimes.'.$this->knownRegime().'.name')
                 : null,
@@ -1209,6 +1212,35 @@ final class LegalTextEditor extends Component
             'sentence' => $sentence,
             'generic' => AcceptanceWording::isGeneric($this->key, $this->locale, $sentence),
         ];
+    }
+
+    /**
+     * The window of a release with an objection window in a sentence of the screen's language: each
+     * date as a reader of that language writes it, the way the notices write it, and kept on one line,
+     * so that a date never breaks at a hyphen or between its day and its month.
+     *
+     * The sentence and the dates are escaped before the three elements go in, so those are the only
+     * markup in it. The placeholders are filled here rather than by the translator, which would put the
+     * elements into the sentence before it is escaped.
+     */
+    private function windowInWords(): HtmlString
+    {
+        return new HtmlString(strtr(e((string) __('legal-consent::ui.admin_release_dialog_window')), [
+            ':announce' => $this->dateInWords($this->announceAt),
+            ':deadline' => $this->dateInWords($this->objectionDeadline),
+            ':enforce' => $this->dateInWords($this->enforceAt),
+        ]));
+    }
+
+    /**
+     * One date of the window as the reader of this screen writes it, in an element that keeps it on one
+     * line. A value this screen cannot read stays as it was typed: the release refuses it by name.
+     */
+    private function dateInWords(string $value): string
+    {
+        $date = CalendarDate::parse($value);
+
+        return '<span style="white-space: nowrap">'.e($date instanceof CarbonImmutable ? CalendarDate::readable($date, app()->getLocale()) : $value).'</span>';
     }
 
     /**

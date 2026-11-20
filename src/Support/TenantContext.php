@@ -7,6 +7,7 @@ namespace Pushery\LegalConsent\Support;
 use BackedEnum;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
+use Pushery\LegalConsent\Exceptions\TenantIdTooLong;
 use Pushery\LegalConsent\Exceptions\UnresolvableTenant;
 use Stringable;
 
@@ -109,22 +110,39 @@ final class TenantContext
      *
      * A model is refused although PHP counts it as Stringable: its string form is its JSON, which
      * changes whenever one of its attributes does, so it would move the tenant's rows each time.
+     *
+     * @param  mixed  $tenant  what the host's tenant resolver answered, which may be any value
      */
     private function idFrom(mixed $tenant, string $resolver): string
     {
         if ($tenant === null || is_int($tenant) || is_string($tenant)) {
-            return (string) $tenant;
+            return $this->fitting((string) $tenant, $resolver);
         }
 
         if ($tenant instanceof BackedEnum) {
-            return (string) $tenant->value;
+            return $this->fitting((string) $tenant->value, $resolver);
         }
 
         if ($tenant instanceof Stringable && ! $tenant instanceof Model) {
-            return (string) $tenant;
+            return $this->fitting((string) $tenant, $resolver);
         }
 
         throw UnresolvableTenant::from($tenant, $resolver);
+    }
+
+    /**
+     * The tenant id, where it fits the `tenant_id` column. A longer one is refused here, where it is
+     * resolved, so no write is begun with a value the column cannot hold.
+     */
+    private function fitting(string $id, string $resolver): string
+    {
+        $length = mb_strlen($id);
+
+        if ($length > TenantIdTooLong::MAX_LENGTH) {
+            throw TenantIdTooLong::from($resolver, $length);
+        }
+
+        return $id;
     }
 
     /**
@@ -139,7 +157,9 @@ final class TenantContext
      * @template TReturn
      *
      * @param  Closure(): TReturn  $callback
-     * @return TReturn
+     * @return mixed what `$callback` returns, whatever its type
+     *
+     * @phpstan-return TReturn
      */
     public function forTenant(string $tenantId, Closure $callback): mixed
     {

@@ -96,7 +96,7 @@ final readonly class LedgerRecordMacs
     {
         $consentIds = array_values(array_filter(
             $consentIds,
-            static fn (mixed $id): bool => is_int($id) || is_string($id),
+            $this->isConsentId(...),
         ));
 
         if ($consentIds === [] || ! $this->available()) {
@@ -142,7 +142,7 @@ final readonly class LedgerRecordMacs
     {
         $consentIds = array_values(array_filter(
             $consentIds,
-            static fn (mixed $id): bool => is_int($id) || is_string($id),
+            $this->isConsentId(...),
         ));
 
         if ($consentIds === [] || ! $this->available()) {
@@ -152,6 +152,16 @@ final readonly class LedgerRecordMacs
         foreach (array_chunk($consentIds, LedgerChainRepair::MAX_BOUND_PARAMETERS) as $chunk) {
             DB::table(self::TABLE)->whereIn('consent_id', $chunk)->delete();
         }
+    }
+
+    /**
+     * Whether a value can be the id of a consent row: an int, or its digits as text.
+     *
+     * @param  mixed  $id  an id as the caller collected it, of whatever type the key column has
+     */
+    private function isConsentId(mixed $id): bool
+    {
+        return is_int($id) || is_string($id);
     }
 
     /**

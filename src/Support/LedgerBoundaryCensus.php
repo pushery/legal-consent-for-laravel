@@ -196,6 +196,9 @@ final readonly class LedgerBoundaryCensus
         return $censuses;
     }
 
+    /**
+     * @param  mixed  $value  a column of the query row, as the driver returns it
+     */
     private function number(mixed $value): int
     {
         return is_int($value) || is_string($value) ? (int) $value : 0;

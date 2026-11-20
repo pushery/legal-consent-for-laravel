@@ -32,7 +32,9 @@ final readonly class ReadTimeLimit
      *
      * @param  int|null  $milliseconds  the time the database gets; null runs the read without a limit, and 0 or less does not run it
      * @param  Closure(): TResult  $read
-     * @return TResult|null
+     * @return mixed what `$read` returns, whatever its type, or null where the read does not run
+     *
+     * @phpstan-return TResult|null
      */
     public function run(?int $milliseconds, Closure $read): mixed
     {
@@ -70,7 +72,9 @@ final readonly class ReadTimeLimit
      * @template TResult
      *
      * @param  Closure(): TResult  $read
-     * @return TResult
+     * @return mixed what `$read` returns, whatever its type
+     *
+     * @phpstan-return TResult
      */
     private function onPostgres(int $milliseconds, Closure $read): mixed
     {
@@ -101,7 +105,9 @@ final readonly class ReadTimeLimit
      * @template TResult
      *
      * @param  Closure(): TResult  $read
-     * @return TResult
+     * @return mixed what `$read` returns, whatever its type
+     *
+     * @phpstan-return TResult
      */
     private function onMySql(int $milliseconds, Closure $read): mixed
     {

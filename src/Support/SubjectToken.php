@@ -69,7 +69,9 @@ final class SubjectToken
      * @template TResult
      *
      * @param  Closure(string): TResult  $write
-     * @return TResult
+     * @return mixed what `$write` returns, whatever its type
+     *
+     * @phpstan-return TResult
      */
     public function whileLocked(Model $subject, Closure $write): mixed
     {
@@ -79,9 +81,11 @@ final class SubjectToken
         $keys = $this->registryKeys($subject);
         $registered = $keys !== null && $this->registered();
 
-        return $connection->transaction(function () use ($connection, $subject, $keys, $registered, $write): mixed {
+        // The callback hands the write's answer back in a list of one, so its own type is array, and the
+        // analysis still reads the type of the answer out of the list.
+        [$written] = $connection->transaction(function () use ($connection, $subject, $keys, $registered, $write): array {
             if ($keys === null || ! $registered) {
-                return $write($this->forSubject($subject));
+                return [$write($this->forSubject($subject))];
             }
 
             [$lockKey, $subjectHash] = $keys;
@@ -105,8 +109,10 @@ final class SubjectToken
                 $connection->table(self::REGISTRY)->where('lock_key', $lockKey)->update(['subject_token' => $token]);
             }
 
-            return $write($token);
+            return [$write($token)];
         }, self::ATTEMPTS);
+
+        return $written;
     }
 
     /**
@@ -319,6 +325,8 @@ final class SubjectToken
      * The map key for a (subject_type, subject_id) pair. The id cast lives on an assignment, not
      * inside the concat, so it satisfies PHPStan (a mixed id) without Rector stripping it as a
      * redundant concat autocast.
+     *
+     * @param  mixed  $id  the key of a subject, as the ledger row returns it
      */
     private function pairKey(string $type, mixed $id): string
     {

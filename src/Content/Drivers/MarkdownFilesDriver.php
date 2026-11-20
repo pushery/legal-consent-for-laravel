@@ -96,7 +96,9 @@ final readonly class MarkdownFilesDriver implements LegalDocumentSource
             $raw = substr($raw, strlen(self::BYTE_ORDER_MARK));
         }
 
-        if (preg_match('/^---\n(.*?)\n---\n?(.*)$/s', $raw, $matches) === 1) {
+        // The body runs to the end of the file under `/s`, its last line break included, so `$`
+        // matches where `\z` would.
+        if (preg_match('/^---\n(.*?)\n---\n?(.*)$/sD', $raw, $matches) === 1) {
             return [$this->parseFlatYaml($matches[1]), ltrim($matches[2])];
         }
 

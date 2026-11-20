@@ -70,7 +70,8 @@
                     @else
                         <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                     @endif
-                    <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                    <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                    @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
                 </x-wirekit::text>
             @empty
                 <x-wirekit::text intent="muted">{{ __('legal-consent::ui.contracts_empty') }}</x-wirekit::text>
@@ -94,7 +95,8 @@
                     @else
                         <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                     @endif
-                    <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                    <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                    @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
                 </x-wirekit::text>
             @empty
                 <x-wirekit::text intent="muted">{{ __('legal-consent::ui.acknowledgements_empty') }}</x-wirekit::text>
@@ -118,6 +120,7 @@
                         @else
                             <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
                         @endif
+                        @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
                     </x-wirekit::text>
 
                     {{-- A document retired out from under a holding. `is_active = false` does not

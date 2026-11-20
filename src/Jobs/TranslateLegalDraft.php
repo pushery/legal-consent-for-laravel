@@ -196,6 +196,7 @@ final class TranslateLegalDraft implements ShouldQueue
     /**
      * The values a refusal was recorded with, as its sentence takes them.
      *
+     * @param  mixed  $values  the counts the draft recorded, as the JSON column decodes them
      * @return array<string, int>
      */
     private static function recordedValues(mixed $values): array
@@ -289,7 +290,9 @@ final class TranslateLegalDraft implements ShouldQueue
      * @template TResult
      *
      * @param  Closure(): TResult  $call
-     * @return TResult
+     * @return mixed what `$call` returns, whatever its type
+     *
+     * @phpstan-return TResult
      */
     private function asTheActor(Closure $call): mixed
     {

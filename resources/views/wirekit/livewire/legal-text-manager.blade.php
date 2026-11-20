@@ -35,9 +35,15 @@
              tabindex="-1" + x-effect is the focus half. The release is confirmed in a modal that
              closes itself; with nowhere to send focus it falls to <body> (WCAG 2.4.3), leaving a
              keyboard user at the top of the document after an irreversible action. wire:key cannot
-             do it — the element is always present and gets morphed, so nothing re-runs. --}}
+             do it — the element is always present and gets morphed, so nothing re-runs.
+
+             `sr-only` while empty, and only then, as the editor's regions and the consent panel's
+             carry it: an empty region has no height but is still a child of the stack, so it takes a
+             gap, and under the heading the space was two gaps. A status takes it off again, so the
+             region the focus moves to is in view. --}}
         <div role="status" aria-live="polite" tabindex="-1" wire:key="lc-status"
-             x-effect="$wire.statusNonce > 0 && $el.focus()">
+             x-effect="$wire.statusNonce > 0 && $el.focus()"
+             @class(['sr-only' => ($status ?? '') === ''])>
             @if ($status !== '')
                 <div wire:key="lc-status-{{ $statusNonce }}"><x-wirekit::text>{{ $status }}</x-wirekit::text></div>
             @endif
@@ -46,7 +52,10 @@
         <x-wirekit::alert intent="neutral">{{ __('legal-consent::ui.admin_policy') }}</x-wirekit::alert>
 
         {{-- tableLabel names the always-focusable responsive scroll region (else it falls back to a
-             generic "Scrollable table"). The document cell below is a real row header
+             generic "Scrollable table"), and it names it for what it holds rather than after the
+             screen: the section around it already carries the heading's words, and two landmarks
+             under one name cannot be told apart in a screen reader's landmark list. The document
+             cell below is a real row header
              (header-scope="row") — WCAG 1.3.1: it is what associates every status
              cell in the row with the document it describes, so a screen reader announces "terms" with
              the cell instead of leaving a bare "not written" adrift in a grid.
@@ -61,10 +70,13 @@
              and seven of those columns do not fit a 1728px desktop. Letting the cells break inside
              a word makes them fit and stacks "Nicht geschrieben" one letter per line.
 
-             So the cell carries the short form and the badge's accessible name carries the long one
-             -- a screen reader announces the sentence, a sighted reader reads the legend once. Each
-             short form is drawn from its own language's long wording rather than translated from
-             English, because a legend only explains a word that belongs to the same family.
+             So the cell carries the short form as its text and the long one in its `title`, as the
+             plain twin's cell does, and the legend explains the six once, to a reader and to a screen
+             reader alike. Where the cell is a link, the link's name carries the long ones as well.
+             The badge itself carries no `aria-label`: it renders a `span`, an element without a role,
+             and ARIA prohibits naming one, so a label there is a name no screen reader has to read.
+             Each short form is drawn from its own language's long wording rather than translated
+             from English, because a legend only explains a word that belongs to the same family.
 
              An entry moves to the next line as a whole and wraps inside itself only where it is
              wider than the screen: "Unveröffentlicht = Unveröffentlichte Änderungen" is 47
@@ -97,7 +109,7 @@
             @endforeach
         </x-wirekit::stack>
 
-        <x-wirekit::table :tableLabel="__('legal-consent::ui.admin_heading')">
+        <x-wirekit::table :tableLabel="__('legal-consent::ui.admin_grid_label')">
             <x-wirekit::table.head>
                 <x-wirekit::table.row>
                     <x-wirekit::table.th>{{ __('legal-consent::ui.admin_document') }}</x-wirekit::table.th>
@@ -136,16 +148,16 @@
                                      the first `@if`, which renders nothing without an editor route. --}}
                                 @php(ob_start())
                                 @if (! $cell['written'])
-                                    <x-wirekit::badge intent="neutral" size="sm" :aria-label="__('legal-consent::ui.admin_not_written')" :title="__('legal-consent::ui.admin_not_written')">{{ __('legal-consent::ui.admin_not_written_short') }}</x-wirekit::badge>
+                                    <x-wirekit::badge intent="neutral" size="sm" :title="__('legal-consent::ui.admin_not_written')">{{ __('legal-consent::ui.admin_not_written_short') }}</x-wirekit::badge>
                                 @else
-                                    <x-wirekit::badge :intent="$cell['publishable'] ? 'success' : 'warning'" size="sm" :aria-label="__($cell['review_state_label'])" :title="__($cell['review_state_label'])">{{ __($cell['review_state_label'].'_short') }}</x-wirekit::badge>
+                                    <x-wirekit::badge :intent="$cell['publishable'] ? 'success' : 'warning'" size="sm" :title="__($cell['review_state_label'])">{{ __($cell['review_state_label'].'_short') }}</x-wirekit::badge>
                                     @if ($cell['machine'])
-                                        <x-wirekit::badge intent="info" size="sm" :aria-label="__('legal-consent::ui.admin_machine')" :title="__('legal-consent::ui.admin_machine')">{{ __('legal-consent::ui.admin_machine_short') }}</x-wirekit::badge>
+                                        <x-wirekit::badge intent="info" size="sm" :title="__('legal-consent::ui.admin_machine')">{{ __('legal-consent::ui.admin_machine_short') }}</x-wirekit::badge>
                                     @endif
                                     @if ($cell['stale'])
-                                        <x-wirekit::badge intent="warning" size="sm" :aria-label="__('legal-consent::ui.admin_needs_update')" :title="__('legal-consent::ui.admin_needs_update')">{{ __('legal-consent::ui.admin_needs_update_short') }}</x-wirekit::badge>
+                                        <x-wirekit::badge intent="warning" size="sm" :title="__('legal-consent::ui.admin_needs_update')">{{ __('legal-consent::ui.admin_needs_update_short') }}</x-wirekit::badge>
                                     @elseif ($cell['unpublished_changes'])
-                                        <x-wirekit::badge intent="neutral" size="sm" :aria-label="__('legal-consent::ui.admin_unpublished')" :title="__('legal-consent::ui.admin_unpublished')">{{ __('legal-consent::ui.admin_unpublished_short') }}</x-wirekit::badge>
+                                        <x-wirekit::badge intent="neutral" size="sm" :title="__('legal-consent::ui.admin_unpublished')">{{ __('legal-consent::ui.admin_unpublished_short') }}</x-wirekit::badge>
                                     @endif
                                 @endif
                                 @php($badges = new \Illuminate\Support\HtmlString((string) ob_get_clean()))
@@ -190,7 +202,7 @@
                                             {{ __('legal-consent::ui.admin_release_headings', ['headings' => implode(', ', array_map(fn (string $locale, string $heading): string => ($languageNames[$locale] ?? $locale).' „'.$heading.'“', array_keys($rows[$key]['_release']['headings'] ?? []), array_values($rows[$key]['_release']['headings'] ?? [])))]) }}
                                         @endif
                                         @if ($rows[$key]['_release']['left_out'] !== [])
-                                            {{ __('legal-consent::ui.admin_release_leaves_out', ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}
+                                            {{ trans_choice('legal-consent::ui.admin_release_leaves_out', count($rows[$key]['_release']['left_out']), ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}
                                         @endif
                                     </x-wirekit::alert-dialog.description>
 
@@ -232,7 +244,7 @@
                                 {{-- Visible on the row as well as in the dialog: the languages this release
                                      leaves out keep the version they already have live. --}}
                                 @if ($rows[$key]['_release']['left_out'] !== [])
-                                    <x-wirekit::text size="sm">{{ __('legal-consent::ui.admin_release_leaves_out', ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}</x-wirekit::text>
+                                    <x-wirekit::text size="sm">{{ trans_choice('legal-consent::ui.admin_release_leaves_out', count($rows[$key]['_release']['left_out']), ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}</x-wirekit::text>
                                 @endif
                             @else
                                 {{-- The blocking reasons stay outside aria-describedby, the same call

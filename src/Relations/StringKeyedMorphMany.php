@@ -139,9 +139,7 @@ final class StringKeyedMorphMany extends MorphMany
      *
      * @param  Builder<TRelatedModel>  $query
      * @param  Builder<TDeclaringModel>  $parentQuery
-     *
-     * @phpstan-param  mixed  $columns
-     *
+     * @param  mixed  $columns  the columns of the existence query, as Eloquent's own signature takes them
      * @return Builder<TRelatedModel>
      */
     public function getRelationExistenceQuery(Builder $query, Builder $parentQuery, mixed $columns = ['*']): Builder

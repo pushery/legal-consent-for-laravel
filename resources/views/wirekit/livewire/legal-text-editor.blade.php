@@ -234,7 +234,9 @@
                                         @endif
                                     </x-wirekit::data-list.item>
                                 @endif
-                                <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_dates')" :value="$releaseSummary['dates']" />
+                                {{-- In the slot, the place the kit gives markup: each date comes in an
+                                     element that keeps it on one line. --}}
+                                <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_dates')">{{ $releaseSummary['dates'] }}</x-wirekit::data-list.item>
                                 @if ($releaseSummary['regime'] !== null)
                                     <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_regime')" :value="$releaseSummary['regime']" />
                                 @endif

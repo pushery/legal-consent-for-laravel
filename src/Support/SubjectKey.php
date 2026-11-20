@@ -39,6 +39,9 @@ final class SubjectKey
         return self::from($subject->getKey());
     }
 
+    /**
+     * @param  mixed  $key  the key of a subject model, as Eloquent reports it, which may be of any type
+     */
     public static function from(mixed $key): ?string
     {
         return is_int($key) || is_string($key) ? (string) $key : null;

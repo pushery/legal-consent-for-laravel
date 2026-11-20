@@ -42,7 +42,10 @@
              forcing whole-page horizontal scrolling (WCAG 1.4.10 Reflow). --}}
         {{-- A size container as well, so the release row below can hold its control in the part of
              the grid a reader sees: `100cqi` there is this region's visible width. --}}
-        <div role="region" aria-label="{{ __('legal-consent::ui.admin_heading') }}" tabindex="0" style="overflow-x: auto; container-type: inline-size;">
+        {{-- Named for what it holds, not after the screen. The section around it already carries the
+             heading's words, and two landmarks under one name are two entries in a screen reader's
+             landmark list that cannot be told apart. --}}
+        <div role="region" aria-label="{{ __('legal-consent::ui.admin_grid_label') }}" tabindex="0" style="overflow-x: auto; container-type: inline-size;">
         {{-- The legend. This matrix carries one column per locale, so the widest state word
              decides the table's width -- and the words are sentences. The cell carries the short
              form, its `title` the long one, and this line explains the six once for a reader who
@@ -169,7 +172,7 @@
                                      version they already have live, so leaving them out is a decision
                                      somebody saw. --}}
                                 @if ($rows[$key]['_release']['left_out'] !== [])
-                                    <p id="left-out-{{ $key }}">{{ __('legal-consent::ui.admin_release_leaves_out', ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}</p>
+                                    <p id="left-out-{{ $key }}">{{ trans_choice('legal-consent::ui.admin_release_leaves_out', count($rows[$key]['_release']['left_out']), ['languages' => implode(', ', array_map(fn (string $locale): string => $languageNames[$locale] ?? $locale, $rows[$key]['_release']['left_out']))]) }}</p>
                                 @endif
                             @else
                                 {{-- The blocking reasons stay outside aria-describedby on a disabled

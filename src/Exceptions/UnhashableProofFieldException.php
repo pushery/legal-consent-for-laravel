@@ -22,6 +22,9 @@ use InvalidArgumentException;
  */
 final class UnhashableProofFieldException extends InvalidArgumentException
 {
+    /**
+     * @param  mixed  $value  the value that has no lossless string form, of whatever type it came as
+     */
     public static function for(string $field, mixed $value): self
     {
         return new self(sprintf(

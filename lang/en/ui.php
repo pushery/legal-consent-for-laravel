@@ -69,6 +69,8 @@ return [
     // Give button otherwise shows a consent that is not given as a bare title.
     'consent_given' => 'Given',
     'consent_not_given' => 'Not given',
+    'held_since' => 'since :date',
+    'held_version_since' => 'since :date (v:version)',
 
     // Grace-period remaining time (trans_choice): pluralization + effective-today case.
     'days_left' => '{0}Effective today|{1}:count day left|[2,*]:count days left',
@@ -95,6 +97,7 @@ return [
 
     // Admin screens (LegalTextManager / LegalTextEditor).
     'admin_heading' => 'Legal texts',
+    'admin_grid_label' => 'State of each text per locale',
     'admin_policy' => 'Texts are edited per locale, reviewed by a human, then released across every locale at once. A machine translation can never be published until someone reviews it, and the acceptance sentence is fixed copy — it is never machine-translated.',
     'admin_document' => 'Document',
     'admin_not_written' => 'Not written',
@@ -122,7 +125,7 @@ return [
     'admin_release_all' => 'Release all locales',
     'admin_release_confirm_title' => 'Release every locale?',
     'admin_release_confirm_body' => 'All locales of this text are published together as one version. This cannot be undone — a change is a new, higher version.',
-    'admin_release_leaves_out' => 'This release leaves out :languages. They keep the version already published in them, if there is one, until their own translation is released.',
+    'admin_release_leaves_out' => '{1} This release leaves out :languages. That language keeps the version already published in it, if there is one, until its own translation is released.|[2,*] This release leaves out :languages. They keep the version already published in them, if there is one, until their own translation is released.',
     'admin_release_headings' => 'Headings: :headings',
     'admin_stale' => 'The source text changed after this translation was reviewed — review it again before releasing.',
     'admin_stale_unconfirmed' => 'This translation has never been confirmed against the source text — review it before releasing.',

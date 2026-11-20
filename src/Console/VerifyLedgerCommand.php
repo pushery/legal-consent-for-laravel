@@ -632,6 +632,7 @@ final class VerifyLedgerCommand extends Command
             ->orderBy('subject_id')
             ->orderBy('tenant_id');
 
+        // Only the subjects that carry more than one token, which an intact ledger has none of.
         foreach ($subjects->cursor() as $subject) {
             // `?` stands for a type the row does not carry. The id is never missing, since the pairs
             // are read only where it is set, and the count is an integer, or its digits under a
@@ -656,6 +657,7 @@ final class VerifyLedgerCommand extends Command
             ->havingRaw('count(*) > 1')
             ->orderBy('subject_token');
 
+        // Only the tokens shared by more than one subject, which an intact ledger has none of.
         foreach ($tokens->cursor() as $shared) {
             $token = is_string($shared->subject_token) ? $shared->subject_token : '?';
 

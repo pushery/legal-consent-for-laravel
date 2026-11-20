@@ -1,7 +1,7 @@
 {{--
     WireKit-native variant of the change banners. Publish with `--tag=legal-consent-wirekit`.
 
-    Built from real `x-wirekit::*` components. Needs `pushery/wirekit` >= 2.70.0, the floor the
+    Built from real `x-wirekit::*` components. Needs `pushery/wirekit` >= 2.73.0, the floor the
     provider itself applies (`LegalConsentServiceProvider::WIREKIT_MINIMUM`), and `@wirekitScripts`
     in the layout for the live countdown.
 
@@ -38,8 +38,20 @@
             @foreach ($pending as $item)
                 <x-wirekit::stack :gap="'xs'" class="legal-consent-banner__item">
                     <x-wirekit::text>
-                        {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                        {{ $item['title'] }} <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text>
                     </x-wirekit::text>
+
+                    {{-- What changed, in the words the notice opened with, and the date to agree by in the
+                         notice's own sentence. Both come from the server: the countdown below is drawn by
+                         the kit's script, and a page without it still has to say by when. The version is
+                         quiet text, as on the settings screen, where a badge is a state. --}}
+                    @if (($item['headline'] ?? null) !== null)
+                        <x-wirekit::text size="sm">{{ $item['headline'] }}</x-wirekit::text>
+                    @endif
+
+                    @if (($item['agree_by'] ?? null) !== null)
+                        <x-wirekit::text size="sm">{{ __('legal-consent::notifications.contract.consequence', ['deadline' => $item['agree_by']]) }}</x-wirekit::text>
+                    @endif
 
                     @if (! empty($item['enforce_from']))
                         {{-- `show-seconds="false"`, and the default is `true`. The threshold two
@@ -83,12 +95,15 @@
             @foreach ($informational as $item)
                 <x-wirekit::text>
                     {{ $item['title'] }}
-                    <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                    <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text>
                     — {{ __('legal-consent::ui.updated_note') }}
                     @if ($consentUrl !== null)
                         <x-wirekit::link :href="$consentUrl">{{ __('legal-consent::ui.read_document', ['title' => $item['title']]) }}</x-wirekit::link>
                     @endif
                 </x-wirekit::text>
+                @if (($item['headline'] ?? null) !== null)
+                    <x-wirekit::text size="sm">{{ $item['headline'] }}</x-wirekit::text>
+                @endif
             @endforeach
         </x-wirekit::stack>
     </x-wirekit::callout>
@@ -102,14 +117,18 @@
             @foreach ($deemed as $item)
                 <x-wirekit::stack :gap="'xs'">
                     <x-wirekit::text>
-                        {{ $item['title'] }} <x-wirekit::badge intent="neutral" size="sm">v{{ $item['version'] }}</x-wirekit::badge>
+                        {{ $item['title'] }} <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text>
                     </x-wirekit::text>
+
+                    @if (($item['headline'] ?? null) !== null)
+                        <x-wirekit::text size="sm">{{ $item['headline'] }}</x-wirekit::text>
+                    @endif
 
                     @if (! empty($item['objection_date']))
                         {{-- The § 308 Nr. 5 lit. b warning the durable notice carries, word for word. Without
                              it the countdown below reads like a second deadline to agree by, when here it is
                              silence that binds. --}}
-                        <x-wirekit::text>{{ __('legal-consent::notifications.deemed.warning', ['deadline' => $item['objection_date']]) }}</x-wirekit::text>
+                        <x-wirekit::text>{{ __('legal-consent::notifications.deemed.warning', ['deadline' => $item['object_by'] ?? $item['objection_date']]) }}</x-wirekit::text>
                     @endif
 
                     @if (! empty($item['objection_deadline']))

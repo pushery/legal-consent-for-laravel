@@ -31,6 +31,13 @@
                 @foreach ($pending as $item)
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>
+                        @if (($item['headline'] ?? null) !== null)
+                            <span>{{ $item['headline'] }}</span>
+                        @endif
+                        @if (($item['agree_by'] ?? null) !== null)
+                            {{-- The notice's sentence with the date to agree by, as the notice writes it. --}}
+                            <span>{{ __('legal-consent::notifications.contract.consequence', ['deadline' => $item['agree_by']]) }}</span>
+                        @endif
                         <span>{{ trans_choice('legal-consent::ui.days_left', $item['days_left'], ['count' => $item['days_left']]) }}</span>
                         @if ($consentUrl !== null)
                             <a href="{{ $consentUrl }}">{{ __('legal-consent::ui.review') }}</a>
@@ -45,6 +52,9 @@
                 @foreach ($informational as $item)
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>
+                        @if (($item['headline'] ?? null) !== null)
+                            <span>{{ $item['headline'] }}</span>
+                        @endif
                         <span>{{ __('legal-consent::ui.updated_note') }}</span>
                         {{-- The document's name, never the re-consent label: nothing is asked here. --}}
                         @if ($consentUrl !== null)
@@ -60,10 +70,13 @@
                 @foreach ($deemed as $item)
                     <li>
                         <span>{{ $item['title'] }} (v{{ $item['version'] }})</span>
+                        @if (($item['headline'] ?? null) !== null)
+                            <span>{{ $item['headline'] }}</span>
+                        @endif
                         <span>{{ trans_choice('legal-consent::ui.days_left', $item['days_left'], ['count' => $item['days_left']]) }}</span>
                         @if (! empty($item['objection_date']))
                             {{-- The notice's § 308 Nr. 5 lit. b warning, word for word: here silence binds. --}}
-                            <span>{{ __('legal-consent::notifications.deemed.warning', ['deadline' => $item['objection_date']]) }}</span>
+                            <span>{{ __('legal-consent::notifications.deemed.warning', ['deadline' => $item['object_by'] ?? $item['objection_date']]) }}</span>
                         @endif
                         @if ($consentUrl !== null)
                             <a href="{{ $consentUrl }}">{{ __('legal-consent::ui.object_review') }}</a>
