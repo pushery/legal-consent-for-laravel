@@ -43,9 +43,9 @@ php artisan vendor:publish --tag=legal-consent-lang
 php artisan migrate
 ```
 
-There is an umbrella tag, `--tag=legal-consent`, which adds the migrations
-(`legal-consent-migrations`), the views (`legal-consent-views`) and the script of the document
-dialog (`legal-consent-assets`, copied to `public/vendor/legal-consent`) to those two.
+There is an umbrella tag, `--tag=legal-consent`, which adds three more to those two: the tag
+`legal-consent-migrations` for the migrations, the tag `legal-consent-views` for the views, and
+`legal-consent-assets` for the script of the document dialog, copied to `public/vendor/legal-consent`.
 **Do NOT reach for it on an application that has WireKit installed.** It copies the whole view
 tree into `resources/views/vendor/legal-consent/`, whose top level is the plain stubs, and a
 published view is resolved before either of the package's own sets — so the umbrella publish
@@ -93,7 +93,7 @@ Every option in `config/legal-consent.php` is documented inline. The ones that u
   registration checkboxes, the re-consent gate and "Your consents". Resolve from
   `$document->locale`, never the app locale — a mandatory document may be published only in the
   default language, and a link built from the page's locale points at nothing. Left null, nothing
-  breaks; the titles simply are not links.
+  breaks; the titles are not links.
 
   A closure works too, but do not deploy one: `php artisan config:cache` cannot serialize it and
   aborts the whole cache. Nothing before the deploy reproduces that, so use the class-string. The

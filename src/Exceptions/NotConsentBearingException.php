@@ -13,7 +13,7 @@ use RuntimeException;
  * An informational page — an Impressum, a cookie policy, an accessibility statement — is published
  * because the law requires it to be readable, and it asks the reader for nothing. There is no
  * sentence to accept, so a ledger row saying someone accepted it asserts a state that never
- * existed. The ledger is append-only: such a row cannot be corrected later, it simply stands, and
+ * existed. The ledger is append-only: such a row cannot be corrected later, it stands, and
  * every later reader takes it as proof.
  *
  * The sibling of {@see NotObjectableException} and {@see NotTerminableException} for the two entry

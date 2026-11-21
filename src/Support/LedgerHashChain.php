@@ -258,7 +258,7 @@ final class LedgerHashChain
     }
 
     /**
-     * The MAC over the boundary id, so the boundary cannot simply be raised.
+     * The MAC over the boundary id, so the boundary cannot be raised.
      *
      * A boundary an attacker can move is worth nothing — they would push it past their forged row
      * and inherit the exemption meant for history. Unkeyed it is a plain hash: inert, well-formed,

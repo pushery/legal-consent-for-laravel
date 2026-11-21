@@ -96,7 +96,7 @@ final readonly class ConsentController
 
         // Mirrors withdraw() above, and it is not symmetry for its own sake: the manager refuses
         // an objection against a consent or an informational page, and without this the refusal
-        // reaches the client as a 500 — an "our fault, retry" for a request that is simply not a
+        // reaches the client as a 500 — an "our fault, retry" for a request that is not a
         // thing. The JSON API and the Livewire component must answer the same way.
         try {
             $record = $this->consent->object(

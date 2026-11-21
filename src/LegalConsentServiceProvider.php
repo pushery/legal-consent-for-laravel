@@ -965,7 +965,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
      * ordinary section merge runs, so a field added to a shipped document in a later release still
      * reaches a host who published that document.
      *
-     * A shipped entry the host renamed is simply a key they do not have, and there is no way to
+     * A shipped entry the host renamed is a key they do not have, and there is no way to
      * tell that apart from one they removed. That is a property of the data rather than a gap here:
      * the config file says every shipped key is an example to rename freely, so a rename is a
      * removal plus an addition, and the addition is theirs.

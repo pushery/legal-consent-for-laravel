@@ -24,7 +24,7 @@ use RuntimeException;
  * be given and taken back freely, and neither direction may ever block anything (Art. 7(4)).
  *
  * The ledger is append-only, so a row claiming an acceptance that was never informed cannot be
- * corrected later; it simply stands, and every later reader takes it at face value.
+ * corrected later; it stands, and every later reader takes it at face value.
  */
 final class NotGrantableException extends RuntimeException
 {

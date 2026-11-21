@@ -18,7 +18,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  * law is loudest. Art. 7(1)/(2) GDPR want consent informed and the request intelligible, § 305
  * Abs. 2 BGB wants the terms retrievable before agreeing, and the re-consent gate is the sharpest
  * of the three, because the subject cannot continue until they agree. The failure is quiet: no test
- * goes red, the schema is intact, the row is simply no longer clickable.
+ * goes red, the schema is intact, the row is no longer clickable.
  *
  * Unset stays the old behavior — a title rendered as text. A misconfigured value yields no link
  * rather than a broken one: an empty `href` navigates to the current page, which reads as "the

@@ -448,7 +448,7 @@ readonly class DefaultConsentManager implements ConsentManager
             LegalConsent::model()::query()->whereKey($pending->getKey())->lockForUpdate()->first();
 
             $latest = LegalConsent::model()::query()
-                ->where('subject_type', (string) $subject->getMorphClass())
+                ->whereIn('subject_type', SubjectTypes::of($subject))
                 ->where('subject_id', SubjectKey::for($subject))
                 ->where('document_key', $documentKey)
                 ->orderByDesc('accepted_at')
@@ -707,7 +707,7 @@ readonly class DefaultConsentManager implements ConsentManager
         }
 
         $rows = LegalConsent::model()::query()
-            ->where('subject_type', (string) $subject->getMorphClass())
+            ->whereIn('subject_type', SubjectTypes::of($subject))
             ->where('subject_id', $subjectId)
             ->orderBy('accepted_at')
             ->orderBy('id')

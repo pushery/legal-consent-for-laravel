@@ -202,9 +202,10 @@ final class NoticeAttempts
             return $query;
         }
 
+        // The same subject under either spelling of its type ({@see SubjectTypes}): an attempt written after a
+        // morph map stands under the alias, the consent it was owed for may stand under the class name.
         return $query->whereNotExists(
-            fn (QueryBuilder $attempt): QueryBuilder => $attempt->from(self::TABLE)
-                ->whereColumn(self::TABLE.'.subject_type', 'legal_consents.subject_type')
+            fn (QueryBuilder $attempt): QueryBuilder => SubjectTypes::whereSame($attempt->from(self::TABLE), self::TABLE.'.subject_type', 'legal_consents.subject_type')
                 ->whereColumn(self::TABLE.'.subject_id', 'legal_consents.subject_id')
                 ->where(self::TABLE.'.document_id', $version->getKey())
                 ->where(fn (QueryBuilder $blocking): QueryBuilder => $blocking

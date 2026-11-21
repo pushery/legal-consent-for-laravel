@@ -13,6 +13,7 @@ use Pushery\LegalConsent\Support\LedgerChainRepair;
 use Pushery\LegalConsent\Support\LedgerHashChain;
 use Pushery\LegalConsent\Support\LedgerRecordMacs;
 use Pushery\LegalConsent\Support\LedgerRootBoundary;
+use Pushery\LegalConsent\Support\SubjectTypes;
 use Pushery\LegalConsent\Support\TableLookup;
 use stdClass;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -534,7 +535,7 @@ final class VerifyLedgerCommand extends Command
      *  - a mac that does not match means the row's content or its link changed after it was
      *    recorded. That is the replacement this feature was built for.
      *  - No mac at all, on a row above the boundary, means the evidence was removed. Without this
-     *    half, deleting the mac would be as good as forging it — an unwitnessed row is simply not
+     *    half, deleting the mac would be as good as forging it — an unwitnessed row is not
      *    checked, so the cheapest attack on a mac store is to delete from it.
      *
      * Below the boundary a missing mac is history and cannot be anything else: every row already
@@ -693,17 +694,45 @@ final class VerifyLedgerCommand extends Command
     private function distinctPairs(array $columns, bool $asBytes): QueryBuilder
     {
         $selected = [];
+        $subjectType = null;
 
         // Each expression names one of the four columns the type above allows and nothing else, so
         // static analysis reads the statement's text as it is written here.
         foreach ($columns as $column) {
+            if ($column === 'subject_type') {
+                $subjectType = $this->currentSubjectType($asBytes);
+
+                continue;
+            }
+
             $selected[] = $asBytes ? DB::raw("CAST(`{$column}` AS BINARY) as `{$column}`") : $column;
         }
 
-        return DB::table('legal_consents')
-            ->select($selected)
-            ->distinct()
+        $pairs = DB::table('legal_consents')->select($selected);
+
+        // The type comes last, with the bindings its case takes. The readers take the pairs by
+        // column name, so the order of the columns says nothing.
+        if ($subjectType !== null) {
+            $pairs->selectRaw($subjectType[0], $subjectType[1]);
+        }
+
+        return $pairs->distinct()
             ->whereNotNull('subject_id')
             ->whereNotNull('subject_token');
+    }
+
+    /**
+     * `subject_type` as one subject's current spelling ({@see SubjectTypes}): rows written before a
+     * morph map stand under the class name, and the rows after it continue the same chain under the
+     * alias, so both are one subject with one token rather than two subjects sharing it. The class
+     * names and the aliases travel as bindings beside the text.
+     *
+     * @return array{0: literal-string, 1: list<string>}
+     */
+    private function currentSubjectType(bool $asBytes): array
+    {
+        [$current, $bindings] = SubjectTypes::currentIn('subject_type');
+
+        return [$asBytes ? 'CAST('.$current.' AS BINARY) as `subject_type`' : $current.' as subject_type', $bindings];
     }
 }

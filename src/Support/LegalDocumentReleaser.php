@@ -22,7 +22,7 @@ use Pushery\LegalConsent\Models\LegalDraft;
  * different major versions of the same contract, with nothing in the package detecting it.
  * `check-drift` stays quiet too, because the English source still matches the English published
  * row. The cross-locale gate fix does not help here: the gate looks up enforceable documents in
- * the subject's own locale, so an English session simply never sees the German v2.
+ * the subject's own locale, so an English session never sees the German v2.
  *
  * So a release is atomic: one version, one major, one notice mode, every locale, one transaction.
  * The per-locale `legal-consent:publish` stays as the documented escape hatch for an urgent
@@ -274,7 +274,7 @@ final readonly class LegalDocumentReleaser
         // The predicate moved to {@see DocumentSourceKind}, because the admin overview has to ask
         // the same thing to arm its button and used not to ask at all — so it armed one over a
         // release this line then refused. The paragraph above is the argument for saying the
-        // source rather than the draft, and it was already written here; it simply never reached
+        // source rather than the draft, and it was already written here; it never reached
         // the second reader. The reasoning about the third state — a source that does not resolve,
         // which is somebody else's error and stays theirs — lives with the predicate now.
         if (DocumentSourceKind::isOutsideTheDraftStore($key)) {
@@ -282,7 +282,7 @@ final readonly class LegalDocumentReleaser
         }
 
         // Pre-flight before the transaction: a release that cannot complete must not write a row
-        // and roll it back, it must simply not start — and it must say which locales blocked it.
+        // and roll it back, it must not start — and it must say which locales blocked it.
         $blocking = LegalDraftSet::for($key)->blockingLocales($locales);
 
         // The change description is checked in the same pre-flight as the text, and for the same
@@ -295,7 +295,7 @@ final readonly class LegalDocumentReleaser
         // notice at all — a silent editorial fix owes none. And the operator must have asked for
         // the requirement (`change_items.required`), because a package that started refusing every
         // existing release the day it shipped a new field would be forcing a feature, not offering
-        // one. Off by default; the notice simply carries no delta until someone turns it on.
+        // one. Off by default; the notice carries no delta until someone turns it on.
         if ($mode->requiresNotice() && config('legal-consent.change_items.required', false)) {
             // array_values() changes nothing observable, since blockingLocales() only iterates the locales.
             // It is there for the list its signature declares.

@@ -28,6 +28,7 @@ use Pushery\LegalConsent\Support\DeemedAcceptanceDecision;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\SubjectKey;
 use Pushery\LegalConsent\Support\SubjectToken;
+use Pushery\LegalConsent\Support\SubjectTypes;
 use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
 
@@ -275,7 +276,8 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
             // Cast for the reason SubjectToken carries the same one: a morph alias written as a
             // number comes back as the int PHP made of that array key, and the closure would then
             // violate its own return type — a fatal sweep, on a configuration Laravel allows.
-            ->whereIn('subject_type', $subjects->map(fn (Model $subject): string => (string) $subject->getMorphClass())->unique()->values()->all())
+            // Every spelling of each type: a notice delivered before a morph map stands under the class name.
+            ->whereIn('subject_type', SubjectTypes::ofAll($subjects))
             ->get(['subject_type', 'subject_id', 'sent_at']);
 
         $proved = [];
@@ -285,7 +287,7 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
             // The values are placeholders: both maps are read with `isset()`, which is true for
             // `false` just as it is for `true` — said out loud, because a value that could be
             // anything invites somebody to conclude it matters.
-            $key = $row->subject_type.'#'.$row->subject_id;
+            $key = SubjectTypes::current((string) $row->subject_type).'#'.$row->subject_id;
             $delivered[$key] = true;
 
             // On time means with the objection period still ahead of the recipient, measured from the

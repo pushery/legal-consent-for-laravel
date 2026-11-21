@@ -297,7 +297,7 @@ final readonly class LedgerRecordMacs
     }
 
     /**
-     * The MAC over the boundary id, so the boundary cannot simply be raised past a forgery.
+     * The MAC over the boundary id, so the boundary cannot be raised past a forgery.
      *
      * Its own payload prefix, so a proof lifted from the chain-root marker does not validate this
      * one. Both markers live in one table under different names, and two values that differ only

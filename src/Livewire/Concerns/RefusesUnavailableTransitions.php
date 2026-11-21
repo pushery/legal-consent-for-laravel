@@ -25,7 +25,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  *  - the document's class cannot carry the transition (an objection against a consent, a
  *    termination against a privacy notice).
  *
- * Neither is a server error, and a 500 ("our fault, retry") would answer a request that is simply
+ * Neither is a server error, and a 500 ("our fault, retry") would answer a request that is
  * not a thing.
  * The manager's guard is untouched and still does its real job, which is keeping rows that assert
  * legally impossible states out of an append-only ledger; only the answer to the client changes.
@@ -72,7 +72,7 @@ trait RefusesUnavailableTransitions
     {
         // Every ledger write a bundled component offers passes through here, which makes it the one
         // place the session-write limit can sit and cover them all. A 429 rather than a 404: the
-        // transition exists, the subject has simply spent the budget for the minute. The re-consent
+        // transition exists, the subject has spent the budget for the minute. The re-consent
         // screen's `submit()` does not come through here and needs no limit — it records only what
         // is still pending, and a document stops being pending the moment it is recorded.
         SessionWriteThrottle::enforce(request());

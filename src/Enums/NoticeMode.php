@@ -15,7 +15,7 @@ namespace Pushery\LegalConsent\Enums;
  * disadvantageous one with no notice at all.
  *
  * - SilentEditorial  — a typo, a clarification, or a purely favorable change: no
- *                      notice duty, the new version simply activates. (§ 308 Nr. 5 BGB
+ *                      notice duty, the new version activates. (§ 308 Nr. 5 BGB
  *                      only bites on fingierte *nachteilige* declarations — EuGH
  *                      C-287/19.)
  * - InfoPush         — a material but info-only change: the subject is actively

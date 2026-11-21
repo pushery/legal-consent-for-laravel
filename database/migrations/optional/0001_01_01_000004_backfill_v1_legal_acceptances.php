@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Schema;
  * Not auto-loaded. Publish + run only if you are migrating from that schema:
  *   php artisan vendor:publish --tag=legal-consent-backfill
  * A no-op when neither legacy column exists. All or nothing: a run that fails leaves no row behind
- * and can simply be run again, and a run that finished is skipped.
+ * and can be run again, and a run that finished is skipped.
  *
  * Adapt the column/type mapping to your own legacy schema before running.
  */

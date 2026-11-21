@@ -50,7 +50,7 @@ return new class extends Migration
             // referential action through SPI, so the trigger fires and the parent DELETE aborts;
             // MySQL applies it without firing the row trigger and silently mutates a row this
             // package calls frozen; SQLite has no trigger to fire and mutates it too. The plain
-            // column keeps the relation readable and simply dangles once the document is gone —
+            // column keeps the relation readable and dangles once the document is gone —
             // which is what the SET NULL was reaching for, without the illegal write.
             $table->unsignedBigInteger('document_id')->nullable();
             $table->char('document_content_hash', 64)->nullable();

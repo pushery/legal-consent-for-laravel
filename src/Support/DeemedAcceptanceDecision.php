@@ -32,7 +32,7 @@ final class DeemedAcceptanceDecision
         // row for this (subject, version) whose mandatory content actually rendered.
         //
         // This parameter is required rather than defaulted to true on purpose. A default would let
-        // any future call site create consent out of silence by simply not passing it, which is the
+        // any future call site create consent out of silence by not passing it, which is the
         // one mistake this check exists to prevent.
         if (! $noticeProved) {
             return false;
@@ -98,7 +98,7 @@ final class DeemedAcceptanceDecision
         }
 
         $rows = LegalConsent::model()::query()
-            ->where('subject_type', (string) $subject->getMorphClass())
+            ->whereIn('subject_type', SubjectTypes::of($subject))
             ->where('subject_id', $subjectId)
             ->where('document_key', $version->key)
             ->where('locale', $version->locale)

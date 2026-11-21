@@ -11,7 +11,7 @@ use RuntimeException;
  *
  * Distinct from {@see LegalDocumentNotFound} on purpose: that one is the publish gate's refusal
  * (and the drift checker catches it to stay quiet about work in progress), while this is a caller
- * asking to act on a row that is simply absent, which should surface rather than pass silently.
+ * asking to act on a row that is absent, which should surface rather than pass silently.
  */
 final class LegalDraftNotFound extends RuntimeException
 {

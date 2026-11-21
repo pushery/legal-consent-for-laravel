@@ -90,7 +90,9 @@ final readonly class LedgerSubjectEraser
 
     public function forget(Model $subject): SubjectErasure
     {
-        $type = (string) $subject->getMorphClass();
+        // Every spelling of the subject's type: rows written before a morph map stand under the class
+        // name, and they are the subject's as much as the newer ones under the alias.
+        $types = SubjectTypes::of($subject);
         $id = SubjectKey::for($subject);
 
         if ($id === null) {
@@ -102,27 +104,33 @@ final readonly class LedgerSubjectEraser
         $tokens = new SubjectToken;
         $registered = $tokens->registered();
 
-        return DB::transaction(function () use ($type, $id, $tokens, $registered): SubjectErasure {
+        return DB::transaction(function () use ($types, $id, $tokens, $registered): SubjectErasure {
             // First: a write for the subject that is under way holds their registry row, so this
             // waits for it to commit, and no write for them starts until this one has committed.
             // The ledgers are read with locking reads below, which see what such a write stored.
             if ($registered) {
-                $tokens->hold($type, $id);
+                foreach ($types as $type) {
+                    $tokens->hold($type, $id);
+                }
             }
 
             $erasedAt = CarbonImmutable::now();
 
-            [$consents, $rechained, $unverified] = $this->eraseConsents($type, $id, $erasedAt);
+            [$consents, $rechained, $unverified] = $this->eraseConsents($types, $id, $erasedAt);
 
             // Operational state, not evidence: which notices were on their way to this subject and
             // which failed. It names the subject and nothing needs it once they are gone.
-            NoticeAttempts::forgetSubject($type, $id);
+            foreach ($types as $type) {
+                NoticeAttempts::forgetSubject($type, $id);
+            }
 
-            $notices = $this->eraseNotices($type, $id, $erasedAt);
+            $notices = $this->eraseNotices($types, $id, $erasedAt);
 
             // The rows tie the subject to their token, the tie the erasure exists to cut.
             if ($registered) {
-                $tokens->forget($type, $id);
+                foreach ($types as $type) {
+                    $tokens->forget($type, $id);
+                }
             }
 
             return new SubjectErasure(
@@ -142,9 +150,10 @@ final readonly class LedgerSubjectEraser
      * give rows written through SQL the key's approval. Its links stay as they are, so the verifier
      * goes on reporting what changed it, and the count goes back to the caller.
      *
+     * @param  non-empty-list<string>  $types  every spelling of the subject's type
      * @return array{0: int, 1: int, 2: int} rows erased, rows re-linked, chains left unverified
      */
-    private function eraseConsents(string $type, string $id, CarbonImmutable $erasedAt): array
+    private function eraseConsents(array $types, string $id, CarbonImmutable $erasedAt): array
     {
         // Every row this subject's chain touches, not only the rows still naming them. A previous
         // erasure leaves rows with a null subject and the same token, and their hashes are inputs
@@ -155,9 +164,9 @@ final readonly class LedgerSubjectEraser
         // the erasure reads would keep naming the subject, and link to a hash the erasure changes.
         // The subject's rows and their chains are asked for separately, each on its own index, so
         // the locks stay on those rows rather than on whatever a combined condition scans.
-        $rows = LockedRows::settled(static function () use ($type, $id): array {
+        $rows = LockedRows::settled(static function () use ($types, $id): array {
             $named = DB::table('legal_consents')
-                ->where('subject_type', $type)
+                ->whereIn('subject_type', $types)
                 ->where('subject_id', $id)
                 ->orderBy('id')
                 ->lockForUpdate()
@@ -355,11 +364,15 @@ final readonly class LedgerSubjectEraser
         }
     }
 
-    /** The notice ledger, which carries no chain — so the rewrite is the erasure and nothing more. */
-    private function eraseNotices(string $type, string $id, CarbonImmutable $erasedAt): int
+    /**
+     * The notice ledger, which carries no chain — so the rewrite is the erasure and nothing more.
+     *
+     * @param  non-empty-list<string>  $types  every spelling of the subject's type
+     */
+    private function eraseNotices(array $types, string $id, CarbonImmutable $erasedAt): int
     {
         $rows = LockedRows::settled(static fn (): array => array_values(DB::table('legal_notices')
-            ->where('subject_type', $type)
+            ->whereIn('subject_type', $types)
             ->where('subject_id', $id)
             ->orderBy('id')
             ->lockForUpdate()

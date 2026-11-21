@@ -17,7 +17,7 @@ use RuntimeException;
  * which binds nobody and so offers nothing to object to.
  *
  * The ledger is append-only, so a row claiming a state that does not legally exist cannot be
- * corrected later; it simply stands, and every later reader takes it at face value.
+ * corrected later; it stands, and every later reader takes it at face value.
  */
 final class NotObjectableException extends RuntimeException
 {

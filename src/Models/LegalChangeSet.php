@@ -89,7 +89,7 @@ class LegalChangeSet extends Model
      *
      * Not loaded is not "not published", and reading it that way would open the freeze on exactly
      * the rows it exists to protect. `getOriginal()` is `Arr::get($this->original, $key, $default)`
-     * — on a partially hydrated row, `select(['id', …])`, the key is simply absent and the answer
+     * — on a partially hydrated row, `select(['id', …])`, the key is absent and the answer
      * is null. Null is not `Published`, so the write would go through, and partial selects are
      * common in this package. The database triggers refuse the write on every engine as well, but with a raw SQLSTATE
      * rather than a refusal that names the document.

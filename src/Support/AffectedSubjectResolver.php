@@ -121,6 +121,7 @@ readonly class AffectedSubjectResolver
             ->whereNotNull('subject_type')
             ->whereNotNull('subject_id')
             ->whereIn('action', $accepting)
+            ->tap(fn (QueryBuilder $query): QueryBuilder => $this->withoutATwinUnderTheAlias($query, $version, [$version->locale], $accepting, $maxConsentId))
             ->groupBy('subject_type', 'subject_id')
             // The one mode-dependent condition. Everything else about this query — the keyset
             // paging, the tenant scoping, the resume predicate, the ledger snapshot — is identical
@@ -274,6 +275,7 @@ readonly class AffectedSubjectResolver
             ->whereNotNull('subject_type')
             ->whereNotNull('subject_id')
             ->whereIn('action', $accepting)
+            ->tap(fn (QueryBuilder $query): QueryBuilder => $this->withoutATwinUnderTheAlias($query, $version, $locales, $accepting, $maxConsentId))
             ->groupBy('subject_type', 'subject_id')
             ->when(
                 $version->noticeMode()->gates(),
@@ -281,6 +283,39 @@ readonly class AffectedSubjectResolver
             );
 
         return DB::query()->fromSub($grouped, 'affected')->count();
+    }
+
+    /**
+     * Leaves out the rows a subject wrote under its class name before the application registered a
+     * morph map, where the same subject has accepting rows under the alias as well. Those decide for
+     * the subject, so it is served once, under the spelling it has now ({@see SubjectTypes}), and
+     * never twice in one sweep. Without a map nothing is left out.
+     *
+     * Applied to the streaming query and to the counting one alike, with the locales each reads.
+     *
+     * @param  list<string>  $locales
+     * @param  list<string>  $accepting
+     */
+    private function withoutATwinUnderTheAlias(QueryBuilder $query, LegalDocument $version, array $locales, array $accepting, ?int $maxConsentId): QueryBuilder
+    {
+        $map = Relation::morphMap();
+
+        if ($map === []) {
+            return $query;
+        }
+
+        return $query->whereNotExists(fn (QueryBuilder $twin): QueryBuilder => $twin->from('legal_consents as twin')
+            ->whereColumn('twin.subject_id', 'legal_consents.subject_id')
+            ->where('twin.document_key', $version->key)
+            ->whereIn('twin.locale', $locales)
+            ->whereIn('twin.action', $accepting)
+            ->when($this->tenant->enabled(), fn (QueryBuilder $scoped): QueryBuilder => $scoped->whereColumn('twin.tenant_id', 'legal_consents.tenant_id'))
+            ->when($maxConsentId !== null, fn (QueryBuilder $snapshot): QueryBuilder => $snapshot->where('twin.id', '<=', $maxConsentId))
+            ->where(static function (QueryBuilder $pairs) use ($map): void {
+                foreach ($map as $alias => $class) {
+                    $pairs->orWhere(static fn (QueryBuilder $pair): QueryBuilder => $pair->where('legal_consents.subject_type', $class)->where('twin.subject_type', (string) $alias));
+                }
+            }));
     }
 
     /**
@@ -300,9 +335,10 @@ readonly class AffectedSubjectResolver
      */
     private function withoutAlreadyNotified(QueryBuilder $query, LegalDocument $version): QueryBuilder
     {
+        // Under either spelling of the subject's type ({@see SubjectTypes}): a proof written after a morph map
+        // stands under the alias, the consent it proves notice of may stand under the class name.
         $query->whereNotExists(
-            fn (QueryBuilder $sub): QueryBuilder => $sub->from('legal_notices')
-                ->whereColumn('legal_notices.subject_type', 'legal_consents.subject_type')
+            fn (QueryBuilder $sub): QueryBuilder => SubjectTypes::whereSame($sub->from('legal_notices'), 'legal_notices.subject_type', 'legal_consents.subject_type')
                 ->whereColumn('legal_notices.subject_id', 'legal_consents.subject_id')
                 ->where('legal_notices.document_id', $version->getKey())
         );

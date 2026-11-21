@@ -151,7 +151,7 @@ final class LegalTextEditor extends Component
      * are here rather than left out as two more inputs. `ReleaseOptions` calls itself "the
      * operator's legal classification of one change", and this screen built five of its seven
      * fields: a release from here therefore froze a contract change with no regime and no class,
-     * and nothing said so — the publish succeeded and the columns were simply null.
+     * and nothing said so — the publish succeeded and the columns were null.
      *
      * It matters most exactly where it is quietest. A deemed-consent release binds people by their
      * silence, and the classification is what that binding is later argued from.
@@ -252,7 +252,7 @@ final class LegalTextEditor extends Component
         // client input without being told they had.
         //
         // Unchecked, an unknown key reaches the source factory, which has nothing to resolve for
-        // it and raises: a 500 on an admin screen for a request that is simply not a thing.
+        // it and raises: a 500 on an admin screen for a request that is not a thing.
         abort_unless(in_array($documentKey, $this->documentKeys(), true), 404);
 
         // And the locale, which is the one that fails quietly. releaseDeemed() releases the

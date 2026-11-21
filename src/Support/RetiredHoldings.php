@@ -62,9 +62,9 @@ final readonly class RetiredHoldings
             // Retired means no active version anywhere, not merely none in the locale on screen.
             // A document published in `de` and not (yet) in `en` is not retired: a mandatory one
             // reaches the `en` screen as active through the locale chain, and a voluntary one is
-            // simply not offered there. Without this arm a partially published document would
+            // not offered there. Without this arm a partially published document would
             // appear on the other locale's screen labeled as withdrawn from service — a claim about
-            // the operator's registry that is simply untrue.
+            // the operator's registry that is untrue.
             ->whereNotExists(fn (QueryBuilder $live): QueryBuilder => $live->from('legal_documents as live')
                 ->whereColumn('live.key', 'legal_documents.key')
                 ->where('live.is_active', true)
@@ -76,7 +76,7 @@ final readonly class RetiredHoldings
                 ->whereColumn('legal_consents.document_key', 'legal_documents.key')
                 ->whereColumn('legal_consents.locale', 'legal_documents.locale')
                 ->whereColumn('legal_consents.document_version', 'legal_documents.version')
-                ->where('legal_consents.subject_type', (string) $subject->getMorphClass())
+                ->whereIn('legal_consents.subject_type', SubjectTypes::of($subject))
                 ->where('legal_consents.subject_id', SubjectKey::for($subject))
                 ->when($tenant->enabled(), fn (QueryBuilder $scoped): QueryBuilder => $scoped->where('legal_consents.tenant_id', $tenant->current())))
             // Deterministic, and `locale` is part of it: a retired row is shown in the language the

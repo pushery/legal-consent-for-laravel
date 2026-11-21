@@ -76,7 +76,7 @@ final readonly class RegistrationChecklistItem
      * `legal_{key}_hash`, after the document, whatever the control is called.
      *
      * Rendering it is opt-in and adds no behavior by itself: a form that omits it keeps the prior
-     * no-guard registration path (the recorder simply receives no expected hash). Empty for an
+     * no-guard registration path (the recorder receives no expected hash). Empty for an
      * attestation, which has no document to guard.
      *
      * Named after the document, not after the control, and that is deliberate where a single

@@ -39,7 +39,7 @@ final class ChangeItemsFreezer
         // that was just created carries whatever `forceCreate` was given, and with tenancy off that
         // is nothing at all — the empty string is the database default, so the in-memory model says
         // null while every stored row says ''. Matching on null finds nothing, silently, and the
-        // publish then looks like it simply had no description to freeze.
+        // publish then looks like it had no description to freeze.
         $tenantId = $document->tenant_id ?? '';
 
         $draft = LegalChangeSet::model()::query()

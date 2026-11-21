@@ -151,7 +151,7 @@ final class ProofColumnGuard
      *
      * The re-install sits in `finally` deliberately: a schema change that throws must not also
      * leave the proof table unguarded, and an unguarded `legal_documents` is a state with no
-     * symptom — nothing fails, rows simply stop being frozen.
+     * symptom — nothing fails, rows stop being frozen.
      */
     public static function whileDisarmed(callable $work): void
     {

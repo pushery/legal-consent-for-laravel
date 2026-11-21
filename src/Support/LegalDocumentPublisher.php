@@ -63,7 +63,7 @@ final readonly class LegalDocumentPublisher
      * that four period keys sat in a published config file with no reader at all: an operator who
      * raised `p2b_standstill_days` because their contract demanded it changed nothing, and nothing
      * said so. A partial map would let the next regime arrive the same way, so a regime with no
-     * period has to say `null` here rather than simply be absent.
+     * period has to say `null` here rather than be absent.
      *
      * The two nulls are decisions, not gaps:
      *  - `bgb_agb` — § 308 Nr. 5's "angemessene Frist" is the mode benchmark below; a second
@@ -897,7 +897,7 @@ final readonly class LegalDocumentPublisher
         // An informational page binds nobody, so every mode except the silent one describes an
         // audience that does not exist: there is no acceptance to deem, none to re-request, and
         // nobody "holds" the page to be notified about it — the notice sweeps resolve their
-        // recipients from ledger rows, and this type never writes one. Publishing it is simply
+        // recipients from ledger rows, and this type never writes one. Publishing it is
         // making the current text live.
         if (! $type->isConsentBearing() && $mode !== NoticeMode::SilentEditorial) {
             throw new LegalPublishRefused(

@@ -66,8 +66,11 @@ final readonly class RetentionEligibility
                         $newer
                             ->selectRaw('1')
                             ->from($table, 'newer')
-                            ->whereColumn('newer.tenant_id', "{$table}.tenant_id")
-                            ->whereColumn('newer.subject_type', "{$table}.subject_type")
+                            ->whereColumn('newer.tenant_id', "{$table}.tenant_id");
+
+                        // Under either spelling of the subject's type ({@see SubjectTypes}): a row from before a
+                        // morph map is superseded by a newer one under the alias.
+                        SubjectTypes::whereSame($newer, 'newer.subject_type', "{$table}.subject_type")
                             ->whereColumn('newer.subject_id', "{$table}.subject_id")
                             ->whereColumn('newer.document_key', "{$table}.document_key")
                             ->whereColumn('newer.locale', "{$table}.locale")
@@ -131,9 +134,12 @@ final readonly class RetentionEligibility
 
         $candidates = $connection->table('legal_consents', 'candidate')
             ->leftJoinSub($latest, 'latest', static function (JoinClause $join): void {
-                $join->on('latest.tenant_id', '=', 'candidate.tenant_id')
-                    ->on('latest.subject_type', '=', 'candidate.subject_type')
-                    ->on('latest.subject_id', '=', 'candidate.subject_id')
+                $join->on('latest.tenant_id', '=', 'candidate.tenant_id');
+
+                // The same subject under either spelling of its type, as the row-by-row reader asks it.
+                SubjectTypes::whereSame($join, 'latest.subject_type', 'candidate.subject_type');
+
+                $join->on('latest.subject_id', '=', 'candidate.subject_id')
                     ->on('latest.document_key', '=', 'candidate.document_key')
                     ->on('latest.locale', '=', 'candidate.locale');
             })

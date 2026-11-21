@@ -4,6 +4,10 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.60.0 → 0.60.1
+
+**Nothing is required of you.**
+
 ## 0.59.0 → 0.60.0
 
 **Nothing is required of you**, unless you published the package's views or its translations.
@@ -857,7 +861,7 @@ The registration now asks whether the tables are **there**, which is the fact th
 
 **Run the second migration (000026) as well.** It appends `tenant_id` to the affected-subject index the notice sweep walks. Nothing about your data changes and nothing is required of you — it is named here only because `migrate` will report two migrations rather than one, and a second unexplained migration is the kind of thing an operator stops for.
 
-**Nothing else changes.** The activation lock behaves exactly as before, including its warning when the configured cache store cannot serialize. It simply is no longer the only thing holding the invariant.
+**Nothing else changes.** The activation lock behaves exactly as before, including its warning when the configured cache store cannot serialize. It is no longer the only thing holding the invariant.
 
 ### Run migration 000028 — `locale` and `version` get the widths their formats need
 
@@ -1357,7 +1361,7 @@ anything. Add it to your published file only if you want to pin the variant.
 
 `routes.web`, `routes.web_prefix` and `routes.web_middleware` are different: they sit **inside** a
 block your published file already declares, and the merge is flat — so your `routes` block wins
-wholesale and those three never reach runtime. The route simply stays off, which is the default
+wholesale and those three never reach runtime. The route stays off, which is the default
 anyway. Add them by hand if you want it. `legal-consent:doctor` lists exactly this case.
 
 ## 0.16.0 → 0.16.1
@@ -1780,7 +1784,7 @@ after upgrading — a rebuild keeps indexes and drops triggers, and nothing warn
 
 This is the only change in this release that can stop `php artisan migrate`, and it affects
 installations that upgraded cleanly until now. Up to 0.9.0 a fourth engine migrated green and
-simply got **no proof trigger** on `legal_documents` — the immutability this package builds its
+got **no proof trigger** on `legal_documents` — the immutability this package builds its
 evidentiary weight on, silently absent. It now stops instead:
 
 ```
