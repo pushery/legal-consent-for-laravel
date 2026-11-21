@@ -37,7 +37,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  *
  * A row in a table of its own is written after the read, which is the only order in which the two
  * facts above are both satisfiable. It carries the history of lawful rewrites for free: the eraser
- * and the retention sweep re-link rows, which changes their hash, and each simply appends the new
+ * and the retention sweep re-link rows, which changes their hash, and each appends the new
  * mac rather than correcting anything.
  *
  * No append-only trigger, and that is the same call migration 000024 made for the marker.
@@ -48,7 +48,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  * posture is the chain's own, and it is stated rather than implied.
  *
  * The boundary marker is the other half. Without one, deleting a mac would be as good as forging
- * it: a row with no mac would simply not be checked. Above the boundary a missing mac is a break;
+ * it: a row with no mac would not be checked. Above the boundary a missing mac is a break;
  * below it, it is history, because every row already in the table was written before this could
  * exist. That marker carries its own MAC over its id, so it cannot be raised past a forgery — and
  * it is stamped by the first mac rather than by this migration, for the reason spelled out in

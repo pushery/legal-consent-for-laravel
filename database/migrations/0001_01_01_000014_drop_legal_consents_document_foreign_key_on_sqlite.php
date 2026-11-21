@@ -22,7 +22,7 @@ use Pushery\SQLens\Attributes\NoSqlOnDriver;
  * with foreign keys enabled (Laravel's default) was exposed.
  *
  * This unifies SQLite with the other two engines: the denormalized proof columns keep every row
- * self-proving, and document_id simply dangles once the document is gone (its index stays — 000009).
+ * self-proving, and document_id dangles once the document is gone (its index stays — 000009).
  *
  * Guarded to SQLite: PostgreSQL and MySQL already dropped this constraint in 000008, so running the
  * drop there would fail on a missing key.

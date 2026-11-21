@@ -39,7 +39,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  *  - `legal_ledger_markers` — one row recording the highest `legal_consents.id` at this moment.
  *    Below it a missing `root_proof` is history; above it, it is a forgery. The boundary carries
  *    its own MAC, because a boundary an attacker can raise is a boundary that buys nothing: they
- *    would simply move it past their forged row. Recomputing that MAC needs the secret.
+ *    would move it past their forged row. Recomputing that MAC needs the secret.
  *
  * The marker needs no append-only trigger of its own. A trigger stops the write; the MAC makes the
  * write useless — and the MAC is the half that still holds when the attacker reaches the database

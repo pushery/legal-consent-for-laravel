@@ -322,7 +322,7 @@ final class ReConsentForm extends Component
         // judged a string no browser ever navigates to. The other two the old list named — NUL and
         // the vertical tab — keep being trimmed at the front only, because that is what the parser
         // does with them: stripped at the edges, ordinary path bytes in the middle. Any other
-        // leading control byte simply fails the rooted-path test below, which is the safe direction.
+        // leading control byte fails the rooted-path test below, which is the safe direction.
         //
         // Nothing is handed on from here: the raw value is what gets redirected to, and the browser
         // performs this same removal itself. This function only has to judge the same string.

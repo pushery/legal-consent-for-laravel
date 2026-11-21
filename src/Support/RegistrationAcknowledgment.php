@@ -38,7 +38,7 @@ use Pushery\LegalConsent\Models\LegalDocument;
  *         'registration_wording' => 'I have read the imprint.',
  *     ],
  *
- * Both keys, and a document carrying only the flag is simply not covered rather than an error at
+ * Both keys, and a document carrying only the flag is not covered rather than an error at
  * registration time. The wording is the sentence the operator's own form puts next to the page, and
  * the ledger stores it verbatim — an informational document has none of its own, because this
  * package never asks the reader for anything on such a page. Without it there is nothing truthful

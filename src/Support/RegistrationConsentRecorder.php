@@ -415,7 +415,7 @@ final readonly class RegistrationConsentRecorder
     private function isMandatoryByConfig(string $key): bool
     {
         // No explicit legal_basis means the registry never claimed this key was mandatory, so an
-        // unresolvable one is simply not offered — not an error. Only a key the config declares
+        // unresolvable one is not offered — not an error. Only a key the config declares
         // mandatory can be an unrecordable-consent failure; anything looser would turn a merely
         // unpublished document into a broken registration.
         $basis = $this->documents[$key]['legal_basis'] ?? null;

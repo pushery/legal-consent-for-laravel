@@ -21,7 +21,7 @@ use Pushery\LegalConsent\Models\LegalNotice;
  * the token exists: it is what keeps the proof meaningful once the subject reference is gone
  * (Art. 17(3)(b)/(e) — the proof survives the person).
  *
- * An Art. 17 erasure cannot simply clear the naming columns: that is an UPDATE, and both ledgers
+ * An Art. 17 erasure cannot clear the naming columns: that is an UPDATE, and both ledgers
  * refuse every UPDATE — the model blocks it, and PostgreSQL and MySQL each carry a BEFORE UPDATE
  * trigger. `Consent::forget()` therefore deletes each row and writes it again without the columns
  * that name the person, inside one transaction, re-linking the chain as it goes. The token is what
@@ -291,9 +291,11 @@ final class SubjectToken
                 $type = (string) $type;
                 $ids = $group->map(static fn (Model $subject): ?string => SubjectKey::for($subject))->all();
 
+                // Every spelling of the type, so a subject whose rows stand under the class name from before a
+                // morph map keeps the token those rows carry.
                 $rows = $model::query()
                     ->distinct()
-                    ->where('subject_type', $type)
+                    ->whereIn('subject_type', SubjectTypes::ofAll($group))
                     ->whereIn('subject_id', $ids)
                     ->whereNotNull('subject_token')
                     ->get(['subject_id', 'subject_token']);
@@ -354,10 +356,13 @@ final class SubjectToken
             return null;
         }
 
+        // Under every spelling of the type, the oldest row first: a subject with rows from before a morph
+        // map keeps the token they carry, so its chain stays one.
         $token = $query
-            ->where('subject_type', (string) $subject->getMorphClass())
+            ->whereIn('subject_type', SubjectTypes::of($subject))
             ->where('subject_id', $subjectId)
             ->whereNotNull('subject_token')
+            ->orderBy('id')
             ->value('subject_token');
 
         return is_string($token) ? $token : null;

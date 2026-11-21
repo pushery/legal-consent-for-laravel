@@ -225,7 +225,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // lock-expired run resumes on those still owed a notice. `skipNotified` only bites when
             // proof is on; with proof off there is nothing to resume from and no proof to
             // duplicate — a killed run then re-notifies the whole population (tolerated duplicate
-            // emails under at-least-once), it simply writes no duplicate proof row.
+            // emails under at-least-once), it writes no duplicate proof row.
             $resolver->forVersion($version, skipNotified: $proofEnabled)
                 ->chunk(self::CHUNK)
                 ->each(function (LazyCollection $chunk) use ($notification, $version, $proofEnabled, $reported, &$notified): void {

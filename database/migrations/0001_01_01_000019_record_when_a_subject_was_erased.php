@@ -14,7 +14,7 @@ use Pushery\LegalConsent\Support\TableLookup;
  * The erasure seam rewrites a row without its personal columns and re-links the chain behind it.
  * That is a lawful, application-initiated change to append-only evidence, and evidence that
  * changes without a record of the change is the thing this package exists to prevent — so the
- * change records itself. A `subject_id` that is simply null cannot say whether a person was
+ * change records itself. A `subject_id` that is null cannot say whether a person was
  * erased or the row never had one (the v1 backfill can write either).
  *
  * Not a hashed proof field, deliberately. `LedgerHashChain::canonical()` walks a fixed list of

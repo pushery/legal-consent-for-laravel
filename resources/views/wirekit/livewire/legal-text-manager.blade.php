@@ -224,7 +224,7 @@
                                              compiled: the tag compiler lifts the attribute out as a
                                              literal before the directive compiler sees it, so the
                                              text `@js($key)` is what reaches the browser — for every
-                                             key, with no error anywhere, and the release simply never
+                                             key, with no error anywhere, and the release never
                                              fires. An echo is compiled in that position, and
                                              `AlpinePayload::from()` writes the key as a literal
                                              Alpine's CSP evaluator reads. The plain stub, whose button

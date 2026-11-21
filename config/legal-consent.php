@@ -160,7 +160,7 @@ return [
             // Both keys or neither. `registration_wording` is the sentence your form puts next to the page,
             // stored verbatim, because this page carries none of its own: nothing here asks the
             // reader for anything, so the only truthful sentence is the one you showed. Set the
-            // flag without it and this document is simply not covered — a configuration that does
+            // flag without it and this document is not covered — a configuration that does
             // nothing, which you find, rather than a registration that fails, which they do. The
             // exception is a form that builds its sentence per request and hands it to
             // recordRegistrationConsent() as `shownWordings`: then the flag is enough.
@@ -611,7 +611,7 @@ return [
     | resolved from the container, so it may take constructor dependencies.
     |
     | Returning null (or leaving this null) renders the title as plain text, which is
-    | what every release before 0.13 did. Nothing breaks; the link is simply absent.
+    | what every release before 0.13 did. Nothing breaks; the link is absent.
     |
     | It is worth setting. A subject asked to agree, or to withdraw, has to be able to
     | read what they are deciding about: Art. 7(1) and (2) GDPR want consent to be

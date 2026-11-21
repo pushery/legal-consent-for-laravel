@@ -331,7 +331,7 @@ final class ConsentGate
      */
     public function standingFor(Model $subject, ?array $keys = null): array
     {
-        return $this->foldStanding($this->standingRows((string) $subject->getMorphClass(), [SubjectKey::for($subject)], $keys));
+        return $this->foldStanding($this->standingRows(SubjectTypes::of($subject), [SubjectKey::for($subject)], $keys));
     }
 
     /**
@@ -375,6 +375,7 @@ final class ConsentGate
             // De-duplicated on the way in, because the same subject twice is one subject to read
             // for, and a caller paginating a list is exactly where a duplicate turns up.
             $batches[$type]['type'] = $type;
+            $batches[$type]['types'] = SubjectTypes::of($subject);
             $batches[$type]['ids'][$id] = $id;
         }
 
@@ -385,7 +386,7 @@ final class ConsentGate
 
             // Bucketing preserves the order the query imposed, so each bucket is still ordered by
             // `document_key, accepted_at, id` — which is the order the fold depends on.
-            foreach ($this->standingRows($batch['type'], array_values($batch['ids']), $keys) as $row) {
+            foreach ($this->standingRows($batch['types'], array_values($batch['ids']), $keys) as $row) {
                 $id = is_scalar($row->subject_id) ? (string) $row->subject_id : null;
 
                 if ($id !== null) {
@@ -395,7 +396,7 @@ final class ConsentGate
 
             // Walked over the subjects rather than over the rows that came back, which is what
             // makes "every subject gets an entry" structural instead of a separate seeding pass:
-            // one the ledger has never seen simply folds an empty bucket.
+            // one the ledger has never seen folds an empty bucket.
             foreach ($batch['ids'] as $id) {
                 $standing[SubjectKey::pair($batch['type'], $id)] = $this->foldStanding($rowsBySubject[$id] ?? []);
             }
@@ -414,17 +415,21 @@ final class ConsentGate
      * many-subject reader can also give — and two readers that cannot agree are the whole reason
      * this method exists.
      *
+     * Read under every spelling of the subject's type ({@see SubjectTypes}), because rows written before
+     * a morph map stand under the class name and are the same subject's.
+     *
+     * @param  non-empty-list<string>  $types
      * @param  list<string|null>  $ids
      * @param  list<string>|null  $keys
      * @return SupportCollection<int, stdClass>
      */
-    private function standingRows(string $type, array $ids, ?array $keys): SupportCollection
+    private function standingRows(array $types, array $ids, ?array $keys): SupportCollection
     {
         $tenant = app(TenantContext::class);
 
         return DB::table('legal_consents')
             ->select('subject_id', 'document_key', 'document_major_version', 'document_version', 'action', 'accepted_at')
-            ->where('subject_type', $type)
+            ->whereIn('subject_type', $types)
             ->whereIn('subject_id', $ids)
             ->when($keys !== null, fn (QueryBuilder $query): QueryBuilder => $query->whereIn('document_key', $keys ?? []))
             ->when($tenant->enabled(), fn (QueryBuilder $query): QueryBuilder => $query->where('tenant_id', $tenant->current()))
@@ -536,7 +541,7 @@ final class ConsentGate
         }
 
         return LegalConsent::model()::query()
-            ->where('subject_type', (string) $subject->getMorphClass())
+            ->whereIn('subject_type', SubjectTypes::of($subject))
             ->where('subject_id', $subjectId)
             ->where('document_key', $documentKey)
             ->when($locale !== null, fn (Builder $query): Builder => $query->where('locale', $locale))

@@ -131,7 +131,7 @@ interface ConsentManager
      * is in this set too. That is deliberate. Somebody who terminated their contract terms holds no
      * contract, `hasCurrent()` says so, and a gate that skipped them would let an ending action buy
      * permanent access. The honest label for what they are asked next is a first-use gate, not a
-     * re-consent: nothing changed, they simply hold nothing.
+     * re-consent: nothing changed, they hold nothing.
      *
      * {@see outstanding()} answers a different one and cannot answer this: it filters on the
      * notice mode, which states how a version change is communicated, and a first acceptance is

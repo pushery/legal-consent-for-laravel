@@ -4,6 +4,16 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.60.1] - 2026-11-21
+
+### Documentation
+
+- **The package description fits a search result.** The description in `composer.json`, which Packagist shows as the description of the package page, ran past the roughly 160 characters a search result shows, so the result cut it off mid-sentence. It now says what the package does within that length.
+
+### Fixed
+
+- **A subject keeps its consents, its erasure and its chain when the application registers a morph map later.** Rows written before the map stand under the class name and cannot be rewritten, since `subject_type` is part of every row's hash. The package read a subject under `getMorphClass()` alone, so the gate asked an account again for what it had accepted, `Consent::forget()` left the older rows with their IP address, and a consent after the map opened a second chain. Every reader now takes both spellings as one subject: the gate, the history, `Consent::forget()`, the notice sweep and its attempts, the objection windows and the retention sweep. A consent after the map continues the chain under the token the first row carries, and `legal-consent:verify-ledger` reads the two spellings as one subject.
+
 ## [0.60.0] - 2026-11-20
 
 ### Added
@@ -3472,7 +3482,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.1...HEAD
+[0.60.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.0...v0.60.1
 [0.60.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.59.0...v0.60.0
 [0.59.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.58.0...v0.59.0
 [0.58.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.57.0...v0.58.0
