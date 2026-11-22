@@ -4,6 +4,17 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.60.2] - 2026-11-22
+
+### Documentation
+
+- **The examples of the Boost skill set every variable they read.** The examples for a double opt-in, for recording an acceptance and for a test read `$user`, `$context`, `$locale` or `$shownHash` without setting it, so code copied from them stopped at its first call. Each now sets what it reads, the shown fingerprint from the `legal_terms_hash` field the form renders.
+
+### Fixed
+
+- **The badges of a language in the overview of legal texts stand side by side without a frame.** The whole cell was one link around its badges, and a host that marks its links drew it as a rounded frame that made each cell read as a field. The first badge of a cell, the state of the review or "not written", is now the link to the editor and carries the name the cell carried, and the other badges stay plain.
+- **The key line of the legal texts screen explains no state with its own word.** It read "Draft = Draft" and "Reviewed = Reviewed" beside the states whose short form differs from their wording, and on a phone it took four lines. A state whose short form is its wording now has no entry, in every language, and the two sentences under the key line explain the review states as before.
+
 ## [0.60.1] - 2026-11-21
 
 ### Documentation
@@ -3482,7 +3493,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.1...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.2...HEAD
+[0.60.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.1...v0.60.2
 [0.60.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.0...v0.60.1
 [0.60.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.59.0...v0.60.0
 [0.59.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.58.0...v0.59.0

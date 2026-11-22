@@ -71,8 +71,9 @@
              a word makes them fit and stacks "Nicht geschrieben" one letter per line.
 
              So the cell carries the short form as its text and the long one in its `title`, as the
-             plain twin's cell does, and the legend explains the six once, to a reader and to a screen
-             reader alike. Where the cell is a link, the link's name carries the long ones as well.
+             plain twin's cell does, and the legend explains every short form that differs from its
+             long wording once, to a reader and to a screen reader alike. The component leaves the
+             others out of $keyLine, so no entry explains a word with itself. Where the cell is a link, the link's name carries the long ones as well.
              The badge itself carries no `aria-label`: it renders a `span`, an element without a role,
              and ARIA prohibits naming one, so a label there is a name no screen reader has to read.
              Each short form is drawn from its own language's long wording rather than translated
@@ -83,20 +84,13 @@
              characters, more than a 320 px screen holds at this size. --}}
         <x-wirekit::stack gap="sm">
             <x-wirekit::text size="sm" intent="muted">
-                @foreach ([
-                    'admin_not_written',
-                    'review_state_draft',
-                    'review_state_reviewed',
-                    'admin_machine',
-                    'admin_needs_update',
-                    'admin_unpublished',
-                ] as $state)
-                    <span class="inline-block max-w-full">{{ __('legal-consent::ui.'.$state.'_short') }} = {{ __('legal-consent::ui.'.$state) }}</span>@if (! $loop->last) · @endif
+                @foreach ($keyLine as $entry)
+                    <span class="inline-block max-w-full">{{ $entry['short'] }} = {{ $entry['long'] }}</span>@if (! $loop->last) · @endif
                 @endforeach
             </x-wirekit::text>
 
             {{-- The same two sentences as the plain twin, and for the same reason: the legend above
-                 maps a short form onto a long one, so it explains "Draft" with "Draft". What a first
+                 leaves the review states out, because their short form is their long wording. What a first
                  reader of this screen needs to hear is that reviewing publishes nothing, and then why
                  the release waits on languages other than their own. A capability in one tree and not
                  the other is exactly the drift a pair of shipped views invites. --}}
@@ -125,32 +119,23 @@
                         @foreach ($locales as $locale)
                             @php($cell = $rows[$key][$locale])
                             <x-wirekit::table.td>
-                                {{-- The whole cell is the link when an editor route is configured, and
-                                     `underline="none"` is the reason it is readable: an underline drawn
-                                     across a row of badges runs through each pill, which reads as struck
-                                     out — the opposite of what every one of these states means. What is
-                                     left is `cursor-pointer` and the hover fade the component already
-                                     carries. A resting affordance is a border, and a border is CSS this
-                                     package does not ship: publish this view and add one if your design
-                                     calls for it.
+                                {{-- With an editor route configured, the first badge of the cell is the link to
+                                     the editor: the state of the review, or "not written". A linked badge keeps
+                                     the pill every badge draws and adds its ring only on focus, so the badges of
+                                     a cell stand side by side with no frame around them. The other badges stay
+                                     plain: two or three links to the same editor, each named by its short form
+                                     alone, would reach a screen reader as separate links without the document
+                                     and the language.
 
-                                     The accessible name repeats the states on purpose. An `aria-label`
-                                     replaces the content it sits on, so a link announcing only "Edit
-                                     Terms (de)" would hide the one fact the cell exists to state. It
-                                     begins with the short forms the badges show, so the text a reader
-                                     sees is part of the name a voice command matches (WCAG 2.5.3).
-
-                                     The badges are rendered once into `$badges` and then either wrapped
-                                     in the link or echoed as they are. Blade pairs a component's opening
-                                     and closing tags when it compiles the view, so the link cannot be
-                                     opened in one `@if` and closed in another: the compiled blocks nest
-                                     differently from the written ones, and every badge would land inside
-                                     the first `@if`, which renders nothing without an editor route. --}}
-                                @php(ob_start())
+                                     The link's accessible name repeats the states on purpose. An `aria-label`
+                                     replaces the content it sits on, so a link announcing only "Edit Terms (de)"
+                                     would hide the one fact the cell exists to state. It begins with the short
+                                     forms the badges show, so the text a reader sees is part of the name a voice
+                                     command matches (WCAG 2.5.3). --}}
                                 @if (! $cell['written'])
-                                    <x-wirekit::badge intent="neutral" size="sm" :title="__('legal-consent::ui.admin_not_written')">{{ __('legal-consent::ui.admin_not_written_short') }}</x-wirekit::badge>
+                                    <x-wirekit::badge intent="neutral" size="sm" :title="__('legal-consent::ui.admin_not_written')" :href="$cell['url']" :aria-label="$cell['url'] !== null ? $cell['label'] : null">{{ __('legal-consent::ui.admin_not_written_short') }}</x-wirekit::badge>
                                 @else
-                                    <x-wirekit::badge :intent="$cell['publishable'] ? 'success' : 'warning'" size="sm" :title="__($cell['review_state_label'])">{{ __($cell['review_state_label'].'_short') }}</x-wirekit::badge>
+                                    <x-wirekit::badge :intent="$cell['publishable'] ? 'success' : 'warning'" size="sm" :title="__($cell['review_state_label'])" :href="$cell['url']" :aria-label="$cell['url'] !== null ? $cell['label'] : null">{{ __($cell['review_state_label'].'_short') }}</x-wirekit::badge>
                                     @if ($cell['machine'])
                                         <x-wirekit::badge intent="info" size="sm" :title="__('legal-consent::ui.admin_machine')">{{ __('legal-consent::ui.admin_machine_short') }}</x-wirekit::badge>
                                     @endif
@@ -159,12 +144,6 @@
                                     @elseif ($cell['unpublished_changes'])
                                         <x-wirekit::badge intent="neutral" size="sm" :title="__('legal-consent::ui.admin_unpublished')">{{ __('legal-consent::ui.admin_unpublished_short') }}</x-wirekit::badge>
                                     @endif
-                                @endif
-                                @php($badges = new \Illuminate\Support\HtmlString((string) ob_get_clean()))
-                                @if ($cell['url'] !== null)
-                                    <x-wirekit::link :href="$cell['url']" underline="none" :aria-label="$cell['label']">{{ $badges }}</x-wirekit::link>
-                                @else
-                                    {{ $badges }}
                                 @endif
                             </x-wirekit::table.td>
                         @endforeach
