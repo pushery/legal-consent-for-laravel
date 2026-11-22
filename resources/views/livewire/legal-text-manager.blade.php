@@ -48,22 +48,16 @@
         <div role="region" aria-label="{{ __('legal-consent::ui.admin_grid_label') }}" tabindex="0" style="overflow-x: auto; container-type: inline-size;">
         {{-- The legend. This matrix carries one column per locale, so the widest state word
              decides the table's width -- and the words are sentences. The cell carries the short
-             form, its `title` the long one, and this line explains the six once for a reader who
-             has no pointer to hover with. The WireKit twin does the same with an accessible name,
-             which a `title` alone is not. --}}
+             form, its `title` the long one, and this line explains every short form that differs
+             from its long wording, once, for a reader who has no pointer to hover with. A short form
+             that is its long wording has no entry: the component leaves it out of $keyLine. The
+             WireKit twin does the same with an accessible name, which a `title` alone is not. --}}
         <p>
-            @foreach ([
-                'admin_not_written',
-                'review_state_draft',
-                'review_state_reviewed',
-                'admin_machine',
-                'admin_needs_update',
-                'admin_unpublished',
-            ] as $state){{ __('legal-consent::ui.'.$state.'_short') }} = {{ __('legal-consent::ui.'.$state) }}@if (! $loop->last) · @endif @endforeach
+            @foreach ($keyLine as $entry){{ $entry['short'] }} = {{ $entry['long'] }}@if (! $loop->last) · @endif @endforeach
         </p>
 
-        {{-- What the two review words mean, which the line above cannot say: it maps a short form
-             onto a long one, so "Draft" explains itself with "Draft". The half that matters is the
+        {{-- What the two review words mean, which the line above cannot say: their short form is
+             their long wording, so the line leaves them out. The half that matters is the
              second sentence of the first -- reviewing publishes NOTHING. On the one screen whose
              product is that a person vouched for these exact bytes, "Reviewed" reading as "done,
              live" is the most expensive confusion available, and it goes wrong in both directions:
@@ -97,11 +91,16 @@
                         @foreach ($locales as $locale)
                             @php($cell = $rows[$key][$locale])
                             <td>
-                                @php(ob_start())
-                                @if (! $cell['written'])
+                                @if (! $cell['written'] && $cell['url'] !== null)
+                                    <a href="{{ $cell['url'] }}" aria-label="{{ $cell['label'] }}" title="{{ __('legal-consent::ui.admin_not_written') }}">{{ __('legal-consent::ui.admin_not_written_short') }}</a>
+                                @elseif (! $cell['written'])
                                     <span title="{{ __('legal-consent::ui.admin_not_written') }}">{{ __('legal-consent::ui.admin_not_written_short') }}</span>
                                 @else
-                                    <span title="{{ __($cell['review_state_label']) }}">{{ __($cell['review_state_label'].'_short') }}</span>
+                                    @if ($cell['url'] !== null)
+                                        <a href="{{ $cell['url'] }}" aria-label="{{ $cell['label'] }}" title="{{ __($cell['review_state_label']) }}">{{ __($cell['review_state_label'].'_short') }}</a>
+                                    @else
+                                        <span title="{{ __($cell['review_state_label']) }}">{{ __($cell['review_state_label'].'_short') }}</span>
+                                    @endif
                                     @if ($cell['machine'])
                                         <span title="{{ __('legal-consent::ui.admin_machine') }}"> · {{ __('legal-consent::ui.admin_machine_short') }}</span>
                                     @endif
@@ -111,17 +110,12 @@
                                         <span title="{{ __('legal-consent::ui.admin_unpublished') }}"> · {{ __('legal-consent::ui.admin_unpublished_short') }}</span>
                                     @endif
                                 @endif
-                                @php($badges = new \Illuminate\Support\HtmlString((string) ob_get_clean()))
-                                @if ($cell['url'] !== null)
-                                    <a href="{{ $cell['url'] }}" aria-label="{{ $cell['label'] }}">{{ $badges }}</a>
-                                @else
-                                    {{ $badges }}
-                                @endif
-                                {{-- The states are rendered once into `$badges` and then either wrapped
-                                     in the link or echoed as they are, so the link opens and closes in
-                                     one branch. Livewire marks where each condition starts and ends, and
-                                     a link opened under one condition and closed under another would hold
-                                     the end of the first and the start of the second.
+                                {{-- The first state of the cell is the link to the editor, as in the WireKit
+                                     twin, and the states after it stay text: one link per cell, named in
+                                     full. Each branch opens and closes its own element, because Livewire
+                                     marks where each condition starts and ends, and an element opened under
+                                     one condition and closed under another would hold the end of the first
+                                     and the start of the second.
 
                                      Nothing is rendered until `admin.editor_route` names a route, and
                                      that is unchanged rather than a leftover: the package brings no

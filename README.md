@@ -90,13 +90,13 @@ the development repository, so `composer test` has nothing to run from an instal
 Please review the [security policy](SECURITY.md) and report vulnerabilities
 privately rather than opening a public issue.
 
-## Built by Pushery
+## Built by PUSHERY
 
-This package is built and maintained by [Pushery](https://www.pushery.com) — a
+This package is built and maintained by [PUSHERY](https://www.pushery.com) — a
 Berlin-based studio building Laravel applications, SaaS products, and open-source
 tools.
 
-Building a Laravel UI? [WireKit](https://wirekit.app), Pushery's open-source
+Building a Laravel UI? [WireKit](https://wirekit.app), PUSHERY's open-source
 Livewire component kit, is the library this package's WireKit views are built with.
 Browse the rest of our work at [pushery.com](https://www.pushery.com).
 

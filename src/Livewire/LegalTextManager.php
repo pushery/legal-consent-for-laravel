@@ -160,7 +160,34 @@ final class LegalTextManager extends Component
             // is how a guarded render starts paying per cell again.
             'documentNames' => $documentNames,
             'languageNames' => $languageNames,
+            'keyLine' => $this->keyLine(),
         ]);
+    }
+
+    /**
+     * The key line under the grid: each short form a cell shows, with the long wording it stands for.
+     *
+     * A state whose short form is its long wording has no entry, because the entry would explain the
+     * word with itself: "Draft" and "Reviewed" in English, "Entwurf" and "Geprüft" in German. The two
+     * sentences under the key line explain those states. Both views read this one list, so the plain
+     * view and the WireKit view cannot disagree about which entries a language shows.
+     *
+     * @return list<array{short: string, long: string}>
+     */
+    private function keyLine(): array
+    {
+        $entries = [];
+
+        foreach (['admin_not_written', 'review_state_draft', 'review_state_reviewed', 'admin_machine', 'admin_needs_update', 'admin_unpublished'] as $state) {
+            $short = (string) __('legal-consent::ui.'.$state.'_short');
+            $long = (string) __('legal-consent::ui.'.$state);
+
+            if ($short !== $long) {
+                $entries[] = ['short' => $short, 'long' => $long];
+            }
+        }
+
+        return $entries;
     }
 
     /**

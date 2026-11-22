@@ -4,6 +4,14 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.60.1 → 0.60.2
+
+**Nothing is required of you**, unless you published the package's views.
+
+**Publish the views of the overview again if you published them.** The first badge of a cell is the link to the
+editor now, and the key line under the grid leaves out a state whose short form is its own wording. A published
+view keeps the whole cell as one link and the old key line.
+
 ## 0.60.0 → 0.60.1
 
 **Nothing is required of you.**

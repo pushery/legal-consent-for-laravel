@@ -262,6 +262,9 @@ foreach (Consent::registrationChecklist(app()->getLocale()) as $item) {
 **Double opt-in?** Two rows, and only the second is a consent:
 
 ```php
+$user = request()->user(); // the subject whose consent this is
+$context = ConsentContext::fromRequest(request(), ConsentMethod::DoubleOptIn);
+
 Consent::requestConfirmation($user, 'newsletter', $context);  // action: optin_requested — NOT held
 Consent::confirm($user, 'newsletter', $context);              // action: confirmed — now held
 ```
@@ -278,6 +281,9 @@ for a request.
 released mid-session cannot be frozen against them:
 
 ```php
+$locale = app()->getLocale();
+$shownHash = request()->input('legal_terms_hash'); // the fingerprint the form rendered beside the checkbox
+
 Consent::accept($user, 'terms', ConsentContext::forMethod(ConsentMethod::RegistrationCheckbox), $locale, $shownHash);
 ```
 
@@ -424,6 +430,8 @@ package's tables into your test schema.
 $fake = Consent::fake();
 
 $this->post('/register', [...]);
+
+$user = User::query()->latest('id')->firstOrFail(); // the account the registration created
 
 $fake->assertAccepted($user, 'terms');
 ```
