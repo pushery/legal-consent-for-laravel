@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.60.2 → 0.61.0
+
+**Nothing is required of you**, unless your application reads `subject_token` from a serialized consent or notice.
+
+**Call `makeVisible('subject_token')` where you serialize a consent or a notice and need its token.** `LegalConsent` and `LegalNotice` keep `subject_token` out of `toArray()` and `toJson()`. The attribute itself stays readable, as `$consent->subject_token`.
+
 ## 0.60.1 → 0.60.2
 
 **Nothing is required of you**, unless you published the package's views.

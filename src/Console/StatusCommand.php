@@ -22,6 +22,7 @@ use Pushery\LegalConsent\Support\DocumentTitle;
 use Pushery\LegalConsent\Support\LegalDraftSet;
 use Pushery\LegalConsent\Support\TableLookup;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Throwable;
 
 /**
@@ -89,7 +90,7 @@ final class StatusCommand extends Command
                 $rows[] = [
                     $key,
                     $locale,
-                    $this->heading($key, $locale, $source),
+                    OutputFormatter::escape($this->heading($key, $locale, $source)),
                     $type->legalBasis(),
                     $this->state($source, $set, $locale),
                     isset($active[$locale]) ? 'v'.$active[$locale] : '-',
@@ -106,7 +107,7 @@ final class StatusCommand extends Command
             $this->line("  <options=bold>{$key}</>");
 
             foreach ($lines as $line) {
-                $this->line("    {$line}");
+                $this->line(OutputFormatter::escape("    {$line}"));
             }
         }
 
@@ -130,7 +131,7 @@ final class StatusCommand extends Command
         }
 
         if (! in_array($named, $registered, true)) {
-            $this->error("'{$named}' is not a registered document. Name a key of legal-consent.documents: ".implode(', ', $registered).'.');
+            $this->error(OutputFormatter::escape("'{$named}' is not a registered document. Name a key of legal-consent.documents: ".implode(', ', $registered).'.'));
 
             return null;
         }

@@ -17,6 +17,7 @@ use Pushery\LegalConsent\Support\LegalDraftSet;
 use Pushery\LegalConsent\Support\LegalDraftWriter;
 use Pushery\LegalConsent\Support\TableLookup;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Sign drafts off as reviewed from the shell, the act of the editor's "Mark as reviewed" button.
@@ -70,13 +71,13 @@ final class ReviewCommand extends Command
         $key = $this->argument('key');
 
         if (! in_array($key, DocumentMatrix::keys(), true)) {
-            $this->error("'{$key}' is not a registered document. Name a key of legal-consent.documents: ".implode(', ', DocumentMatrix::keys()).'.');
+            $this->error(OutputFormatter::escape("'{$key}' is not a registered document. Name a key of legal-consent.documents: ".implode(', ', DocumentMatrix::keys()).'.'));
 
             return self::FAILURE;
         }
 
         if (! $this->onTheDraftStore($sources, $key)) {
-            $this->error("'{$key}' does not take its text from the draft store, so it is reviewed where its text is written and published from there.");
+            $this->error(OutputFormatter::escape("'{$key}' does not take its text from the draft store, so it is reviewed where its text is written and published from there."));
 
             return self::FAILURE;
         }
@@ -94,13 +95,13 @@ final class ReviewCommand extends Command
             $draft = $set->draft($locale);
 
             if (! $draft instanceof LegalDraft) {
-                $this->components->twoColumnDetail("{$key} ({$locale})", 'no draft to review');
+                $this->components->twoColumnDetail(OutputFormatter::escape("{$key} ({$locale})"), 'no draft to review');
 
                 continue;
             }
 
             if ($set->isPublishable($draft)) {
-                $this->components->twoColumnDetail("{$key} ({$locale})", 'reviewed already');
+                $this->components->twoColumnDetail(OutputFormatter::escape("{$key} ({$locale})"), 'reviewed already');
 
                 continue;
             }
@@ -136,17 +137,17 @@ final class ReviewCommand extends Command
         foreach ($toReview as $locale) {
             try {
                 $writer->markReviewed($key, $locale, $by);
-                $this->components->twoColumnDetail("{$key} ({$locale})", "reviewed by {$by}");
+                $this->components->twoColumnDetail(OutputFormatter::escape("{$key} ({$locale})"), OutputFormatter::escape("reviewed by {$by}"));
             } catch (LegalDraftNotFound) {
                 $failed = true;
-                $this->components->twoColumnDetail("{$key} ({$locale})", 'no draft to review any more');
+                $this->components->twoColumnDetail(OutputFormatter::escape("{$key} ({$locale})"), 'no draft to review any more');
             } catch (LegalDraftChanged) {
                 $failed = true;
-                $this->components->twoColumnDetail("{$key} ({$locale})", 'written while it was signed off, so not signed off: read it again and run this once more');
+                $this->components->twoColumnDetail(OutputFormatter::escape("{$key} ({$locale})"), 'written while it was signed off, so not signed off: read it again and run this once more');
             }
         }
 
-        $this->components->info("legal-consent:status {$key} names the command that publishes it.");
+        $this->components->info(OutputFormatter::escape("legal-consent:status {$key} names the command that publishes it."));
 
         return $failed ? self::FAILURE : self::SUCCESS;
     }
@@ -175,7 +176,7 @@ final class ReviewCommand extends Command
             $unknown = array_values(array_diff($named, $configured));
 
             if ($unknown !== []) {
-                $this->error('These languages are not configured in legal-consent.locales: '.implode(', ', $unknown).'.');
+                $this->error(OutputFormatter::escape('These languages are not configured in legal-consent.locales: '.implode(', ', $unknown).'.'));
 
                 return null;
             }

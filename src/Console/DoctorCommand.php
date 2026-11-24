@@ -41,6 +41,7 @@ use Pushery\LegalConsent\Support\SourceLanguageFallback;
 use Pushery\LegalConsent\Support\TableLookup;
 use Pushery\WireKit\WireKitServiceProvider;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Throwable;
 use ValueError;
 
@@ -231,12 +232,12 @@ final class DoctorCommand extends Command
         $this->newLine();
 
         if ($combinations === $documents * $locales) {
-            $this->warn(sprintf(
+            $this->warn(OutputFormatter::escape(sprintf(
                 'Nothing is published yet: %s × %s, %s without a version.',
                 Str::plural('document', $documents, prependCount: true),
                 Str::plural('locale', $locales, prependCount: true),
                 Str::plural('combination', $combinations, prependCount: true),
-            ));
+            )));
             $this->line('  A page reading `Consent::published()` renders EMPTY until a version is published,');
             $this->line('  with no error and no log. Every freshly migrated database starts here, CI included.');
         } else {
@@ -263,7 +264,7 @@ final class DoctorCommand extends Command
 
         if ($authored !== []) {
             $this->line('  These take their text from a source written by people, and nothing can be published');
-            $this->line('  before the text is written and released there: '.implode(', ', $authored));
+            $this->line(OutputFormatter::escape('  before the text is written and released there: '.implode(', ', $authored)));
             $this->line('  On the drafts store, that happens on the legal-consent.legal-text-manager screen.');
         }
 
@@ -1133,10 +1134,10 @@ final class DoctorCommand extends Command
             [$headline, $explanation] = $variantFinding;
 
             $this->newLine();
-            $this->warn($headline);
+            $this->warn(OutputFormatter::escape($headline));
 
             foreach ($explanation as $line) {
-                $this->line($line);
+                $this->line(OutputFormatter::escape($line));
             }
 
             $this->newLine();
@@ -1146,10 +1147,10 @@ final class DoctorCommand extends Command
             [$headline, $explanation] = $firstUseFinding;
 
             $this->newLine();
-            $this->warn($headline);
+            $this->warn(OutputFormatter::escape($headline));
 
             foreach ($explanation as $line) {
-                $this->line($line);
+                $this->line(OutputFormatter::escape($line));
             }
 
             $this->newLine();
@@ -1157,10 +1158,10 @@ final class DoctorCommand extends Command
 
         foreach ($tamperFindings as [$headline, $explanation]) {
             $this->newLine();
-            $this->warn($headline);
+            $this->warn(OutputFormatter::escape($headline));
 
             foreach ($explanation as $line) {
-                $this->line($line);
+                $this->line(OutputFormatter::escape($line));
             }
 
             $this->newLine();
@@ -1168,8 +1169,8 @@ final class DoctorCommand extends Command
 
         if ($zoneShift !== null) {
             $this->newLine();
-            $this->error('Every accepted_at is stored '.$this->describeShift($zoneShift).' the moment of acceptance:');
-            $this->line("  the database's session time zone and the application's ('".date_default_timezone_get()."') stand that far apart.");
+            $this->error(OutputFormatter::escape('Every accepted_at is stored '.$this->describeShift($zoneShift).' the moment of acceptance:'));
+            $this->line(OutputFormatter::escape("  the database's session time zone and the application's ('".date_default_timezone_get()."') stand that far apart."));
             $this->line('  Laravel writes a moment as the wall time of app.timezone, without an offset, and the');
             $this->line('  database reads that wall time in its session time zone. Set `timezone` on the connection');
             $this->line("  to the application's zone before more consents are recorded. Rows written before keep");
@@ -1181,8 +1182,8 @@ final class DoctorCommand extends Command
             [$routeName, $reason] = $editorRoute;
 
             $this->newLine();
-            $this->warn("legal-consent.admin.editor_route is '{$routeName}'.");
-            $this->line("  It {$reason}.");
+            $this->warn(OutputFormatter::escape("legal-consent.admin.editor_route is '{$routeName}'."));
+            $this->line(OutputFormatter::escape("  It {$reason}."));
             $this->line('  The admin overview links every cell to that route when it can. It cannot, so the');
             $this->line('  cells are plain text — which looks exactly like an installation that never set the');
             $this->line('  key, and is the reason this line exists. The parameters are filled by position:');
@@ -1193,7 +1194,7 @@ final class DoctorCommand extends Command
         if ($retentionProblem !== null) {
             $this->newLine();
             $this->error('legal-consent.retention_after_end names no retention period:');
-            $this->line("  {$retentionProblem}");
+            $this->line(OutputFormatter::escape("  {$retentionProblem}"));
             $this->line('  `legal-consent:prune` refuses to run with it, so nothing past its retention is removed');
             $this->line('  until the value is fixed.');
             $this->newLine();
@@ -1201,10 +1202,10 @@ final class DoctorCommand extends Command
 
         if ($documentRetentionProblems !== []) {
             $this->newLine();
-            $this->error('legal-consent.retention_by_document names no retention period for '.implode(', ', array_keys($documentRetentionProblems)).':');
+            $this->error(OutputFormatter::escape('legal-consent.retention_by_document names no retention period for '.implode(', ', array_keys($documentRetentionProblems)).':'));
 
             foreach ($documentRetentionProblems as $problem) {
-                $this->line("  {$problem}");
+                $this->line(OutputFormatter::escape("  {$problem}"));
             }
 
             $this->line('  `legal-consent:prune` refuses to run with it, so nothing past its retention is removed');
@@ -1215,7 +1216,7 @@ final class DoctorCommand extends Command
         if ($confirmWindowProblem !== null) {
             $this->newLine();
             $this->error('legal-consent.double_opt_in.confirm_within names no confirmation window:');
-            $this->line("  {$confirmWindowProblem}");
+            $this->line(OutputFormatter::escape("  {$confirmWindowProblem}"));
             $this->line('  `Consent::confirm()` refuses with it, so no double opt-in is completed until the');
             $this->line('  value is fixed.');
             $this->newLine();
@@ -1223,7 +1224,7 @@ final class DoctorCommand extends Command
 
         if ($unknownMode !== null) {
             $this->newLine();
-            $this->warn("legal-consent.registration.without_form_fields is '{$unknownMode}', which is not 'warn' or 'refuse'.");
+            $this->warn(OutputFormatter::escape("legal-consent.registration.without_form_fields is '{$unknownMode}', which is not 'warn' or 'refuse'."));
             $this->line('  It falls back to `warn`, so registrations keep working — and that is why this is');
             $this->line('  worth saying: if you meant `refuse`, the one state you were guarding against is');
             $this->line('  still being recorded, into a table nothing can correct afterwards.');
@@ -1248,7 +1249,7 @@ final class DoctorCommand extends Command
             [$store, $origin] = $databaseCache;
 
             $this->newLine();
-            $this->warn("The document cache resolves to '{$store}', which is a database-backed store ({$origin}).");
+            $this->warn(OutputFormatter::escape("The document cache resolves to '{$store}', which is a database-backed store ({$origin})."));
             $this->line('  The enforceable set is asked for four times in a documented request, once from the');
             $this->line('  gate middleware and three times from the banner. The per-request memo answers three of');
             $this->line('  them, so on this store every request still pays one SELECT against the cache table per');
@@ -1345,7 +1346,7 @@ final class DoctorCommand extends Command
             $headline = 'These documents would be published with a heading or an acceptance sentence nobody gave them:';
 
             $this->newLine();
-            $unnamedRefused ? $this->error($headline) : $this->warn($headline);
+            $unnamedRefused ? $this->error(OutputFormatter::escape($headline)) : $this->warn(OutputFormatter::escape($headline));
 
             foreach ($unnamed as [$key, $locale, $refused, $finding]) {
                 $this->line($refused ? "  <fg=red>x</> {$key} in {$locale}: {$finding}" : "  <fg=yellow>?</> {$key} in {$locale}: {$finding}");

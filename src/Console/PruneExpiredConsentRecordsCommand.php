@@ -29,6 +29,7 @@ use Pushery\LegalConsent\Support\RetentionEligibility;
 use Pushery\LegalConsent\Support\SubjectToken;
 use stdClass;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Delete consent records past the retention period (default 3 years, § 31 Abs. 2 OWiG /
@@ -140,7 +141,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
                 CarbonImmutable::now(),
             );
         } catch (InvalidRetentionPeriod $refusal) {
-            $this->error($refusal->getMessage());
+            $this->error(OutputFormatter::escape($refusal->getMessage()));
             $this->line('Nothing was pruned.');
 
             return self::FAILURE;
@@ -163,7 +164,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
             } catch (LedgerCensusDoesNotVerify $refusal) {
                 // Changed while this run swept: what was removed before it is consistent, since
                 // every delete and the count it lowered commit together.
-                $this->error($refusal->getMessage());
+                $this->error(OutputFormatter::escape($refusal->getMessage()));
 
                 return self::FAILURE;
             }
@@ -171,14 +172,14 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
 
         $notices = $this->pruneUnchained(LegalNotice::model()::query(), 'legal_notices', 'sent_at', $cutoffs);
 
-        $this->info("Pruned {$consents} consent record(s) and {$notices} notice record(s) older than {$cutoffs->described()}.");
+        $this->info(OutputFormatter::escape("Pruned {$consents} consent record(s) and {$notices} notice record(s) older than {$cutoffs->described()}."));
 
         // A subject whose last records went leaves their row in the token registry behind, holding
         // a token no record carries any more. Said only when it happened, like the re-link below.
         $released = new SubjectToken()->forgetUnused();
 
         if ($released > 0) {
-            $this->line("Removed {$released} subject(s) from the token registry whose last record was pruned.");
+            $this->line(OutputFormatter::escape("Removed {$released} subject(s) from the token registry whose last record was pruned."));
         }
 
         // The sweep above re-links a chain in the same transaction that removes from it, so it
@@ -193,7 +194,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         // nobody reads by the second week — and this one is worth reading, because it is the
         // record that a chain was rewritten lawfully rather than by someone else.
         if ($relinked > 0) {
-            $this->line("Re-linked the tamper chain for {$relinked} subject(s) whose older rows a retention sweep removed, so a lawful removal does not read as tampering.");
+            $this->line(OutputFormatter::escape("Re-linked the tamper chain for {$relinked} subject(s) whose older rows a retention sweep removed, so a lawful removal does not read as tampering."));
         }
 
         if (! $ledgerHolds) {
@@ -206,7 +207,7 @@ final class PruneExpiredConsentRecordsCommand extends Command implements Isolata
         // would record the key's approval of whatever changed it, and deleting from it would
         // destroy what shows the change. That is for a person to look at, so the run fails.
         if ($refused > 0) {
-            $this->error("Left the tamper chain of {$refused} subject(s) as it is: it does not verify as this package wrote it, so re-linking it could make a change made outside the package read as a lawful one. Their records were not pruned. Run `php artisan legal-consent:verify-ledger` to see what changed.");
+            $this->error(OutputFormatter::escape("Left the tamper chain of {$refused} subject(s) as it is: it does not verify as this package wrote it, so re-linking it could make a change made outside the package read as a lawful one. Their records were not pruned. Run `php artisan legal-consent:verify-ledger` to see what changed."));
 
             return self::FAILURE;
         }

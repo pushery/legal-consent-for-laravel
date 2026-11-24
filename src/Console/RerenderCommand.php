@@ -12,6 +12,7 @@ use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\PresentationRerenderer;
 use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Throwable;
 
 /**
@@ -77,11 +78,11 @@ final class RerenderCommand extends Command
         }
 
         foreach ($published as $line) {
-            $this->info($line);
+            $this->info(OutputFormatter::escape($line));
         }
 
         foreach ($refusals as $refusal) {
-            $this->warn($refusal);
+            $this->warn(OutputFormatter::escape($refusal));
         }
 
         if ($published === [] && $refusals === []) {

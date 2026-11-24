@@ -22,6 +22,7 @@ use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\PublishedDocumentReader;
 use Pushery\LegalConsent\Support\SourceLanguageFallback;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Throwable;
 use ValueError;
 
@@ -116,7 +117,7 @@ final class PublishDocumentCommand extends Command
         $unreadable = $this->unreadableDateOptions();
 
         if ($unreadable !== []) {
-            $this->error('Dates are calendar dates written as YYYY-MM-DD, and these are not: '.implode(', ', $unreadable).'. Nothing was published.');
+            $this->error(OutputFormatter::escape('Dates are calendar dates written as YYYY-MM-DD, and these are not: '.implode(', ', $unreadable).'. Nothing was published.'));
 
             return self::FAILURE;
         }
@@ -184,7 +185,7 @@ final class PublishDocumentCommand extends Command
         try {
             $document = $this->publish($publisher, $mode, $key, $locale);
         } catch (Throwable $e) {
-            $this->error($e->getMessage());
+            $this->error(OutputFormatter::escape($e->getMessage()));
 
             return self::FAILURE;
         }
@@ -194,7 +195,7 @@ final class PublishDocumentCommand extends Command
         // Report the mode of the row that now exists, never the flag that was asked for — they can
         // differ (an unchanged re-publish returns the existing version), and a success line naming
         // a notice mode the row does not carry is how a missing legal notice goes unnoticed.
-        $this->info("Published {$key} ({$locale}) v{$document->version} — major {$document->major_version}, {$document->noticeMode()->value}, enforced from {$enforceFrom}.");
+        $this->info(OutputFormatter::escape("Published {$key} ({$locale}) v{$document->version} — major {$document->major_version}, {$document->noticeMode()->value}, enforced from {$enforceFrom}."));
 
         if ($document->wasRecentlyCreated) {
             $this->reportWordingChange($key, $locale, $before, $document->ui_wording);
@@ -281,7 +282,7 @@ final class PublishDocumentCommand extends Command
 
                 if ($document->wasRecentlyCreated) {
                     $published++;
-                    $this->info("Published {$key} ({$locale}) v{$document->version} — {$document->noticeMode()->value}.");
+                    $this->info(OutputFormatter::escape("Published {$key} ({$locale}) v{$document->version} — {$document->noticeMode()->value}."));
                     $this->reportWordingChange($key, $locale, $before, $document->ui_wording);
                     $this->reportGenericWording($key, $locale, $document->ui_wording);
                 } else {
@@ -318,24 +319,24 @@ final class PublishDocumentCommand extends Command
         // --all: a permanently-zero count is noise, and it would move a line deploy logs are
         // grepped for. Both halves of the premise are gone — the count can be non-zero here now,
         // and a summary whose shape depends on a modifier is the harder thing to grep anyway.
-        $this->line("{$published} published, {$unchanged} already current, ".count($textless).' without text, '.count($failures).' failed.');
+        $this->line(OutputFormatter::escape("{$published} published, {$unchanged} already current, ".count($textless).' without text, '.count($failures).' failed.'));
 
         // Skipped is not silent. A count alone would let a document sit unpublished for months
         // behind a green deploy — the same shape as the empty legal page this command exists to
         // prevent, one level up.
         foreach ($textless as $skipped) {
-            $this->warn('No text yet, left unpublished: '.$skipped);
+            $this->warn(OutputFormatter::escape('No text yet, left unpublished: '.$skipped));
         }
 
         // Neither published nor failed, and deliberately outside the summary above, whose shape deploy
         // logs are searched for. A reader of this language is shown another one's version, so there
         // is no empty page here to fail on.
         foreach ($readsAnother as $entry) {
-            $this->line('No text of its own, its readers get another language: '.$entry);
+            $this->line(OutputFormatter::escape('No text of its own, its readers get another language: '.$entry));
         }
 
         foreach ($failures as $failure) {
-            $this->error($failure);
+            $this->error(OutputFormatter::escape($failure));
         }
 
         return $failures === [] ? self::SUCCESS : self::FAILURE;
@@ -376,7 +377,7 @@ final class PublishDocumentCommand extends Command
                 if ($onlyMissing && $active instanceof LegalDocument) {
                     $current++;
                     $available[] = "{$key}|{$locale}";
-                    $this->line("  = {$key} ({$locale}) — active v{$active->version} kept, source not read.");
+                    $this->line(OutputFormatter::escape("  = {$key} ({$locale}) — active v{$active->version} kept, source not read."));
 
                     continue;
                 }
@@ -386,7 +387,7 @@ final class PublishDocumentCommand extends Command
                 } catch (LegalDocumentNotFound $e) {
                     if ($this->awaitsAuthoring($publisher, $key)) {
                         $textless++;
-                        $this->warn("  ? {$key} ({$locale}) — no text yet: {$e->getMessage()}");
+                        $this->warn(OutputFormatter::escape("  ? {$key} ({$locale}) — no text yet: {$e->getMessage()}"));
 
                         continue;
                     }
@@ -396,7 +397,7 @@ final class PublishDocumentCommand extends Command
                     continue;
                 } catch (Throwable $e) {
                     $failures[] = "{$key} ({$locale}): {$e->getMessage()}";
-                    $this->error("  x {$key} ({$locale}) — {$e->getMessage()}");
+                    $this->error(OutputFormatter::escape("  x {$key} ({$locale}) — {$e->getMessage()}"));
 
                     continue;
                 }
@@ -405,15 +406,15 @@ final class PublishDocumentCommand extends Command
 
                 if ($this->unchanged($active, $rendered)) {
                     $current++;
-                    $this->line("  = {$key} ({$locale}) — v{$rendered->version} already active, unchanged.");
+                    $this->line(OutputFormatter::escape("  = {$key} ({$locale}) — v{$rendered->version} already active, unchanged."));
 
                     continue;
                 }
 
                 $would++;
-                $this->info($active instanceof LegalDocument
+                $this->info(OutputFormatter::escape($active instanceof LegalDocument
                     ? "  + {$key} ({$locale}) — would publish v{$rendered->version}, replacing active v{$active->version} (source has drifted)."
-                    : "  + {$key} ({$locale}) — would publish v{$rendered->version} (first version).");
+                    : "  + {$key} ({$locale}) — would publish v{$rendered->version} (first version)."));
                 $this->reportNames($key, $locale, $rendered);
                 $this->reportWordingChange($key, $locale, $active, $rendered->uiWording, preview: true);
             }
@@ -425,7 +426,7 @@ final class PublishDocumentCommand extends Command
 
             if ($kept instanceof LegalDocument) {
                 $failures[] = "{$key} ({$locale}): {$message}";
-                $this->error("  x {$key} ({$locale}) — no text: {$message}".$this->keptVersion($kept));
+                $this->error(OutputFormatter::escape("  x {$key} ({$locale}) — no text: {$message}".$this->keptVersion($kept)));
 
                 continue;
             }
@@ -434,13 +435,13 @@ final class PublishDocumentCommand extends Command
 
             if ($standIn === null) {
                 $failures[] = "{$key} ({$locale}): {$message}";
-                $this->error("  x {$key} ({$locale}) — no text: {$message}");
+                $this->error(OutputFormatter::escape("  x {$key} ({$locale}) — no text: {$message}"));
             } else {
-                $this->line("  ~ {$key} ({$locale}) — no text of its own, its readers get the {$standIn} version.");
+                $this->line(OutputFormatter::escape("  ~ {$key} ({$locale}) — no text of its own, its readers get the {$standIn} version."));
             }
         }
 
-        $this->line("Dry run: {$would} would publish, {$current} already current, {$textless} without text, ".count($failures).' failed. Nothing was written.');
+        $this->line(OutputFormatter::escape("Dry run: {$would} would publish, {$current} already current, {$textless} without text, ".count($failures).' failed. Nothing was written.'));
 
         return $failures === [] ? self::SUCCESS : self::FAILURE;
     }
@@ -515,7 +516,7 @@ final class PublishDocumentCommand extends Command
                 )),
             );
         } catch (Throwable $e) {
-            $this->error($e->getMessage().' Nothing was published in '.implode(', ', $locales).'.');
+            $this->error(OutputFormatter::escape($e->getMessage().' Nothing was published in '.implode(', ', $locales).'.'));
 
             return self::FAILURE;
         }
@@ -523,9 +524,9 @@ final class PublishDocumentCommand extends Command
         foreach ($documents as $document) {
             $enforceFrom = $document->enforce_from?->toDateTimeString() ?? 'immediately';
 
-            $this->info($document->wasRecentlyCreated
+            $this->info(OutputFormatter::escape($document->wasRecentlyCreated
                 ? "Published {$key} ({$document->locale}) v{$document->version} — major {$document->major_version}, {$document->noticeMode()->value}, enforced from {$enforceFrom}."
-                : "Unchanged {$key} ({$document->locale}) v{$document->version} — already the active version, {$document->noticeMode()->value}.");
+                : "Unchanged {$key} ({$document->locale}) v{$document->version} — already the active version, {$document->noticeMode()->value}."));
 
             if ($document->wasRecentlyCreated) {
                 $this->reportWordingChange($key, $document->locale, $before[$document->locale] ?? null, $document->ui_wording);
@@ -549,7 +550,7 @@ final class PublishDocumentCommand extends Command
             try {
                 $rendered = $this->preview($publisher, $mode, $key, $locale, $locales);
             } catch (Throwable $e) {
-                $this->error($e->getMessage().' The release of '.implode(', ', $locales).' would publish nothing.');
+                $this->error(OutputFormatter::escape($e->getMessage().' The release of '.implode(', ', $locales).' would publish nothing.'));
 
                 return self::FAILURE;
             }
@@ -566,7 +567,7 @@ final class PublishDocumentCommand extends Command
         }
 
         foreach ($lines as [$locale, $rendered, $active, $unchanged, $line]) {
-            $this->info($line);
+            $this->info(OutputFormatter::escape($line));
 
             if (! $unchanged) {
                 $this->reportNames($key, $locale, $rendered);
@@ -607,7 +608,7 @@ final class PublishDocumentCommand extends Command
         try {
             $rendered = $this->preview($publisher, $mode, $key, $locale);
         } catch (Throwable $e) {
-            $this->error($e->getMessage());
+            $this->error(OutputFormatter::escape($e->getMessage()));
 
             return self::FAILURE;
         }
@@ -615,14 +616,14 @@ final class PublishDocumentCommand extends Command
         $active = $this->activeVersion($key, $locale);
 
         if ($this->unchanged($active, $rendered)) {
-            $this->line("Dry run: {$key} ({$locale}) v{$rendered->version} is already the active version, unchanged. Nothing would be written.");
+            $this->line(OutputFormatter::escape("Dry run: {$key} ({$locale}) v{$rendered->version} is already the active version, unchanged. Nothing would be written."));
 
             return self::SUCCESS;
         }
 
-        $this->info($active instanceof LegalDocument
+        $this->info(OutputFormatter::escape($active instanceof LegalDocument
             ? "Dry run: {$key} ({$locale}) would publish v{$rendered->version}, replacing active v{$active->version}. Nothing was written."
-            : "Dry run: {$key} ({$locale}) would publish v{$rendered->version} as the first version. Nothing was written.");
+            : "Dry run: {$key} ({$locale}) would publish v{$rendered->version} as the first version. Nothing was written."));
 
         $this->reportNames($key, $locale, $rendered);
         $this->reportWordingChange($key, $locale, $active, $rendered->uiWording, preview: true);
@@ -680,9 +681,9 @@ final class PublishDocumentCommand extends Command
      */
     private function reportNames(string $key, string $locale, Document $rendered): void
     {
-        $this->line($rendered->uiWording === null
+        $this->line(OutputFormatter::escape($rendered->uiWording === null
             ? "  Heading \"{$rendered->title}\", and no acceptance sentence: the document asks nobody to accept it."
-            : "  Heading \"{$rendered->title}\", acceptance sentence \"{$rendered->uiWording}\".");
+            : "  Heading \"{$rendered->title}\", acceptance sentence \"{$rendered->uiWording}\"."));
 
         $this->reportGenericWording($key, $locale, $rendered->uiWording);
     }
@@ -701,8 +702,8 @@ final class PublishDocumentCommand extends Command
             return;
         }
 
-        $this->warn("{$key} ({$locale}) asks for the generic acceptance sentence \"{$sentence}\", because it has none of its own.");
-        $this->line("  Give it one in lang/vendor/legal-consent/{$locale}/wording.php, as '{$key}' => '…', or as `ui_wording:` in a Markdown source.");
+        $this->warn(OutputFormatter::escape("{$key} ({$locale}) asks for the generic acceptance sentence \"{$sentence}\", because it has none of its own."));
+        $this->line(OutputFormatter::escape("  Give it one in lang/vendor/legal-consent/{$locale}/wording.php, as '{$key}' => '…', or as `ui_wording:` in a Markdown source."));
     }
 
     /**
@@ -724,10 +725,10 @@ final class PublishDocumentCommand extends Command
         $was = $before->ui_wording ?? '(none)';
         $now = $after ?? '(none)';
 
-        $this->warn($preview
+        $this->warn(OutputFormatter::escape($preview
             ? "Dry run: the acceptance sentence of {$key} ({$locale}) would change from \"{$was}\" to \"{$now}\", and every consent given under the new version would record it."
-            : "The acceptance sentence of {$key} ({$locale}) changed from \"{$was}\" to \"{$now}\". Every consent given under this version records the new one.");
-        $this->line("  If that is not meant, set the sentence the version should carry: `ui_wording` in a Markdown source, or lang/vendor/legal-consent/{$locale}/wording.php for the drafts store.");
+            : "The acceptance sentence of {$key} ({$locale}) changed from \"{$was}\" to \"{$now}\". Every consent given under this version records the new one."));
+        $this->line(OutputFormatter::escape("  If that is not meant, set the sentence the version should carry: `ui_wording` in a Markdown source, or lang/vendor/legal-consent/{$locale}/wording.php for the drafts store."));
     }
 
     /**

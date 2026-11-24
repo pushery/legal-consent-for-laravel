@@ -31,6 +31,7 @@ use Pushery\LegalConsent\Support\SubjectToken;
 use Pushery\LegalConsent\Support\SubjectTypes;
 use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Closes the objection window of a deemed-consent (Zustimmungsfiktion) change: for every
@@ -237,19 +238,19 @@ final class CloseObjectionWindowsCommand extends Command implements Isolatable
 
         $monitor->heartbeat('legal-consent:close-objection-windows', $deemed);
 
-        $this->info("Deemed {$deemed} acceptance(s) across {$closed} closed objection window(s).");
+        $this->info(OutputFormatter::escape("Deemed {$deemed} acceptance(s) across {$closed} closed objection window(s)."));
 
         if ($unproved > 0) {
             // Loud, and non-zero. A silent skip here is indistinguishable from "nobody was owed
             // anything", and the difference is whether a population is bound or not.
-            $this->error("{$unproved} subject(s) were NOT deemed: no notice carrying the § 308 Nr. 5 lit. b warning is on record as delivered to them by the objection deadline. Silence does not bind without it, and a notice sent now would arrive after the deadline it names: they need a new version with a new objection deadline. Their window stays OPEN, so this run keeps failing until the version is replaced — check that `legal-consent:dispatch-notices` runs on schedule, and that legal_notices.mandatory_content_ok is true.");
+            $this->error(OutputFormatter::escape("{$unproved} subject(s) were NOT deemed: no notice carrying the § 308 Nr. 5 lit. b warning is on record as delivered to them by the objection deadline. Silence does not bind without it, and a notice sent now would arrive after the deadline it names: they need a new version with a new objection deadline. Their window stays OPEN, so this run keeps failing until the version is replaced — check that `legal-consent:dispatch-notices` runs on schedule, and that legal_notices.mandatory_content_ok is true."));
             $monitor->heartbeat('legal-consent:close-objection-windows.unproved', $unproved);
         }
 
         if ($late > 0) {
             // Apart from the missing ones, because the repair differs: the dispatch did reach these
             // subjects, only too late, and sending again cannot change when.
-            $this->error("{$late} subject(s) were NOT deemed: their notice carrying the § 308 Nr. 5 lit. b warning was delivered too late to leave them the objection period this version owes, after the objection deadline or too close to it, so silence cannot bind them to this version. They need a new version with a new objection deadline. Their window stays OPEN, so this run keeps failing until the version is replaced.");
+            $this->error(OutputFormatter::escape("{$late} subject(s) were NOT deemed: their notice carrying the § 308 Nr. 5 lit. b warning was delivered too late to leave them the objection period this version owes, after the objection deadline or too close to it, so silence cannot bind them to this version. They need a new version with a new objection deadline. Their window stays OPEN, so this run keeps failing until the version is replaced."));
             $monitor->heartbeat('legal-consent:close-objection-windows.late', $late);
         }
 

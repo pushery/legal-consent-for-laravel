@@ -35,6 +35,7 @@ use Pushery\LegalConsent\Support\NoticeAttempts;
 use Pushery\LegalConsent\Support\NoticeMailConfig;
 use Pushery\LegalConsent\Support\ReportedNotificationFailures;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Throwable;
 
 /**
@@ -143,13 +144,13 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // of failed notices is not held back because its whole audience exceeds the brake.
             $audience = $resolver->countForVersion($version, skipNotified: $proofEnabled);
 
-            $this->line(sprintf(
+            $this->line(OutputFormatter::escape(sprintf(
                 '%s %s (%s): %d recipient(s).',
                 $version->key,
                 $version->version,
                 $version->locale,
                 $audience,
-            ));
+            )));
 
             $deadline = $this->passedDeadline($version);
 
@@ -157,10 +158,10 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
                 // Skipped without stamping, like the two hold-backs below, so every run names the
                 // version until a new one replaces it.
                 $expired++;
-                $this->error(sprintf(
+                $this->error(OutputFormatter::escape(sprintf(
                     '  its objection deadline %s has passed, so a deemed-consent notice can no longer found an acceptance. Nothing was sent; the subjects it did not reach need a new version with a new objection deadline.',
                     $deadline->toIso8601String(),
-                ));
+                )));
 
                 continue;
             }
@@ -211,12 +212,12 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             // logged as deficient, stamped the watermark and ended the run at exit 0.
             if (! $this->mandatoryContentPresent($notification, $version)) {
                 $deficient++;
-                $this->error(sprintf(
+                $this->error(OutputFormatter::escape(sprintf(
                     '  %s %s (%s) does not carry the mandatory content its notice mode requires — the notice goes out, but it cannot found a deemed acceptance. Fix the `legal-consent::notifications` lines for this locale, then re-run with `legal-consent:renotify`.',
                     $version->key,
                     $version->version,
                     $version->locale,
-                ));
+                )));
             }
 
             $before = $notified;
@@ -279,32 +280,32 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
 
         // "Queued", not "sent": what this run can attest to is that the jobs are on the queue. The
         // durable-medium proof row is written when a notice actually leaves the mailer.
-        $this->info("Queued {$notified} notice(s) for delivery across {$versions->count()} version(s).");
+        $this->info(OutputFormatter::escape("Queued {$notified} notice(s) for delivery across {$versions->count()} version(s)."));
 
         if ($deficient > 0) {
             // Non-zero, and named. A notice missing its mandatory line is void where it matters
             // most — § 308 Nr. 5 lit. b makes the silence warning a validity condition — and until
             // now the only trace was a boolean column nothing in this command read.
-            $this->error("{$deficient} version(s) went out without their mandatory notice content. Silence cannot bind against those notices; fix the wording and re-notify.");
+            $this->error(OutputFormatter::escape("{$deficient} version(s) went out without their mandatory notice content. Silence cannot bind against those notices; fix the wording and re-notify."));
             $monitor->heartbeat('legal-consent:dispatch-notices.deficient', $deficient);
         }
 
         if ($held > 0) {
             // Non-zero, because a held notice is still owed, and a scheduled run that reports
             // success while a legally required notice sits undelivered hides exactly that.
-            $this->error("{$held} version(s) held back by notifications.max_recipients_per_run. Review with --dry-run, then release with --force or raise the limit.");
+            $this->error(OutputFormatter::escape("{$held} version(s) held back by notifications.max_recipients_per_run. Review with --dry-run, then release with --force or raise the limit."));
             $monitor->heartbeat('legal-consent:dispatch-notices.held', $held);
         }
 
         if ($canceled > 0) {
             // Non-zero for the same reason, and named apart from the brake: a listener's hold is
             // lifted where the listener decides, and neither --force nor a higher limit reaches it.
-            $this->error("{$canceled} version(s) held back by a NoticeDispatching listener. The notice is still owed and goes out on the first run the listener lets through; --force and notifications.max_recipients_per_run do not reach a listener.");
+            $this->error(OutputFormatter::escape("{$canceled} version(s) held back by a NoticeDispatching listener. The notice is still owed and goes out on the first run the listener lets through; --force and notifications.max_recipients_per_run do not reach a listener."));
             $monitor->heartbeat('legal-consent:dispatch-notices.canceled', $canceled);
         }
 
         if ($expired > 0) {
-            $this->error("{$expired} deemed-consent version(s) still owed a notice after their objection deadline had passed. Nothing was sent for them: silence cannot bind on a notice that arrives after the deadline it names, so publish a new version with a new objection deadline.");
+            $this->error(OutputFormatter::escape("{$expired} deemed-consent version(s) still owed a notice after their objection deadline had passed. Nothing was sent for them: silence cannot bind on a notice that arrives after the deadline it names, so publish a new version with a new objection deadline."));
             $monitor->heartbeat('legal-consent:dispatch-notices.expired', $expired);
         }
 
@@ -342,12 +343,12 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
         foreach ($unreachable as $documentId => $subjects) {
             $version = $versions->find($documentId);
 
-            $this->error(sprintf(
+            $this->error(OutputFormatter::escape(sprintf(
                 '  %s: %d subject(s) could not be reached after %d attempt(s), and their notice is still owed. Correct the address and run `legal-consent:renotify`, or erase a subject that is gone.',
                 $version instanceof LegalDocument ? "{$version->key} {$version->version} ({$version->locale})" : "version #{$documentId}",
                 $subjects,
                 NoticeAttempts::maxAttempts(),
-            ));
+            )));
         }
 
         return array_sum($unreachable);
@@ -488,7 +489,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             if ($deadline instanceof CarbonImmutable && $remaining > 0) {
                 $expired++;
 
-                $this->line(sprintf(
+                $this->line(OutputFormatter::escape(sprintf(
                     '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, queued or given up, 0 would be sent — its objection deadline %s has passed.',
                     $version->key,
                     $version->version,
@@ -497,7 +498,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
                     $total,
                     $proofed,
                     $deadline->toIso8601String(),
-                ));
+                )));
 
                 continue;
             }
@@ -507,7 +508,7 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
             if ($this->exceedsLimit($remaining)) {
                 $held++;
 
-                $this->line(sprintf(
+                $this->line(OutputFormatter::escape(sprintf(
                     '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, queued or given up, 0 would be sent — held back by notifications.max_recipients_per_run.',
                     $version->key,
                     $version->version,
@@ -515,12 +516,12 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
                     $version->tenant_id === '' ? '-' : $version->tenant_id,
                     $total,
                     $proofed,
-                ));
+                )));
 
                 continue;
             }
 
-            $this->line(sprintf(
+            $this->line(OutputFormatter::escape(sprintf(
                 '%s %s (%s, tenant %s): %d recipient(s), %d already proofed, queued or given up, %d would be sent.',
                 $version->key,
                 $version->version,
@@ -529,18 +530,18 @@ final class DispatchDueLegalNoticesCommand extends Command implements Isolatable
                 $total,
                 $proofed,
                 $remaining,
-            ));
+            )));
         }
 
         $this->info('Dry run — nothing was sent, no proof was written, no watermark was stamped.');
         $this->line('NoticeDispatching listeners are not asked in a dry run, so a version one of them would hold back is counted here as one that would be sent.');
 
         if ($held > 0) {
-            $this->error("{$held} version(s) would be held back by notifications.max_recipients_per_run. Re-run with --force or raise the limit.");
+            $this->error(OutputFormatter::escape("{$held} version(s) would be held back by notifications.max_recipients_per_run. Re-run with --force or raise the limit."));
         }
 
         if ($expired > 0) {
-            $this->error("{$expired} deemed-consent version(s) would not be sent: their objection deadline has passed. Publish a new version with a new objection deadline.");
+            $this->error(OutputFormatter::escape("{$expired} deemed-consent version(s) would not be sent: their objection deadline has passed. Publish a new version with a new objection deadline."));
         }
 
         // The subjects the real run gives up on are owed a notice whether or not anything is sent,

@@ -11,6 +11,7 @@ use Pushery\LegalConsent\Models\Scopes\TenantScope;
 use Pushery\LegalConsent\Support\NoticeAttempts;
 use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Clear a version's dispatch watermark so the next sweep considers it again.
@@ -56,13 +57,13 @@ final class RenotifyVersionCommand extends Command
             ->all();
 
         if (count($tenants) > 1) {
-            $this->error(sprintf(
+            $this->error(OutputFormatter::escape(sprintf(
                 '%s (%s) names a version in %d tenants: %s. Name the one to repair with --tenant=. Nothing was changed.',
                 $this->stringArgument('key'),
                 $this->stringArgument('locale'),
                 count($tenants),
                 implode(', ', array_map(static fn (string $tenant): string => $tenant === '' ? "'' (shared)" : $tenant, $tenants)),
-            ));
+            )));
 
             return self::FAILURE;
         }
@@ -83,13 +84,13 @@ final class RenotifyVersionCommand extends Command
         $forgotten = NoticeAttempts::forgetVersion($version);
 
         if ($forgotten > 0) {
-            $this->info("Forgot {$forgotten} recorded notice attempt(s) of {$label}, so every subject is tried again.");
+            $this->info(OutputFormatter::escape("Forgot {$forgotten} recorded notice attempt(s) of {$label}, so every subject is tried again."));
         }
 
         if ($version->notified_at === null) {
             // Not an error, and deliberately not silent: reporting success over a version that was
             // never swept would read as "repaired" for the one case where nothing was wrong.
-            $this->info("{$label} was never swept — its watermark is already clear.");
+            $this->info(OutputFormatter::escape("{$label} was never swept — its watermark is already clear."));
 
             return self::SUCCESS;
         }
@@ -98,7 +99,7 @@ final class RenotifyVersionCommand extends Command
 
         $version->forceFill(['notified_at' => null])->saveQuietly();
 
-        $this->info("Cleared the notice watermark on {$label}, stamped {$stamped}.");
+        $this->info(OutputFormatter::escape("Cleared the notice watermark on {$label}, stamped {$stamped}."));
         $this->line('Run `legal-consent:dispatch-notices --dry-run` to see the audience before the next sweep sends anything.');
 
         return self::SUCCESS;

@@ -76,6 +76,15 @@ class LegalConsent extends Model
     protected $guarded = ['*'];
 
     /**
+     * The pseudonym that ties the rows of a subject together after an erasure stays out of toArray() and
+     * toJson(), so a serialized consent hands it to no log line, queued payload or answer of an API. It stays
+     * readable as an attribute.
+     *
+     * @var list<string>
+     */
+    protected $hidden = ['subject_token'];
+
+    /**
      * @return MorphTo<Model, $this>
      */
     public function subject(): MorphTo

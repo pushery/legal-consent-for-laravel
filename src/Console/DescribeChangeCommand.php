@@ -9,6 +9,7 @@ use Pushery\LegalConsent\Console\Concerns\RunsPerTenant;
 use Pushery\LegalConsent\Models\LegalChangeSet;
 use Pushery\LegalConsent\Support\ChangeItemsAuthor;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Read, print or discard the change description for a pending version — the headless path for an
@@ -64,7 +65,7 @@ final class DescribeChangeCommand extends Command
         $draft = $author->draft($key, $locale);
 
         if (! $draft instanceof LegalChangeSet) {
-            $this->warn("No change description has been written for '{$key}' ({$locale}).");
+            $this->warn(OutputFormatter::escape("No change description has been written for '{$key}' ({$locale})."));
             $this->line('Write one with Pushery\\LegalConsent\\Facades\\ChangeItems::for(…)->headline(…)->impact(…)->save().');
 
             // Not a failure. A version that owes no description is the normal case, and a non-zero
@@ -73,14 +74,14 @@ final class DescribeChangeCommand extends Command
         }
 
         $this->line("<options=bold>{$key} ({$locale})</> — draft");
-        $this->line('  headline: '.($draft->headline ?? '<none>'));
-        $this->line('  impact:   '.($draft->impact ?? '<none>'));
+        $this->line(OutputFormatter::escape('  headline: '.($draft->headline ?? '<none>')));
+        $this->line(OutputFormatter::escape('  impact:   '.($draft->impact ?? '<none>')));
 
         foreach ($draft->items as $item) {
-            $this->line(sprintf('  [%d] %-10s %s', $item->position, $item->type->value, $item->subject));
+            $this->line(OutputFormatter::escape(sprintf('  [%d] %-10s %s', $item->position, $item->type->value, $item->subject)));
 
             if (($item->detail ?? '') !== '') {
-                $this->line('       '.$item->detail);
+                $this->line(OutputFormatter::escape('       '.$item->detail));
             }
 
             if ($item->type->namesAParty() && ! $item->describesPartyFully()) {
@@ -102,7 +103,7 @@ final class DescribeChangeCommand extends Command
 
     private function done(string $message): int
     {
-        $this->info($message);
+        $this->info(OutputFormatter::escape($message));
 
         return self::SUCCESS;
     }

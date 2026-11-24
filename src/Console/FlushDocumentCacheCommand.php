@@ -14,6 +14,7 @@ use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\EnforceableDocumentCache;
 use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Flush the cached, rendered legal documents. Rarely needed (the cache
@@ -47,9 +48,9 @@ final class FlushDocumentCacheCommand extends Command
         if ($tenancy->enabled()) {
             $named = array_map(static fn (string $tenant): string => $tenant === '' ? "'' (shared)" : $tenant, $tenants);
 
-            $this->info("Flushed {$count} cached legal document(s) across ".count($tenants).' tenant bucket(s): '.implode(', ', $named).'.');
+            $this->info(OutputFormatter::escape("Flushed {$count} cached legal document(s) across ".count($tenants).' tenant bucket(s): '.implode(', ', $named).'.'));
         } else {
-            $this->info("Flushed {$count} cached legal document(s).");
+            $this->info(OutputFormatter::escape("Flushed {$count} cached legal document(s)."));
         }
 
         return self::SUCCESS;
@@ -79,7 +80,7 @@ final class FlushDocumentCacheCommand extends Command
         } catch (QueryException $e) {
             $enforceable->flushDeclared();
 
-            $this->warn('The published locales could not be read from `legal_documents`, so only the configured locales were flushed: '.$e->getMessage());
+            $this->warn(OutputFormatter::escape('The published locales could not be read from `legal_documents`, so only the configured locales were flushed: '.$e->getMessage()));
         }
 
         // `DocumentMatrix::keys()` rather than `array_keys()`, and it takes nothing away from this

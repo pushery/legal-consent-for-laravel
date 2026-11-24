@@ -22,6 +22,7 @@ use Pushery\LegalConsent\Support\LegalDraftSet;
 use Pushery\LegalConsent\Support\LegalDraftWriter;
 use Pushery\LegalConsent\Support\TableLookup;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Throwable;
 
 /**
@@ -110,13 +111,13 @@ final class DraftFromSourceCommand extends Command
         try {
             $source = $sources->make($from);
         } catch (InvalidArgumentException $exception) {
-            $this->error($exception->getMessage());
+            $this->error(OutputFormatter::escape($exception->getMessage()));
 
             return self::FAILURE;
         }
 
         if ($source instanceof DraftDocumentSource) {
-            $this->error("--from={$from} names the draft store itself. Name the source the texts are written in, such as markdown.");
+            $this->error(OutputFormatter::escape("--from={$from} names the draft store itself. Name the source the texts are written in, such as markdown."));
 
             return self::FAILURE;
         }
@@ -194,10 +195,10 @@ final class DraftFromSourceCommand extends Command
 
         foreach ($proposals as $file => $lines) {
             $this->newLine();
-            $this->line("  {$file}");
+            $this->line(OutputFormatter::escape("  {$file}"));
 
             foreach ($lines as $line) {
-                $this->line("      {$line}");
+                $this->line(OutputFormatter::escape("      {$line}"));
             }
         }
 
@@ -229,13 +230,13 @@ final class DraftFromSourceCommand extends Command
 
         if (is_string($named) && $named !== '') {
             if (! in_array($named, $registered, true)) {
-                $this->error("'{$named}' is not a registered document. Name a key of legal-consent.documents.");
+                $this->error(OutputFormatter::escape("'{$named}' is not a registered document. Name a key of legal-consent.documents."));
 
                 return null;
             }
 
             if (! $this->onTheDraftStore($sources, $named)) {
-                $this->error("'{$named}' does not take its text from the draft store, so a draft of it could never be released. Set its source to the draft store first.");
+                $this->error(OutputFormatter::escape("'{$named}' does not take its text from the draft store, so a draft of it could never be released. Set its source to the draft store first."));
 
                 return null;
             }
@@ -249,7 +250,7 @@ final class DraftFromSourceCommand extends Command
             if ($this->onTheDraftStore($sources, $key)) {
                 $keys[] = $key;
             } else {
-                $this->components->twoColumnDetail($key, 'skipped, its source is not the draft store');
+                $this->components->twoColumnDetail(OutputFormatter::escape($key), 'skipped, its source is not the draft store');
             }
         }
 
@@ -273,7 +274,7 @@ final class DraftFromSourceCommand extends Command
             $draft = $set->draft($locale);
 
             if ($draft instanceof LegalDraft && ! $this->refreshes()) {
-                $this->components->twoColumnDetail($label, 'kept, it has a draft');
+                $this->components->twoColumnDetail(OutputFormatter::escape($label), 'kept, it has a draft');
 
                 continue;
             }
@@ -281,7 +282,7 @@ final class DraftFromSourceCommand extends Command
             try {
                 $raw = $source->resolve($key, $locale);
             } catch (LegalDocumentNotFound) {
-                $this->components->twoColumnDetail($label, $draft instanceof LegalDraft ? 'kept, no text in this source' : 'no text in this source');
+                $this->components->twoColumnDetail(OutputFormatter::escape($label), OutputFormatter::escape($draft instanceof LegalDraft ? 'kept, no text in this source' : 'no text in this source'));
 
                 continue;
             }
@@ -289,7 +290,7 @@ final class DraftFromSourceCommand extends Command
             $version = $raw->version ?? self::UNWRITTEN;
 
             if ($version === self::UNWRITTEN) {
-                $this->components->twoColumnDetail($label, 'skipped, version 0.0.0 marks a text nobody has written yet');
+                $this->components->twoColumnDetail(OutputFormatter::escape($label), 'skipped, version 0.0.0 marks a text nobody has written yet');
 
                 continue;
             }
@@ -306,7 +307,7 @@ final class DraftFromSourceCommand extends Command
                         $tally['edited'][] = $label;
                     }
 
-                    $this->components->twoColumnDetail($label, $reason);
+                    $this->components->twoColumnDetail(OutputFormatter::escape($label), OutputFormatter::escape($reason));
 
                     continue;
                 }
@@ -319,9 +320,9 @@ final class DraftFromSourceCommand extends Command
                 }
 
                 if ($dryRun) {
-                    $this->components->twoColumnDetail($label, $unchecked
+                    $this->components->twoColumnDetail(OutputFormatter::escape($label), OutputFormatter::escape($unchecked
                         ? 'would be replaced, unchecked'
-                        : 'would be replaced by the text of the source');
+                        : 'would be replaced by the text of the source'));
 
                     continue;
                 }
@@ -335,9 +336,9 @@ final class DraftFromSourceCommand extends Command
                     $writer->setVersion($key, $version);
                 }
 
-                $this->components->twoColumnDetail($label, $unchecked
+                $this->components->twoColumnDetail(OutputFormatter::escape($label), OutputFormatter::escape($unchecked
                     ? 'replaced unchecked, not reviewed'
-                    : 'replaced by the text of the source, not reviewed');
+                    : 'replaced by the text of the source, not reviewed'));
 
                 continue;
             }
@@ -345,7 +346,7 @@ final class DraftFromSourceCommand extends Command
             $tally['drafted']++;
 
             if ($dryRun) {
-                $this->components->twoColumnDetail($label, 'would be drafted');
+                $this->components->twoColumnDetail(OutputFormatter::escape($label), 'would be drafted');
 
                 continue;
             }
@@ -357,7 +358,7 @@ final class DraftFromSourceCommand extends Command
                 $sourceWritten = true;
             }
 
-            $this->components->twoColumnDetail($label, $this->review($key, $locale, $sourceWritten, $writer));
+            $this->components->twoColumnDetail(OutputFormatter::escape($label), OutputFormatter::escape($this->review($key, $locale, $sourceWritten, $writer)));
         }
     }
 
@@ -418,21 +419,21 @@ final class DraftFromSourceCommand extends Command
         }
 
         if ($parts === []) {
-            $this->components->info($dryRun ? 'Dry run: no text would be drafted. Nothing was written.' : 'No text was drafted.');
+            $this->components->info(OutputFormatter::escape($dryRun ? 'Dry run: no text would be drafted. Nothing was written.' : 'No text was drafted.'));
         } else {
-            $this->components->info($dryRun
+            $this->components->info(OutputFormatter::escape($dryRun
                 ? 'Dry run: '.implode(', ', $parts).'. Nothing was written.'
-                : implode(', ', $parts).'. Review and release them in the admin area.');
+                : implode(', ', $parts).'. Review and release them in the admin area.'));
         }
 
         if ($tally['edited'] !== []) {
-            $this->warn('These drafts were edited in the admin area since their published version, so they were kept: '.implode(', ', $tally['edited']).'.');
+            $this->warn(OutputFormatter::escape('These drafts were edited in the admin area since their published version, so they were kept: '.implode(', ', $tally['edited']).'.'));
             $this->line('  Carry the change from the source over in the editor, or discard the draft there first.');
         }
 
         if ($tally['unchecked'] !== []) {
-            $this->warn(($dryRun ? 'These drafts would be replaced' : 'These drafts were replaced')
-                .' with nothing published to compare them with, on --replace-unchecked: '.implode(', ', $tally['unchecked']).'.');
+            $this->warn(OutputFormatter::escape(($dryRun ? 'These drafts would be replaced' : 'These drafts were replaced')
+                .' with nothing published to compare them with, on --replace-unchecked: '.implode(', ', $tally['unchecked']).'.'));
         }
     }
 
