@@ -10,6 +10,7 @@ use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDriftChecker;
 use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Report (never fix) any legal document whose live source text has drifted from its
@@ -71,13 +72,13 @@ final class CheckDriftCommand extends Command
         if ($drifts === []) {
             // The count, because "no drift" is only as good as what was compared, and a run over no
             // published version at all says so here instead of reading like a clean one.
-            $this->info("No legal-document drift detected. {$compared} published version(s) compared with their source.");
+            $this->info(OutputFormatter::escape("No legal-document drift detected. {$compared} published version(s) compared with their source."));
 
             return self::SUCCESS;
         }
 
         foreach ($drifts as $line) {
-            $this->warn($line);
+            $this->warn(OutputFormatter::escape($line));
         }
 
         $this->error(count($drifts).' legal document(s) have drifted from their published version.');

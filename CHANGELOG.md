@@ -4,6 +4,16 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.61.0] - 2026-11-23
+
+### Changed
+
+- **`LegalConsent` and `LegalNotice` keep `subject_token` out of `toArray()` and `toJson()`.** The pseudonym ties the records of a subject together after an erasure, and a serialized consent or notice handed it to every log line, queued payload and API answer that printed the model. It stays readable as an attribute, and `makeVisible('subject_token')` brings it back where an application needs it in a serialization.
+
+### Fixed
+
+- **The commands print values as they stand.** Symfony's console formatter read a part of a value that looks like a style tag as styling and dropped it, in an exception message, the heading of a document or a value of the configuration. The colored markers of `legal-consent:doctor`, `legal-consent:status` and `legal-consent:changes` keep their colors.
+
 ## [0.60.2] - 2026-11-22
 
 ### Documentation
@@ -3493,7 +3503,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.2...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.61.0...HEAD
+[0.61.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.2...v0.61.0
 [0.60.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.1...v0.60.2
 [0.60.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.0...v0.60.1
 [0.60.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.59.0...v0.60.0

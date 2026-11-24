@@ -17,6 +17,7 @@ use Pushery\LegalConsent\Support\DocumentMatrix;
 use Pushery\LegalConsent\Support\LegalDocumentPublisher;
 use Pushery\LegalConsent\Support\TenantContext;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Verify the published documents themselves — the companion to `legal-consent:verify-ledger`
@@ -117,11 +118,11 @@ final class VerifyDocumentsCommand extends Command
         }
 
         foreach ($advisories as $advisory) {
-            $this->warn($advisory);
+            $this->warn(OutputFormatter::escape($advisory));
         }
 
         if ($failures === []) {
-            $this->info("Documents verified: {$walked} active version(s) intact and consistent.");
+            $this->info(OutputFormatter::escape("Documents verified: {$walked} active version(s) intact and consistent."));
 
             return self::SUCCESS;
         }
@@ -129,7 +130,7 @@ final class VerifyDocumentsCommand extends Command
         $this->error(sprintf('Document verification FAILED: %d problem(s) across %d active version(s).', count($failures), $walked));
 
         foreach ($failures as $failure) {
-            $this->line("  • {$failure}");
+            $this->line(OutputFormatter::escape("  • {$failure}"));
         }
 
         return self::FAILURE;

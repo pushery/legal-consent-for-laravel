@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\LegalConsent\Console\Concerns;
 
 use Pushery\LegalConsent\Support\TableLookup;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * A sweep on a database that has not been migrated yet reports it and stops.
@@ -30,7 +31,7 @@ trait SkipsWhenTablesAreMissing
     {
         foreach ($tables as $table) {
             if (! TableLookup::exists($table)) {
-                $this->warn("`{$table}` does not exist yet — run `php artisan migrate` to create this package's tables. Nothing was swept.");
+                $this->warn(OutputFormatter::escape("`{$table}` does not exist yet — run `php artisan migrate` to create this package's tables. Nothing was swept."));
 
                 return true;
             }

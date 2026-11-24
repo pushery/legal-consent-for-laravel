@@ -17,6 +17,7 @@ use Pushery\LegalConsent\Support\SubjectTypes;
 use Pushery\LegalConsent\Support\TableLookup;
 use stdClass;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Verify the optional tamper-evidence hash chain (config `tamper_evidence`). Streams the
@@ -286,10 +287,10 @@ final class VerifyLedgerCommand extends Command
         }
 
         if ($this->breakCount === 0) {
-            $this->info("Ledger chain intact: verified {$rows} chained record(s) across {$subjects} subject(s).");
+            $this->info(OutputFormatter::escape("Ledger chain intact: verified {$rows} chained record(s) across {$subjects} subject(s)."));
 
             if ($unprotected > 0) {
-                $this->warn("{$unprotected} row(s) predate tamper-evidence and carry no chain link — unprotected, not a break.");
+                $this->warn(OutputFormatter::escape("{$unprotected} row(s) predate tamper-evidence and carry no chain link — unprotected, not a break."));
             }
 
             // Honesty: with no signed head, deleting a subject's newest row leaves nothing to
@@ -309,7 +310,7 @@ final class VerifyLedgerCommand extends Command
         $this->error(sprintf('Ledger tamper check FAILED: %d break(s) across %d chained record(s).', $this->breakCount, $rows));
 
         foreach ($this->namedBreaks as $break) {
-            $this->line("  • {$break}");
+            $this->line(OutputFormatter::escape("  • {$break}"));
         }
 
         if ($this->breakCount > self::NAMED_BREAKS) {
