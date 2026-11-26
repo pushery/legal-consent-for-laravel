@@ -4,6 +4,25 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.62.0] - 2026-11-26
+
+### Changed
+
+- **`LEGAL_CONSENT_ALLOW_UNSAFE_LINKS` set to a spelling that says neither on nor off stops the boot.** A value such as `ture` kept unsafe links refused. The boot and `config:cache` now stop with an `InvalidArgumentException` that names the variable, the value as written and every spelling for on and off. A missing or empty line and `empty`, `(empty)`, `null` and `(null)` keep unsafe links refused, as before.
+
+  **Upgrade:** a host whose `.env` gives the variable another spelling corrects it, or deletes the line to keep unsafe links refused.
+- **The WireKit consent settings stand each group in a card with its head.** The contracts, the documents taken note of and the consents each sit in a card whose head carries an icon, the group's heading and a sentence on what the group holds, in all seven languages (`contracts_description`, `acknowledgements_description` and `consents_description` in `ui.php`). Each group stays a `section` named by its heading, at the level it had. A host that published the WireKit views keeps its copy and can take the cards from the package's views.
+- **The WireKit views are chosen from WireKit 2.74.1 on.** A host on WireKit 2.74.0 or older gets the plain views until it updates WireKit, and the suggestion names 2.74.1.
+
+### Fixed
+
+- **The release dialog names its choice as a heading.** "How it is released" stood as plain text right above the first option of the WireKit view. It is now a heading of the third level inside the legend of its group, with space before the options, so the group keeps its name for a screen reader.
+- **The withdraw action of a consent in the WireKit settings view stays inside a narrow card.** Where the title and the action do not fit on one line, the action moves onto a line of its own instead of running out of the card.
+
+### Documentation
+
+- **The requirements name the versions the package is tested on.** PHP 8.4.27, 8.5.x and 8.6.x, PostgreSQL 18.7 and MySQL 8.4.13, in the README and on the start page of the documentation.
+
 ## [0.61.0] - 2026-11-23
 
 ### Changed
@@ -3503,7 +3522,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.61.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.62.0...HEAD
+[0.62.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.2...v0.61.0
 [0.60.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.1...v0.60.2
 [0.60.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.0...v0.60.1

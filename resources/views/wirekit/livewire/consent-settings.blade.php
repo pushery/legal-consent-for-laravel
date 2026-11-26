@@ -58,57 +58,71 @@
         @if (! $hideEmpty || count($contracts) > 0)
 
         <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-contracts">
-            <x-wirekit::heading :level="$groupLevel" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</x-wirekit::heading>
-            <x-wirekit::stack gap="xs">
-                @forelse ($contracts as $item)
-                    {{-- The title's own language, declared only where it differs from the page. A
-                         document published only in the default locale still binds, and a retired
-                         row is deliberately shown in the language the subject read it in
-                         (WCAG 3.1.2). See ContentLanguage. --}}
-                    @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
-                    <x-wirekit::text>
-                        @if (($item['url'] ?? null) !== null)
-                            <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
-                        @else
-                            <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
-                        @endif
-                        {{-- The version as quiet text rather than a badge: a badge on this screen is a state, and a
-                             version in the same shape made the consent's "Given" read as one more version. --}}
-                        <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
-                        @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
-                    </x-wirekit::text>
-                @empty
-                    <x-wirekit::text intent="muted">{{ __('legal-consent::ui.contracts_empty') }}</x-wirekit::text>
-                @endforelse
-            </x-wirekit::stack>
+            <x-wirekit::card>
+                <x-wirekit::card.header :description="__('legal-consent::ui.contracts_description')">
+                    <x-slot:iconSlot><x-wirekit::icon name="legal" size="md" /></x-slot:iconSlot>
+                    <x-wirekit::heading :level="$groupLevel" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</x-wirekit::heading>
+                </x-wirekit::card.header>
+                <x-wirekit::card.body>
+                    <x-wirekit::stack gap="xs">
+                        @forelse ($contracts as $item)
+                            {{-- The title's own language, declared only where it differs from the page. A
+                                 document published only in the default locale still binds, and a retired
+                                 row is deliberately shown in the language the subject read it in
+                                 (WCAG 3.1.2). See ContentLanguage. --}}
+                            @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
+                            <x-wirekit::text>
+                                @if (($item['url'] ?? null) !== null)
+                                    <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
+                                @else
+                                    <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
+                                @endif
+                                {{-- The version as quiet text rather than a badge: a badge on this screen is a state, and a
+                                     version in the same shape made the consent's "Given" read as one more version. --}}
+                                <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                                @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
+                            </x-wirekit::text>
+                        @empty
+                            <x-wirekit::text intent="muted">{{ __('legal-consent::ui.contracts_empty') }}</x-wirekit::text>
+                        @endforelse
+                    </x-wirekit::stack>
+                </x-wirekit::card.body>
+            </x-wirekit::card>
         </x-wirekit::stack>
         @endif
 
         @if (! $hideEmpty || count($acknowledgements) > 0)
         <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-acknowledgements">
-            <x-wirekit::heading :level="$groupLevel" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</x-wirekit::heading>
-            <x-wirekit::stack gap="xs">
-                @forelse ($acknowledgements as $item)
-                    {{-- The title's own language, declared only where it differs from the page. A
-                         document published only in the default locale still binds, and a retired
-                         row is deliberately shown in the language the subject read it in
-                         (WCAG 3.1.2). See ContentLanguage. --}}
-                    @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
-                    <x-wirekit::text>
-                        @if (($item['url'] ?? null) !== null)
-                            <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
-                        @else
-                            <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
-                        @endif
-                        {{-- The version as quiet text rather than a badge: a badge on this screen is a state, and a
-                             version in the same shape made the consent's "Given" read as one more version. --}}
-                        <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
-                        @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
-                    </x-wirekit::text>
-                @empty
-                    <x-wirekit::text intent="muted">{{ __('legal-consent::ui.acknowledgements_empty') }}</x-wirekit::text>
-                @endforelse
-            </x-wirekit::stack>
+            <x-wirekit::card>
+                <x-wirekit::card.header :description="__('legal-consent::ui.acknowledgements_description')">
+                    <x-slot:iconSlot><x-wirekit::icon name="eye" size="md" /></x-slot:iconSlot>
+                    <x-wirekit::heading :level="$groupLevel" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</x-wirekit::heading>
+                </x-wirekit::card.header>
+                <x-wirekit::card.body>
+                    <x-wirekit::stack gap="xs">
+                        @forelse ($acknowledgements as $item)
+                            {{-- The title's own language, declared only where it differs from the page. A
+                                 document published only in the default locale still binds, and a retired
+                                 row is deliberately shown in the language the subject read it in
+                                 (WCAG 3.1.2). See ContentLanguage. --}}
+                            @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
+                            <x-wirekit::text>
+                                @if (($item['url'] ?? null) !== null)
+                                    <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
+                                @else
+                                    <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
+                                @endif
+                                {{-- The version as quiet text rather than a badge: a badge on this screen is a state, and a
+                                     version in the same shape made the consent's "Given" read as one more version. --}}
+                                <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                                @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
+                            </x-wirekit::text>
+                        @empty
+                            <x-wirekit::text intent="muted">{{ __('legal-consent::ui.acknowledgements_empty') }}</x-wirekit::text>
+                        @endforelse
+                    </x-wirekit::stack>
+                </x-wirekit::card.body>
+            </x-wirekit::card>
         </x-wirekit::stack>
         @endif
 
@@ -118,115 +132,122 @@
 
         @if (! $hideEmpty || count($consents) > 0)
         <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-consents">
-            <x-wirekit::heading :level="$groupLevel" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</x-wirekit::heading>
-            <x-wirekit::stack gap="xs">
-                @forelse ($consents as $item)
-                    {{-- Same rule as the two blocks above. See ContentLanguage. --}}
-                    @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
-                    {{-- The title and its action on one line, the action at the row's end: the title takes the room
-                         that is left and wraps inside it. --}}
-                    <x-wirekit::row gap="sm" class="legal-consent-settings__consent">
-                        <x-wirekit::text class="min-w-0 flex-1">
-                            @if (($item['url'] ?? null) !== null)
-                                <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
-                            @else
-                                <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
-                            @endif
-                            {{-- The state in words, beside the title and whatever the action next to it is.
-                                 A screen that offers no Give button showed a consent that is not given as a
-                                 bare title, and one that is given only through the Withdraw button beside it.
-                                 Neutral for both: the screen reports a position, it does not steer one. --}}
-                            <x-wirekit::badge intent="neutral" size="sm" class="legal-consent-settings__state">{{ $item['held'] ? __('legal-consent::ui.consent_given') : __('legal-consent::ui.consent_not_given') }}</x-wirekit::badge>
-                            @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
-                        </x-wirekit::text>
+            <x-wirekit::card>
+                <x-wirekit::card.header :description="__('legal-consent::ui.consents_description')">
+                    <x-slot:iconSlot><x-wirekit::icon name="shield-check" size="md" /></x-slot:iconSlot>
+                    <x-wirekit::heading :level="$groupLevel" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</x-wirekit::heading>
+                </x-wirekit::card.header>
+                <x-wirekit::card.body>
+                    <x-wirekit::stack gap="xs">
+                        @forelse ($consents as $item)
+                            {{-- Same rule as the two blocks above. See ContentLanguage. --}}
+                            @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
+                            {{-- The title and its action on one line, the action at the row's end: the title takes the room
+                                 that is left and wraps inside it. --}}
+                            <x-wirekit::row gap="sm" class="legal-consent-settings__consent">
+                                <x-wirekit::text class="min-w-0 flex-1">
+                                    @if (($item['url'] ?? null) !== null)
+                                        <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
+                                    @else
+                                        <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
+                                    @endif
+                                    {{-- The state in words, beside the title and whatever the action next to it is.
+                                         A screen that offers no Give button showed a consent that is not given as a
+                                         bare title, and one that is given only through the Withdraw button beside it.
+                                         Neutral for both: the screen reports a position, it does not steer one. --}}
+                                    <x-wirekit::badge intent="neutral" size="sm" class="legal-consent-settings__state">{{ $item['held'] ? __('legal-consent::ui.consent_given') : __('legal-consent::ui.consent_not_given') }}</x-wirekit::badge>
+                                    @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
+                                </x-wirekit::text>
 
-                        @if ($item['held'] && $item['withdrawable'])
-                            {{-- A withdrawal is irreversible: it appends a Withdrawn row to an
-                                 append-only ledger. That earns a real confirmation — an
-                                 alert-dialog, never the unstyled native browser confirm. --}}
-                            {{-- It closes with the re-render its action causes, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
-                            <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']" :close-on-confirm="false">
-                                <x-slot:trigger>
-                                    <x-wirekit::button intent="danger" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
-                                        @if (filled($icons['withdraw']))
-                                            <x-slot:iconLeft><x-wirekit::icon :name="$icons['withdraw']" /></x-slot:iconLeft>
+                                @if ($item['held'] && $item['withdrawable'])
+                                    {{-- A withdrawal is irreversible: it appends a Withdrawn row to an
+                                         append-only ledger. That earns a real confirmation — an
+                                         alert-dialog, never the unstyled native browser confirm. --}}
+                                    {{-- It closes with the re-render its action causes, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
+                                    <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']" :close-on-confirm="false">
+                                        <x-slot:trigger>
+                                            <x-wirekit::button intent="danger" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
+                                                @if (filled($icons['withdraw']))
+                                                    <x-slot:iconLeft><x-wirekit::icon :name="$icons['withdraw']" /></x-slot:iconLeft>
+                                                @endif
+                                                {{ __('legal-consent::ui.withdraw') }}
+                                            </x-wirekit::button>
+                                        </x-slot:trigger>
+
+                                        <x-wirekit::alert-dialog.title>
+                                            {{ __('legal-consent::ui.withdraw_confirm_title') }}
+                                        </x-wirekit::alert-dialog.title>
+
+                                        <x-wirekit::alert-dialog.description>
+                                            {{ __('legal-consent::ui.withdraw_confirm_body', ['title' => $item['title']]) }}
+                                        </x-wirekit::alert-dialog.description>
+
+                                        <x-wirekit::alert-dialog.actions>
+                                            <x-wirekit::alert-dialog.cancel>
+                                                {{ __('legal-consent::ui.cancel') }}
+                                            </x-wirekit::alert-dialog.cancel>
+
+                                            {{-- An echo of `AlpinePayload::from()`, NOT `@js()`. A Blade
+                                                 directive inside a component tag attribute is never
+                                                 compiled — the tag compiler lifts the attribute out as a
+                                                 literal before the directive compiler reaches it, so the
+                                                 text `@js($item['key'])` is what the browser gets and the
+                                                 withdrawal never fires, for every key and with nothing
+                                                 logged. On Art. 7(3) that is the one control that must not
+                                                 be decorative. An echo is compiled in that position, and
+                                                 `AlpinePayload::from()` is the encoder for a directive
+                                                 attribute: it writes the key as a literal Alpine's CSP
+                                                 evaluator reads, where `Js::from()` is the encoder for a
+                                                 `<script>` block.
+
+                                                 The busy state names the same call, argument included,
+                                                 so only this row's button reports `aria-busy` while its
+                                                 withdrawal runs. Bound rather than echoed: the button
+                                                 prints `loading-target` with its own escaping, and an echo
+                                                 would reach the page escaped twice. --}}
+                                            <x-wirekit::button intent="danger" wire:click="withdraw({{ \Pushery\WireKit\Support\AlpinePayload::from($item['key']) }})" :loading-target="'withdraw('.\Pushery\WireKit\Support\AlpinePayload::from($item['key']).')'" :disable-on-loading="false">
+                                                @if (filled($icons['withdraw']))
+                                                    <x-slot:iconLeft><x-wirekit::icon :name="$icons['withdraw']" /></x-slot:iconLeft>
+                                                @endif
+                                                {{ __('legal-consent::ui.withdraw') }}
+                                            </x-wirekit::button>
+                                        </x-wirekit::alert-dialog.actions>
+                                    </x-wirekit::alert-dialog>
+                                {{-- A document retired out from under a holding: `is_active = false` does
+                                     not end the consents recorded against it, and the row keeps its
+                                     withdrawal control. It takes the Give button's place because there is
+                                     nothing left to give — the version is no longer published. --}}
+                                @elseif ($item['retired'] ?? false)
+                                    <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.retired') }}</x-wirekit::badge>
+                                {{-- The double opt-in's middle state, and it takes the place of the Give
+                                     button rather than sitting beside it: giving again would write a
+                                     second request, which supersedes the first and stops the confirmation
+                                     link already in the subject's inbox from working. --}}
+                                @elseif ($item['pending_confirmation'] ?? false)
+                                    <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.confirmation_pending') }}</x-wirekit::badge>
+                                {{-- The counterpart, and only where the embedding screen asked for it.
+                                     Deliberately NOT behind an alert-dialog: giving a voluntary consent is
+                                     reversible in one click on this very screen, so a confirmation would
+                                     put friction on the harmless direction and none on the irreversible
+                                     one — the exact opposite of what Art. 7(3) is about. --}}
+                                @elseif (! $item['held'] && $this->allowGrant)
+                                    {{-- An echo, not `@js()` — see the withdraw button above for why the
+                                         directive never compiles in a component tag attribute, and why
+                                         the busy state is bound with its argument. --}}
+                                    <x-wirekit::button intent="neutral" wire:click="grant({{ \Pushery\WireKit\Support\AlpinePayload::from($item['key']) }})" :loading-target="'grant('.\Pushery\WireKit\Support\AlpinePayload::from($item['key']).')'" :disable-on-loading="false" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
+                                        @if (filled($icons['grant']))
+                                            <x-slot:iconLeft><x-wirekit::icon :name="$icons['grant']" /></x-slot:iconLeft>
                                         @endif
-                                        {{ __('legal-consent::ui.withdraw') }}
+                                        {{ __('legal-consent::ui.grant') }}
                                     </x-wirekit::button>
-                                </x-slot:trigger>
-
-                                <x-wirekit::alert-dialog.title>
-                                    {{ __('legal-consent::ui.withdraw_confirm_title') }}
-                                </x-wirekit::alert-dialog.title>
-
-                                <x-wirekit::alert-dialog.description>
-                                    {{ __('legal-consent::ui.withdraw_confirm_body', ['title' => $item['title']]) }}
-                                </x-wirekit::alert-dialog.description>
-
-                                <x-wirekit::alert-dialog.actions>
-                                    <x-wirekit::alert-dialog.cancel>
-                                        {{ __('legal-consent::ui.cancel') }}
-                                    </x-wirekit::alert-dialog.cancel>
-
-                                    {{-- An echo of `AlpinePayload::from()`, NOT `@js()`. A Blade
-                                         directive inside a component tag attribute is never
-                                         compiled — the tag compiler lifts the attribute out as a
-                                         literal before the directive compiler reaches it, so the
-                                         text `@js($item['key'])` is what the browser gets and the
-                                         withdrawal never fires, for every key and with nothing
-                                         logged. On Art. 7(3) that is the one control that must not
-                                         be decorative. An echo is compiled in that position, and
-                                         `AlpinePayload::from()` is the encoder for a directive
-                                         attribute: it writes the key as a literal Alpine's CSP
-                                         evaluator reads, where `Js::from()` is the encoder for a
-                                         `<script>` block.
-
-                                         The busy state names the same call, argument included,
-                                         so only this row's button reports `aria-busy` while its
-                                         withdrawal runs. Bound rather than echoed: the button
-                                         prints `loading-target` with its own escaping, and an echo
-                                         would reach the page escaped twice. --}}
-                                    <x-wirekit::button intent="danger" wire:click="withdraw({{ \Pushery\WireKit\Support\AlpinePayload::from($item['key']) }})" :loading-target="'withdraw('.\Pushery\WireKit\Support\AlpinePayload::from($item['key']).')'" :disable-on-loading="false">
-                                        @if (filled($icons['withdraw']))
-                                            <x-slot:iconLeft><x-wirekit::icon :name="$icons['withdraw']" /></x-slot:iconLeft>
-                                        @endif
-                                        {{ __('legal-consent::ui.withdraw') }}
-                                    </x-wirekit::button>
-                                </x-wirekit::alert-dialog.actions>
-                            </x-wirekit::alert-dialog>
-                        {{-- A document retired out from under a holding: `is_active = false` does
-                             not end the consents recorded against it, and the row keeps its
-                             withdrawal control. It takes the Give button's place because there is
-                             nothing left to give — the version is no longer published. --}}
-                        @elseif ($item['retired'] ?? false)
-                            <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.retired') }}</x-wirekit::badge>
-                        {{-- The double opt-in's middle state, and it takes the place of the Give
-                             button rather than sitting beside it: giving again would write a
-                             second request, which supersedes the first and stops the confirmation
-                             link already in the subject's inbox from working. --}}
-                        @elseif ($item['pending_confirmation'] ?? false)
-                            <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.confirmation_pending') }}</x-wirekit::badge>
-                        {{-- The counterpart, and only where the embedding screen asked for it.
-                             Deliberately NOT behind an alert-dialog: giving a voluntary consent is
-                             reversible in one click on this very screen, so a confirmation would
-                             put friction on the harmless direction and none on the irreversible
-                             one — the exact opposite of what Art. 7(3) is about. --}}
-                        @elseif (! $item['held'] && $this->allowGrant)
-                            {{-- An echo, not `@js()` — see the withdraw button above for why the
-                                 directive never compiles in a component tag attribute, and why
-                                 the busy state is bound with its argument. --}}
-                            <x-wirekit::button intent="neutral" wire:click="grant({{ \Pushery\WireKit\Support\AlpinePayload::from($item['key']) }})" :loading-target="'grant('.\Pushery\WireKit\Support\AlpinePayload::from($item['key']).')'" :disable-on-loading="false" :aria-label="__('legal-consent::ui.grant_for', ['title' => $item['title']])">
-                                @if (filled($icons['grant']))
-                                    <x-slot:iconLeft><x-wirekit::icon :name="$icons['grant']" /></x-slot:iconLeft>
                                 @endif
-                                {{ __('legal-consent::ui.grant') }}
-                            </x-wirekit::button>
-                        @endif
-                    </x-wirekit::row>
-                @empty
-                    <x-wirekit::text intent="muted">{{ __('legal-consent::ui.consents_empty') }}</x-wirekit::text>
-                @endforelse
-            </x-wirekit::stack>
+                            </x-wirekit::row>
+                        @empty
+                            <x-wirekit::text intent="muted">{{ __('legal-consent::ui.consents_empty') }}</x-wirekit::text>
+                        @endforelse
+                    </x-wirekit::stack>
+                </x-wirekit::card.body>
+            </x-wirekit::card>
         </x-wirekit::stack>
         @endif
         @endif

@@ -224,7 +224,7 @@ return [
     */
     'markdown' => [
         'html_input' => 'strip',
-        'allow_unsafe_links' => EnvSwitch::read(env('LEGAL_CONSENT_ALLOW_UNSAFE_LINKS'), false),
+        'allow_unsafe_links' => EnvSwitch::read(env('LEGAL_CONSENT_ALLOW_UNSAFE_LINKS'), false, 'LEGAL_CONSENT_ALLOW_UNSAFE_LINKS'),
         // How deep CommonMark nests blocks. Anything below 1 keeps the shipped 20: at 0 no block
         // starts at all, and every heading and list of a document renders as plain text.
         'max_nesting_level' => filter_var(

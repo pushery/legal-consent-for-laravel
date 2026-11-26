@@ -35,8 +35,9 @@ a user was shown**, its version and hash, and the server-side context — not ju
 composer require pushery/legal-consent-for-laravel
 ```
 
-PHP 8.4+ · Laravel 13 · SQLite, PostgreSQL, and MySQL 8.4 LTS — every database-touching path is
-tested against a real PostgreSQL and a real MySQL, not just SQLite.
+PHP 8.4+ (tested on 8.4.27, 8.5.x and 8.6.x) · Laravel 13 · SQLite, PostgreSQL 18.7, and
+MySQL 8.4.13 (8.4 LTS) — every database-touching path is tested against a real PostgreSQL and a
+real MySQL, not just SQLite.
 
 ## What it does
 

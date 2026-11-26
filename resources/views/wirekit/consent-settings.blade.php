@@ -55,134 +55,156 @@
     @else
 
     <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-contracts">
-        <x-wirekit::heading :level="3" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</x-wirekit::heading>
-        <x-wirekit::stack gap="xs">
-            @forelse ($contracts as $item)
-                {{-- The title can be in a language this page is not in — a document published
-                     only in the default locale still binds, and a retired row is deliberately shown
-                     in the language the subject read it in. Without `lang` a screen reader speaks it
-                     with the page's phonetics (WCAG 3.1.2). See the plain stub, and
-                     ContentLanguage for the rule. --}}
-                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
-                <x-wirekit::text>
-                    @if (($item['url'] ?? null) !== null)
-                        <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
-                    @else
-                        <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
-                    @endif
-                    <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
-                    @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
-                </x-wirekit::text>
-            @empty
-                <x-wirekit::text intent="muted">{{ __('legal-consent::ui.contracts_empty') }}</x-wirekit::text>
-            @endforelse
-        </x-wirekit::stack>
+        <x-wirekit::card>
+            <x-wirekit::card.header :description="__('legal-consent::ui.contracts_description')">
+                <x-slot:iconSlot><x-wirekit::icon name="legal" size="md" /></x-slot:iconSlot>
+                <x-wirekit::heading :level="3" id="lc-contracts">{{ __('legal-consent::ui.contracts_heading') }}</x-wirekit::heading>
+            </x-wirekit::card.header>
+            <x-wirekit::card.body>
+                <x-wirekit::stack gap="xs">
+                    @forelse ($contracts as $item)
+                        {{-- The title can be in a language this page is not in — a document published
+                             only in the default locale still binds, and a retired row is deliberately shown
+                             in the language the subject read it in. Without `lang` a screen reader speaks it
+                             with the page's phonetics (WCAG 3.1.2). See the plain stub, and
+                             ContentLanguage for the rule. --}}
+                        @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
+                        <x-wirekit::text>
+                            @if (($item['url'] ?? null) !== null)
+                                <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
+                            @else
+                                <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
+                            @endif
+                            <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                            @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
+                        </x-wirekit::text>
+                    @empty
+                        <x-wirekit::text intent="muted">{{ __('legal-consent::ui.contracts_empty') }}</x-wirekit::text>
+                    @endforelse
+                </x-wirekit::stack>
+            </x-wirekit::card.body>
+        </x-wirekit::card>
     </x-wirekit::stack>
 
     <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-acknowledgements">
-        <x-wirekit::heading :level="3" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</x-wirekit::heading>
-        <x-wirekit::stack gap="xs">
-            @forelse ($acknowledgements as $item)
-                {{-- The title can be in a language this page is not in — a document published
-                     only in the default locale still binds, and a retired row is deliberately shown
-                     in the language the subject read it in. Without `lang` a screen reader speaks it
-                     with the page's phonetics (WCAG 3.1.2). See the plain stub, and
-                     ContentLanguage for the rule. --}}
-                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
-                <x-wirekit::text>
-                    @if (($item['url'] ?? null) !== null)
-                        <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
-                    @else
-                        <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
-                    @endif
-                    <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
-                    @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
-                </x-wirekit::text>
-            @empty
-                <x-wirekit::text intent="muted">{{ __('legal-consent::ui.acknowledgements_empty') }}</x-wirekit::text>
-            @endforelse
-        </x-wirekit::stack>
+        <x-wirekit::card>
+            <x-wirekit::card.header :description="__('legal-consent::ui.acknowledgements_description')">
+                <x-slot:iconSlot><x-wirekit::icon name="eye" size="md" /></x-slot:iconSlot>
+                <x-wirekit::heading :level="3" id="lc-acknowledgements">{{ __('legal-consent::ui.acknowledgements_heading') }}</x-wirekit::heading>
+            </x-wirekit::card.header>
+            <x-wirekit::card.body>
+                <x-wirekit::stack gap="xs">
+                    @forelse ($acknowledgements as $item)
+                        {{-- The title can be in a language this page is not in — a document published
+                             only in the default locale still binds, and a retired row is deliberately shown
+                             in the language the subject read it in. Without `lang` a screen reader speaks it
+                             with the page's phonetics (WCAG 3.1.2). See the plain stub, and
+                             ContentLanguage for the rule. --}}
+                        @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
+                        <x-wirekit::text>
+                            @if (($item['url'] ?? null) !== null)
+                                <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
+                            @else
+                                <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
+                            @endif
+                            <x-wirekit::text as="span" size="sm" intent="muted">v{{ $item['version'] }}</x-wirekit::text> @if (($item['outstanding'] ?? false)) <x-wirekit::badge intent="warning" size="sm">{{ __('legal-consent::ui.action_required') }}</x-wirekit::badge> @endif
+                            @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
+                        </x-wirekit::text>
+                    @empty
+                        <x-wirekit::text intent="muted">{{ __('legal-consent::ui.acknowledgements_empty') }}</x-wirekit::text>
+                    @endforelse
+                </x-wirekit::stack>
+            </x-wirekit::card.body>
+        </x-wirekit::card>
     </x-wirekit::stack>
 
     <x-wirekit::stack gap="sm" as="section" aria-labelledby="lc-consents">
-        <x-wirekit::heading :level="3" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</x-wirekit::heading>
-        <x-wirekit::stack gap="xs">
-            @forelse ($consents as $item)
-                {{-- Same as the two blocks above: the title's own language, declared only where it
-                     differs from the page. See ContentLanguage. --}}
-                @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
-                {{-- The title and its action on one line, the action at the row's end: the title takes the room
-                     that is left and wraps inside it. --}}
-                <x-wirekit::row gap="sm" class="legal-consent-settings__consent">
-                    <x-wirekit::text class="min-w-0 flex-1">
-                        @if (($item['url'] ?? null) !== null)
-                            <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
-                        @else
-                            <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
-                        @endif
-                        @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
-                    </x-wirekit::text>
+        <x-wirekit::card>
+            <x-wirekit::card.header :description="__('legal-consent::ui.consents_description')">
+                <x-slot:iconSlot><x-wirekit::icon name="shield-check" size="md" /></x-slot:iconSlot>
+                <x-wirekit::heading :level="3" id="lc-consents">{{ __('legal-consent::ui.consents_heading') }}</x-wirekit::heading>
+            </x-wirekit::card.header>
+            <x-wirekit::card.body>
+                <x-wirekit::stack gap="xs">
+                    @forelse ($consents as $item)
+                        {{-- Same as the two blocks above: the title's own language, declared only where it
+                             differs from the page. See ContentLanguage. --}}
+                        @php($lang = \Pushery\LegalConsent\Support\ContentLanguage::differingFrom($item['locale'] ?? null))
+                        {{-- The title and its action on one line, the action at the row's end: the title takes the room
+                             that is left and wraps inside it. In a card too narrow for both, the action moves onto a line
+                             of its own instead of running out of the card. --}}
+                        <x-wirekit::row gap="sm" wrap class="legal-consent-settings__consent">
+                            <x-wirekit::text class="min-w-0 flex-1">
+                                @if (($item['url'] ?? null) !== null)
+                                    <x-wirekit::link :href="$item['url']" :hreflang="$lang" :lang="$lang" external>{{ $item['title'] }}</x-wirekit::link>
+                                @else
+                                    <span @if ($lang !== null) lang="{{ $lang }}" @endif>{{ $item['title'] }}</span>
+                                @endif
+                                @if (($item['held_since'] ?? null) !== null) <x-wirekit::text as="span" size="sm" intent="muted">· {{ $item['held_since'] }}</x-wirekit::text> @endif
+                            </x-wirekit::text>
 
-                    {{-- A document retired out from under a holding. `is_active = false` does not
-                         end the consents recorded against it, so the row stays with its withdrawal
-                         control intact — but it is never `outstanding`, and without this the
-                         subject cannot see why the version is older than the one they read about. --}}
-                    @if ($item['retired'] ?? false)
-                        <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.retired') }}</x-wirekit::badge>
-                    @endif
+                            {{-- A document retired out from under a holding. `is_active = false` does not
+                                 end the consents recorded against it, so the row stays with its withdrawal
+                                 control intact — but it is never `outstanding`, and without this the
+                                 subject cannot see why the version is older than the one they read about. --}}
+                            @if ($item['retired'] ?? false)
+                                <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.retired') }}</x-wirekit::badge>
+                            @endif
 
-                    {{-- The double opt-in's middle state: entered but not yet confirmed reads as
-                         never entered otherwise, and the screen would say nothing at all. --}}
-                    @if ($item['pending_confirmation'] ?? false)
-                        <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.confirmation_pending') }}</x-wirekit::badge>
-                    @endif
+                            {{-- The double opt-in's middle state: entered but not yet confirmed reads as
+                                 never entered otherwise, and the screen would say nothing at all. --}}
+                            @if ($item['pending_confirmation'] ?? false)
+                                <x-wirekit::badge intent="neutral" size="sm">{{ __('legal-consent::ui.confirmation_pending') }}</x-wirekit::badge>
+                            @endif
 
-                    @if (($item['withdraw_url'] ?? null) !== null)
-                        {{-- The form carries the POST; the dialog's confirm button submits it by id.
-                             A control with no action is not a control, so the whole block is absent
-                             while `legal-consent.routes.web` is off or the entry is not a
-                             withdrawable consent the subject holds. --}}
-                        <form method="post" action="{{ $item['withdraw_url'] }}" id="lc-withdraw-form-{{ $item['key'] }}" class="legal-consent-withdraw-form">
-                            @csrf
-                            <input type="hidden" name="document_key" value="{{ $item['key'] }}">
-                        </form>
+                            @if (($item['withdraw_url'] ?? null) !== null)
+                                {{-- The form carries the POST; the dialog's confirm button submits it by id.
+                                     A control with no action is not a control, so the whole block is absent
+                                     while `legal-consent.routes.web` is off or the entry is not a
+                                     withdrawable consent the subject holds. --}}
+                                <form method="post" action="{{ $item['withdraw_url'] }}" id="lc-withdraw-form-{{ $item['key'] }}" class="legal-consent-withdraw-form">
+                                    @csrf
+                                    <input type="hidden" name="document_key" value="{{ $item['key'] }}">
+                                </form>
 
-                        {{-- A withdrawal is irreversible: it appends a Withdrawn row to an
-                             append-only ledger and cannot be taken back. That earns a real
-                             confirmation — an alert-dialog, never the native browser confirm, which
-                             renders unstyled and outside the design system. --}}
-                        {{-- It closes with the form it submits, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
-                        <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']" :close-on-confirm="false">
-                            <x-slot:trigger>
-                                <x-wirekit::button intent="danger" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
-                                    {{ __('legal-consent::ui.withdraw') }}
-                                </x-wirekit::button>
-                            </x-slot:trigger>
+                                {{-- A withdrawal is irreversible: it appends a Withdrawn row to an
+                                     append-only ledger and cannot be taken back. That earns a real
+                                     confirmation — an alert-dialog, never the native browser confirm, which
+                                     renders unstyled and outside the design system. --}}
+                                {{-- It closes with the form it submits, and says so, so an application that turns close-on-confirm on for every dialog does not ask this one for a confirm control. --}}
+                                <x-wirekit::alert-dialog :name="'lc-withdraw-'.$item['key']" :close-on-confirm="false">
+                                    <x-slot:trigger>
+                                        <x-wirekit::button intent="danger" :aria-label="__('legal-consent::ui.withdraw_for', ['title' => $item['title']])">
+                                            {{ __('legal-consent::ui.withdraw') }}
+                                        </x-wirekit::button>
+                                    </x-slot:trigger>
 
-                            <x-wirekit::alert-dialog.title>
-                                {{ __('legal-consent::ui.withdraw_confirm_title') }}
-                            </x-wirekit::alert-dialog.title>
+                                    <x-wirekit::alert-dialog.title>
+                                        {{ __('legal-consent::ui.withdraw_confirm_title') }}
+                                    </x-wirekit::alert-dialog.title>
 
-                            <x-wirekit::alert-dialog.description>
-                                {{ __('legal-consent::ui.withdraw_confirm_body', ['title' => $item['title']]) }}
-                            </x-wirekit::alert-dialog.description>
+                                    <x-wirekit::alert-dialog.description>
+                                        {{ __('legal-consent::ui.withdraw_confirm_body', ['title' => $item['title']]) }}
+                                    </x-wirekit::alert-dialog.description>
 
-                            <x-wirekit::alert-dialog.actions>
-                                <x-wirekit::alert-dialog.cancel>
-                                    {{ __('legal-consent::ui.cancel') }}
-                                </x-wirekit::alert-dialog.cancel>
+                                    <x-wirekit::alert-dialog.actions>
+                                        <x-wirekit::alert-dialog.cancel>
+                                            {{ __('legal-consent::ui.cancel') }}
+                                        </x-wirekit::alert-dialog.cancel>
 
-                                <x-wirekit::button intent="danger" type="submit" form="lc-withdraw-form-{{ $item['key'] }}">
-                                    {{ __('legal-consent::ui.withdraw') }}
-                                </x-wirekit::button>
-                            </x-wirekit::alert-dialog.actions>
-                        </x-wirekit::alert-dialog>
-                    @endif
-                </x-wirekit::row>
-            @empty
-                <x-wirekit::text intent="muted">{{ __('legal-consent::ui.consents_empty') }}</x-wirekit::text>
-            @endforelse
-        </x-wirekit::stack>
+                                        <x-wirekit::button intent="danger" type="submit" form="lc-withdraw-form-{{ $item['key'] }}">
+                                            {{ __('legal-consent::ui.withdraw') }}
+                                        </x-wirekit::button>
+                                    </x-wirekit::alert-dialog.actions>
+                                </x-wirekit::alert-dialog>
+                            @endif
+                        </x-wirekit::row>
+                    @empty
+                        <x-wirekit::text intent="muted">{{ __('legal-consent::ui.consents_empty') }}</x-wirekit::text>
+                    @endforelse
+                </x-wirekit::stack>
+            </x-wirekit::card.body>
+        </x-wirekit::card>
     </x-wirekit::stack>
     @endif
 </x-wirekit::stack>

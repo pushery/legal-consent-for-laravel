@@ -17,6 +17,11 @@ return [
     'acknowledgements_heading' => 'Acknowledged',
     'consents_heading' => 'Consents',
 
+    // The sentence under each group's heading, where the WireKit views stand the group in a card.
+    'contracts_description' => 'The terms you have agreed to.',
+    'acknowledgements_description' => 'Documents you have taken note of. Taking note is not a consent.',
+    'consents_description' => 'You can withdraw a consent at any time, as easily as you gave it.',
+
     // Empty states. A group with no entries used to render its heading over nothing, and that is
     // not the rare case it looks like: statusFor() reads the `legal_documents` table, which a
     // freshly installed package has nothing in until `legal-consent:publish` runs — so an empty
