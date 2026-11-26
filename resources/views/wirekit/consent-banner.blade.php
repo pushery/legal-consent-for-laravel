@@ -1,7 +1,7 @@
 {{--
     WireKit-native variant of the change banners. Publish with `--tag=legal-consent-wirekit`.
 
-    Built from real `x-wirekit::*` components. Needs `pushery/wirekit` >= 2.73.0, the floor the
+    Built from real `x-wirekit::*` components. Needs `pushery/wirekit` >= 2.74.1, the floor the
     provider itself applies (`LegalConsentServiceProvider::WIREKIT_MINIMUM`), and `@wirekitScripts`
     in the layout for the live countdown.
 

@@ -152,7 +152,7 @@
                          moved it: at 390 px the control sat 200 px past the right edge of the table's
                          visible area, and it is the only control this screen has. --}}
                     <x-wirekit::table.row wire:key="release-{{ $key }}">
-                        <x-wirekit::table.td :colspan="count($locales) + 1" style="padding-inline: 0;">
+                        <x-wirekit::table.td :colspan="count($locales) + 1" align="end" style="padding-inline: 0;">
                             {{-- Held at the visible left edge while the grid scrolls sideways, and no wider
                                  than the table's frame, the container `100cqi` measures. The cell's inline
                                  padding moves into the hold, which a sticky box needs: it cannot leave its

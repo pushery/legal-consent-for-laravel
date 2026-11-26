@@ -4,6 +4,16 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.61.0 → 0.62.0
+
+**Nothing is required of you**, unless your `.env` gives `LEGAL_CONSENT_ALLOW_UNSAFE_LINKS` a spelling that says neither on nor off, your application runs a WireKit older than 2.74.1, or you published the package's WireKit views.
+
+**Correct `LEGAL_CONSENT_ALLOW_UNSAFE_LINKS` if it says neither on nor off.** A value such as `ture` kept unsafe links refused, and the boot and `config:cache` now stop with an `InvalidArgumentException` that names the variable, the value as written and every spelling for on and off. Delete the line to keep unsafe links refused.
+
+**Update `pushery/wirekit` to 2.74.1 or newer to keep the WireKit views.** With an older WireKit the package serves its plain views.
+
+**Publish the WireKit views again if you published them.** The release dialog of the editor names its choice as a heading in the legend of its group, the consent settings stand each group in a card with its head, and the withdraw action of a consent moves onto a line of its own in a narrow card. A published view keeps the plain text above the first option of the dialog and the groups without their cards.
+
 ## 0.60.2 → 0.61.0
 
 **Nothing is required of you**, unless your application reads `subject_token` from a serialized consent or notice.

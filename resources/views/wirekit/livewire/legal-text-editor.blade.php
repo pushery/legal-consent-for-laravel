@@ -210,14 +210,14 @@
                 <x-wirekit::modal.body>
                     @if (is_array($releaseSummary ?? null))
                         <x-wirekit::stack gap="md">
-                            <fieldset>
-                                <legend>{{ __('legal-consent::ui.admin_release_dialog_mode') }}</legend>
-                                <x-wirekit::stack gap="sm">
-                                    @foreach ($releaseModes as $available)
-                                        <x-wirekit::radio name="releaseMode" :value="$available" wire:model.live="releaseMode" :label="__('legal-consent::ui.admin_release_modes.'.$available.'.label')" :hint="__('legal-consent::ui.admin_release_modes.'.$available.'.consequence')" />
-                                    @endforeach
-                                </x-wirekit::stack>
-                            </fieldset>
+                            {{-- The legend of the set carries the heading of the choice, so the group keeps its name for a screen
+                                 reader and reads as a section of the dialog. The set spaces the legend and the options. --}}
+                            <x-wirekit::field.set>
+                                <x-slot:legend><x-wirekit::heading :level="3">{{ __('legal-consent::ui.admin_release_dialog_mode') }}</x-wirekit::heading></x-slot:legend>
+                                @foreach ($releaseModes as $available)
+                                    <x-wirekit::radio name="releaseMode" :value="$available" wire:model.live="releaseMode" :label="__('legal-consent::ui.admin_release_modes.'.$available.'.label')" :hint="__('legal-consent::ui.admin_release_modes.'.$available.'.consequence')" />
+                                @endforeach
+                            </x-wirekit::field.set>
 
                             <x-wirekit::data-list layout="detail">
                                 <x-wirekit::data-list.item :label="__('legal-consent::ui.admin_release_dialog_languages')" :value="implode(', ', $releaseSummary['languages'])" />
