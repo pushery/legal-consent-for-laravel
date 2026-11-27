@@ -4,6 +4,14 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.62.1] - 2026-11-27
+
+### Fixed
+
+- **A migration that finds its ledger table no longer takes an interrupted one for complete.** On MySQL a `migrate` that stopped between creating `legal_ledger_markers` or `legal_consent_record_macs` and creating its index left the table without it, and the next run skipped the table and recorded the migration as done. Without the unique index on `name`, a second marker of one name could stand beside the first. Where the table already stands, migrations 000024 and 000031 now check for the index and stop with a message that names the table and the way to repair it. A table that carries the index, under any name, passes as before.
+
+  **Upgrade:** an installation whose migrations ran through has nothing to do. One whose `migrate` stops at the message adds the index it names, or drops the table if it holds no row, and runs `migrate` again.
+
 ## [0.62.0] - 2026-11-26
 
 ### Changed
@@ -3522,7 +3530,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.62.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.62.1...HEAD
+[0.62.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.62.0...v0.62.1
 [0.62.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.2...v0.61.0
 [0.60.2]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.1...v0.60.2

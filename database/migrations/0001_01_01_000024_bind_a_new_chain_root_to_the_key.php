@@ -68,6 +68,13 @@ return new class extends Migration
                 $blueprint->string('proof', 64);
                 $blueprint->timestampTz('created_at')->nullable();
             });
+        } elseif (! Schema::hasIndex(TableLookup::qualified('legal_ledger_markers'), ['name'], 'unique')) {
+            // A table found here says that CREATE TABLE ran, not that the unique index after it did.
+            // MySQL runs no DDL inside a transaction, so a `migrate` cut off between the two leaves a
+            // table that can hold a second marker of one name, the root boundary among them, and
+            // skipping it would record that as done. A table that carries the index under any name is
+            // a second published copy of this migration finding its own table, and passes.
+            throw new RuntimeException('legal_ledger_markers exists without the unique index on name that this migration creates, so a previous migrate stopped between the table and its index, or the table is not the one this package creates. Add the index (a unique index on legal_ledger_markers.name) and run migrate again, or drop the table first if it holds no row.');
         }
 
         if (DB::table('legal_ledger_markers')->where('name', LedgerHashChain::ROOT_BOUNDARY_MARKER)->exists()) {

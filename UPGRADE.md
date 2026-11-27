@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.62.0 → 0.62.1
+
+**Nothing is required of you**, unless `migrate` stops at migration 000024 or 000031 with a message that a table exists without its index.
+
+**Add the index the message names and run `migrate` again.** For 000024 that is a unique index on `legal_ledger_markers.name`, for 000031 an index on `legal_consent_record_macs.consent_id`. A table that holds no row can be dropped instead, and `migrate` then creates it with its index. On MySQL a `migrate` that stopped between one of these tables and its index left the table without the index, and the next run passed the table. The two migrations now check a table they find. One that an earlier version recorded as done is not run again, so a table that lost its index that way keeps that state until the same index is added.
+
 ## 0.61.0 → 0.62.0
 
 **Nothing is required of you**, unless your `.env` gives `LEGAL_CONSENT_ALLOW_UNSAFE_LINKS` a spelling that says neither on nor off, your application runs a WireKit older than 2.74.1, or you published the package's WireKit views.

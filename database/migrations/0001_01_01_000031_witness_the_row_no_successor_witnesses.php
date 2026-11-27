@@ -80,6 +80,16 @@ return new class extends Migration
                 $blueprint->string('mac', 64);
                 $blueprint->timestampTz('created_at')->nullable();
             });
+        } elseif (! Schema::hasIndex(TableLookup::qualified(LedgerRecordMacs::TABLE), ['consent_id'])) {
+            // A table found here says that CREATE TABLE ran, not that the index after it did. MySQL
+            // runs no DDL inside a transaction, so a `migrate` cut off between the two leaves the
+            // record MACs without the index they are looked up through, and skipping it would
+            // record that as done. A table that carries the index under any name is a second
+            // published copy of this migration finding its own table, and passes.
+            throw new RuntimeException(sprintf(
+                '%1$s exists without the index on consent_id that this migration creates, so a previous migrate stopped between the table and its index, or the table is not the one this package creates. Add the index (an index on %1$s.consent_id) and run migrate again, or drop the table first if it holds no row.',
+                LedgerRecordMacs::TABLE,
+            ));
         }
 
         // The boundary is not stamped here, for the reason migration 000024 gives about its own
