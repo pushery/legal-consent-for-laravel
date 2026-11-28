@@ -6,6 +6,7 @@ namespace Pushery\LegalConsent\Notifications;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -56,8 +57,12 @@ use Pushery\LegalConsent\Support\TenantContext;
  * nobody can correct afterwards. Only two things ever reach that body — the lines a subclass
  * writes, its heading among them, and the declarant footer, which appears only once someone has
  * configured a declarant.
+ *
+ * A notice goes through the queue encrypted with the application key, because its job names the
+ * recipient and the document. A subclass inherits that, and so does every class
+ * `notice_mail.notification.<mode>` names, since each one extends this class.
  */
-abstract class ChangeNotification extends Notification implements SendsNoticeMail, ShouldQueue
+abstract class ChangeNotification extends Notification implements SendsNoticeMail, ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
     use RendersChangeItems;

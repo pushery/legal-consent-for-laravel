@@ -4,6 +4,12 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.63.0 → 0.63.1
+
+**Nothing is required of you**, unless your queue workers run with another `APP_KEY` than the application that sends the notices.
+
+**Give the workers the same `APP_KEY`.** The three notices and every class `notice_mail.notification.<mode>` names go through the queue encrypted with the application key, so a worker with another key cannot open them. A notice queued before the update is still read.
+
 ## 0.62.1 → 0.63.0
 
 **Nothing is required of you.** The two hourly sweeps, `legal-consent:dispatch-notices` and `legal-consent:close-objection-windows`, now run at minute 23 rather than at minute 0. To keep them at minute 0, set `'minute' => 0` under `schedule` in `config/legal-consent.php`. A published config without the key runs them at minute 23.
