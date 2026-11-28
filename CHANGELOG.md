@@ -4,6 +4,14 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.63.1] - 2026-11-28
+
+### Security
+
+- **The notices go through the queue encrypted.** `ChangeNotification` implements `ShouldBeEncrypted`, so `DeemedConsentNotice`, `LegalChangeInformational`, `ReconsentRequired` and every class `notice_mail.notification.<mode>` names put their job into the queue, Horizon and `failed_jobs` encrypted with the application key. The job names the recipient and the document it is about.
+
+  **Upgrade:** a worker decrypts with the `APP_KEY` of the process that queued the notice, so workers and web nodes share one key, as every encrypted Laravel job requires. A notice queued before the update is still read.
+
 ## [0.63.0] - 2026-11-28
 
 ### Changed
@@ -3538,7 +3546,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.63.0...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.63.1...HEAD
+[0.63.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.63.0...v0.63.1
 [0.63.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.62.1...v0.63.0
 [0.62.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.62.0...v0.62.1
 [0.62.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.61.0...v0.62.0
