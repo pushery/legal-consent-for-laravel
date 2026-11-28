@@ -4,6 +4,14 @@ All notable changes to `pushery/legal-consent-for-laravel` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and
 the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.63.0] - 2026-11-28
+
+### Changed
+
+- **The two hourly sweeps run at minute 23, and a host chooses the minute with `schedule.minute`.** `legal-consent:dispatch-notices` and `legal-consent:close-objection-windows` ran at minute 0, when every task that runs each minute or every five, ten or fifteen minutes is due as well, and each due task starts a process of its own. A host that spreads its tasks over the hour sets the minute in `config/legal-consent.php`. A value that is no whole number from 0 to 59 stops the scheduler with a message that names the key.
+
+  **Upgrade:** nothing is required. To keep both sweeps at minute 0, set `schedule.minute` to `0`.
+
 ## [0.62.1] - 2026-11-27
 
 ### Fixed
@@ -3530,7 +3538,8 @@ its recorded row from the same resolution, so the consent section stays dormant 
   consumed `fallback_locale`, and locale validation on publish.
 - Publishable config, de/en translations, and optional framework-agnostic Blade UI stubs.
 
-[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.62.1...HEAD
+[Unreleased]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.63.0...HEAD
+[0.63.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.62.1...v0.63.0
 [0.62.1]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.62.0...v0.62.1
 [0.62.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/pushery/legal-consent-for-laravel/compare/v0.60.2...v0.61.0

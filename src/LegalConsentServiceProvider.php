@@ -18,6 +18,7 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 use Livewire\Livewire;
 use Override;
 use Pushery\LegalConsent\Console\CheckDriftCommand;
@@ -380,7 +381,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
                 // one take the same lock: the scheduler's overlap lock is named after the schedule
                 // entry, and a hand-started run never takes it.
                 $schedule->command('legal-consent:dispatch-notices', ['--isolated'])
-                    ->hourly()
+                    ->hourlyAt($this->hourlyMinute())
                     ->when($tablesExist)
                     // The overlap lock expires after 55 minutes, inside the hour, rather than after
                     // the 24h default. The expiry only matters when a run dies holding the lock or
@@ -398,7 +399,7 @@ final class LegalConsentServiceProvider extends ServiceProvider
 
             if ((bool) config('legal-consent.schedule.close_objection_windows', true)) {
                 $schedule->command('legal-consent:close-objection-windows', ['--isolated'])
-                    ->hourly()
+                    ->hourlyAt($this->hourlyMinute())
                     ->when($tablesExist)
                     // 55 minutes, for the reason given at dispatch-notices above. A run that
                     // overtakes a long one deems nobody twice: a subject who already holds the
@@ -988,5 +989,34 @@ final class LegalConsentServiceProvider extends ServiceProvider
         }
 
         return $published;
+    }
+
+    /**
+     * The minute of the hour both hourly sweeps run at, `legal-consent.schedule.minute`, and 23 where a
+     * published config predates the key. Minute 0 is when every task of a host that runs each minute or
+     * every five, ten or fifteen minutes is due as well, and each due task starts a process of its own.
+     * A value that is no whole number from 0 to 59 stops the scheduler with the name of the key rather
+     * than run both sweeps at a minute nobody chose.
+     *
+     * @return int<0, 59>
+     *
+     * @throws InvalidArgumentException when the value is no minute of an hour
+     */
+    private function hourlyMinute(): int
+    {
+        $minute = config('legal-consent.schedule.minute', 23);
+
+        if (! is_int($minute) || $minute < 0 || $minute > 59) {
+            throw new InvalidArgumentException(sprintf(
+                'legal-consent.schedule.minute is %s, which is no minute of an hour. Set a whole number from 0 to 59, or leave the key out for the minute the package ships, 23.',
+                match (true) {
+                    is_string($minute) => '"'.$minute.'"',
+                    is_int($minute), is_float($minute) => (string) $minute,
+                    default => get_debug_type($minute),
+                },
+            ));
+        }
+
+        return $minute;
     }
 }
