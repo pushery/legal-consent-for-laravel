@@ -801,6 +801,11 @@ return [
         'dispatch_notices' => true,
         'close_objection_windows' => true,
 
+        // The minute of the hour both sweeps above run at, a whole number from 0 to 59. Minute 0 is
+        // when every task that runs each minute or every five, ten or fifteen minutes is due as well,
+        // and each due task starts a process of its own, so the sweeps run at 23 unless set here.
+        'minute' => 23,
+
         // Off by default, unlike its two siblings: this sweep deletes. Turning it on is how the
         // `retention_after_end` period stops being a statement and starts being enforced —
         // until then nothing ever removes an expired record. Opt in deliberately, once.

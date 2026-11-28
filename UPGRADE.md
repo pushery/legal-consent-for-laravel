@@ -4,6 +4,10 @@ This guide documents the changes you need to make when upgrading between
 breaking versions of `pushery/legal-consent-for-laravel`. Because the package is
 still `0.x`, a **minor** bump may contain breaking changes (SemVer `0.y.z`).
 
+## 0.62.1 → 0.63.0
+
+**Nothing is required of you.** The two hourly sweeps, `legal-consent:dispatch-notices` and `legal-consent:close-objection-windows`, now run at minute 23 rather than at minute 0. To keep them at minute 0, set `'minute' => 0` under `schedule` in `config/legal-consent.php`. A published config without the key runs them at minute 23.
+
 ## 0.62.0 → 0.62.1
 
 **Nothing is required of you**, unless `migrate` stops at migration 000024 or 000031 with a message that a table exists without its index.
